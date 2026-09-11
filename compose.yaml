@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: taxo
+      POSTGRES_PASSWORD: taxo
+      POSTGRES_DB: taxo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taxo"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://taxo:taxo@db:5432/taxo
+      TAXO_ALLOWED_ROOTS: /repositories:/taxo-source
+    volumes:
+      - ${TAXO_REPOSITORIES:-D:/Taxo}:/repositories:ro
+      - .:/taxo-source:ro
+    ports:
+      - "127.0.0.1:18000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+  portal:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:18080:80"
+    depends_on:
+      - api
+volumes:
+  postgres_data:
