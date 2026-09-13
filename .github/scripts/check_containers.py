@@ -19,7 +19,7 @@ def wait_for_health(url):
             status, body = request(url)
             if status == 200 and json.loads(body).get('status') == 'ok':
                 return
-        except (URLError, TimeoutError, ValueError):
+        except (URLError, OSError, TimeoutError, ValueError):
             pass
         time.sleep(2)
     raise RuntimeError('Application health did not become ready: ' + url)
