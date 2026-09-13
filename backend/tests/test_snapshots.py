@@ -166,7 +166,7 @@ def test_env_files_are_never_exposed(make_repo):
     for mode in (COMMIT, WORKING_TREE):
         snapshot = open_snapshot(repo, 'demo', mode)
         assert not any(p.rsplit('/', 1)[-1].startswith('.env') for p in paths(snapshot))
-        assert {('.env', 'confidential'), ('config/.env.local', 'confidential')} <= set(snapshot.skipped)
+        assert set(snapshot.skipped) >= {('.env', 'confidential'), ('config/.env.local', 'confidential')}
         with pytest.raises(KeyError):
             snapshot.read_bytes('.env')
 
