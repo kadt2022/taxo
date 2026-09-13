@@ -1,0 +1,29 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "INFERRED",
+  "validity": "VALID",
+  "subject": "endpoint:POST /api/v1/orgs/{orgId}/spaces/{spaceId}/clients",
+  "relation": "PROTECTED_BY",
+  "object": "symbol:java:com.example.PolicyBasedAuthorizationManager",
+  "qualifiers": {},
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+    "mode": "COMMIT"
+  },
+  "produced_by": {
+    "producer_type": "PROJECTION",
+    "producer_id": "projection-pr",
+    "execution_id": "fixture"
+  },
+  "derivation": {
+    "premises": [
+      "fixture-f1",
+      "fixture-f2"
+    ],
+    "rule": "spring-security.route-authorization-applies",
+    "counter_examples_checked": [],
+    "known_gaps": []
+  }
+}

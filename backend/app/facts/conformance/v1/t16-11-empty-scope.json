@@ -1,0 +1,27 @@
+{
+  "contract_version": 1,
+  "kind": "ABSENCE",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+    "mode": "COMMIT"
+  },
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "inventory",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "inventory-rules",
+    "catalog_version": "1"
+  },
+  "pattern": {
+    "type": "literal",
+    "value": "P_SPACE_USER_CREATE"
+  },
+  "scope": {
+    "include": []
+  },
+  "method": "java.string-literal-search"
+}

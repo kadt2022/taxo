@@ -45,7 +45,7 @@ Rien d'autre n'est ouvert tant que les récits 01A à 01G ne sont pas terminés.
 
 | Récit | Contenu | Tâches de l'épique | Statut |
 | --- | --- | --- | --- |
-| **01A** Contrat machine du fait | natures et règles de preuve par nature, statuts et producteurs autorisés, validité, identité et occurrence, syntaxe des références, référence d'instantané, périmètre structuré, provenance `produced_by`, preuve et empreinte, vocabulaire v1, règles de cohérence, suite de conformité | T1 | rédigé : `TAXO-01A-contrat-machine-du-fait.md` |
+| **01A** Contrat machine du fait | natures et règles de preuve par nature, statuts et producteurs autorisés, validité, identité et occurrence, syntaxe des références, référence d'instantané, périmètre structuré, provenance `produced_by`, preuve et empreinte, vocabulaire v1, règles de cohérence, suite de conformité | T1 | implémenté et testé ; revue et merge en attente : [récit](Terminé/TAXO-01A-contrat-machine-du-fait-TERMINÉ.md) |
 | **01B** Références stables et identité | normalisation des clés et du périmètre, stabilité entre commits, calcul de l'identité stable d'un fait | T2 | à rédiger |
 | **01C** Instantané au commit | lecture d'un commit en lecture seule ; mode `WORKING_TREE` marqué, avec empreinte du contenu ; fichiers ignorés par Git exclus | T3 | à rédiger |
 | **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statut technique (`SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; `scanner.py` converti en Inventory v0, premier producteur de faits réels | T4 | à rédiger |

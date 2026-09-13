@@ -1,0 +1,727 @@
+{
+  "contract_version": 1,
+  "hash_vectors": "hash-vectors.json",
+  "cases": [
+    {
+      "file": "valid-observed.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-inferred-evaluator.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-inferred-projection.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-human.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-absence.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-coverage.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-coverage-evidence.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-scope-module.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-scope-files.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-scope-directory.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-scope-exclusion.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-stored-stale.json",
+      "submission": false,
+      "accepted": true
+    },
+    {
+      "file": "valid-stored-revalidation_required.json",
+      "submission": false,
+      "accepted": true
+    },
+    {
+      "file": "valid-working-tree.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-permits-all.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-authorization-expression.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-authorization-symbol.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-takibo-t19.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "t16-01-missing-evidence.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/"
+      },
+      "reason": "An observed assertion requires evidence.",
+      "t16": 1
+    },
+    {
+      "file": "t16-01-empty-evidence.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_minItems",
+        "path": "/evidence"
+      },
+      "reason": "An observed assertion requires at least one proof.",
+      "t16": 1
+    },
+    {
+      "file": "t16-02-absence-evidence.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_None",
+        "path": "/"
+      },
+      "reason": "Absence cannot contain evidence, even an empty list.",
+      "t16": 2
+    },
+    {
+      "file": "t16-02-absence-relation.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_None",
+        "path": "/"
+      },
+      "reason": "Absence cannot contain a relation.",
+      "t16": 2
+    },
+    {
+      "file": "t16-03-evidence-repository.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "EVIDENCE_SNAPSHOT",
+        "path": "/evidence/0"
+      },
+      "reason": "Evidence belongs to another snapshot.",
+      "t16": 3
+    },
+    {
+      "file": "t16-03-evidence-commit.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "EVIDENCE_SNAPSHOT",
+        "path": "/evidence/0"
+      },
+      "reason": "Evidence belongs to another snapshot.",
+      "t16": 3
+    },
+    {
+      "file": "t16-04-missing-derivation.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/"
+      },
+      "reason": "Inference requires derivation.",
+      "t16": 4
+    },
+    {
+      "file": "t16-04-empty-premises.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_minItems",
+        "path": "/derivation/premises"
+      },
+      "reason": "Inference requires a premise.",
+      "t16": 4
+    },
+    {
+      "file": "t16-04-missing-rule.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/derivation"
+      },
+      "reason": "Inference requires a named rule.",
+      "t16": 4
+    },
+    {
+      "file": "t16-05-missing-validation.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/"
+      },
+      "reason": "Human validation must be complete.",
+      "t16": 5
+    },
+    {
+      "file": "t16-05-empty-anchors.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_minItems",
+        "path": "/validation/anchors"
+      },
+      "reason": "Human validation requires an anchor.",
+      "t16": 5
+    },
+    {
+      "file": "t16-06-missing-pattern.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/"
+      },
+      "reason": "Absence must be bounded.",
+      "t16": 6
+    },
+    {
+      "file": "t16-06-missing-scope.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/"
+      },
+      "reason": "Absence must be bounded.",
+      "t16": 6
+    },
+    {
+      "file": "t16-06-missing-method.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/"
+      },
+      "reason": "Absence must be bounded.",
+      "t16": 6
+    },
+    {
+      "file": "t16-07-missing-scope.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/"
+      },
+      "reason": "Coverage requires scope and type.",
+      "t16": 7
+    },
+    {
+      "file": "t16-07-missing-coverage_type.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/"
+      },
+      "reason": "Coverage requires scope and type.",
+      "t16": 7
+    },
+    {
+      "file": "t16-07-unknown-coverage.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_enum",
+        "path": "/coverage_type"
+      },
+      "reason": "Unknown coverage type.",
+      "t16": 7
+    },
+    {
+      "file": "t16-08-absence-status.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_const",
+        "path": "/status"
+      },
+      "reason": "This kind must be OBSERVED.",
+      "t16": 8
+    },
+    {
+      "file": "t16-08-coverage-status.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_const",
+        "path": "/status"
+      },
+      "reason": "This kind must be OBSERVED.",
+      "t16": 8
+    },
+    {
+      "file": "t16-09-projection-observed.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "PRODUCER_STATUS",
+        "path": "/produced_by/producer_type"
+      },
+      "reason": "A projection cannot observe.",
+      "t16": 9
+    },
+    {
+      "file": "t16-09-human-observed.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "PRODUCER_STATUS",
+        "path": "/produced_by/producer_type"
+      },
+      "reason": "A person must use HUMAN_VALIDATED.",
+      "t16": 9
+    },
+    {
+      "file": "t16-09-evaluator-human.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "PRODUCER_STATUS",
+        "path": "/produced_by/producer_type"
+      },
+      "reason": "An evaluator cannot validate as a person.",
+      "t16": 9
+    },
+    {
+      "file": "t16-10-evaluator-catalog_id.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/produced_by"
+      },
+      "reason": "Evaluator provenance is incomplete.",
+      "t16": 10
+    },
+    {
+      "file": "t16-10-evaluator-catalog_version.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/produced_by"
+      },
+      "reason": "Evaluator provenance is incomplete.",
+      "t16": 10
+    },
+    {
+      "file": "t16-10-evaluator-producer_version.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/produced_by"
+      },
+      "reason": "Evaluator provenance is incomplete.",
+      "t16": 10
+    },
+    {
+      "file": "t16-10-evaluator-execution_id.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/produced_by"
+      },
+      "reason": "Evaluator provenance is incomplete.",
+      "t16": 10
+    },
+    {
+      "file": "t16-10-projection-producer_version.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/produced_by"
+      },
+      "reason": "Projection provenance is incomplete.",
+      "t16": 10
+    },
+    {
+      "file": "t16-10-projection-execution_id.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/produced_by"
+      },
+      "reason": "Projection provenance is incomplete.",
+      "t16": 10
+    },
+    {
+      "file": "t16-10-human-catalog_id.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_None",
+        "path": "/produced_by"
+      },
+      "reason": "Human provenance cannot contain automated execution fields.",
+      "t16": 10
+    },
+    {
+      "file": "t16-10-human-catalog_version.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_None",
+        "path": "/produced_by"
+      },
+      "reason": "Human provenance cannot contain automated execution fields.",
+      "t16": 10
+    },
+    {
+      "file": "t16-10-human-producer_version.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_None",
+        "path": "/produced_by"
+      },
+      "reason": "Human provenance cannot contain automated execution fields.",
+      "t16": 10
+    },
+    {
+      "file": "t16-10-human-execution_id.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_None",
+        "path": "/produced_by"
+      },
+      "reason": "Human provenance cannot contain automated execution fields.",
+      "t16": 10
+    },
+    {
+      "file": "t16-10-projection-catalog.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_None",
+        "path": "/produced_by"
+      },
+      "reason": "Projection provenance cannot contain a catalog.",
+      "t16": 10
+    },
+    {
+      "file": "t16-11-empty-scope.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_minItems",
+        "path": "/scope/include"
+      },
+      "reason": "A scope needs an inclusion.",
+      "t16": 11
+    },
+    {
+      "file": "t16-11-invalid-scope-type.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_pattern",
+        "path": "/scope/include/0"
+      },
+      "reason": "This entity type cannot define a scope.",
+      "t16": 11
+    },
+    {
+      "file": "t16-12-missing-relation.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/"
+      },
+      "reason": "An assertion requires a relation.",
+      "t16": 12
+    },
+    {
+      "file": "t16-12-unknown-relation.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_enum",
+        "path": "/relation"
+      },
+      "reason": "Unknown relation.",
+      "t16": 12
+    },
+    {
+      "file": "t16-13-malformed.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_pattern",
+        "path": "/subject"
+      },
+      "reason": "Invalid entity reference.",
+      "t16": 13
+    },
+    {
+      "file": "t16-13-type.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_pattern",
+        "path": "/subject"
+      },
+      "reason": "Invalid entity reference.",
+      "t16": 13
+    },
+    {
+      "file": "t16-13-blank.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_pattern",
+        "path": "/subject"
+      },
+      "reason": "Invalid entity reference.",
+      "t16": 13
+    },
+    {
+      "file": "t16-14-kind.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_enum",
+        "path": "/kind"
+      },
+      "reason": "Unknown contract value.",
+      "t16": 14
+    },
+    {
+      "file": "t16-14-status.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_enum",
+        "path": "/status"
+      },
+      "reason": "Unknown contract value.",
+      "t16": 14
+    },
+    {
+      "file": "t16-14-validity.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_enum",
+        "path": "/validity"
+      },
+      "reason": "Unknown contract value.",
+      "t16": 14
+    },
+    {
+      "file": "t16-14-producer.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_enum",
+        "path": "/produced_by/producer_type"
+      },
+      "reason": "A LLM is not a producer.",
+      "t16": 14
+    },
+    {
+      "file": "t16-15-stale.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SUBMISSION_VALIDITY",
+        "path": "/validity"
+      },
+      "reason": "Only the memory can change validity.",
+      "t16": 15
+    },
+    {
+      "file": "t16-15-revalidation_required.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SUBMISSION_VALIDITY",
+        "path": "/validity"
+      },
+      "reason": "Only the memory can change validity.",
+      "t16": 15
+    },
+    {
+      "file": "t16-16-unknown-field.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_additionalProperties",
+        "path": "/"
+      },
+      "reason": "Unknown fields are refused.",
+      "t16": 16
+    },
+    {
+      "file": "t16-16-confidence.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_additionalProperties",
+        "path": "/"
+      },
+      "reason": "Confidence fields are refused.",
+      "t16": 16
+    },
+    {
+      "file": "t16-16-source-text.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_additionalProperties",
+        "path": "/evidence/0"
+      },
+      "reason": "Evidence cannot store raw source.",
+      "t16": 16
+    },
+    {
+      "file": "t16-17-working-tree-fingerprint.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_required",
+        "path": "/snapshot"
+      },
+      "reason": "Working tree requires a content fingerprint.",
+      "t16": 17
+    },
+    {
+      "file": "t16-18-invalid-hash.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_pattern",
+        "path": "/evidence/0/content_hash"
+      },
+      "reason": "Invalid SHA-256 format.",
+      "t16": 18
+    },
+    {
+      "file": "invalid-relation-target.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "RELATION_OBJECT",
+        "path": "/object"
+      },
+      "reason": "Target type does not match relation."
+    },
+    {
+      "file": "invalid-authorization-reference-type.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "RELATION_OBJECT",
+        "path": "/object"
+      },
+      "reason": "AUTHORIZED_BY accepts a symbol reference or a literal expression, never another reference type."
+    },
+    {
+      "file": "invalid-missing-object.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "RELATION_OBJECT",
+        "path": "/object"
+      },
+      "reason": "Relation requires an object."
+    },
+    {
+      "file": "invalid-directory-path.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "REFERENCE_PATH",
+        "path": "/scope/include/0"
+      },
+      "reason": "Directory must be relative without traversal."
+    },
+    {
+      "file": "invalid-reference-control.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "REFERENCE",
+        "path": "/subject"
+      },
+      "reason": "References cannot contain control characters."
+    },
+    {
+      "file": "invalid-confidence-qualifier.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_not",
+        "path": "/qualifiers"
+      },
+      "reason": "Confidence fields cannot be hidden in qualifiers."
+    },
+    {
+      "file": "invalid-date.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_format",
+        "path": "/validation/validated_at"
+      },
+      "reason": "Validation requires a timestamp."
+    }
+  ]
+}
