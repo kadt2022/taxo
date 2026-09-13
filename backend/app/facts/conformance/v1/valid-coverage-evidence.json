@@ -1,0 +1,35 @@
+{
+  "contract_version": 1,
+  "kind": "COVERAGE",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+    "mode": "COMMIT"
+  },
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "inventory",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "inventory-rules",
+    "catalog_version": "1"
+  },
+  "scope": {
+    "include": [
+      "repository:taxo"
+    ]
+  },
+  "subject": "symbol:java:com.example.PolicyEvaluator",
+  "coverage_type": "NOT_INTERPRETED",
+  "evidence": [
+    {
+      "repository": "taxo",
+      "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+      "path": "requirements.txt",
+      "method": "inventory.requirements",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}

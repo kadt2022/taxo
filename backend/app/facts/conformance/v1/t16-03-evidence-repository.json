@@ -1,0 +1,32 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "subject": "repository:taxo",
+  "relation": "USES_TECHNOLOGY",
+  "object": "technology:FastAPI",
+  "qualifiers": {},
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+    "mode": "COMMIT"
+  },
+  "evidence": [
+    {
+      "repository": "other",
+      "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+      "path": "requirements.txt",
+      "method": "inventory.requirements",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "inventory",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "inventory-rules",
+    "catalog_version": "1"
+  }
+}

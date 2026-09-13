@@ -1,0 +1,46 @@
+[
+  {
+    "name": "lf",
+    "source_utf8": "alpha\nbeta\n",
+    "expected": "sha256:bbfb79e82216bd2db1ad2c507d44ddf80aeb12f64f9562056afe93aad43154d9"
+  },
+  {
+    "name": "crlf",
+    "source_utf8": "alpha\r\nbeta\r\n",
+    "expected": "sha256:bbfb79e82216bd2db1ad2c507d44ddf80aeb12f64f9562056afe93aad43154d9"
+  },
+  {
+    "name": "without-terminator",
+    "source_utf8": "alpha\nbeta",
+    "expected": "sha256:bbfb79e82216bd2db1ad2c507d44ddf80aeb12f64f9562056afe93aad43154d9"
+  },
+  {
+    "name": "empty",
+    "source_utf8": "",
+    "expected": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "blank-final-line",
+    "source_utf8": "alpha\n\n",
+    "expected": "sha256:b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060"
+  },
+  {
+    "name": "utf8",
+    "source_utf8": "caf\u00e9\n",
+    "expected": "sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+  },
+  {
+    "name": "range-lf",
+    "source_utf8": "header\nalpha\nbeta\nfooter\n",
+    "line_start": 2,
+    "line_end": 3,
+    "expected": "sha256:bbfb79e82216bd2db1ad2c507d44ddf80aeb12f64f9562056afe93aad43154d9"
+  },
+  {
+    "name": "range-crlf",
+    "source_utf8": "header\r\nalpha\r\nbeta\r\nfooter\r\n",
+    "line_start": 2,
+    "line_end": 3,
+    "expected": "sha256:bbfb79e82216bd2db1ad2c507d44ddf80aeb12f64f9562056afe93aad43154d9"
+  }
+]

@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:taxo:fact:1",
+  "title": "Taxo Fact Contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "kind", "status", "validity", "snapshot", "produced_by"],
+  "properties": {
+    "contract_version": {"const": 1},
+    "kind": {"enum": ["ASSERTION", "ABSENCE", "COVERAGE"]},
+    "status": {"enum": ["OBSERVED", "INFERRED", "HUMAN_VALIDATED"]},
+    "validity": {"enum": ["VALID", "STALE", "REVALIDATION_REQUIRED"]},
+    "subject": {"$ref": "#/$defs/reference"},
+    "relation": {"enum": ["CONTAINS", "WRITTEN_IN", "USES_TECHNOLOGY", "DECLARED_BY", "ANNOTATED_WITH", "CALLS", "IMPLEMENTS", "DISPATCHES_TO", "HANDLED_BY", "ACCEPTS", "RETURNS", "PERMITS_ALL", "AUTHORIZED_BY", "MATCHED_BY", "PROTECTED_BY"]},
+    "object": {"$ref": "#/$defs/text"},
+    "qualifiers": {"$ref": "#/$defs/qualifiers"},
+    "pattern": {
+      "type": "object", "additionalProperties": false, "required": ["type", "value"],
+      "properties": {"type": {"$ref": "#/$defs/text"}, "value": {"$ref": "#/$defs/text"}}
+    },
+    "scope": {"$ref": "#/$defs/scope"},
+    "method": {"$ref": "#/$defs/text"},
+    "coverage_type": {"enum": ["ANALYSED", "RECOGNIZED", "NOT_INTERPRETED", "OUT_OF_SCOPE", "READ_ERROR"]},
+    "snapshot": {
+      "type": "object", "additionalProperties": false, "required": ["repository", "commit", "mode"],
+      "properties": {
+        "repository": {"$ref": "#/$defs/text"}, "commit": {"$ref": "#/$defs/commit"},
+        "mode": {"enum": ["COMMIT", "WORKING_TREE"]}, "content_fingerprint": {"$ref": "#/$defs/hash"}
+      },
+      "allOf": [{"if": {"properties": {"mode": {"const": "WORKING_TREE"}}}, "then": {"required": ["content_fingerprint"]}}]
+    },
+    "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
+    "produced_by": {
+      "type": "object", "additionalProperties": false, "required": ["producer_type", "producer_id"],
+      "properties": {
+        "producer_type": {"enum": ["EVALUATOR", "PROJECTION", "HUMAN"]},
+        "producer_id": {"$ref": "#/$defs/text"}, "producer_version": {"$ref": "#/$defs/text"},
+        "execution_id": {"$ref": "#/$defs/text"}, "catalog_id": {"$ref": "#/$defs/text"}, "catalog_version": {"$ref": "#/$defs/text"}
+      },
+      "allOf": [
+        {"if": {"properties": {"producer_type": {"const": "EVALUATOR"}}}, "then": {"required": ["producer_version", "execution_id", "catalog_id", "catalog_version"]}},
+        {"if": {"properties": {"producer_type": {"const": "PROJECTION"}}}, "then": {"required": ["producer_version", "execution_id"], "properties": {"catalog_id": false, "catalog_version": false}}},
+        {"if": {"properties": {"producer_type": {"const": "HUMAN"}}}, "then": {"properties": {"producer_version": false, "execution_id": false, "catalog_id": false, "catalog_version": false}}}
+      ]
+    },
+    "derivation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["premises", "rule", "counter_examples_checked", "known_gaps"],
+      "properties": {
+        "premises": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/text"}},
+        "rule": {"$ref": "#/$defs/text"},
+        "counter_examples_checked": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+        "known_gaps": {"type": "array", "items": {"$ref": "#/$defs/text"}}
+      }
+    },
+    "validation": {
+      "type": "object", "additionalProperties": false, "required": ["validated_at", "statement", "anchors"],
+      "properties": {
+        "validated_at": {"type": "string", "format": "date-time"}, "statement": {"$ref": "#/$defs/text"},
+        "anchors": {
+          "type": "array", "minItems": 1,
+          "items": {"type": "object", "additionalProperties": false, "required": ["symbol", "content_hash"], "properties": {"symbol": {"$ref": "#/$defs/symbol"}, "content_hash": {"$ref": "#/$defs/hash"}}}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"kind": {"const": "ASSERTION"}}}, "then": {"required": ["subject", "relation", "qualifiers"], "properties": {"pattern": false, "scope": false, "method": false, "coverage_type": false}}},
+    {"if": {"properties": {"kind": {"const": "ABSENCE"}}}, "then": {"required": ["pattern", "scope", "method"], "properties": {"status": {"const": "OBSERVED"}, "subject": false, "relation": false, "object": false, "qualifiers": false, "evidence": false, "coverage_type": false}}},
+    {"if": {"properties": {"kind": {"const": "COVERAGE"}}}, "then": {"required": ["subject", "coverage_type", "scope"], "properties": {"status": {"const": "OBSERVED"}, "relation": false, "object": false, "qualifiers": false, "pattern": false, "method": false}}},
+    {"if": {"properties": {"kind": {"const": "ASSERTION"}, "status": {"const": "OBSERVED"}}}, "then": {"required": ["evidence"], "properties": {"evidence": {"minItems": 1}}}},
+    {"if": {"properties": {"status": {"const": "INFERRED"}}}, "then": {"required": ["derivation"]}, "else": {"properties": {"derivation": false}}},
+    {"if": {"properties": {"status": {"const": "HUMAN_VALIDATED"}}}, "then": {"required": ["validation"]}, "else": {"properties": {"validation": false}}}
+  ],
+  "$defs": {
+    "text": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "commit": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})(?![\\s\\S])"},
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])"},
+    "reference": {"type": "string", "pattern": "^(repository|module|directory|file|symbol|endpoint|route-pattern|technology|language|annotation|role|permission|policy-rule):[^\\s].*$"},
+    "symbol": {"type": "string", "pattern": "^symbol:[^\\s].*$"},
+    "scopeReference": {"type": "string", "pattern": "^(repository|module|directory|file):[^\\s].*$"},
+    "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*[\\\\:\\u0000-\\u001f\\u007f])(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)[^\\r\\n]*[^/\\r\\n](?![\\s\\S])"},
+    "scope": {
+      "type": "object", "additionalProperties": false, "required": ["include"],
+      "properties": {
+        "include": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/scopeReference"}},
+        "exclude": {"type": "array", "items": {"$ref": "#/$defs/scopeReference"}}
+      }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false, "required": ["repository", "commit", "path", "method", "content_hash"],
+      "properties": {
+        "repository": {"$ref": "#/$defs/text"}, "commit": {"$ref": "#/$defs/commit"}, "path": {"$ref": "#/$defs/path"},
+        "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1},
+        "symbol": {"$ref": "#/$defs/symbol"}, "method": {"$ref": "#/$defs/text"}, "content_hash": {"$ref": "#/$defs/hash"}
+      },
+      "dependentRequired": {"line_start": ["line_end"], "line_end": ["line_start"]}
+    },
+    "qualifiers": {
+      "type": "object", "propertyNames": {"not": {"pattern": "[Cc][Oo][Nn][Ff](?:[Ii][Dd][Ee][Nn][Cc][Ee]|[Ii][Aa][Nn][Cc][Ee])"}},
+      "additionalProperties": {"$ref": "#/$defs/jsonValue"}
+    },
+    "jsonValue": {"anyOf": [
+      {"type": ["string", "number", "boolean", "null"]},
+      {"type": "array", "items": {"$ref": "#/$defs/jsonValue"}},
+      {"$ref": "#/$defs/qualifiers"}
+    ]}
+  }
+}

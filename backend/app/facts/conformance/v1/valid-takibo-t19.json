@@ -1,0 +1,43 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "subject": "endpoint:POST /api/v1/orgs/{orgId}/spaces/{spaceId}/clients",
+  "relation": "HANDLED_BY",
+  "object": "symbol:java:com.takibo.managementservice.interfaces.rest.api.OAuthClientController#register",
+  "qualifiers": {},
+  "snapshot": {
+    "repository": "takibo-iam",
+    "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+    "mode": "COMMIT"
+  },
+  "evidence": [
+    {
+      "repository": "takibo-iam",
+      "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+      "path": "takibo-management-service/src/main/java/com/takibo/managementservice/interfaces/rest/api/OAuthClientController.java",
+      "line_start": 26,
+      "line_end": 26,
+      "method": "java.spring.request-mapping",
+      "content_hash": "sha256:09ccb00cbc0c7ee30ae55351c08e700b9f2c64d4516c99121b8088f3a81e2144"
+    },
+    {
+      "repository": "takibo-iam",
+      "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+      "path": "takibo-management-service/src/main/java/com/takibo/managementservice/interfaces/rest/api/OAuthClientController.java",
+      "line_start": 34,
+      "line_end": 35,
+      "method": "java.spring.request-mapping",
+      "content_hash": "sha256:554a3321bd5d9cdc6a59094935ac3d2e3d531ad045904cf06f53c565bb3b4a37"
+    }
+  ],
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "spring-api",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "spring-api-rules",
+    "catalog_version": "1"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "HUMAN_VALIDATED",
+  "validity": "REVALIDATION_REQUIRED",
+  "subject": "endpoint:POST /api/v1/orgs/{orgId}/spaces/{spaceId}/clients",
+  "relation": "PROTECTED_BY",
+  "object": "policy-rule:POL_OAUTH_CLIENT_ADMIN_REQUIRED",
+  "qualifiers": {},
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+    "mode": "COMMIT"
+  },
+  "produced_by": {
+    "producer_type": "HUMAN",
+    "producer_id": "fixture-reviewer"
+  },
+  "validation": {
+    "validated_at": "2026-09-13T10:00:00Z",
+    "statement": "OAuth client administration requires this policy.",
+    "anchors": [
+      {
+        "symbol": "symbol:java:com.example.PolicyEvaluator#denyOAuthClientSurface",
+        "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  }
+}
