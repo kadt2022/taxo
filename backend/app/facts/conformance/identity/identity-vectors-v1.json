@@ -1,0 +1,1181 @@
+{
+  "version": 1,
+  "domain": "taxo-fact-identity/v1",
+  "cases": [
+    {
+      "name": "assertion",
+      "reason": "Simple ASSERTION",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {},
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {}
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:taxo\"}",
+      "expected": "sha256:f9ff2025d589eff08aa0c63d1028b3fb2e4be6aa3c0a87b3522c300932977c94"
+    },
+    {
+      "name": "property-order",
+      "reason": "Input property order does not affect identity",
+      "input": {
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "qualifiers": {},
+        "object": "technology:FastAPI",
+        "relation": "USES_TECHNOLOGY",
+        "subject": "repository:taxo",
+        "validity": "VALID",
+        "status": "OBSERVED",
+        "kind": "ASSERTION",
+        "contract_version": 1
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {}
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:taxo\"}",
+      "expected": "sha256:f9ff2025d589eff08aa0c63d1028b3fb2e4be6aa3c0a87b3522c300932977c94"
+    },
+    {
+      "name": "absence",
+      "reason": "ABSENCE with bounded scope",
+      "input": {
+        "contract_version": 1,
+        "kind": "ABSENCE",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        },
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "module:a",
+            "module:b"
+          ]
+        },
+        "method": "java.string-literal-search"
+      },
+      "canonical_identity": {
+        "kind": "ABSENCE",
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "module:a",
+            "module:b"
+          ]
+        },
+        "method": "java.string-literal-search"
+      },
+      "canonical_json": "{\"kind\":\"ABSENCE\",\"method\":\"java.string-literal-search\",\"pattern\":{\"type\":\"literal\",\"value\":\"P_SPACE_USER_CREATE\"},\"scope\":{\"include\":[\"module:a\",\"module:b\"]}}",
+      "expected": "sha256:9aea80599cd2e527033590e430677f969d45ffcd78f5d7d810cbd114d56ecaa1"
+    },
+    {
+      "name": "scope-order",
+      "reason": "Inclusion order is not semantic",
+      "input": {
+        "contract_version": 1,
+        "kind": "ABSENCE",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        },
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "module:b",
+            "module:a"
+          ]
+        },
+        "method": "java.string-literal-search"
+      },
+      "canonical_identity": {
+        "kind": "ABSENCE",
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "module:a",
+            "module:b"
+          ]
+        },
+        "method": "java.string-literal-search"
+      },
+      "canonical_json": "{\"kind\":\"ABSENCE\",\"method\":\"java.string-literal-search\",\"pattern\":{\"type\":\"literal\",\"value\":\"P_SPACE_USER_CREATE\"},\"scope\":{\"include\":[\"module:a\",\"module:b\"]}}",
+      "expected": "sha256:9aea80599cd2e527033590e430677f969d45ffcd78f5d7d810cbd114d56ecaa1"
+    },
+    {
+      "name": "scope-duplicates",
+      "reason": "Duplicate inclusions are removed",
+      "input": {
+        "contract_version": 1,
+        "kind": "ABSENCE",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        },
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "module:b",
+            "module:a",
+            "module:a"
+          ]
+        },
+        "method": "java.string-literal-search"
+      },
+      "canonical_identity": {
+        "kind": "ABSENCE",
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "module:a",
+            "module:b"
+          ]
+        },
+        "method": "java.string-literal-search"
+      },
+      "canonical_json": "{\"kind\":\"ABSENCE\",\"method\":\"java.string-literal-search\",\"pattern\":{\"type\":\"literal\",\"value\":\"P_SPACE_USER_CREATE\"},\"scope\":{\"include\":[\"module:a\",\"module:b\"]}}",
+      "expected": "sha256:9aea80599cd2e527033590e430677f969d45ffcd78f5d7d810cbd114d56ecaa1"
+    },
+    {
+      "name": "empty-exclude",
+      "reason": "Empty and absent exclusions are equivalent",
+      "input": {
+        "contract_version": 1,
+        "kind": "ABSENCE",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        },
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "module:b",
+            "module:a",
+            "module:a"
+          ],
+          "exclude": []
+        },
+        "method": "java.string-literal-search"
+      },
+      "canonical_identity": {
+        "kind": "ABSENCE",
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "module:a",
+            "module:b"
+          ]
+        },
+        "method": "java.string-literal-search"
+      },
+      "canonical_json": "{\"kind\":\"ABSENCE\",\"method\":\"java.string-literal-search\",\"pattern\":{\"type\":\"literal\",\"value\":\"P_SPACE_USER_CREATE\"},\"scope\":{\"include\":[\"module:a\",\"module:b\"]}}",
+      "expected": "sha256:9aea80599cd2e527033590e430677f969d45ffcd78f5d7d810cbd114d56ecaa1"
+    },
+    {
+      "name": "coverage",
+      "reason": "COVERAGE includes producer_id",
+      "input": {
+        "contract_version": 1,
+        "kind": "COVERAGE",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        },
+        "scope": {
+          "include": [
+            "repository:taxo"
+          ]
+        },
+        "subject": "symbol:java:com.example.PolicyEvaluator",
+        "coverage_type": "NOT_INTERPRETED"
+      },
+      "canonical_identity": {
+        "kind": "COVERAGE",
+        "subject": "symbol:java:com.example.PolicyEvaluator",
+        "coverage_type": "NOT_INTERPRETED",
+        "scope": {
+          "include": [
+            "repository:taxo"
+          ]
+        },
+        "producer_id": "inventory"
+      },
+      "canonical_json": "{\"coverage_type\":\"NOT_INTERPRETED\",\"kind\":\"COVERAGE\",\"producer_id\":\"inventory\",\"scope\":{\"include\":[\"repository:taxo\"]},\"subject\":\"symbol:java:com.example.PolicyEvaluator\"}",
+      "expected": "sha256:e6f688b880bfd2e028ce1972c8f1dcf2f8cac5efc0b882cae109e9488a332006"
+    },
+    {
+      "name": "coverage-producer",
+      "reason": "A different coverage producer changes identity",
+      "input": {
+        "contract_version": 1,
+        "kind": "COVERAGE",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory-2",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        },
+        "scope": {
+          "include": [
+            "repository:taxo"
+          ]
+        },
+        "subject": "symbol:java:com.example.PolicyEvaluator",
+        "coverage_type": "NOT_INTERPRETED"
+      },
+      "canonical_identity": {
+        "kind": "COVERAGE",
+        "subject": "symbol:java:com.example.PolicyEvaluator",
+        "coverage_type": "NOT_INTERPRETED",
+        "scope": {
+          "include": [
+            "repository:taxo"
+          ]
+        },
+        "producer_id": "inventory-2"
+      },
+      "canonical_json": "{\"coverage_type\":\"NOT_INTERPRETED\",\"kind\":\"COVERAGE\",\"producer_id\":\"inventory-2\",\"scope\":{\"include\":[\"repository:taxo\"]},\"subject\":\"symbol:java:com.example.PolicyEvaluator\"}",
+      "expected": "sha256:c5dbda039e3da97f2510cbb98fe07f1fe0c70ae32bf2859778d1be4a614b3219"
+    },
+    {
+      "name": "nested-numbers",
+      "reason": "Nested objects, ordered arrays and ECMAScript numbers",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "nested": {
+            "z": [
+              null,
+              true,
+              false,
+              {
+                "b": "é",
+                "a": "value"
+              }
+            ],
+            "a": 1
+          },
+          "count": 1,
+          "tiny": 1e-7,
+          "zero": 0
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "nested": {
+            "z": [
+              null,
+              true,
+              false,
+              {
+                "b": "é",
+                "a": "value"
+              }
+            ],
+            "a": 1
+          },
+          "count": 1,
+          "tiny": 1e-7,
+          "zero": 0
+        }
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{\"count\":1,\"nested\":{\"a\":1,\"z\":[null,true,false,{\"a\":\"value\",\"b\":\"é\"}]},\"tiny\":1e-7,\"zero\":0},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:taxo\"}",
+      "expected": "sha256:18b707c241145d755ac6b61228495abf670b6ed92151a32307e6ca2b309852cf"
+    },
+    {
+      "name": "unicode-nfc",
+      "reason": "NFC text in references, qualifier keys and values",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:café",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "é": "café"
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:café",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "é": "café"
+        }
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{\"é\":\"café\"},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:café\"}",
+      "expected": "sha256:c77ce59957cc5c6aa27a3931ea3c8f95878628df2e8e360ac405dbf52a337363"
+    },
+    {
+      "name": "unicode-nfd",
+      "reason": "NFD has the same canonical identity as NFC",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:café",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "é": "café"
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:café",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "é": "café"
+        }
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{\"é\":\"café\"},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:café\"}",
+      "expected": "sha256:c77ce59957cc5c6aa27a3931ea3c8f95878628df2e8e360ac405dbf52a337363"
+    },
+    {
+      "name": "different-occurrence",
+      "reason": "Commit, evidence and producer versions do not affect identity",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {},
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "path": "other.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "2",
+          "execution_id": "second",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "2"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {}
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:taxo\"}",
+      "expected": "sha256:f9ff2025d589eff08aa0c63d1028b3fb2e4be6aa3c0a87b3522c300932977c94"
+    },
+    {
+      "name": "different-object",
+      "reason": "Changing the object changes identity",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:Flask",
+        "qualifiers": {},
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:Flask",
+        "qualifiers": {}
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:Flask\",\"qualifiers\":{},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:taxo\"}",
+      "expected": "sha256:3771e244331b0e5ddfc5320e006641428c096e9e9a29ab018b2580a5e26b79ee"
+    },
+    {
+      "name": "different-qualifier",
+      "reason": "Changing a qualifier changes identity",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "version": "2"
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "version": "2"
+        }
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{\"version\":\"2\"},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:taxo\"}",
+      "expected": "sha256:8aabbf284b9d0fe8ed28be64d343d2341febded7f391b6731afd3eaadd8fec0c"
+    },
+    {
+      "name": "utf16-scope",
+      "reason": "NFC precedes deduplication; both lists use UTF-16 order",
+      "input": {
+        "contract_version": 1,
+        "kind": "ABSENCE",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        },
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "module:Ａ",
+            "module:𝒜",
+            "module:café",
+            "module:café"
+          ],
+          "exclude": [
+            "file:Ａ",
+            "file:𝒜",
+            "file:𝒜"
+          ]
+        },
+        "method": "java.string-literal-search"
+      },
+      "canonical_identity": {
+        "kind": "ABSENCE",
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "module:café",
+            "module:𝒜",
+            "module:Ａ"
+          ],
+          "exclude": [
+            "file:𝒜",
+            "file:Ａ"
+          ]
+        },
+        "method": "java.string-literal-search"
+      },
+      "canonical_json": "{\"kind\":\"ABSENCE\",\"method\":\"java.string-literal-search\",\"pattern\":{\"type\":\"literal\",\"value\":\"P_SPACE_USER_CREATE\"},\"scope\":{\"exclude\":[\"file:𝒜\",\"file:Ａ\"],\"include\":[\"module:café\",\"module:𝒜\",\"module:Ａ\"]}}",
+      "expected": "sha256:899b16007b101be15fd56759671a2d958a401c5e6b3e53f6b0602042f4727dd5"
+    },
+    {
+      "name": "integer-one",
+      "reason": "Integer one and zero",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "one": 1,
+          "zero": 0
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "one": 1,
+          "zero": 0
+        }
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{\"one\":1,\"zero\":0},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:taxo\"}",
+      "expected": "sha256:9ee110b845764e766e97375501ef71c8f052fd60aeb1027b35163ee5a129c6c5"
+    },
+    {
+      "name": "float-one-negative-zero",
+      "reason": "1.0 and -0.0 serialize as 1 and 0",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "one": 1.0,
+          "zero": -0.0
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "one": 1,
+          "zero": 0
+        }
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{\"one\":1,\"zero\":0},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:taxo\"}",
+      "expected": "sha256:9ee110b845764e766e97375501ef71c8f052fd60aeb1027b35163ee5a129c6c5"
+    },
+    {
+      "name": "utf16-object-keys",
+      "reason": "JCS sorts even numeric-looking keys lexically and supplementary keys by UTF-16",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "2": "two",
+          "10": "ten",
+          "Ａ": 1,
+          "𝒜": 2
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "2": "two",
+          "10": "ten",
+          "Ａ": 1,
+          "𝒜": 2
+        }
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{\"10\":\"ten\",\"2\":\"two\",\"𝒜\":2,\"Ａ\":1},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:taxo\"}",
+      "expected": "sha256:31ced14e137fdff5c0e409066d5732bf8288573e51a2b1e8ac9953c4c55c5bcd"
+    },
+    {
+      "name": "safe-integer-limits",
+      "reason": "Both inclusive safe-integer boundaries",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "min": -9007199254740991,
+          "max": 9007199254740991
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "canonical_identity": {
+        "kind": "ASSERTION",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "min": -9007199254740991,
+          "max": 9007199254740991
+        }
+      },
+      "canonical_json": "{\"kind\":\"ASSERTION\",\"object\":\"technology:FastAPI\",\"qualifiers\":{\"max\":9007199254740991,\"min\":-9007199254740991},\"relation\":\"USES_TECHNOLOGY\",\"subject\":\"repository:taxo\"}",
+      "expected": "sha256:d368bd62d57bf12fa0dc4f7cef0fcfbaced1177751e90b47091693e1ea2fd35c"
+    }
+  ],
+  "negative": [
+    {
+      "name": "backslash-path",
+      "input": {
+        "contract_version": 1,
+        "kind": "ABSENCE",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        },
+        "pattern": {
+          "type": "literal",
+          "value": "P_SPACE_USER_CREATE"
+        },
+        "scope": {
+          "include": [
+            "file:src\\main.py"
+          ]
+        },
+        "method": "java.string-literal-search"
+      },
+      "expected_error": {
+        "code": "REFERENCE_PATH",
+        "path": "/scope/include/0",
+        "reason": "Backslashes are rejected, never repaired"
+      }
+    },
+    {
+      "name": "unsafe-integer-positive",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "n": 9007199254740992
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "expected_error": {
+        "code": "IDENTITY_INTEGER_RANGE",
+        "path": "/qualifiers/n",
+        "reason": "Integer outside the interoperable range"
+      }
+    },
+    {
+      "name": "unsafe-integer-negative",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "n": -9007199254740992
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "expected_error": {
+        "code": "IDENTITY_INTEGER_RANGE",
+        "path": "/qualifiers/n",
+        "reason": "Integer outside the interoperable range"
+      }
+    },
+    {
+      "name": "nfc-key-collision",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "nested": [
+            {
+              "é": 1,
+              "é": 2
+            }
+          ]
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "expected_error": {
+        "code": "IDENTITY_KEY_COLLISION",
+        "path": "/qualifiers/nested/0",
+        "reason": "No arbitrary winner after NFC"
+      }
+    },
+    {
+      "name": "lone-surrogate",
+      "input": {
+        "contract_version": 1,
+        "kind": "ASSERTION",
+        "status": "OBSERVED",
+        "validity": "VALID",
+        "subject": "repository:taxo",
+        "relation": "USES_TECHNOLOGY",
+        "object": "technology:FastAPI",
+        "qualifiers": {
+          "text": "\ud800"
+        },
+        "snapshot": {
+          "repository": "taxo",
+          "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+          "mode": "COMMIT"
+        },
+        "evidence": [
+          {
+            "repository": "taxo",
+            "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+            "path": "requirements.txt",
+            "method": "inventory.requirements",
+            "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "produced_by": {
+          "producer_type": "EVALUATOR",
+          "producer_id": "inventory",
+          "producer_version": "1.0.0",
+          "execution_id": "fixture",
+          "catalog_id": "inventory-rules",
+          "catalog_version": "1"
+        }
+      },
+      "expected_error": {
+        "code": "IDENTITY_UNICODE",
+        "path": "/qualifiers/text",
+        "reason": "JCS requires Unicode scalar values"
+      }
+    }
+  ]
+}

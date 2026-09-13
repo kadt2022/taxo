@@ -62,8 +62,9 @@ Le schema seul ne constitue donc pas un validateur Taxo complet.
 - `contract_version` est le nombre entier `1`. Les versions de producteur et de
   catalogue sont des chaines non vides, par exemple `"1"` et `"1.0.0"`.
 - Le fait est plat : ses champs d'identite sont distincts conceptuellement de
-  ceux d'occurrence. `identity_fields` en extrait une copie, sans normalisation
-  ni calcul d'empreinte. Pour COVERAGE, cette copie inclut `producer_id`.
+  ceux d'occurrence. `identity_fields` en renvoie la forme canonique
+  detachee et `fact_identity` son empreinte (voir « Identite canonique »). Pour
+  COVERAGE, l'identite inclut `producer_id`.
 - `derivation.rule` est le nom normatif de l'ADR 0002. Le terme
   `derivation_rule` du paragraphe T13 du recit ne constitue pas un alias.
 - Les premisses sont des identifiants opaques non vides en attendant TAXO-01B.
@@ -76,7 +77,8 @@ Le schema seul ne constitue donc pas un validateur Taxo complet.
   contiennent la cle du depot, pas une reference prefixee `repository:`.
 - Une reference est `type:cle`. Les cles des fichiers et repertoires sont des
   chemins relatifs avec `/`, sans segment `.` ou `..`, ni `/` final.
-  Le tri, la deduplication et la normalisation des references restent en 01B.
+  Aucune reference invalide n'est reparee : la canonicalisation ne s'applique qu'a
+  une valeur deja valide.
 - Les lignes d'une preuve sont optionnelles mais doivent etre presentes ensemble,
   entieres, positives, et ordonnees. Une preuve sans lignes cite le fichier entier.
 - `PERMITS_ALL` interdit `object`, y compris `null`. `AUTHORIZED_BY` accepte
@@ -97,6 +99,23 @@ n'est pas une ligne supplementaire ; une vraie ligne vide finale est conservee.
 Ainsi `a\n` devient `a`, et `a\n\n` devient `a\n`. Une plage inexistante est refusee.
 LF et CRLF produisent la meme empreinte. Aucun acces disque ni texte conserve.
 
+## Identite canonique (TAXO-01B)
+
+`identity_fields(fact)` valide le fait puis renvoie ses champs d'identite canoniques :
+chaines (valeurs et cles) en Unicode NFC, `include` et `exclude` dedoublonnes puis
+tries par unites de code UTF-16, `exclude` vide omis. Aucune autre transformation :
+casse, methode HTTP, `/` final et symboles restent intacts.
+
+`fact_identity(fact)` renvoie `sha256:` suivi du SHA-256 de `taxo-fact-identity/v1
+`
+concatene a la serialisation RFC 8785 (JCS) de `identity_fields(fact)`.
+
+Refus propres a l'identite, appliques des la validation : entier hors de
++/-(2^53 - 1) (`IDENTITY_INTEGER_RANGE`), cles en collision apres NFC
+(`IDENTITY_KEY_COLLISION`), surrogate isole (`IDENTITY_UNICODE`). `1` et `1.0`,
+`0` et `-0` donnent la meme identite. Limite acceptee : deux noms qui ne different
+que par leur forme NFC ou NFD ont la meme identite.
+
 ## Conformite interlangage
 
 `conformance/v1/manifest.json` liste des fichiers JSON autonomes, le mode de
@@ -112,6 +131,10 @@ designe une propriete explicitement interdite par un schema `false`.
 attendues, dont les variantes LF/CRLF et les plages de lignes. Ces textes
 synthetiques servent uniquement de donnees de test et ne sont pas des faits.
 
+`identity/identity-vectors-v1.json` fournit 19 vecteurs d'identite (entree, identite
+canonique, JSON canonique, empreinte) et 5 vecteurs negatifs (code et chemin
+attendus). `--conformance` les rejoue.
+
 La fixture T19 reprend les references et empreintes publiees dans le recit.
 Elle est un exemple de contrat, pas une analyse executee par Taxo. Les autres
 empreintes et identifiants de fixtures sont synthetiques. La suite ne verifie pas
@@ -123,4 +146,5 @@ Valider un fait ne prouve pas sa veracite. Le module n'ouvre aucun depot et ne
 verifie ni l'existence des premisses dans l'instantane, ni les octets cites par
 les preuves, ni le rattachement a une execution reelle. Ces controles necessitent
 les instantanes, executions et la memoire des recits suivants. Aucun stockage,
-appel LLM, calcul d'identite stable ou analyse Java/Spring n'est introduit ici.
+appel LLM ou analyse Java/Spring n'est introduit ici ; l'identite canonique vient
+de TAXO-01B.

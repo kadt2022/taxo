@@ -70,7 +70,8 @@ du langage. Voir [le guide du contrat](backend/app/facts/README.md) pour les
 formats, les décisions de représentation et les limites de validation.
 
 Depuis `backend`, `python -m app.facts --conformance` rejoue les 76 exemples de
-faits et les 8 vecteurs d'empreinte. Le scanner existant conserve son format
+faits, les 8 vecteurs d'empreinte et les vecteurs d'identite canonique (19 positifs,
+5 negatifs). Le scanner existant conserve son format
 actuel jusqu'à TAXO-01D ; le contrat n'est pas encore une mémoire persistante.
 
 `backend/app/scanner.py` produit un inventaire déterministe. `main.py` expose les projets et snapshots via SQLAlchemy. Alembic versionne la base. Le portail interroge l'API à travers un proxy de même origine.

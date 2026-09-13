@@ -6,7 +6,9 @@ import json
 import os
 from pathlib import Path
 
-from .contract import FactValidationError, content_hash, validate_fact
+import rfc8785
+
+from .contract import FactValidationError, content_hash, fact_identity, identity_fields, validate_fact
 
 
 def _unique_object(pairs):
@@ -29,6 +31,29 @@ def fact_path(value):
     if not path.startswith(base + os.sep) or not path.endswith('.json'):
         raise ValueError('The fact must be a .json file inside the working directory.')
     return path
+
+
+def _identity_conformance(root, failures):
+    vectors = read_json(root / 'identity' / 'identity-vectors-v1.json')
+    for case in vectors['cases']:
+        try:
+            passed = (identity_fields(case['input']) == case['canonical_identity']
+                      and rfc8785.dumps(identity_fields(case['input'])).decode('utf-8') == case['canonical_json']
+                      and fact_identity(case['input']) == case['expected'])
+        except FactValidationError:
+            passed = False
+        if not passed:
+            failures.append('identity:' + case['name'])
+    for case in vectors['negative']:
+        try:
+            validate_fact(case['input'], submission=False)
+            passed = False
+        except FactValidationError as error:
+            passed = any(issue.code == case['expected_error']['code']
+                         and issue.path == case['expected_error']['path'] for issue in error.issues)
+        if not passed:
+            failures.append('identity-negative:' + case['name'])
+    return len(vectors['cases']), len(vectors['negative'])
 
 
 def main(argv=None):
@@ -59,7 +84,9 @@ def main(argv=None):
             actual = content_hash(case['source_utf8'].encode('utf-8'), case.get('line_start'), case.get('line_end'))
             if actual != case['expected']:
                 failures.append('hash:' + case['name'])
-        print(json.dumps({'total': len(cases), 'hash_vectors': len(hash_cases), 'failed': failures}))
+        positive, negative = _identity_conformance(root.parent, failures)
+        print(json.dumps({'total': len(cases), 'hash_vectors': len(hash_cases),
+                          'identity_vectors': positive, 'identity_negative_vectors': negative, 'failed': failures}))
         return 1 if failures else 0
     try:
         validate_fact(read_json(fact_path(args.fact)), submission=not args.stored)
