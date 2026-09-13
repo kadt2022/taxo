@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -13,6 +14,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 SCHEMA_PATH = Path(__file__).with_name('contract-v1.schema.json')
 SCHEMA = json.loads(SCHEMA_PATH.read_text(encoding='utf-8'))
 _VALIDATOR = Draft202012Validator(SCHEMA, format_checker=FormatChecker())
+# Reserved type:key syntax of entity references; never read as a literal expression.
+_REFERENCE_SYNTAX = re.compile(r'[a-z][a-z0-9-]*:')
 
 # Source/target types and permitted statuses are the v1 relation vocabulary.
 RELATIONS = {
@@ -151,12 +154,11 @@ def validate_fact(fact, *, submission=True):
                 reject('RELATION_OBJECT', '/object', 'This relation has no object.')
         elif 'object' not in fact:
             reject('RELATION_OBJECT', '/object', 'This relation requires an object.')
-        elif fact['relation'] != 'AUTHORIZED_BY':
+        elif fact['relation'] != 'AUTHORIZED_BY' or _REFERENCE_SYNTAX.match(fact['object']):
+            # AUTHORIZED_BY also accepts an uninterpreted literal expression, but a value
+            # using the reserved type:key syntax is always validated as a reference.
             if reference(fact['object'], '/object') not in targets:
                 reject('RELATION_OBJECT', '/object', 'Object type is not permitted by this relation.')
-        elif fact['object'].startswith('symbol:'):
-            reference(fact['object'], '/object')
-        # AUTHORIZED_BY also accepts an uninterpreted literal expression.
 
     for index, evidence in enumerate(fact.get('evidence', [])):
         path = f'/evidence/{index}'

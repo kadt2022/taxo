@@ -664,6 +664,16 @@
       "reason": "Target type does not match relation."
     },
     {
+      "file": "invalid-authorization-reference-type.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "RELATION_OBJECT",
+        "path": "/object"
+      },
+      "reason": "AUTHORIZED_BY accepts a symbol reference or a literal expression, never another reference type."
+    },
+    {
       "file": "invalid-missing-object.json",
       "submission": true,
       "accepted": false,

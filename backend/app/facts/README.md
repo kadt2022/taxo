@@ -79,6 +79,9 @@ Le schema seul ne constitue donc pas un validateur Taxo complet.
   entieres, positives, et ordonnees. Une preuve sans lignes cite le fichier entier.
 - `PERMITS_ALL` interdit `object`, y compris `null`. `AUTHORIZED_BY` accepte
   une reference `symbol:` ou une expression litterale textuelle, sans l'interpreter.
+  Une valeur qui utilise la syntaxe reservee `type:cle` (par exemple
+  `role:R_ADMIN`) est toujours validee comme reference, donc refusee si son type
+  n'est pas `symbol`.
 - La validite des occurrences conservees peut etre `STALE` ou
   `REVALIDATION_REQUIRED` ; `validate_fact(..., submission=False)` ne calcule
   aucune invalidation et n'autorise pas un producteur a soumettre ces etats.

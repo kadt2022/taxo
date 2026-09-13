@@ -108,6 +108,26 @@ def test_every_relation_has_valid_typed_example(relation):
         validate_fact(fact)
 
 
+@pytest.mark.parametrize('value,accepted', [
+    ('symbol:java:com.example.SecurityConfig', True),
+    ("hasRole('ADMIN')", True),
+    ("hasAuthority('SCOPE_read') and isAuthenticated()", True),
+    ('role:R_ADMIN', False),
+    ('file:SecurityConfig.java', False),
+    ('policy-rule:POL_X', False),
+    ('unknown-type:value', False),
+])
+def test_authorized_by_separates_references_from_literal_expressions(value, accepted):
+    fact = read('valid-authorization-expression')
+    fact['object'] = value
+    if accepted:
+        assert validate_fact(fact) is None
+        return
+    with pytest.raises(FactValidationError) as caught:
+        validate_fact(fact)
+    assert any(i.code == 'RELATION_OBJECT' and i.path == '/object' for i in caught.value.issues)
+
+
 @pytest.mark.parametrize('kind', ['observed', 'absence', 'coverage'])
 def test_identity_excludes_occurrence_and_is_detached(kind):
     fact = read('valid-' + kind)
