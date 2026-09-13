@@ -1,8 +1,34 @@
-# TAXO-01A — Contrat machine du fait
+# TAXO-01A — Contrat machine du fait — TERMINÉ
 
-Statut : À FAIRE  
-Parent : EPIC TAXO-01 — Fondation de la mémoire logicielle vérifiable (`EPIC-TAXO-01-fondation-memoire-verifiable.md`)  
+Statut : Implémentation terminée et tests validés ; revue PR et intégration dans `main` en attente.
+
+Parent : EPIC TAXO-01 — Fondation de la mémoire logicielle vérifiable (`../EPIC-TAXO-01-fondation-memoire-verifiable.md`)
 Références : ADR 0001, ADR 0002
+
+## Vérification de l'implémentation
+
+Branche : `feat/taxo-01a-contrat-machine`, créée depuis `main` au commit `3e35df2`
+après intégration de la PR #1.
+
+- Contrat et guide : `backend/app/facts/`.
+- Suite autonome : 75 faits JSON, dont les 18 catégories de refus T16 et la fixture
+  TAKIBO T19 ; 8 vecteurs d'empreinte UTF-8, LF/CRLF et plages de lignes.
+- `python -m pytest -q` dans `backend` : 165 tests réussis, dont les tests existants
+  du scanner et de l'API ; deux avertissements de dépréciation des dépendances de test.
+- `python -m compileall -q app` : réussi.
+- `python -m app.facts --conformance` : aucune divergence.
+- `npm ci` puis `npm run build` dans `frontend` : type-check et build réussis.
+
+Décisions de représentation détaillées dans `backend/app/facts/README.md` :
+`derivation.rule` suit l'ADR 0002, les versions de producteurs sont textuelles,
+les commits sont complets, et l'extraction des champs d'identité ne calcule pas
+encore leur forme canonique. La validation des faits conservés est distincte
+de la validation de soumission.
+
+La fixture TAKIBO n'est pas une analyse exécutée par Taxo. La validation ne
+vérifie pas encore l'existence des prémisses, des exécutions ou des octets cités :
+ces contrôles nécessitent les récits suivants. Aucune persistance ni conversion
+du scanner n'est introduite dans TAXO-01A.
 
 ## Récit
 

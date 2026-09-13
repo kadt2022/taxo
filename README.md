@@ -62,6 +62,17 @@ npm run build
 
 ## Architecture et prochaines étapes
 
+### Contrat du fait : TAXO-01A
+
+Le contrat machine v1 est disponible dans `backend/app/facts` : JSON Schema,
+validateur sémantique, empreintes normalisées et suite de conformité indépendante
+du langage. Voir [le guide du contrat](backend/app/facts/README.md) pour les
+formats, les décisions de représentation et les limites de validation.
+
+Depuis `backend`, `python -m app.facts --conformance` rejoue les 75 exemples de
+faits et les 8 vecteurs d'empreinte. Le scanner existant conserve son format
+actuel jusqu'à TAXO-01D ; le contrat n'est pas encore une mémoire persistante.
+
 `backend/app/scanner.py` produit un inventaire déterministe. `main.py` expose les projets et snapshots via SQLAlchemy. Alembic versionne la base. Le portail interroge l'API à travers un proxy de même origine.
 
 Les scans sont synchrones et bornés à 50 000 fichiers dans cette version. Avant de traiter de gros dépôts : introduire une file durable, des workers isolés, des délais et une reprise après échec.
