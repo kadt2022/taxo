@@ -64,7 +64,8 @@ def test_commit_does_not_depend_on_the_working_tree(repo):
     for path in expected[0]:
         (repo / path).unlink()
     after = open_snapshot(repo, 'demo')
-    assert (paths(after), contents(after)) == expected
+    actual = (paths(after), contents(after))
+    assert actual == expected
     assert after.commit == before.commit
 
 
