@@ -30,17 +30,17 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - name: Install backend dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r requirements.txt pytest-cov
       - name: Compile Python modules
         run: python -m compileall -q app
-      - name: Run all backend tests
-        run: python -m pytest -q --junitxml=reports/pytest.xml
+      - name: Run all backend tests with coverage
+        run: python -m pytest -q --cov=app --cov-report=xml:reports/coverage.xml --junitxml=reports/pytest.xml
       - name: Upload backend test results
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: taxo-backend-tests
-          path: backend/reports/pytest.xml
+          path: backend/reports
           if-no-files-found: warn
           retention-days: 7
 
@@ -146,9 +146,51 @@ jobs:
         if: always()
         run: docker compose down --volumes --remove-orphans
 
+  sonar:
+    name: Taxo Sonar Analysis
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Download backend coverage
+        uses: actions/download-artifact@v6
+        with:
+          name: taxo-backend-tests
+          path: backend/reports
+      - name: Run SonarQube Cloud analysis and wait for Quality Gate
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.sources=backend/app,frontend/src
+            -Dsonar.tests=backend/tests
+            -Dsonar.python.version=3.12
+            -Dsonar.python.coverage.reportPaths=backend/reports/coverage.xml
+            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+
+  quality-gate:
+    name: Taxo Quality Gate
+    needs: sonar
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Confirm Sonar Quality Gate
+        run: |
+          echo "## Taxo Quality Gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "Sonar analysis completed with a passing Quality Gate." >> "$GITHUB_STEP_SUMMARY"
+
   status:
     name: Taxo CI Status
-    needs: [backend, frontend, database, containers]
+    needs: [backend, frontend, database, containers, sonar, quality-gate]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
