@@ -37,7 +37,7 @@ jobs:
         run: |
           test -f backend/requirements.txt
           test -f frontend/package-lock.json
-          test -f docker-compose.yml
+          test -f compose.yaml
           test -f .github/scripts/check_database.py
           test -f .github/scripts/check_containers.py
       - name: Validate Docker Compose configuration
@@ -180,12 +180,30 @@ jobs:
   sonar:
     name: Taxo Sonar Analysis
     needs: [backend, frontend]
+    # Contexte de confiance uniquement. GitHub ne transmet pas les secrets du depot
+    # aux PR issues d'un fork ni aux PR Dependabot ; pull_request_target n'est pas
+    # utilise, pour ne jamais exposer les secrets au code d'un fork.
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Verify Sonar configuration
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+        run: |
+          missing=0
+          for name in SONAR_TOKEN SONAR_PROJECT_KEY SONAR_ORGANIZATION; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name absent : Sonar est obligatoire dans ce contexte de confiance."
+              missing=1
+            fi
+          done
+          exit "$missing"
       - name: Download backend coverage
         uses: actions/download-artifact@v6
         with:
@@ -227,9 +245,37 @@ jobs:
     timeout-minutes: 2
     permissions: {}
     steps:
-      - name: Require every job to succeed
+      - name: Require every applicable job to succeed
         env:
           RESULTS: ${{ toJSON(needs) }}
+          # Meme condition que le job sonar : true dans un contexte de confiance.
+          SONAR_APPLICABLE: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
         run: |
-          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"' >> "$GITHUB_STEP_SUMMARY"
-          echo "$RESULTS" | jq -e 'length > 0 and all(.[]; .result == "success")'
+          summary() { echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+          result() { echo "$RESULTS" | jq -r --arg job "$1" '.[$job].result'; }
+          failed=0
+
+          summary "## Taxo CI Status"
+          summary ""
+          for job in preflight backend frontend database containers; do
+            r="$(result "$job")"
+            summary "- $job: $r"
+            [ "$r" = "success" ] || failed=1
+          done
+
+          if [ "$SONAR_APPLICABLE" = "true" ]; then
+            for job in sonar quality-gate; do
+              r="$(result "$job")"
+              summary "- $job: $r"
+              [ "$r" = "success" ] || failed=1
+            done
+          else
+            summary "- Sonar Analysis: NOT APPLICABLE - untrusted fork PR"
+            summary "- Quality Gate: NOT APPLICABLE - untrusted fork PR"
+            # Seul skipped est tolere : il prouve que Sonar n'a pas ete execute.
+            # Un Quality Gate rouge ne peut donc jamais devenir un succes.
+            [ "$(result sonar)" = "skipped" ] || failed=1
+            [ "$(result quality-gate)" = "skipped" ] || failed=1
+          fi
+
+          exit "$failed"
