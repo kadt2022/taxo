@@ -1,35 +1,47 @@
 """Read-only Git snapshots (TAXO-01C).
 
-Only plumbing commands that never run repository-configured programs are used:
-rev-parse, ls-tree, ls-files and cat-file. Working-tree bytes are read directly, so
-clean/smudge filters, hooks and fsmonitor are never invoked. `.env` files are listed
-but never read, not even to compute a digest.
+COMMIT reads Git objects only and never touches the working tree. WORKING_TREE reads the
+files Git tracks or would track (not ignored) and is identified by a content fingerprint.
+Only rev-parse, ls-tree, ls-files and cat-file are run, with core.fsmonitor disabled:
+no hook, filter or fsmonitor configured by the repository is ever executed. `.env` files
+are neither exposed nor read.
 """
 from dataclasses import dataclass, field
-from functools import partial
 import hashlib
 import os
 from pathlib import Path
+import re
+import stat
 import subprocess
 import tempfile
-from typing import Callable
+import unicodedata
 
 COMMIT, WORKING_TREE = 'COMMIT', 'WORKING_TREE'
+NOT_A_GIT_REPOSITORY = 'NOT_A_GIT_REPOSITORY'
+UNKNOWN_COMMIT = 'UNKNOWN_COMMIT'
+GIT_READ_ERROR = 'GIT_READ_ERROR'
+UNSUPPORTED_GIT_ENTRY = 'UNSUPPORTED_GIT_ENTRY'
+WORKING_TREE_READ_ERROR = 'WORKING_TREE_READ_ERROR'
+
 GIT_TIMEOUT = 120
+# Same object id rule as the fact contract: 40 or 64 lowercase hexadecimal characters.
+_COMMIT_ID = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')
 _GIT = ['git', '-c', 'safe.directory=*', '-c', 'core.fsmonitor=false']
 _ENV = {'GIT_TERMINAL_PROMPT': '0', 'GIT_OPTIONAL_LOCKS': '0'}
+_FILE_MODES = {b'100644', b'100755'}
 _CHUNK = 1 << 16
 
 
 class SnapshotError(ValueError):
-    """The repository cannot provide a versioned snapshot."""
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True)
-class Entry:
+class SnapshotFile:
     path: str
     size: int
-    read: Callable[[], bytes] = field(repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -37,10 +49,28 @@ class Snapshot:
     repository: str
     commit: str
     mode: str
-    dirty: bool
-    content_fingerprint: str | None
-    entries: tuple[Entry, ...] = field(repr=False)
-    warnings: tuple[str, ...] = ()
+    files: tuple[SnapshotFile, ...] = field(repr=False)
+    content_fingerprint: str | None = None
+    dirty: bool | None = None
+    skipped: tuple[tuple[str, str], ...] = field(default=(), repr=False)
+    _root: Path | None = field(default=None, repr=False, compare=False)
+    _sources: dict = field(default_factory=dict, repr=False, compare=False)
+
+    def iter_files(self):
+        return iter(self.files)
+
+    def read_bytes(self, path):
+        return next(self.read_many([path]))[1]
+
+    def read_many(self, paths):
+        """Yield (path, bytes) in order; COMMIT streams every blob through one git process."""
+        paths = list(paths)
+        sources = [self._sources[path] for path in paths]
+        if self.mode == COMMIT:
+            yield from zip(paths, _read_blobs(self._root, sources))
+        else:
+            for path, raw_path in zip(paths, sources):
+                yield path, _read_file(self._root, raw_path, path)
 
     def reference(self):
         """Snapshot fields of the fact contract (ADR 0002)."""
@@ -52,13 +82,56 @@ class Snapshot:
 
 def _git(root, *args):
     try:
-        result = subprocess.run([*_GIT, '-C', str(root), *args], capture_output=True,
-                                timeout=GIT_TIMEOUT, env={**os.environ, **_ENV})
+        return subprocess.run([*_GIT, '-C', str(root), *args], capture_output=True,
+                              timeout=GIT_TIMEOUT, env={**os.environ, **_ENV})
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise SnapshotError("Git est indisponible ou trop lent pour créer l'instantané.") from exc
+        raise SnapshotError(GIT_READ_ERROR, 'Git est indisponible ou trop lent.') from exc
+
+
+def _git_output(root, *args):
+    result = _git(root, *args)
     if result.returncode:
-        raise SnapshotError('Git a refusé de lire le dépôt.')
+        raise SnapshotError(GIT_READ_ERROR, 'Git a refusé de lire le dépôt.')
     return result.stdout
+
+
+def _read_blobs(root, oids):
+    """Stream blobs in order through a single `git cat-file --batch` process."""
+    if not oids:
+        return
+    with tempfile.TemporaryFile() as batch:
+        batch.write(b''.join(oid.encode('ascii') + b'\n' for oid in oids))
+        batch.seek(0)
+        try:
+            process = subprocess.Popen([*_GIT, '-C', str(root), 'cat-file', '--batch'], stdin=batch,
+                                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env={**os.environ, **_ENV})
+        except OSError as exc:
+            raise SnapshotError(GIT_READ_ERROR, 'Git est indisponible.') from exc
+        try:
+            for _ in oids:
+                header = process.stdout.readline().split()
+                if len(header) != 3 or header[1] != b'blob':
+                    raise SnapshotError(GIT_READ_ERROR, 'Objet Git manquant ou illisible.')
+                size = int(header[2])
+                data = process.stdout.read(size)
+                if len(data) != size or process.stdout.read(1) != b'\n':
+                    raise SnapshotError(GIT_READ_ERROR, 'Objet Git tronqué.')
+                yield data
+        finally:
+            process.stdout.close()
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+
+
+def _read_file(root, raw_path, path):
+    file = root / raw_path
+    try:
+        if not stat.S_ISREG(file.lstat().st_mode) or not file.resolve().is_relative_to(root):
+            raise OSError('Not a regular file inside the repository.')
+        return file.read_bytes()
+    except OSError as exc:
+        raise SnapshotError(WORKING_TREE_READ_ERROR, f'Fichier du dossier de travail illisible : {path}') from exc
 
 
 def _is_env(path):
@@ -66,20 +139,8 @@ def _is_env(path):
     return name == '.env' or name.startswith('.env.')
 
 
-def _decode(raw, warnings):
-    try:
-        return raw.decode('utf-8')
-    except UnicodeDecodeError:
-        warnings.append('Chemin non UTF-8 ignoré.')
-        return None
-
-
-def _fingerprint(digests):
-    """SHA-256 over (path, LF-normalized content digest) pairs sorted by UTF-8 path bytes."""
-    digest = hashlib.sha256()
-    for path in sorted(digests, key=lambda p: p.encode('utf-8')):
-        digest.update(path.encode('utf-8') + b'\0' + digests[path].encode('ascii') + b'\n')
-    return 'sha256:' + digest.hexdigest()
+def _digest(data):
+    return hashlib.sha256(data.replace(b'\r', b'')).hexdigest()
 
 
 def _file_digest(file):
@@ -90,92 +151,116 @@ def _file_digest(file):
     return digest.hexdigest()
 
 
-def _blob_digests(root, oids):
-    """Stream each committed blob once and keep only its LF-normalized digest."""
-    digests = {}
-    with tempfile.TemporaryFile() as batch:
-        batch.write(b''.join(oid.encode('ascii') + b'\n' for oid in oids))
-        batch.seek(0)
+def _fingerprint(digests):
+    """SHA-256 over (NFC path, LF-normalized content digest), sorted by UTF-8 path bytes."""
+    digest = hashlib.sha256()
+    for path in sorted(digests, key=lambda p: p.encode('utf-8')):
+        digest.update(path.encode('utf-8') + b'\0' + digests[path].encode('ascii') + b'\n')
+    return 'sha256:' + digest.hexdigest()
+
+
+def _logical_paths(raw_paths):
+    """Map NFC repository-relative paths to Git paths; refuse instead of choosing."""
+    logical = {}
+    for raw in raw_paths:
         try:
-            process = subprocess.Popen([*_GIT, '-C', str(root), 'cat-file', '--batch'], stdin=batch,
-                                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env={**os.environ, **_ENV})
+            text = raw.decode('utf-8')
+        except UnicodeDecodeError as exc:
+            raise SnapshotError(UNSUPPORTED_GIT_ENTRY, 'Chemin Git non UTF-8.') from exc
+        path = unicodedata.normalize('NFC', text)
+        parts = path.split('/')
+        if path.startswith('/') or '' in parts or '.' in parts or '..' in parts:
+            raise SnapshotError(UNSUPPORTED_GIT_ENTRY, 'Chemin Git hors du dépôt logique.')
+        if path in logical:
+            raise SnapshotError(UNSUPPORTED_GIT_ENTRY, 'Deux chemins Git sont identiques après normalisation NFC.')
+        logical[path] = text
+    return logical
+
+
+def _tree(root, commit):
+    """Readable committed files {path: (oid, size)} and skipped special entries."""
+    records = []
+    for record in filter(None, _git_output(root, 'ls-tree', '-r', '-z', '-l', '--full-tree', commit).split(b'\0')):
+        meta, raw_path = record.split(b'\t', 1)
+        records.append((raw_path, meta.split()))
+    files, skipped = {}, []
+    for path, (_, (mode, kind, oid, size)) in zip(_logical_paths(raw for raw, _ in records), records):
+        if kind == b'blob' and mode in _FILE_MODES:
+            if _is_env(path):
+                skipped.append((path, 'confidential'))
+            else:
+                files[path] = (oid.decode('ascii'), int(size))
+        elif kind == b'blob' and mode == b'120000':
+            skipped.append((path, 'symlink'))
+        elif kind == b'commit':
+            skipped.append((path, 'submodule'))
+        else:
+            raise SnapshotError(UNSUPPORTED_GIT_ENTRY, f'Entrée Git non supportée : {path}')
+    return files, skipped
+
+
+def _sorted_files(sizes):
+    return tuple(SnapshotFile(p, sizes[p]) for p in sorted(sizes, key=lambda p: p.encode('utf-8')))
+
+
+def _working_tree(root, repository, head):
+    listed = _git_output(root, 'ls-files', '-z', '--cached', '--others', '--exclude-standard').split(b'\0')
+    sizes, sources, digests, skipped = {}, {}, {}, []
+    for path, text in _logical_paths(dict.fromkeys(filter(None, listed))).items():
+        file = root / text
+        try:
+            info = file.lstat()
+        except (FileNotFoundError, NotADirectoryError):
+            continue
         except OSError as exc:
-            raise SnapshotError("Git est indisponible pour lire l'instantané.") from exc
-        with process.stdout as out:
-            for oid in oids:
-                header = out.readline().split()
-                if len(header) != 3:
-                    process.kill()
-                    raise SnapshotError('Objet Git illisible.')
-                remaining, digest = int(header[2]), hashlib.sha256()
-                while remaining:
-                    chunk = out.read(min(remaining, _CHUNK))
-                    if not chunk:
-                        process.kill()
-                        raise SnapshotError('Objet Git tronqué.')
-                    digest.update(chunk.replace(b'\r', b''))
-                    remaining -= len(chunk)
-                out.read(1)
-                digests[oid] = digest.hexdigest()
-        if process.wait(timeout=GIT_TIMEOUT):
-            raise SnapshotError('Git a refusé de lire les objets du commit.')
-    return digests
+            raise SnapshotError(WORKING_TREE_READ_ERROR, f'Fichier du dossier de travail illisible : {path}') from exc
+        if stat.S_ISLNK(info.st_mode):
+            skipped.append((path, 'symlink'))
+        elif stat.S_ISDIR(info.st_mode):
+            skipped.append((path, 'submodule'))
+        elif not stat.S_ISREG(info.st_mode):
+            raise SnapshotError(WORKING_TREE_READ_ERROR, f'Entrée du dossier de travail non supportée : {path}')
+        elif _is_env(path):
+            skipped.append((path, 'confidential'))
+        else:
+            try:
+                if not file.resolve().is_relative_to(root):
+                    skipped.append((path, 'symlink'))
+                    continue
+                digests[path] = _file_digest(file)
+            except OSError as exc:
+                raise SnapshotError(WORKING_TREE_READ_ERROR, f'Fichier du dossier de travail illisible : {path}') from exc
+            sizes[path], sources[path] = info.st_size, text
+    head_files, _ = _tree(root, head)
+    head_paths = list(head_files)
+    head_digests = {p: _digest(data) for p, data in
+                    zip(head_paths, _read_blobs(root, [head_files[p][0] for p in head_paths]))}
+    return Snapshot(repository, head, WORKING_TREE, _sorted_files(sizes), _fingerprint(digests),
+                    head_digests != digests, tuple(skipped), root, sources)
 
 
-def open_snapshot(root, mode=COMMIT):
-    """Return a Snapshot of the repository at root, or None if root is not a Git top level."""
+def open_snapshot(root, repository, mode=COMMIT, commit=None):
+    """Snapshot of the Git repository whose top level is root, identified by the caller's key."""
     if mode not in (COMMIT, WORKING_TREE):
-        raise ValueError('Mode d\'instantané inconnu.')
+        raise ValueError("Mode d'instantané inconnu.")
+    if not isinstance(repository, str) or not repository.strip():
+        raise ValueError("La clé du dépôt doit être fournie par l'appelant.")
+    if commit is not None and mode != COMMIT:
+        raise ValueError('Un commit explicite ne peut être demandé qu\'en mode COMMIT.')
+    if commit is not None and not (isinstance(commit, str) and _COMMIT_ID.fullmatch(commit)):
+        raise SnapshotError(UNKNOWN_COMMIT, 'Commit attendu : 40 ou 64 caractères hexadécimaux minuscules.')
     root = Path(root).resolve()
     if not (root / '.git').exists():
-        return None
-    if Path(_git(root, 'rev-parse', '--show-toplevel').decode('utf-8').strip()).resolve() != root:
-        return None
-    try:
-        commit = _git(root, 'rev-parse', '--verify', '--quiet', 'HEAD^{commit}').decode('ascii').strip()
-    except SnapshotError as exc:
-        raise SnapshotError('Le dépôt ne contient encore aucun commit.') from exc
-    warnings = []
-
-    committed = {}
-    for record in filter(None, _git(root, 'ls-tree', '-r', '-z', '-l', '--full-tree', commit).split(b'\0')):
-        meta, raw_path = record.split(b'\t', 1)
-        file_mode, kind, oid, size = meta.split()
-        path = _decode(raw_path, warnings)
-        # Symlinks (120000) and submodules (commit objects) are never followed.
-        if path and kind == b'blob' and file_mode != b'120000':
-            committed[path] = (oid.decode('ascii'), int(size))
-
-    working = {}
-    listed = _git(root, 'ls-files', '-z', '--cached', '--others', '--exclude-standard').split(b'\0')
-    for raw_path in dict.fromkeys(filter(None, listed)):
-        path = _decode(raw_path, warnings)
-        file = root / path if path else None
-        try:
-            if file and not file.is_symlink() and file.is_file() and file.resolve().is_relative_to(root):
-                working[path] = file
-        except OSError:
-            warnings.append(f'Fichier illisible : {path}')
-
-    readable = [p for p in committed if not _is_env(p)]
-    oids = list(dict.fromkeys(committed[p][0] for p in readable))
-    blob_digests = _blob_digests(root, oids) if oids else {}
-    committed_digests = {p: blob_digests[committed[p][0]] for p in readable}
-    working_digests = {}
-    for path, file in working.items():
-        if _is_env(path):
-            continue
-        try:
-            working_digests[path] = _file_digest(file)
-        except OSError:
-            warnings.append(f'Fichier illisible : {path}')
-
-    if mode == COMMIT:
-        entries = tuple(Entry(p, size, partial(_git, root, 'cat-file', 'blob', oid))
-                        for p, (oid, size) in sorted(committed.items()))
-        fingerprint = None
-    else:
-        entries = tuple(Entry(p, f.stat().st_size, f.read_bytes) for p, f in sorted(working.items()))
-        fingerprint = _fingerprint(working_digests)
-    return Snapshot(root.name, commit, mode, committed_digests != working_digests, fingerprint,
-                    entries, tuple(warnings))
+        raise SnapshotError(NOT_A_GIT_REPOSITORY, "Le dossier n'est pas la racine d'un dépôt Git.")
+    top = _git(root, 'rev-parse', '--show-toplevel')
+    if top.returncode or Path(top.stdout.decode('utf-8', 'replace').strip()).resolve() != root:
+        raise SnapshotError(NOT_A_GIT_REPOSITORY, "Le dossier n'est pas la racine d'un dépôt Git.")
+    resolved = _git(root, 'rev-parse', '--verify', '--quiet', (commit or 'HEAD') + '^{commit}')
+    if resolved.returncode:
+        raise SnapshotError(UNKNOWN_COMMIT, 'Commit introuvable dans le dépôt.')
+    sha = resolved.stdout.decode('ascii').strip()
+    if mode == WORKING_TREE:
+        return _working_tree(root, repository, sha)
+    files, skipped = _tree(root, sha)
+    return Snapshot(repository, sha, COMMIT, _sorted_files({p: size for p, (_, size) in files.items()}),
+                    skipped=tuple(skipped), _root=root, _sources={p: oid for p, (oid, _) in files.items()})

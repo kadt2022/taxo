@@ -10,7 +10,7 @@ from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session
 
 from .scanner import inspect_repository
-from .snapshots import COMMIT, WORKING_TREE
+from .snapshots import COMMIT, WORKING_TREE, SnapshotError
 
 
 class Base(DeclarativeBase):
@@ -82,14 +82,17 @@ def create_app(database_url=None, allowed_roots=None):
             return [{'id': s.id, 'created_at': s.created_at, **s.result} for s in db.scalars(select(Scan).where(Scan.project_id == project_id).order_by(Scan.created_at.desc()))]
 
     @api.post('/api/projects/{project_id}/scans', status_code=201)
-    def run_scan(project_id: str, mode: Literal['commit', 'working-tree'] = 'commit'):
+    def run_scan(project_id: str, mode: Literal['commit', 'working-tree'] = 'commit', commit: str | None = None):
         with Session(engine) as db:
             project = db.get(Project, project_id)
             if not project:
                 raise HTTPException(404, 'Projet introuvable.')
             path = resolve_project_path(project.path)
             try:
-                result = inspect_repository(path, WORKING_TREE if mode == 'working-tree' else COMMIT)
+                # The Project id is the repository key: the filesystem never defines it.
+                result = inspect_repository(path, project.id, WORKING_TREE if mode == 'working-tree' else COMMIT, commit)
+            except SnapshotError as exc:
+                raise HTTPException(422, f'{exc.code} : {exc}') from exc
             except (ValueError, OSError) as exc:
                 raise HTTPException(422, str(exc)) from exc
             scan = Scan(id=str(uuid4()), project_id=project_id, created_at=datetime.now(timezone.utc), result=result)

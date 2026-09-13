@@ -1,77 +1,170 @@
 import json
+import os
 import subprocess
 import sys
+import unicodedata
 
 from fastapi.testclient import TestClient
 import pytest
 
+from app import snapshots
 from app.main import Base, create_app
 from app.scanner import inspect_repository
-from app.snapshots import COMMIT, WORKING_TREE, SnapshotError, open_snapshot
+from app.snapshots import (COMMIT, GIT_READ_ERROR, NOT_A_GIT_REPOSITORY, UNKNOWN_COMMIT, UNSUPPORTED_GIT_ENTRY,
+                           WORKING_TREE, WORKING_TREE_READ_ERROR, SnapshotError, open_snapshot)
 
-
-def git(repo, *args, stdin=None):
-    return subprocess.run(['git', '-c', 'user.name=Taxo', '-c', 'user.email=taxo@example.invalid',
-                           '-c', 'commit.gpgsign=false', '-c', 'core.autocrlf=false', '-C', str(repo), *args],
-                          input=stdin, check=True, capture_output=True).stdout.decode().strip()
+FILES = {'.gitignore': 'cache/\nignored.txt\n', 'package.json': json.dumps({'dependencies': {'react': '19'}}),
+         'App.tsx': 'export const App = () => null\n', 'src/main.py': 'print(1)\n'}
 
 
 @pytest.fixture
-def repo(tmp_path):
-    root = tmp_path / 'demo'
-    root.mkdir()
-    git(root, 'init', '-q')
-    (root / '.gitignore').write_text('ignored/\n.env\n')
-    (root / 'package.json').write_text(json.dumps({'dependencies': {'react': '19'}}))
-    (root / 'App.tsx').write_bytes(b'export const App = () => null\n')
-    git(root, 'add', '.')
-    git(root, 'commit', '-q', '-m', 'initial')
-    return root
+def repo(make_repo):
+    return make_repo(FILES, 'demo')
 
 
-def test_commit_snapshot_reads_only_committed_tracked_content(repo):
-    (repo / 'ignored').mkdir()
-    (repo / 'ignored' / 'hidden.py').write_text('')
+def paths(snapshot):
+    return [f.path for f in snapshot.iter_files()]
+
+
+def contents(snapshot):
+    return dict(snapshot.read_many(paths(snapshot)))
+
+
+def fingerprint(repo):
+    return open_snapshot(repo, 'demo', WORKING_TREE).content_fingerprint
+
+
+def error_code(call):
+    with pytest.raises(SnapshotError) as caught:
+        call()
+    return caught.value.code
+
+
+# COMMIT
+
+def test_commit_lists_committed_files_and_reads_git_objects(repo):
+    (repo / 'cache').mkdir()
+    (repo / 'cache' / 'big.bin').write_bytes(b'x')
+    (repo / 'ignored.txt').write_text('ignored')
     (repo / 'untracked.py').write_text('')
-    (repo / 'package.json').write_text(json.dumps({'dependencies': {'react': '19', 'vite': '7'}}))
+    (repo / 'package.json').write_text('{"local": true}')
     (repo / 'App.tsx').unlink()
-    result = inspect_repository(repo)
-    assert {f['technology'] for f in result['facts']} == {'React', 'TypeScript', 'Node.js ecosystem'}
-    assert result['files_count'] == 3 and result['source'] == 'commit'
-    assert result['snapshot'] == {'repository': 'demo', 'commit': git(repo, 'rev-parse', 'HEAD'),
-                                  'mode': 'COMMIT', 'dirty': True}
+    snapshot = open_snapshot(repo, 'demo')
+    assert paths(snapshot) == ['.gitignore', 'App.tsx', 'package.json', 'src/main.py']
+    data = contents(snapshot)
+    assert data['package.json'] == FILES['package.json'].encode() and data['App.tsx'] == FILES['App.tsx'].encode()
+    assert snapshot.dirty is None and 'content_fingerprint' not in snapshot.reference()
 
 
-def test_working_tree_snapshot_is_marked_and_includes_uncommitted_files(repo):
-    (repo / 'ignored').mkdir()
-    (repo / 'ignored' / 'hidden.py').write_text('')
+def test_commit_does_not_depend_on_the_working_tree(repo):
+    before = open_snapshot(repo, 'demo')
+    expected = (paths(before), contents(before))
+    for path in expected[0]:
+        (repo / path).unlink()
+    after = open_snapshot(repo, 'demo')
+    assert (paths(after), contents(after)) == expected and after.commit == before.commit
+
+
+def test_old_commit_can_be_read_after_head_moves(repo, git):
+    first = git(repo, 'rev-parse', 'HEAD')
+    (repo / 'App.tsx').write_bytes(b'changed\n')
+    git(repo, 'commit', '-qam', 'second')
+    old = open_snapshot(repo, 'demo', commit=first)
+    assert old.commit == first and old.read_bytes('App.tsx') == FILES['App.tsx'].encode()
+    assert open_snapshot(repo, 'demo').read_bytes('App.tsx') == b'changed\n'
+
+
+def test_sha_is_frozen_when_head_moves_during_analysis(repo, git):
+    snapshot = open_snapshot(repo, 'demo')
+    frozen = snapshot.commit
+    (repo / 'App.tsx').write_bytes(b'newer\n')
+    (repo / 'added.py').write_text('')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'during')
+    assert snapshot.commit == frozen and 'added.py' not in paths(snapshot)
+    assert snapshot.read_bytes('App.tsx') == FILES['App.tsx'].encode()
+
+
+def test_no_checkout_reset_or_index_write(repo):
+    (repo / 'App.tsx').write_bytes(b'local\n')
     (repo / 'untracked.py').write_text('')
-    result = inspect_repository(repo, WORKING_TREE)
-    assert ('Python', 'untracked.py') in {(f['technology'], f['file']) for f in result['facts']}
-    assert all(not f['file'].startswith('ignored/') for f in result['facts'])
-    snapshot = result['snapshot']
-    assert snapshot['mode'] == 'WORKING_TREE' and snapshot['dirty'] is True and result['source'] == 'working-tree'
-    assert snapshot['content_fingerprint'].startswith('sha256:') and len(snapshot['content_fingerprint']) == 71
+    index = repo / '.git' / 'index'
+    def state():
+        return (index.read_bytes(), index.stat().st_mtime_ns, (repo / '.git' / 'HEAD').read_bytes(),
+                (repo / 'App.tsx').read_bytes(), sorted(p.name for p in repo.iterdir()))
+    before = state()
+    for mode in (COMMIT, WORKING_TREE):
+        contents(open_snapshot(repo, 'demo', mode))
+    assert state() == before
 
 
-def test_line_endings_alone_do_not_change_state_or_fingerprint(repo):
-    lf = open_snapshot(repo, WORKING_TREE)
-    assert lf.dirty is False
-    (repo / 'App.tsx').write_bytes(b'export const App = () => null\r\n')
-    crlf = open_snapshot(repo, WORKING_TREE)
-    assert crlf.dirty is False and crlf.content_fingerprint == lf.content_fingerprint
-    (repo / 'App.tsx').write_bytes(b'export const App = () => 1\n')
-    assert open_snapshot(repo, WORKING_TREE).content_fingerprint != lf.content_fingerprint
+def test_symlinks_and_submodules_are_not_followed(repo, git):
+    link = git(repo, 'hash-object', '-w', '--stdin', stdin=b'../outside')
+    git(repo, 'update-index', '--add', '--cacheinfo', f'120000,{link},link.py')
+    git(repo, 'update-index', '--add', '--cacheinfo', f'160000,{git(repo, "rev-parse", "HEAD")},vendor')
+    git(repo, 'commit', '-qm', 'special entries')
+    snapshot = open_snapshot(repo, 'demo')
+    assert 'link.py' not in paths(snapshot) and 'vendor' not in paths(snapshot)
+    assert set(snapshot.skipped) == {('link.py', 'symlink'), ('vendor', 'submodule')}
 
 
-def test_env_files_are_never_read(repo):
-    (repo / '.env.local').write_text('TOKEN=never-read')
-    snapshot = open_snapshot(repo, WORKING_TREE)
-    assert snapshot.dirty is False
-    assert '.env.local' in {entry.path for entry in snapshot.entries}
+@pytest.mark.parametrize('commit', ['HEAD', 'abc123', 'A' * 40, '0' * 39, '--output=' + '0' * 32, '0' * 40, 'f' * 64])
+def test_unknown_or_malformed_commit_is_refused(repo, commit):
+    assert error_code(lambda: open_snapshot(repo, 'demo', commit=commit)) == UNKNOWN_COMMIT
 
 
-def test_repository_configured_programs_are_never_executed(repo, tmp_path):
+def test_two_reads_of_a_commit_are_identical(repo):
+    first, second = open_snapshot(repo, 'demo'), open_snapshot(repo, 'demo')
+    assert first.files == second.files and contents(first) == contents(second)
+
+
+def test_commit_content_is_read_through_one_batch_process(repo, monkeypatch):
+    snapshot = open_snapshot(repo, 'demo')
+    calls, real = [], subprocess.Popen
+    def spy(args, *rest, **options):
+        calls.append(args)
+        return real(args, *rest, **options)
+    monkeypatch.setattr(snapshots.subprocess, 'Popen', spy)
+    assert len(contents(snapshot)) == 4
+    assert sum('cat-file' in call for call in calls) == 1
+
+
+def test_missing_git_object_is_a_read_error(repo):
+    snapshot = open_snapshot(repo, 'demo')
+    oid = snapshot._sources['App.tsx']
+    obj = repo / '.git' / 'objects' / oid[:2] / oid[2:]
+    os.chmod(obj, 0o644)
+    obj.unlink()
+    assert error_code(lambda: snapshot.read_bytes('App.tsx')) == GIT_READ_ERROR
+
+
+def test_git_paths_must_be_utf8(repo, git):
+    blob = git(repo, 'hash-object', '-w', '--stdin', stdin=b'x')
+    git(repo, 'update-index', '--index-info', stdin=f'100644 blob {blob}\t'.encode() + b'bad\xff.txt\n')
+    git(repo, 'commit', '-qm', 'non utf-8 path')
+    assert error_code(lambda: open_snapshot(repo, 'demo')) == UNSUPPORTED_GIT_ENTRY
+
+
+def test_git_paths_colliding_after_nfc_are_refused(repo, git):
+    blob = git(repo, 'hash-object', '-w', '--stdin', stdin=b'x')
+    entry = f'100644 blob {blob}\t'.encode()
+    names = ('café.txt', unicodedata.normalize('NFD', 'café.txt'))
+    git(repo, 'update-index', '--index-info', stdin=b''.join(entry + n.encode() + b'\n' for n in names))
+    git(repo, 'commit', '-qm', 'nfc collision')
+    assert error_code(lambda: open_snapshot(repo, 'demo')) == UNSUPPORTED_GIT_ENTRY
+
+
+def test_env_files_are_never_exposed(make_repo):
+    repo = make_repo({**FILES, '.env': 'SECRET=1', 'config/.env.local': 'TOKEN=2'}, 'demo')
+    for mode in (COMMIT, WORKING_TREE):
+        snapshot = open_snapshot(repo, 'demo', mode)
+        assert not any(p.rsplit('/', 1)[-1].startswith('.env') for p in paths(snapshot))
+        assert {('.env', 'confidential'), ('config/.env.local', 'confidential')} <= set(snapshot.skipped)
+        with pytest.raises(KeyError):
+            snapshot.read_bytes('.env')
+
+
+def test_repository_configured_programs_are_never_executed(repo, git, tmp_path):
     marker = tmp_path / 'executed'
     command = f'"{sys.executable}" -c "open(r\'{marker}\', \'w\').close()"'
     for key in ('core.fsmonitor', 'filter.probe.clean', 'filter.probe.smudge'):
@@ -79,47 +172,109 @@ def test_repository_configured_programs_are_never_executed(repo, tmp_path):
     (repo / '.gitattributes').write_text('* filter=probe\n')
     (repo / 'App.tsx').write_text('changed\n')
     for mode in (COMMIT, WORKING_TREE):
-        inspect_repository(repo, mode)
+        inspect_repository(repo, 'demo', mode)
     assert not marker.exists()
 
 
-def test_symlinks_and_submodules_are_not_followed(repo):
-    link = git(repo, 'hash-object', '-w', '--stdin', stdin=b'App.tsx')
-    git(repo, 'update-index', '--add', '--cacheinfo', f'120000,{link},link.py')
-    git(repo, 'update-index', '--add', '--cacheinfo', f'160000,{git(repo, "rev-parse", "HEAD")},vendor')
-    git(repo, 'commit', '-q', '-m', 'link and submodule')
-    result = inspect_repository(repo)
-    assert result['files_count'] == 3
-    assert all(f['file'] not in ('link.py', 'vendor') for f in result['facts'])
-
-
-def test_folders_that_are_not_git_top_levels_are_scanned_without_snapshot(repo, tmp_path):
+@pytest.mark.parametrize('mode', [COMMIT, WORKING_TREE])
+def test_git_repository_root_is_required(make_repo, tmp_path, mode):
     plain = tmp_path / 'plain'
     plain.mkdir()
     (plain / 'Hello.java').write_text('class Hello {}')
+    repo = make_repo(FILES, 'demo')
     (repo / 'sub').mkdir()
-    (repo / 'sub' / 'Tool.py').write_text('')
     for folder in (plain, repo / 'sub'):
-        result = inspect_repository(folder)
-        assert result['snapshot'] is None and result['commit'] is None
-        assert result['source'] == 'unversioned' and result['warnings'] and result['facts']
+        assert error_code(lambda: open_snapshot(folder, 'demo', mode)) == NOT_A_GIT_REPOSITORY
 
 
-def test_repository_without_commit_is_refused(tmp_path):
-    empty = tmp_path / 'empty'
-    empty.mkdir()
-    git(empty, 'init', '-q')
-    with pytest.raises(SnapshotError):
-        open_snapshot(empty)
+def test_repository_key_comes_from_the_caller(make_repo):
+    first = make_repo(FILES, 'A/backend')
+    second = make_repo(FILES, 'B/backend')
+    assert open_snapshot(first, 'project-a').repository == 'project-a'
+    assert open_snapshot(second, 'project-b').repository == 'project-b'
+    with pytest.raises(ValueError):
+        open_snapshot(first, '')
 
 
-def test_api_scan_mode(repo, tmp_path):
+# WORKING_TREE
+
+def test_working_tree_is_marked_with_head_and_fingerprint(repo, git):
+    snapshot = open_snapshot(repo, 'demo', WORKING_TREE)
+    assert snapshot.mode == WORKING_TREE and snapshot.commit == git(repo, 'rev-parse', 'HEAD')
+    assert snapshot.reference()['content_fingerprint'].startswith('sha256:')
+    assert len(snapshot.content_fingerprint) == 71 and snapshot.dirty is False
+    with pytest.raises(ValueError):
+        open_snapshot(repo, 'demo', WORKING_TREE, commit=snapshot.commit)
+
+
+def test_working_tree_fingerprint_follows_included_content_only(repo):
+    base = fingerprint(repo)
+    (repo / 'App.tsx').write_bytes(b'modified\n')
+    assert fingerprint(repo) != base and open_snapshot(repo, 'demo', WORKING_TREE).dirty is True
+    (repo / 'App.tsx').write_bytes(FILES['App.tsx'].encode())
+    assert fingerprint(repo) == base
+    (repo / 'new.py').write_text('')
+    added = fingerprint(repo)
+    assert added != base
+    (repo / 'new.py').unlink()
+    (repo / 'src' / 'main.py').unlink()
+    assert fingerprint(repo) not in (base, added)
+    (repo / 'src' / 'main.py').write_bytes(FILES['src/main.py'].encode())
+    (repo / 'ignored.txt').write_text('a')
+    (repo / 'cache').mkdir()
+    (repo / 'cache' / 'x').write_text('')
+    assert fingerprint(repo) == base
+    (repo / 'ignored.txt').write_text('b')
+    assert fingerprint(repo) == base
+
+
+def test_working_tree_fingerprint_ignores_timestamps_and_line_endings(repo):
+    base = fingerprint(repo)
+    os.utime(repo / 'App.tsx', (1, 1))
+    (repo / 'src' / 'main.py').write_bytes(b'print(1)\r\n')
+    snapshot = open_snapshot(repo, 'demo', WORKING_TREE)
+    assert snapshot.content_fingerprint == base and snapshot.dirty is False
+
+
+def test_identical_working_trees_share_fingerprint_across_unicode_forms(make_repo):
+    nfc = make_repo({'café.txt': 'x'}, 'nfc')
+    nfd = make_repo({unicodedata.normalize('NFD', 'café.txt'): 'x'}, 'nfd')
+    assert fingerprint(nfc) == fingerprint(nfd)
+    assert paths(open_snapshot(nfd, 'demo', WORKING_TREE)) == ['café.txt']
+
+
+def test_working_tree_read_error_fails_the_snapshot(repo, monkeypatch):
+    def broken(_file):
+        raise OSError('denied')
+    monkeypatch.setattr(snapshots, '_file_digest', broken)
+    assert error_code(lambda: open_snapshot(repo, 'demo', WORKING_TREE)) == WORKING_TREE_READ_ERROR
+
+
+# API
+
+def test_api_modes_explicit_commit_and_structured_errors(make_repo, git, tmp_path):
+    repo = make_repo(FILES, 'demo')
+    first = git(repo, 'rev-parse', 'HEAD')
+    (repo / 'App.tsx').write_bytes(b'second\n')
+    git(repo, 'commit', '-qam', 'second')
+    plain = tmp_path / 'plain'
+    plain.mkdir()
     url = f'sqlite:///{tmp_path / "api.db"}'
     app = create_app(url, [tmp_path])
     Base.metadata.create_all(app.state.engine)
     with TestClient(app) as client:
         project = client.post('/api/projects', json={'name': 'Demo', 'path': str(repo)}).json()
         scans = f'/api/projects/{project["id"]}/scans'
-        assert client.post(scans).json()['snapshot']['mode'] == 'COMMIT'
-        assert client.post(scans + '?mode=working-tree').json()['snapshot']['mode'] == 'WORKING_TREE'
-        assert client.post(scans + '?mode=other').status_code == 422
+        head = client.post(scans).json()
+        assert head['source'] == 'commit' and head['snapshot']['repository'] == project['id']
+        assert 'dirty' not in head['snapshot']
+        assert client.post(scans, params={'commit': first}).json()['commit'] == first
+        working = client.post(scans, params={'mode': 'working-tree'}).json()
+        assert working['source'] == 'working-tree' and working['snapshot']['dirty'] is False
+        refused = client.post(scans, params={'commit': 'HEAD'})
+        assert refused.status_code == 422 and refused.json()['detail'].startswith(UNKNOWN_COMMIT)
+        assert client.post(scans, params={'mode': 'other'}).status_code == 422
+        assert client.post(scans, params={'mode': 'working-tree', 'commit': first}).status_code == 422
+        other = client.post('/api/projects', json={'name': 'Plain', 'path': str(plain)}).json()
+        response = client.post(f'/api/projects/{other["id"]}/scans')
+        assert response.status_code == 422 and response.json()['detail'].startswith(NOT_A_GIT_REPOSITORY)
