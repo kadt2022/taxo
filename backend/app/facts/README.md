@@ -15,6 +15,8 @@ python -m pytest -q
 
 La commande renvoie un document JSON et un code de sortie 0 (valide) ou 1 (refuse).
 `--stored` autorise les etats de validite reserves a la memoire.
+`--fact` n'accepte qu'un fichier `.json` situe sous le repertoire de travail : le
+chemin est resolu (liens symboliques et `..` compris) avant lecture.
 
 ```python
 from app.facts import FactValidationError, validate_fact

@@ -3,6 +3,7 @@
 import argparse
 from dataclasses import asdict
 import json
+import os
 from pathlib import Path
 
 from .contract import FactValidationError, content_hash, validate_fact
@@ -19,6 +20,15 @@ def _unique_object(pairs):
 
 def read_json(path):
     return json.loads(Path(path).read_text(encoding='utf-8'), object_pairs_hook=_unique_object)
+
+
+def fact_path(value):
+    """Resolve --fact (symlinks and ..) and confine it to a JSON file under the working directory."""
+    base = os.path.realpath(os.getcwd())
+    path = os.path.realpath(value)
+    if not path.startswith(base + os.sep) or not path.endswith('.json'):
+        raise ValueError('The fact must be a .json file inside the working directory.')
+    return path
 
 
 def main(argv=None):
@@ -52,12 +62,12 @@ def main(argv=None):
         print(json.dumps({'total': len(cases), 'hash_vectors': len(hash_cases), 'failed': failures}))
         return 1 if failures else 0
     try:
-        validate_fact(read_json(args.fact), submission=not args.stored)
+        validate_fact(read_json(fact_path(args.fact)), submission=not args.stored)
     except FactValidationError as error:
         print(json.dumps({'valid': False, 'errors': [asdict(i) for i in error.issues]}))
         return 1
     except (OSError, ValueError):
-        print(json.dumps({'valid': False, 'errors': [{'code': 'JSON_INPUT', 'path': '/', 'message': 'Cannot read an unambiguous UTF-8 JSON document.'}]}))
+        print(json.dumps({'valid': False, 'errors': [{'code': 'JSON_INPUT', 'path': '/', 'message': 'Cannot read an unambiguous UTF-8 JSON document inside the working directory.'}]}))
         return 1
     print(json.dumps({'valid': True}))
     return 0

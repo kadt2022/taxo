@@ -215,8 +215,9 @@ def test_nested_confidence_is_refused_but_annotation_values_are_supported():
         validate_fact(fact)
 
 
-def test_cli_accepts_rejects_and_replays_suite(capsys):
-    assert main(['--fact', str(ROOT / 'valid-observed.json')]) == 0
+def test_cli_accepts_rejects_and_replays_suite(monkeypatch, capsys):
+    monkeypatch.chdir(ROOT)
+    assert main(['--fact', 'valid-observed.json']) == 0
     assert json.loads(capsys.readouterr().out)['valid'] is True
     assert main(['--fact', str(ROOT / 't16-01-missing-evidence.json')]) == 1
     assert json.loads(capsys.readouterr().out)['errors']
@@ -225,10 +226,24 @@ def test_cli_accepts_rejects_and_replays_suite(capsys):
 
 
 @pytest.mark.parametrize('document', ['{bad', '{"kind":"ASSERTION","kind":"ABSENCE"}', 'NaN'])
-def test_cli_rejects_ambiguous_or_malformed_json(tmp_path, capsys, document):
-    path = tmp_path / 'fact.json'
-    path.write_text(document, encoding='utf-8')
-    assert main(['--fact', str(path)]) == 1
+def test_cli_rejects_ambiguous_or_malformed_json(tmp_path, monkeypatch, capsys, document):
+    (tmp_path / 'fact.json').write_text(document, encoding='utf-8')
+    monkeypatch.chdir(tmp_path)
+    assert main(['--fact', 'fact.json']) == 1
+    assert json.loads(capsys.readouterr().out)['valid'] is False
+
+
+@pytest.mark.parametrize('argument', ['../outside.json', '{outside}', 'fact.txt', 'missing-dir/../../outside.json'])
+def test_cli_confines_fact_path_to_working_directory(tmp_path, monkeypatch, capsys, argument):
+    work = tmp_path / 'work'
+    work.mkdir()
+    valid = (ROOT / 'valid-observed.json').read_text(encoding='utf-8')
+    for target in (work / 'fact.json', work / 'fact.txt', tmp_path / 'outside.json'):
+        target.write_text(valid, encoding='utf-8')
+    monkeypatch.chdir(work)
+    assert main(['--fact', 'fact.json']) == 0
+    capsys.readouterr()
+    assert main(['--fact', argument.format(outside=tmp_path / 'outside.json')]) == 1
     assert json.loads(capsys.readouterr().out)['valid'] is False
 
 
