@@ -10,7 +10,7 @@ Premier socle local de la plateforme de documentation logicielle : Python/FastAP
 - Conserver chaque analyse et la provenance de chaque détection.
 - Consulter les résultats et les analyses précédentes dans le portail français.
 
-Les résultats décrivent les fichiers de travail, y compris les changements non commitées. Le commit HEAD est une référence, pas une garantie de correspondance exacte. Les valeurs de `.env` ne sont pas lues. Une dépendance déclarée ne prouve pas qu'elle est utilisée à l'exécution.
+Par défaut, une analyse lit le commit `HEAD` : seuls les fichiers suivis par Git sont analysés, depuis leur contenu commité, et le résultat indique si le dossier de travail diffère (`dirty`). `POST /api/projects/{id}/scans?mode=working-tree` analyse le dossier de travail (fichiers suivis et non ignorés) en le marquant comme tel, avec une empreinte de contenu. Un dossier qui n'est pas la racine d'un dépôt Git est analysé sans instantané. Taxo n'exécute ni hook, ni filtre, ni fsmonitor du dépôt, et ne lit jamais `.env`. Une dépendance déclarée ne prouve pas qu'elle est utilisée à l'exécution.
 
 ## Démarrer avec Docker
 

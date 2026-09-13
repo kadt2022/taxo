@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import './style.css';
 
 type Project = {id:string; name:string; path:string};
-type Scan = {id:string; created_at:string; files_count:number; commit:string|null; facts:{technology:string; file:string; method:string}[]; warnings:string[]};
+type Scan = {id:string; created_at:string; files_count:number; commit:string|null; snapshot?:{repository:string; commit:string; mode:'COMMIT'|'WORKING_TREE'; dirty:boolean; content_fingerprint?:string}|null; facts:{technology:string; file:string; method:string}[]; warnings:string[]};
 async function request<T>(path:string, init?:RequestInit):Promise<T> {
   const response = await fetch('/api'+path, init);
   if (!response.ok) {
@@ -49,7 +49,7 @@ function App(){
       <section className="results"><div className="section-heading"><div><h2>Les preuves dans votre code</h2><p>Détection par noms de fichiers et dépendances déclarées.</p></div><label>Historique<select value={scan.id} onChange={e=>setScanId(e.target.value)}>{scans.map(s=><option key={s.id} value={s.id}>{new Date(s.created_at).toLocaleString('fr-CA')}</option>)}</select></label></div>
       <div className="tags">{technologies.map(t=><span key={t}>{t}</span>)}</div>
       {scan.facts.length?<div className="table-wrap"><table><thead><tr><th>Technologie</th><th>Fichier justificatif</th><th>Détection</th></tr></thead><tbody>{scan.facts.map(f=><tr key={f.technology+f.file}><td>{f.technology}</td><td><code>{f.file}</code></td><td>{f.method==='manifest'?'Manifeste':'Nom de fichier'}</td></tr>)}</tbody></table></div>:<p className="empty">Aucune technologie reconnue dans ce dossier.</p>}
-      <footer>Source : fichiers de travail{scan.commit?` · HEAD ${scan.commit.slice(0,12)}`:' · aucun commit identifié'}. Les modifications non commitées sont incluses.</footer>
+      <footer>{scan.snapshot===undefined?`Source : fichiers de travail${scan.commit?` · HEAD ${scan.commit.slice(0,12)}`:' · aucun commit identifié'}. Les modifications non commitées sont incluses.`:scan.snapshot===null?'Source : dossier non versionné par Git, sans instantané.':scan.snapshot.mode==='COMMIT'?`Source : commit ${scan.snapshot.commit.slice(0,12)}, fichiers suivis par Git${scan.snapshot.dirty?' · le dossier de travail contient des modifications non analysées':''}.`:`Source : dossier de travail au commit ${scan.snapshot.commit.slice(0,12)}${scan.snapshot.dirty?', modifications non commitées incluses':''}.`}</footer>
       {scan.warnings.map((w,i)=><p className="error" key={i}>{w}</p>)}</section>
     </>:<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez une analyse pour obtenir un inventaire accompagné de ses sources.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
     <p className="scope">Cette première version identifie les technologies. L’extraction des API, des permissions et des relations métier n’est pas encore intégrée.</p></main>
