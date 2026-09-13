@@ -15,8 +15,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  preflight:
+    name: Taxo Preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Verify toolchain
+        run: |
+          python --version
+          node --version
+          npm --version
+          docker compose version
+      - name: Verify required files
+        run: |
+          test -f backend/requirements.txt
+          test -f frontend/package-lock.json
+          test -f docker-compose.yml
+          test -f .github/scripts/check_database.py
+          test -f .github/scripts/check_containers.py
+      - name: Validate Docker Compose configuration
+        run: docker compose config --quiet
+
   backend:
     name: Taxo Backend
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -46,6 +75,7 @@ jobs:
 
   frontend:
     name: Taxo Frontend
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -72,6 +102,7 @@ jobs:
 
   database:
     name: Taxo PostgreSQL
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -190,7 +221,7 @@ jobs:
 
   status:
     name: Taxo CI Status
-    needs: [backend, frontend, database, containers, sonar, quality-gate]
+    needs: [preflight, backend, frontend, database, containers, sonar, quality-gate]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
