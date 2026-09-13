@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import subprocess
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
@@ -10,11 +11,20 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
+def git(root, *args):
+    subprocess.run(['git', '-c', 'user.name=Taxo CI', '-c', 'user.email=ci@example.invalid',
+                    '-c', 'commit.gpgsign=false', '-C', str(root), *args], check=True, capture_output=True)
+
+
 def main():
     database_url = os.environ['DATABASE_URL']
     with TemporaryDirectory(prefix='taxo-ci-') as directory:
         root = Path(directory)
         (root / 'Hello.java').write_text('class Hello {}\n', encoding='utf-8')
+        # Scans analyse a Git snapshot (TAXO-01C): the fixture must be a committed repository.
+        git(root, 'init', '-q')
+        git(root, 'add', '-A')
+        git(root, 'commit', '-q', '-m', 'fixture')
         app = create_app(database_url, [root])
         try:
             with TestClient(app) as client:

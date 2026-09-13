@@ -10,7 +10,7 @@ Premier socle local de la plateforme de documentation logicielle : Python/FastAP
 - Conserver chaque analyse et la provenance de chaque détection.
 - Consulter les résultats et les analyses précédentes dans le portail français.
 
-Les résultats décrivent les fichiers de travail, y compris les changements non commitées. Le commit HEAD est une référence, pas une garantie de correspondance exacte. Les valeurs de `.env` ne sont pas lues. Une dépendance déclarée ne prouve pas qu'elle est utilisée à l'exécution.
+Par défaut, une analyse lit le commit `HEAD` dans Git : seuls les fichiers de ce commit sont analysés, sans aucune lecture du dossier de travail. `?commit=<identifiant complet>` analyse un autre commit. `?mode=working-tree` analyse le dossier de travail (fichiers suivis et non ignorés) en le marquant comme tel, avec une empreinte de contenu et l'indicateur `dirty`. Un dossier qui n'est pas la racine d'un dépôt Git est refusé (`NOT_A_GIT_REPOSITORY`). Taxo n'exécute ni hook, ni filtre, ni fsmonitor du dépôt, et ne lit jamais `.env`. Une dépendance déclarée ne prouve pas qu'elle est utilisée à l'exécution.
 
 ## Démarrer avec Docker
 
@@ -21,8 +21,8 @@ docker compose up --build
 ```
 
 Ouvrir http://localhost:18080 ; documentation API sur http://localhost:18000/docs.
-Dans le formulaire, utiliser `/repositories` pour analyser le dossier `D:\Taxo` monté en lecture seule.
-Pour analyser un autre dossier, définir `$env:TAXO_REPOSITORIES = 'D:/MonProjet'` avant le lancement.
+Dans le formulaire, utiliser `/repositories`, monté en lecture seule : ce dossier doit être la racine d'un dépôt Git.
+Définir `$env:TAXO_REPOSITORIES = 'D:/MonProjet'` avant le lancement (la valeur par défaut `D:/Taxo` n'est pas un dépôt Git).
 Les données PostgreSQL sont conservées dans un volume Docker. Les migrations Alembic sont appliquées au démarrage du backend.
 
 ## Développement sans Docker
