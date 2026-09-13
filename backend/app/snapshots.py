@@ -203,40 +203,55 @@ def _sorted_files(sizes):
     return tuple(SnapshotFile(p, sizes[p]) for p in sorted(sizes, key=lambda p: p.encode('utf-8')))
 
 
+def _unreadable(path):
+    return SnapshotError(WORKING_TREE_READ_ERROR, f'Fichier du dossier de travail illisible : {path}')
+
+
+def _working_entry(root, path, text, skipped):
+    """(digest, size) of an analysed working-tree file; None if absent or not analysed."""
+    file = root / text
+    try:
+        info = file.lstat()
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    except OSError as exc:
+        raise _unreadable(path) from exc
+    if stat.S_ISLNK(info.st_mode):
+        skipped.append((path, 'symlink'))
+        return None
+    if stat.S_ISDIR(info.st_mode):
+        skipped.append((path, 'submodule'))
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        raise SnapshotError(WORKING_TREE_READ_ERROR, f'Entrée du dossier de travail non supportée : {path}')
+    if _is_env(path):
+        skipped.append((path, 'confidential'))
+        return None
+    try:
+        if not file.resolve().is_relative_to(root):
+            skipped.append((path, 'symlink'))
+            return None
+        return _file_digest(file), info.st_size
+    except OSError as exc:
+        raise _unreadable(path) from exc
+
+
+def _head_digests(root, head):
+    files, _ = _tree(root, head)
+    paths = list(files)
+    return {p: _digest(data) for p, data in zip(paths, _read_blobs(root, [files[p][0] for p in paths]))}
+
+
 def _working_tree(root, repository, head):
     listed = _git_output(root, 'ls-files', '-z', '--cached', '--others', '--exclude-standard').split(b'\0')
     sizes, sources, digests, skipped = {}, {}, {}, []
     for path, text in _logical_paths(dict.fromkeys(filter(None, listed))).items():
-        file = root / text
-        try:
-            info = file.lstat()
-        except (FileNotFoundError, NotADirectoryError):
-            continue
-        except OSError as exc:
-            raise SnapshotError(WORKING_TREE_READ_ERROR, f'Fichier du dossier de travail illisible : {path}') from exc
-        if stat.S_ISLNK(info.st_mode):
-            skipped.append((path, 'symlink'))
-        elif stat.S_ISDIR(info.st_mode):
-            skipped.append((path, 'submodule'))
-        elif not stat.S_ISREG(info.st_mode):
-            raise SnapshotError(WORKING_TREE_READ_ERROR, f'Entrée du dossier de travail non supportée : {path}')
-        elif _is_env(path):
-            skipped.append((path, 'confidential'))
-        else:
-            try:
-                if not file.resolve().is_relative_to(root):
-                    skipped.append((path, 'symlink'))
-                    continue
-                digests[path] = _file_digest(file)
-            except OSError as exc:
-                raise SnapshotError(WORKING_TREE_READ_ERROR, f'Fichier du dossier de travail illisible : {path}') from exc
-            sizes[path], sources[path] = info.st_size, text
-    head_files, _ = _tree(root, head)
-    head_paths = list(head_files)
-    head_digests = {p: _digest(data) for p, data in
-                    zip(head_paths, _read_blobs(root, [head_files[p][0] for p in head_paths]))}
+        entry = _working_entry(root, path, text, skipped)
+        if entry:
+            digests[path], sizes[path] = entry
+            sources[path] = text
     return Snapshot(repository, head, WORKING_TREE, _sorted_files(sizes), _fingerprint(digests),
-                    head_digests != digests, tuple(skipped), root, sources)
+                    _head_digests(root, head) != digests, tuple(skipped), root, sources)
 
 
 def open_snapshot(root, repository, mode=COMMIT, commit=None):

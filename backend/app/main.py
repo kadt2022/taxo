@@ -81,7 +81,11 @@ def create_app(database_url=None, allowed_roots=None):
                 raise HTTPException(404, 'Projet introuvable.')
             return [{'id': s.id, 'created_at': s.created_at, **s.result} for s in db.scalars(select(Scan).where(Scan.project_id == project_id).order_by(Scan.created_at.desc()))]
 
-    @api.post('/api/projects/{project_id}/scans', status_code=201)
+    @api.post('/api/projects/{project_id}/scans', status_code=201, responses={
+        403: {'description': 'Dossier hors des racines autorisées.'},
+        404: {'description': 'Projet introuvable.'},
+        422: {'description': 'Analyse impossible, par exemple « NOT_A_GIT_REPOSITORY : … » ou « UNKNOWN_COMMIT : … ».'},
+    })
     def run_scan(project_id: str, mode: Literal['commit', 'working-tree'] = 'commit', commit: str | None = None):
         with Session(engine) as db:
             project = db.get(Project, project_id)
