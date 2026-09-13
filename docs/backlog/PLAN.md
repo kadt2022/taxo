@@ -35,7 +35,7 @@ Rien d'autre n'est ouvert tant que les récits 01A à 01G ne sont pas terminés.
 | **01A** Contrat machine du fait | natures et structures, statuts, validité, identité et occurrence, syntaxe des références, référence d'instantané, preuve et empreinte, vocabulaire v1, règles de cohérence, suite de conformité | T1 | rédigé : `TAXO-01A-contrat-machine-du-fait.md` |
 | **01B** Références stables et identité | normalisation des clés, stabilité entre commits, calcul de l'identité stable d'un fait | T2 | à rédiger |
 | **01C** Instantané au commit | lecture d'un commit en lecture seule ; mode `WORKING_TREE` marqué, avec empreinte du contenu ; fichiers ignorés par Git exclus | T3 | à rédiger |
-| **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statut technique (`SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; premier producteur de faits réels (décision 2) | T4 | à rédiger |
+| **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statut technique (`SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; `scanner.py` converti en Inventory v0, premier producteur de faits réels | T4 | à rédiger |
 | **01E** Persistance | instantanés, exécutions, faits, occurrences, preuves, couvertures ; `scans.result` n'est plus la source de vérité | T5 | à rédiger |
 | **01F** Comparaison et banc Git | introduit, retiré, modifié, inchangé ; « cause possible : évaluateur » ; dépôt de test A/B/C | T8, T11 | à rédiger |
 | **01G** API de lecture et vue de vérification | faits par instantané, identité, sujet, objet ou relation ; preuves ; couverture ; évaluateurs exécutés ; comparaison ; liste dans le portail | T9, T10 | à rédiger |
@@ -86,20 +86,34 @@ Release notes, source Sonar, source Runtime.
 
 Les 17 récits du document de vision restent la description de ces capacités, pas un backlog.
 
-## Décisions ouvertes
+## Décision ouverte
 
-1. **Première démo : PR ou diagramme d'API ?**
-   - PR : n'a besoin que de 01F et des faits API et Security, sans conversation ; montre ce qu'un
-     agent ne sait pas faire (ce qui a changé entre deux commits, avec preuves et de façon
-     reproductible). Recommandation actuelle.
-   - Diagramme puis Ask Taxo : plus parlant pour un nouvel arrivant, mais un agent sait déjà
-     approcher ce résultat. Nécessite 01I.
-   Les récits 01A à 01G servent aux deux : la décision ne bloque pas l'épique.
-2. **Premier producteur de faits réels.** Le banc Git de 01F a besoin de faits issus de fichiers et
-   de manifestes. Recommandation : convertir `scanner.py` en Inventory v0 dès 01D, et réserver
-   TAXO-02 à l'enrichissement. Alternative : un évaluateur factice réservé aux tests.
+**Première démo : commentaire de PR ou diagramme de flux d'un endpoint ?**
+
+- **Commentaire de PR.** Sur une PR de TAKIBO, Taxo commente les endpoints ajoutés, modifiés ou
+  supprimés, et les changements du mécanisme d'autorisation, avec preuves et commits (cas 2).
+  Besoin : 01A à 01G, TAXO-02 à 05. Montre ce qu'un agent ne sait pas faire : dire ce qui a changé
+  entre deux commits, avec preuves et de façon reproductible. **Recommandation actuelle.**
+- **Diagramme de flux d'un endpoint.** Pour un endpoint choisi (cas 3 :
+  `POST /api/v1/orgs/{orgId}/spaces`), Taxo dessine la chaîne contrôleur → service → orchestrateur
+  → dépôt, avec le statut de chaque élément et la fin de chaque branche (établie, non interprétée,
+  non analysée). Besoin : 01A à 01G, 01I, TAXO-02 à 04, et un analyseur Java qui suit les appels
+  (`CALLS`, `IMPLEMENTS`, `DISPATCHES_TO`) au-delà du contrôleur. Sans évaluateur Data, la branche
+  s'arrête au dépôt avec une fin « non analysée » : la table `spaces` n'apparaît pas. La sécurité se
+  superpose après TAXO-05. Plus parlant pour un nouvel arrivant, mais un agent sait déjà approcher
+  ce résultat.
+
+Les récits 01A à 01G servent aux deux : la décision ne bloque pas l'épique.
 
 ## Décisions prises
+
+**2026-09-13 (suite)**
+
+- Premier producteur de faits réels : `scanner.py` est converti en **Inventory v0 dans 01D**.
+  TAXO-02 est réservé à l'enrichissement (Gradle, métriques). Le banc Git de 01F travaille donc
+  sur de vrais faits, sans évaluateur factice.
+- `.gitattributes` ajouté au dépôt Taxo : fins de ligne LF dans Git, cohérent avec la règle
+  d'empreinte de l'ADR 0002.
 
 **2026-09-13**
 

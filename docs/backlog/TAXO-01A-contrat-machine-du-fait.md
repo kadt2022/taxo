@@ -718,7 +718,7 @@ TAXO-01A  Contrat machine du fait
 TAXO-01B  Références stables et identité
        ↓
 TAXO-01D  Exécution d'évaluateur et couverture  ←  TAXO-01C  Instantané au commit (en parallèle)
-          premier producteur de faits réels (décision ouverte, voir PLAN.md)
+          premier producteur de faits réels : scanner.py converti en Inventory v0
        ↓
 TAXO-01E  Persistance
        ↓
