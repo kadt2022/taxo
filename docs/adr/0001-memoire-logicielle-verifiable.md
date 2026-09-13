@@ -59,24 +59,40 @@ Les agents (Claude, Copilot, Codex...) se placent au-dessus, via MCP ou API. Ils
 | Famille | Ce qu'elle lit | Ce qu'elle produit |
 | --- | --- | --- |
 | **Source** | le monde extérieur à Taxo | un matériau versionné et adressable |
-| **Évaluateur** | une ou plusieurs sources | des faits `OBSERVED`, et la couverture de son analyse |
-| **Projection** | uniquement des faits | des vues (docs, diagrammes, commentaires de PR) ou des faits `INFERRED` |
+| **Évaluateur** | une ou plusieurs sources, directement ou au travers des faits d'un analyseur de langage | des faits `OBSERVED`, la couverture de son analyse, et éventuellement des faits `INFERRED` obtenus par des règles nommées appliquées à des faits du même instantané |
+| **Projection** | uniquement des faits | des vues (docs, diagrammes, commentaires de PR, réponses d'Ask Taxo) ou des faits `INFERRED` |
 
 ```text
-SOURCES                  ÉVALUATEURS            PROJECTIONS
-Repository (au commit)   Inventory              Documentation
-Git (historique)         Structure              Diagrammes
-Connaissances humaines   Dependencies           Documentation Drift
-Runtime (plus tard)      API                    Impact Analysis
-Outils externes (Sonar)  Security               PR Bot
-                         Data                   MCP / Ask Taxo
-                         Configuration          Business Flows
-                         Frontend               Release notes
+SOURCES                  ÉVALUATEURS                        PROJECTIONS
+Repository (au commit)   Analyseurs de langage (Java…)      Documentation
+Git (historique)         Inventory                          Diagrammes
+Connaissances humaines   Structure                          Documentation Drift
+Runtime (plus tard)      Dependencies                       Impact Analysis
+Outils externes (Sonar)  API                                PR Bot
+                         Security                           MCP / Ask Taxo
+                         Data                               Business Flows
+                         Configuration                      Release notes
+                         Frontend
                          Tests
                          CI/CD
                          Deployment
                          Documentation (inventaire des documents existants)
 ```
+
+**Producteurs de faits.** Un fait a trois types de producteurs possibles (ADR 0002) : un évaluateur,
+une projection, ou une personne. La personne matérialise la source « connaissances humaines » et
+elle seule produit des faits `HUMAN_VALIDATED`. **Une projection ou une personne n'est jamais
+enregistrée comme évaluateur.**
+
+**Analyseurs de langage et évaluateurs de framework.**
+
+- Un analyseur de langage (Java, TypeScript…) produit les primitives du langage : classes, méthodes,
+  annotations, constantes, types, appels, héritage, interfaces, résolution de symboles. Il n'est
+  propriétaire d'aucun concept de framework : l'analyseur Java ne connaît pas la notion d'endpoint.
+- Un évaluateur de framework (Spring API, Spring Security…) s'appuie sur ces primitives et il est
+  propriétaire de ses concepts (endpoint, règle d'autorisation). Ses faits restent `OBSERVED` quand
+  ils sont extraits mécaniquement et que leurs preuves pointent vers la source. Ce qui dépend d'une
+  règle d'interprétation (un motif d'URL couvre-t-il ce chemin ?) est `INFERRED`.
 
 Reclassements par rapport à la vision initiale :
 
@@ -92,8 +108,8 @@ Reclassements par rapport à la vision initiale :
 - **Couverture déclarée.** Taxo ne promet pas d'avoir tout trouvé : aucun analyseur statique ne le
   peut. Il promet de dire ce qu'il a cherché, avec quelle version de son catalogue de détection, et
   ce qu'il n'a pas su interpréter.
-- **Versionné.** Tout fait est rattaché à un instantané (dépôt et commit) *et* à la version de
-  l'évaluateur qui l'a produit.
+- **Versionné.** Tout fait est rattaché à un instantané (dépôt et commit) *et* à la version de son
+  producteur (évaluateur et catalogue, ou projection).
 - **Persistant.** Une preuve établie aujourd'hui reste consultable et réutilisable plus tard, par
   une personne ou un agent.
 - **Prouvable.** Tout fait porte un statut (`OBSERVED`, `INFERRED`, `HUMAN_VALIDATED`) et sa
@@ -102,7 +118,8 @@ Reclassements par rapport à la vision initiale :
 ### 4. Règles
 
 1. Aucun fait sans statut ni provenance.
-2. Une absence est toujours bornée : périmètre et méthode de recherche sont obligatoires.
+2. Une absence est toujours bornée : motif, périmètre structuré et méthode de recherche sont
+   obligatoires.
 3. Ce qui n'est pas interprété est déclaré comme tel. Ce n'est jamais passé sous silence, ni
    converti en « absent ».
 4. L'analyse de référence porte sur un **commit**, pas sur le dossier de travail. L'analyse du
@@ -112,7 +129,8 @@ Reclassements par rapport à la vision initiale :
    interprété », jamais « non protégé ».
 7. Un analyseur est écrit dans le langage le mieux adapté à ce qu'il analyse (un analyseur Java peut
    être un composant JVM). Le contrat du fait est la seule frontière commune.
-8. Un LLM ne produit jamais de fait `OBSERVED`.
+8. Un LLM ne produit jamais de fait. Ce qu'il écrit dans une projection est de la NARRATION :
+   affichée, jamais persistée (ADR 0002).
 
 ### 5. Développement guidé par la valeur démontrée
 
@@ -132,7 +150,8 @@ modules, migrations, tests et un historique Git réel.
   libre stocké dans `scans.result` est remplacé.
 - Au début, Taxo répondra souvent « non interprété ». C'est le prix de la crédibilité, et une
   information utile en soi.
-- Le choix de la technologie d'analyse Java doit être tranché au début du récit Spring API, pas après.
+- La technologie d'analyse Java est tranchée par le spike du Java Analyzer (TAXO-03), avant le
+  Spring API Evaluator.
 
 ## Alternatives rejetées
 
@@ -144,3 +163,10 @@ modules, migrations, tests et un historique Git réel.
   graphe sera la conséquence de faits reliables.
 - **Ordre séquentiel des 17 évaluateurs** : environ un an de fondations avant la première
   démonstration convaincante.
+
+## Historique
+
+**2026-09-13** (revue de la PR #1) : trois types de producteurs, dont la personne ; une projection
+ou une personne n'est jamais un évaluateur ; un évaluateur peut produire des faits `INFERRED` par
+règles nommées ; frontière entre analyseurs de langage et évaluateurs de framework ; le LLM ne
+produit aucun fait ; absence bornée par un motif et un périmètre structuré.

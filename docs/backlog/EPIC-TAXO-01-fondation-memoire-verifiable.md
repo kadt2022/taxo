@@ -1,6 +1,7 @@
 # TAXO-01 — Fondation de la mémoire logicielle vérifiable
 
 Statut : À FAIRE  
+Nature : épique, découpé en récits TAXO-01A à TAXO-01I (voir `docs/backlog/PLAN.md`)  
 Références : ADR 0001, ADR 0002, `docs/backlog/PLAN.md`  
 Remplace : T03, T05, T06 et T08 de l'ancien récit TAXO-EVAL-01
 
@@ -27,7 +28,7 @@ Quelles relations lui sont associées ?
 Quelles preuves soutiennent ces faits ?
 Quelle partie n'a pas été interprétée ?
 À quel commit ces connaissances appartiennent-elles ?
-Avec quelle version d'évaluateur ont-elles été établies ?
+Par quel producteur, et dans quelle version, ont-elles été établies ?
 ```
 
 sans devoir reparcourir le code source.
@@ -37,9 +38,12 @@ sans devoir reparcourir le code source.
 ```text
 Aucun fait sans statut, sans instantané et sans producteur.
 
-Aucun fait OBSERVED sans preuve.
+La preuve dépend de la nature du fait :
+  ASSERTION OBSERVED → au moins une preuve
+  ABSENCE            → motif + périmètre + méthode, aucune preuve
+  COVERAGE           → sujet + type + périmètre, preuve facultative
 
-Aucune absence sans périmètre et méthode.
+Une projection ou une personne n'est jamais enregistrée comme évaluateur.
 
 Toute exécution d'évaluateur déclare sa couverture.
 
@@ -82,44 +86,49 @@ Dériver de l'ADR 0002 un contrat machine versionné représentant au minimum :
 - validité ;
 - instantané ;
 - preuves ;
-- producteur ;
-- version de l'évaluateur ;
-- version du catalogue de détection ;
-- périmètre ;
+- producteur : type (`EVALUATOR`, `PROJECTION`, `HUMAN`), identifiant, version, exécution ;
+- catalogue de détection, pour un évaluateur ;
+- périmètre structuré (`include`, `exclude`) ;
 - dérivation ;
-- validation humaine ;
-- date d'analyse.
+- validation humaine.
+
+L'horodatage d'analyse appartient à l'exécution référencée, pas au fait.
 
 Le contrat doit être validable automatiquement.
 
-Exemples de règles obligatoires (détail complet : ADR 0002 amendé et TAXO-01A) :
+Exemples de règles obligatoires (détail complet : ADR 0002 et TAXO-01A) :
 
 ```text
 ASSERTION OBSERVED
 → au moins une preuve du même instantané
 
-INFERRED
-→ au moins une prémisse
-
-HUMAN_VALIDATED
-→ validation et ancrage
-
 ABSENCE
-→ motif + périmètre + méthode, sans preuve
+→ motif + périmètre + méthode, aucune preuve
 
 COVERAGE
-→ sujet + type de couverture + périmètre
+→ sujet + type de couverture + périmètre, preuve facultative
+
+INFERRED
+→ au moins une prémisse et une règle
+
+HUMAN_VALIDATED
+→ producteur HUMAN, validation et ancrage
+
+Statut
+→ compatible avec la nature et le type de producteur
 
 Toute relation
 → appartient au vocabulaire versionné
 
 Aucun champ
-→ ne peut contenir de texte source ou de valeur sensible
+→ n'est destiné à conserver un extrait brut de code source
 ```
+
+Les producteurs restent responsables de ne jamais émettre de secret ou de valeur sensible.
 
 ## Résultat attendu
 
-Un évaluateur ne peut pas enregistrer un résultat ambigu ou incomplet en contournant le contrat
+Un producteur ne peut pas enregistrer un résultat ambigu ou incomplet en contournant le contrat
 Taxo.
 
 ---
@@ -133,6 +142,7 @@ Exemples :
 ```text
 repository:takibo-iam
 module:takibo-management-service
+directory:takibo-security-management/src/main/java
 file:.../OAuthClientController.java
 symbol:java:...OAuthClientController#register
 endpoint:POST /api/v1/orgs/{orgId}/spaces/{spaceId}/clients
@@ -156,7 +166,7 @@ sans connaître le stockage interne.
 
 ## Résultat attendu
 
-Taxo possède un langage commun pour relier les faits produits par plusieurs évaluateurs.
+Taxo possède un langage commun pour relier les faits produits par plusieurs producteurs.
 
 ---
 
@@ -174,8 +184,8 @@ dirty
 content_fingerprint   (obligatoire en WORKING_TREE)
 ```
 
-L'horodatage d'analyse appartient à l'exécution d'évaluateur, pas à l'instantané : un même commit
-peut être analysé plusieurs fois, par des versions d'évaluateur différentes (voir T8).
+L'horodatage d'analyse appartient à l'exécution, pas à l'instantané : un même commit peut être
+analysé plusieurs fois, par des versions de producteur différentes (voir T8).
 
 Modes :
 
@@ -207,14 +217,15 @@ et ne présentera jamais silencieusement une ancienne analyse comme l'état cour
 Chaque exécution d'évaluateur porte au minimum :
 
 ```text
-evaluator_id
-evaluator_version
+producer_id
+producer_version
+catalog_id
 catalog_version
 snapshot
 started_at
 finished_at
 status
-scope
+scope          (structure de l'ADR 0002 : include, exclude)
 ```
 
 États :
@@ -272,7 +283,7 @@ Remplacer le JSON libre de `scans.result` comme source de vérité par des struc
 permettant d'interroger séparément :
 
 - instantanés ;
-- exécutions d'évaluateurs ;
+- exécutions ;
 - faits ;
 - occurrences ;
 - preuves ;
@@ -331,11 +342,16 @@ Une future projection de diagramme peut parcourir des relations sans relire le r
 
 # T7 — Validité, dérivation et invalidation
 
-Implémenter les règles de validité prévues par ADR 0002.
+Implémenter les règles de validité prévues par l'ADR 0002.
 
-### Fait OBSERVED
+### Fait ASSERTION OBSERVED
 
-Sa preuve appartient à son instantané.
+Ses preuves appartiennent à son instantané.
+
+### Faits ABSENCE et COVERAGE
+
+Leur périmètre et leur méthode ou type de couverture sont enregistrés. Une absence n'a pas de
+preuve ; une couverture peut en avoir.
 
 ### Fait INFERRED
 
@@ -363,17 +379,21 @@ HUMAN_VALIDATED
 
 ```text
 F1 OBSERVED
-endpoint X HANDLED_BY controller Y
+endpoint X HANDLED_BY symbol Y
 
 F2 OBSERVED
-route Z AUTHORIZED_BY manager M
+route-pattern Z AUTHORIZED_BY symbol M
 
 F3 INFERRED
-endpoint X PROTECTED_BY manager M
+endpoint X MATCHED_BY route-pattern Z
 premises: F1 + F2
+
+F4 INFERRED
+endpoint X PROTECTED_BY symbol M
+premises: F2 + F3
 ```
 
-Si F2 disparaît ou change, F3 ne doit pas rester silencieusement `VALID`.
+Si F2 ou F3 disparaît ou change, F4 ne doit pas rester silencieusement `VALID`.
 
 ## Résultat attendu
 
@@ -403,10 +423,10 @@ La comparaison distingue :
 de :
 
 ```text
-cause possible : évolution de l'évaluateur
+cause possible : évolution du producteur
 ```
 
-lorsque les versions d'évaluateur ou de catalogue diffèrent.
+lorsque les versions d'un producteur (évaluateur ou projection) ou de son catalogue diffèrent.
 
 ## Exemple
 
@@ -471,14 +491,17 @@ Le portail affiche suffisamment d'informations pour contrôler visuellement la m
 
 ```text
 Fact ID
+Kind
 Status
 Validity
 Subject
 Relation
 Object
+Scope
 Snapshot
-Evaluator
-Evaluator version
+Producer type
+Producer
+Producer version
 Evidence
 Coverage / gaps
 ```
@@ -534,15 +557,19 @@ Ajouter un test fonctionnel qui ne fait intervenir aucun LLM.
 ```text
 endpoint:X
     HANDLED_BY
-    symbol:Y            (le contrôleur)
+    symbol:Y            (le contrôleur)                          OBSERVED
 
 route-pattern:Z
     AUTHORIZED_BY
-    symbol:M            (le gestionnaire d'autorisation)
+    symbol:M            (le gestionnaire d'autorisation)         OBSERVED
+
+endpoint:X
+    MATCHED_BY
+    route-pattern:Z                                              INFERRED
 
 symbol:M
     CALLS
-    symbol:N            (la classe de politique du projet analysé)
+    symbol:N            (la classe de politique du projet)       OBSERVED
 
 COVERAGE
     symbol:N
@@ -556,11 +583,11 @@ l'API de lecture doit permettre de reconstruire :
 
 ```text
 endpoint:X
-      ↓
+      ↓ HANDLED_BY
 symbol:Y
 
 sécurité connue :
-route Z → symbol M → symbol N
+endpoint X → MATCHED_BY route Z → AUTHORIZED_BY symbol M → CALLS symbol N
 
 limite :
 symbol N non interprété
@@ -569,9 +596,9 @@ symbol N non interprété
 avec :
 
 - les statuts ;
-- les preuves ;
+- les preuves et les prémisses ;
 - le commit ;
-- la version des évaluateurs ;
+- les producteurs et leurs versions ;
 - les zones non interprétées.
 
 ## Pourquoi ce test est important
@@ -588,7 +615,7 @@ Il teste la **projectabilité de la connaissance**.
 # Critères de terminé
 
 1. Le schéma machine du fait existe, est versionné et applique les règles de cohérence de l'ADR 0002.
-2. Les entités disposent de références stables utilisables par plusieurs évaluateurs.
+2. Les entités disposent de références stables utilisables par plusieurs producteurs.
 3. Une analyse peut cibler un commit précis sans dépendre du dossier de travail.
 4. Le mode `WORKING_TREE` est explicitement identifiable.
 5. Chaque exécution d'évaluateur possède son identité, sa version, son état et sa couverture déclarée.
@@ -598,12 +625,13 @@ Il teste la **projectabilité de la connaissance**.
 9. Les faits `INFERRED` deviennent `STALE` lorsque leurs prémisses ne sont plus valides.
 10. Les faits `HUMAN_VALIDATED` deviennent `REVALIDATION_REQUIRED` lorsque leurs ancrages changent.
 11. Deux instantanés du banc de test se comparent exactement.
-12. Un changement de version d'évaluateur est distingué d'un changement du logiciel.
+12. Un changement de version d'un producteur ou de son catalogue est distingué d'un changement du logiciel.
 13. Les preuves et les limites de couverture restent consultables.
 14. L'API de lecture fournit les primitives nécessaires aux projections futures.
 15. Le test de préparation à Ask Taxo démontre qu'un flux relationnel peut être reconstruit uniquement depuis les faits persistés.
-16. Les garde-fous actuels sont conservés sans assouplissement : lecture seule, aucune exécution du dépôt, `.env` jamais lu, liens symboliques ignorés (`scanner.py` les ignore tous), limite de volume. Tout assouplissement futur passe par un ADR.
-17. Tests verts.
+16. Une projection ou une personne n'est jamais enregistrée comme évaluateur.
+17. Les garde-fous actuels sont conservés sans assouplissement : lecture seule, aucune exécution du dépôt, `.env` jamais lu, liens symboliques ignorés (`scanner.py` les ignore tous), limite de volume. Tout assouplissement futur passe par un ADR.
+18. Tests verts.
 
 ---
 
@@ -617,22 +645,37 @@ TAXO-02
 Inventory Evaluator
        ↓
 TAXO-03
-Java Analyzer
+Java Analyzer (primitives Java)
        ↓
 TAXO-04
-Spring API Evaluator
+Spring API Evaluator (endpoints)
        ↓
 TAXO-05
 Spring Security Evaluator
        ↓
-TAXO-PROJ-01
-Diagramme API
+TAXO-PROJ-PR-01
+Projection PR                     démo technique
+       ↓
+TAXO-PROJ-API-01
+Projection Diagramme API
        ↓
 TAXO-ASK-01
-Ask Taxo minimal
+Ask Taxo minimal                  démo produit
 ```
 
-Le premier objectif de démonstration reste :
+Deux démonstrations, deux objectifs.
+
+**Démo technique : PR et comparaison de commits.**
+
+```text
+Taxo :
+- compare deux commits ;
+- montre les endpoints et les autorisations qui ont changé, avec preuves ;
+- reproduit exactement le même résultat à chaque exécution ;
+- distingue un changement du logiciel d'un changement de producteur.
+```
+
+**Démo produit : Ask Taxo.**
 
 ```text
 Dev :

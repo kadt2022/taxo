@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-09-13
+Mise à jour : 2026-09-13 (revue de la PR #1)
 Références : ADR 0001, ADR 0002, `EPIC-TAXO-01-fondation-memoire-verifiable.md`
 
 ## MVP
@@ -13,18 +13,31 @@ Références : ADR 0001, ADR 0002, `EPIC-TAXO-01-fondation-memoire-verifiable.md
 ## Vue d'ensemble
 
 ```text
-ÉPIQUE TAXO-01  Mémoire logicielle vérifiable
+ÉPIQUE TAXO-01     Mémoire logicielle vérifiable
       ↓
-TAXO-02         Inventory Evaluator
+TAXO-02            Inventory Evaluator
       ↓
-TAXO-03         Java Analyzer (spike, puis ADR 0003)
+TAXO-03            Java Analyzer : primitives Java (spike, puis ADR 0003)   + TAXO-01H
       ↓
-TAXO-04         Spring API Evaluator
+TAXO-04            Spring API Evaluator : endpoints
       ↓
-TAXO-05         Spring Security Evaluator      + TAXO-01H
+TAXO-05            Spring Security Evaluator
       ↓
-PREMIÈRE DÉMO   PR ou diagramme : décision ouverte (voir plus bas)
+TAXO-PROJ-PR-01    Projection PR                           DÉMO TECHNIQUE
+      ↓
+TAXO-PROJ-API-01   Projection Diagramme API                + TAXO-01I
+      ↓
+TAXO-ASK-01        Ask Taxo minimal                        DÉMO PRODUIT
 ```
+
+## Deux démonstrations
+
+| Démo | Question | Ce qu'elle prouve | Jalon |
+| --- | --- | --- | --- |
+| **Technique** | « Qu'est-ce qui a changé entre ces deux commits, et est-ce risqué ? » | reproductibilité, versionnement, preuves, changement du logiciel ou changement de producteur | TAXO-PROJ-PR-01 |
+| **Produit** | « Explique-moi cette API et donne-moi son diagramme. » | expérience du nouvel arrivant, exploitation de la mémoire, diagramme construit depuis les faits, preuves, zones non interprétées | TAXO-ASK-01, après TAXO-PROJ-API-01 |
+
+La démo technique est le premier jalon. La démo produit la suit sur la même mémoire.
 
 ## NOW : épique TAXO-01, Mémoire logicielle vérifiable
 
@@ -32,20 +45,20 @@ Rien d'autre n'est ouvert tant que les récits 01A à 01G ne sont pas terminés.
 
 | Récit | Contenu | Tâches de l'épique | Statut |
 | --- | --- | --- | --- |
-| **01A** Contrat machine du fait | natures et structures, statuts, validité, identité et occurrence, syntaxe des références, référence d'instantané, preuve et empreinte, vocabulaire v1, règles de cohérence, suite de conformité | T1 | rédigé : `TAXO-01A-contrat-machine-du-fait.md` |
-| **01B** Références stables et identité | normalisation des clés, stabilité entre commits, calcul de l'identité stable d'un fait | T2 | à rédiger |
+| **01A** Contrat machine du fait | natures et règles de preuve par nature, statuts et producteurs autorisés, validité, identité et occurrence, syntaxe des références, référence d'instantané, périmètre structuré, provenance `produced_by`, preuve et empreinte, vocabulaire v1, règles de cohérence, suite de conformité | T1 | rédigé : `TAXO-01A-contrat-machine-du-fait.md` |
+| **01B** Références stables et identité | normalisation des clés et du périmètre, stabilité entre commits, calcul de l'identité stable d'un fait | T2 | à rédiger |
 | **01C** Instantané au commit | lecture d'un commit en lecture seule ; mode `WORKING_TREE` marqué, avec empreinte du contenu ; fichiers ignorés par Git exclus | T3 | à rédiger |
 | **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statut technique (`SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; `scanner.py` converti en Inventory v0, premier producteur de faits réels | T4 | à rédiger |
 | **01E** Persistance | instantanés, exécutions, faits, occurrences, preuves, couvertures ; `scans.result` n'est plus la source de vérité | T5 | à rédiger |
-| **01F** Comparaison et banc Git | introduit, retiré, modifié, inchangé ; « cause possible : évaluateur » ; dépôt de test A/B/C | T8, T11 | à rédiger |
+| **01F** Comparaison et banc Git | introduit, retiré, modifié, inchangé ; « cause possible : évolution du producteur » ; dépôt de test A/B/C | T8, T11 | à rédiger |
 | **01G** API de lecture et vue de vérification | faits par instantané, identité, sujet, objet ou relation ; preuves ; couverture ; évaluateurs exécutés ; comparaison ; liste dans le portail | T9, T10 | à rédiger |
 
 Récits de l'épique placés au moment où ils servent :
 
 | Récit | Contenu | Tâches | À réaliser avec |
 | --- | --- | --- | --- |
-| **01H** Validité et invalidation | `STALE`, `REVALIDATION_REQUIRED` | T7 | TAXO-05, premier producteur de faits `INFERRED` |
-| **01I** Voisinage et projectabilité | voisinage d'une entité, reconstruction d'un flux depuis les seuls faits, trois fins de parcours | T6, T12 | la première projection de diagramme |
+| **01H** Validité et invalidation | `STALE`, `REVALIDATION_REQUIRED` | T7 | TAXO-03, premier producteur de faits `INFERRED` (`DISPATCHES_TO`) |
+| **01I** Voisinage et projectabilité | voisinage d'une entité, reconstruction d'un flux depuis les seuls faits, trois fins de parcours | T6, T12 | TAXO-PROJ-API-01 |
 
 ```text
 01A Contrat ──► 01B Références ──┐
@@ -58,19 +71,25 @@ Récits de l'épique placés au moment où ils servent :
 **Première démo possible après 01F** : Taxo compare deux commits, dit ce qui a changé dans
 l'inventaire avec les preuves, et distingue une évolution du logiciel d'une évolution de Taxo.
 
-## NEXT
+## NEXT : trajectoire après l'épique
 
 | Récit | Résultat attendu |
 | --- | --- |
 | **TAXO-02** Inventory Evaluator | inventaire complet sous forme de faits ; lecture de Gradle (`build.gradle`, `settings.gradle`), aujourd'hui ignoré par `scanner.py` alors que TAKIBO est un projet Gradle |
-| **TAXO-03** Java Analyzer | spike de deux jours sur TAKIBO, puis ADR 0003 ; recommandation à confirmer : JavaParser + JavaSymbolSolver, analyse des sources seules, processus JVM séparé qui émet des faits et passe la suite de conformité de 01A |
-| **TAXO-04** Spring API Evaluator | endpoints de TAKIBO avec chemin complet et `HANDLED_BY` |
-| **TAXO-05** Spring Security Evaluator | règles d'URL, annotations, appels de gardes ; mécanismes maison déclarés `NOT_INTERPRETED` ; critère anti-faux-positif bloquant |
-| **Première projection** | PR ou diagramme d'API (décision 1) |
+| **TAXO-03** Java Analyzer | analyseur de langage : classes, méthodes, annotations et leurs valeurs, constantes, types, appels, héritage, interfaces, résolution de symboles, sous forme de faits (`ANNOTATED_WITH`, `CALLS`, `IMPLEMENTS`, `DISPATCHES_TO`…). **Ne connaît pas le concept d'endpoint.** Spike de deux jours sur TAKIBO, puis ADR 0003 ; recommandation à confirmer : JavaParser + JavaSymbolSolver, sources seules, processus JVM séparé qui passe la suite de conformité de 01A. Avec 01H : `DISPATCHES_TO` devient `STALE` si une deuxième implémentation apparaît |
+| **TAXO-04** Spring API Evaluator | évaluateur de framework, **propriétaire du concept d'endpoint** : consomme les primitives du Java Analyzer et produit `HANDLED_BY`, `ACCEPTS`, `RETURNS` avec des preuves dans la source |
+| **TAXO-05** Spring Security Evaluator | propriétaire des concepts Spring Security : `PERMITS_ALL`, `AUTHORIZED_BY` (`OBSERVED`), puis `MATCHED_BY` et `PROTECTED_BY` (`INFERRED`) ; mécanismes maison déclarés `NOT_INTERPRETED` ; critère anti-faux-positif bloquant |
+| **TAXO-PROJ-PR-01** Projection PR | **démo technique** : commentaire de PR listant les endpoints et autorisations ajoutés, modifiés ou retirés entre base et tête, avec preuves et commits ; distingue changement du logiciel et changement de producteur (cas 2) |
+| **TAXO-PROJ-API-01** Projection Diagramme API | diagramme d'un endpoint construit depuis les seuls faits, statut de chaque élément, trois fins de parcours (cas 3) ; avec 01I |
+| **TAXO-ASK-01** Ask Taxo minimal | **démo produit** : « explique-moi cette API et donne-moi son diagramme » ; résout la cible, interroge la mémoire, appelle la projection Diagramme API, affiche preuves et zones non interprétées ; le LLM ne sert qu'à comprendre la question et à rédiger (NARRATION) |
 
 Critères du spike TAXO-03 (vérifiables sur TAKIBO) :
 
-1. Tous les endpoints relevés avec leur chemin complet, y compris un `@PostMapping` sans argument.
+1. Le Java Analyzer fournit les informations et résolutions nécessaires pour permettre au Spring API
+   Evaluator de reconstruire les endpoints Spring du banc TAKIBO : annotations de classe et de
+   méthode avec leurs valeurs résolues, y compris un `@PostMapping` sans argument. La
+   reconstruction elle-même est vérifiée par un prototype jetable qui n'appartient pas au Java
+   Analyzer.
 2. `TechnicalRole.ORG_OWNER.code()` (`PolicyEvaluator.java:396`) résolu en `"R_ORG_OWNER"`, ou
    déclaré `NOT_INTERPRETED`.
 3. `spaceRepository.save` mène à `SpaceRepository`, puis à `SpaceRepositoryAdapter` (`IMPLEMENTS`).
@@ -78,34 +97,34 @@ Critères du spike TAXO-03 (vérifiables sur TAKIBO) :
 5. Aucun Gradle exécuté, aucun jar lu, temps d'analyse mesuré.
 6. Tout échec de résolution produit un fait `COVERAGE` ; l'analyse ne s'arrête jamais en entier.
 
+Spring sert de cas de test difficile au spike. Le Java Analyzer ne devient pas pour autant un
+analyseur Spring.
+
 ## LATER
 
-Dependencies, Data, Documentation Drift, Diagrams, Impact Analysis, MCP, Ask Taxo, Structure,
+Dependencies, Data, Documentation Drift, autres diagrammes, Impact Analysis, MCP, Structure,
 Configuration, Frontend, Tests, CI/CD, Deployment, inventaire Documentation, Business Flows,
 Release notes, source Sonar, source Runtime.
 
 Les 17 récits du document de vision restent la description de ces capacités, pas un backlog.
 
-## Décision ouverte
-
-**Première démo : commentaire de PR ou diagramme de flux d'un endpoint ?**
-
-- **Commentaire de PR.** Sur une PR de TAKIBO, Taxo commente les endpoints ajoutés, modifiés ou
-  supprimés, et les changements du mécanisme d'autorisation, avec preuves et commits (cas 2).
-  Besoin : 01A à 01G, TAXO-02 à 05. Montre ce qu'un agent ne sait pas faire : dire ce qui a changé
-  entre deux commits, avec preuves et de façon reproductible. **Recommandation actuelle.**
-- **Diagramme de flux d'un endpoint.** Pour un endpoint choisi (cas 3 :
-  `POST /api/v1/orgs/{orgId}/spaces`), Taxo dessine la chaîne contrôleur → service → orchestrateur
-  → dépôt, avec le statut de chaque élément et la fin de chaque branche (établie, non interprétée,
-  non analysée). Besoin : 01A à 01G, 01I, TAXO-02 à 04, et un analyseur Java qui suit les appels
-  (`CALLS`, `IMPLEMENTS`, `DISPATCHES_TO`) au-delà du contrôleur. Sans évaluateur Data, la branche
-  s'arrête au dépôt avec une fin « non analysée » : la table `spaces` n'apparaît pas. La sécurité se
-  superpose après TAXO-05. Plus parlant pour un nouvel arrivant, mais un agent sait déjà approcher
-  ce résultat.
-
-Les récits 01A à 01G servent aux deux : la décision ne bloque pas l'épique.
-
 ## Décisions prises
+
+**2026-09-13 (revue de la PR #1)**
+
+- La règle de preuve est formulée par nature : obligatoire pour une `ASSERTION` `OBSERVED`,
+  interdite pour une `ABSENCE`, facultative pour une `COVERAGE`.
+- Provenance générique `produced_by` (`EVALUATOR`, `PROJECTION`, `HUMAN`) : une projection ou une
+  personne n'est jamais enregistrée comme évaluateur.
+- Périmètre structuré (`include`, `exclude`) ; il entre dans l'identité d'une `COVERAGE`.
+- Frontière Java / Spring : le Java Analyzer produit les primitives Java ; le Spring API Evaluator
+  est propriétaire du concept d'endpoint.
+- `PROTECTED_BY` s'appuie sur `MATCHED_BY` puis `AUTHORIZED_BY`.
+- Promesse sur les secrets limitée à ce que le contrat garantit.
+- Deux démonstrations : technique (PR) puis produit (Ask Taxo) ; la projection Diagramme API et
+  Ask Taxo minimal ont leur place dans la trajectoire.
+- 01H est placé avec TAXO-03, premier producteur de faits `INFERRED` (`DISPATCHES_TO`), et non plus
+  avec TAXO-05.
 
 **2026-09-13 (suite)**
 
@@ -144,15 +163,18 @@ OAuthClientController.java:25, :79   @RequireActiveSpace, spaceBoundaryGuard.ass
 ```
 
 Critère : aucun endpoint couvert par une règle d'URL `.access(...)` n'est signalé comme non protégé.
+Résultat attendu : `MATCHED_BY route-pattern:/api/v1/**` puis
+`PROTECTED_BY PolicyBasedAuthorizationManager` (`INFERRED`), et `PolicyEvaluator` en
+`NOT_INTERPRETED`.
 
-### Cas 2 : changement de sécurité sans contrôleur (démo PR)
+### Cas 2 : changement de sécurité sans contrôleur (TAXO-PROJ-PR-01)
 
 Le commit `4523e46` (PR #37, 2026-07-19, « make TMS routes default deny ») modifie
 `PolicyEvaluator.java`, `PolicyBasedAuthorizationManager.java` et leurs tests, sans toucher aucun
 contrôleur. Attendu entre `4523e46^` et `4523e46` : mécanisme d'autorisation modifié, endpoints
 potentiellement concernés (`INFERRED`), avec fichiers et commits.
 
-### Cas 3 : projection de flux (démo diagramme, 01I)
+### Cas 3 : projection de flux (TAXO-PROJ-API-01, 01I)
 
 `POST /api/v1/orgs/{orgId}/spaces` suit la chaîne réelle `SpaceController#createSpace`,
 `SpaceApplicationService#createSpace`, `SpaceRegistrationOrchestrator#registerSpace`, puis deux
@@ -166,7 +188,7 @@ Pièges à couvrir :
 - `OrgBoundaryFilter` est dans la chaîne de filtres mais ne s'applique pas à cette route
   (`OrgBoundaryFilter.java:28-35`, `:57`) : la sécurité se calcule endpoint par endpoint ;
 - la projection doit s'arrêter sur une fin « non interprétée » ou « non analysée » là où la suite
-  n'est pas établie.
+  n'est pas établie ; sans évaluateur Data, la table `spaces` n'apparaît pas.
 
 ### Cas 4 : deux surfaces pour un même concept (TAXO-04)
 
@@ -184,4 +206,4 @@ Taxo relève le fait. La question « est-il actif en production ? » est une con
 `OAuthClientController.java` contient 0 octet CR dans le commit `80eb595` et 89 dans le dossier de
 travail Windows (`core.autocrlf=true`). Critère : le même code produit la même empreinte, qu'il soit
 lu depuis le commit ou depuis le dossier de travail. Empreintes de référence dans la fixture de
-TAXO-01A (T18).
+TAXO-01A (T19).

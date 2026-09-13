@@ -2,13 +2,13 @@
 
 Statut : À FAIRE  
 Parent : EPIC TAXO-01 — Fondation de la mémoire logicielle vérifiable (`EPIC-TAXO-01-fondation-memoire-verifiable.md`)  
-Références : ADR 0001, ADR 0002 (amendé le 2026-09-13)
+Références : ADR 0001, ADR 0002
 
 ## Récit
 
 En tant que Taxo,  
 je veux disposer d'un contrat machine unique et versionné pour représenter un fait,  
-afin que tous les évaluateurs produisent des connaissances ayant la même signification et que les
+afin que tous les producteurs émettent des connaissances ayant la même signification et que les
 projections futures puissent les consommer sans connaître leur technologie d'origine.
 
 ## Pourquoi ce récit existe
@@ -46,7 +46,8 @@ symbol:java:...PolicyEvaluator
 coverage_type: NOT_INTERPRETED
 ```
 
-Ces informations pourront provenir d'évaluateurs différents, écrits dans des langages différents.
+Ces informations pourront provenir d'évaluateurs, de projections ou de personnes, et d'outils écrits
+dans des langages différents.
 
 Leur seule frontière commune doit être le contrat du fait Taxo.
 
@@ -55,9 +56,9 @@ Leur seule frontière commune doit être le contrat du fait Taxo.
 # Loi du récit
 
 ```text
-Un évaluateur ne produit pas du JSON libre.
+Un producteur n'émet pas du JSON libre.
 
-Il produit un fait Taxo valide
+Il émet un fait Taxo valide
 ou son résultat est refusé, avec la raison.
 ```
 
@@ -70,11 +71,11 @@ Ce récit ne réalise pas :
 - la persistance des faits ;
 - les migrations de la base ;
 - la **création** des instantanés Git (TAXO-01C) — la **référence** à un instantané, elle, fait partie du contrat ;
-- la normalisation des références et le calcul de l'identité stable (TAXO-01B) ;
+- la normalisation des références et du périmètre, et le calcul de l'identité stable (TAXO-01B) ;
 - la réévaluation de la validité (TAXO-01H) ;
 - l'analyse Java ou Spring ;
 - l'Inventory Evaluator ;
-- les diagrammes, Ask Taxo, MCP, le Knowledge Graph ;
+- les projections, les diagrammes, Ask Taxo, MCP, le Knowledge Graph ;
 - un LLM.
 
 Il définit et valide uniquement **la forme et les règles d'un fait Taxo**.
@@ -108,13 +109,11 @@ peut rejouer la même suite de conformité sans dépendre du code Python.
 
 # T2 — Implémenter les trois natures de faits
 
-Chaque nature a sa propre structure :
-
-| Nature | Structure | Statuts possibles |
-| --- | --- | --- |
-| `ASSERTION` | `subject`, `relation`, `object`, `qualifiers` | `OBSERVED`, `INFERRED`, `HUMAN_VALIDATED` |
-| `ABSENCE` | `pattern`, `scope`, `method` | `OBSERVED` uniquement |
-| `COVERAGE` | `subject`, `coverage_type`, `scope` | `OBSERVED` uniquement |
+| Nature | Structure | Preuve | Statut |
+| --- | --- | --- | --- |
+| `ASSERTION` | `subject`, `relation`, `object`, `qualifiers` | obligatoire si `OBSERVED` | `OBSERVED`, `INFERRED`, `HUMAN_VALIDATED` |
+| `ABSENCE` | `pattern`, `scope`, `method` | **interdite** | `OBSERVED` uniquement |
+| `COVERAGE` | `subject`, `coverage_type`, `scope` | facultative | `OBSERVED` uniquement |
 
 ### ASSERTION
 
@@ -146,19 +145,19 @@ Une absence et une limitation d'analyse ne peuvent plus être confondues avec un
 
 ---
 
-# T3 — Implémenter les statuts de connaissance
+# T3 — Statuts de connaissance et producteurs autorisés
 
 Le contrat doit supporter :
 
 ```text
-OBSERVED
-INFERRED
-HUMAN_VALIDATED
+OBSERVED          produit uniquement par un évaluateur
+INFERRED          produit par un évaluateur ou par une projection
+HUMAN_VALIDATED   produit uniquement par une personne
 ```
 
 ### OBSERVED
 
-Produit mécaniquement depuis une source, par une règle de détection nommée.
+Extrait mécaniquement d'une source, par une règle de détection nommée.
 
 ### INFERRED
 
@@ -202,7 +201,7 @@ Une connaissance humaine était ancrée sur du code qui a changé.
 
 La validité est **décidée par la mémoire**, pas par le producteur.
 
-Un évaluateur ne soumet que des faits `VALID`. Les états `STALE` et `REVALIDATION_REQUIRED` sont
+Un producteur ne soumet que des faits `VALID`. Les états `STALE` et `REVALIDATION_REQUIRED` sont
 représentables, mais seule la mémoire les pose (TAXO-01H).
 
 ## Résultat attendu
@@ -214,7 +213,7 @@ Status   : HUMAN_VALIDATED
 Validity : REVALIDATION_REQUIRED
 ```
 
-est un état valide du modèle, mais pas un fait qu'un évaluateur peut soumettre.
+est un état valide du modèle, mais pas un fait qu'un producteur peut soumettre.
 
 ---
 
@@ -227,8 +226,11 @@ La structure du fait distingue :
 | Nature | Champs d'identité |
 | --- | --- |
 | `ASSERTION` | nature, sujet, relation, objet, qualificatifs |
-| `ABSENCE` | nature, motif, méthode, périmètre (hors commit) |
-| `COVERAGE` | nature, sujet, type de couverture, identifiant de l'évaluateur |
+| `ABSENCE` | nature, motif, méthode, périmètre |
+| `COVERAGE` | nature, sujet, type de couverture, périmètre, identifiant du producteur |
+
+« `PolicyEvaluator` non interprété dans le module A » et « `PolicyEvaluator` non interprété dans tout
+le dépôt » sont deux couvertures distinctes.
 
 **L'occurrence** — où et comment le fait a été établi : statut, validité, instantané, preuves,
 dérivation ou validation, producteur.
@@ -245,7 +247,7 @@ Un sujet ou un objet est une référence `type:clé`.
 La liste des types v1 est **fermée** :
 
 ```text
-repository   module   file   symbol   endpoint   route-pattern
+repository   module   directory   file   symbol   endpoint   route-pattern
 technology   language   annotation   role   permission   policy-rule
 ```
 
@@ -267,6 +269,7 @@ qualifiers:
 
 - `object` peut être absent lorsque la relation le permet explicitement (`PERMITS_ALL`).
 - Une valeur littérale n'est admise que dans `object` lorsque la relation le prévoit, ou dans `qualifiers`.
+- `directory` désigne un sous-arbre : chemin relatif, séparateurs `/`, sans `/` final.
 - La normalisation et la stabilité des clés relèvent de TAXO-01B.
 
 ---
@@ -287,51 +290,95 @@ la règle « la preuve appartient au même instantané » ne peut pas être vér
 
 ---
 
-# T8 — Définir la provenance du producteur
+# T8 — Périmètre structuré
 
-Chaque fait doit contenir :
-
-```text
-evaluator_id
-evaluator_version
-catalog_id
-catalog_version
-execution_id
-```
-
-Exemple :
+`scope` est une structure, jamais une phrase libre :
 
 ```text
-evaluator_id:       spring-security
-evaluator_version:  1.2.0
-catalog_id:         spring-security-rules
-catalog_version:    1
+scope:
+  include[]   au moins une référence
+  exclude[]   facultatif
 ```
 
-L'horodatage d'analyse appartient à l'exécution référencée par `execution_id`, pas au fait : un même
-commit peut être analysé plusieurs fois.
+Types admis : `repository`, `module`, `directory`, `file`.
 
-## Pourquoi
+| Périmètre | Représentation |
+| --- | --- |
+| tout le dépôt | `include: [repository:takibo-iam]` |
+| un module | `include: [module:takibo-security-management]` |
+| un ensemble de fichiers | `include: [file:a/B.java, file:a/C.java]` |
+| un sous-arbre | `include: [directory:takibo-security-management/src/main/java]` |
+| une exclusion | `exclude: [directory:takibo-security-management/src/test]` |
 
-Deux analyses du même commit peuvent produire des résultats différents parce que l'évaluateur a évolué.
-
-Taxo doit pouvoir distinguer :
-
-```text
-le logiciel a changé
-```
-
-de :
-
-```text
-Taxo analyse mieux le même logiciel
-```
+- Le périmètre dit **où**. Le **comment** est porté par la méthode (`ABSENCE`) ou par le catalogue du
+  producteur (`COVERAGE`) : « catalogue Security v1 » n'est jamais un périmètre.
+- Le commit n'en fait pas partie : il appartient à l'instantané.
+- Le périmètre entre dans l'identité d'une `ABSENCE` et d'une `COVERAGE` (T5).
 
 ---
 
-# T9 — Définir la preuve
+# T9 — Provenance : producteur générique
 
-Une `ASSERTION` `OBSERVED` doit contenir au moins une preuve.
+Chaque fait contient :
+
+```text
+produced_by:
+  producer_type      EVALUATOR | PROJECTION | HUMAN
+  producer_id
+  producer_version   obligatoire pour EVALUATOR et PROJECTION ; absent pour HUMAN
+  execution_id       obligatoire pour EVALUATOR et PROJECTION ; absent pour HUMAN
+  catalog_id         obligatoire pour EVALUATOR ; absent sinon
+  catalog_version    obligatoire pour EVALUATOR ; absent sinon
+```
+
+Matrice appliquée par le validateur :
+
+| Producteur | `ASSERTION` | `ABSENCE` | `COVERAGE` |
+| --- | --- | --- | --- |
+| `EVALUATOR` | `OBSERVED`, `INFERRED` | `OBSERVED` | `OBSERVED` |
+| `PROJECTION` | `INFERRED` | interdit | interdit |
+| `HUMAN` | `HUMAN_VALIDATED` | interdit | interdit |
+
+Exemples :
+
+```text
+producer_type:     EVALUATOR
+producer_id:       spring-security
+producer_version:  1.2.0
+execution_id:      <exécution>
+catalog_id:        spring-security-rules
+catalog_version:   1
+```
+
+```text
+producer_type:     PROJECTION
+producer_id:       projection-pr
+producer_version:  1.0.0
+execution_id:      <exécution>
+```
+
+```text
+producer_type:     HUMAN
+producer_id:       <identifiant de la personne>
+```
+
+L'horodatage d'analyse appartient à l'exécution référencée par `execution_id`. Pour une personne, la
+date est portée par la validation (T14).
+
+## Pourquoi
+
+- **Une projection ou une personne n'est jamais enregistrée comme évaluateur.** Ask Taxo, le bot de
+  PR ou un architecte qui valide une règle doivent apparaître pour ce qu'ils sont.
+- Deux analyses du même commit peuvent produire des résultats différents parce que le producteur a
+  évolué. Taxo doit pouvoir distinguer « le logiciel a changé » de « Taxo analyse mieux le même
+  logiciel ».
+
+---
+
+# T10 — Définir la preuve
+
+Une `ASSERTION` `OBSERVED` contient au moins une preuve. Une `COVERAGE` peut en contenir. Une
+`ABSENCE` n'en contient jamais.
 
 ```text
 repository
@@ -365,24 +412,28 @@ sur disque : `d64ce8df…` ; même fichier sans les CR : `ce768de4…`, identiqu
 
 Sans normalisation, le même code aurait deux empreintes, et Taxo annoncerait de fausses modifications.
 
-## Règle
+## Règles
 
-Aucun champ du contrat ne peut contenir de texte source. C'est la garantie structurelle qu'aucune
-valeur sensible n'est copiée dans un fait : il n'existe pas d'emplacement pour elle.
+- La preuve ne stocke jamais de texte source brut : seulement chemin, lignes, symbole, méthode et
+  empreinte.
+- Le contrat ne comporte aucun champ destiné à conserver un extrait brut de code source. Les
+  producteurs restent responsables de ne jamais émettre de secret ou de valeur sensible, y compris
+  dans les champs textuels (qualificatifs, valeur d'un motif, énoncé d'une validation, valeurs
+  littérales).
 
 ---
 
-# T10 — Définir les règles d'ABSENCE
+# T11 — Définir les règles d'ABSENCE
 
 Un fait `ABSENCE` contient obligatoirement :
 
 ```text
 pattern   type et valeur du motif cherché
-scope     périmètre de la recherche
+scope     périmètre structuré (T8)
 method    méthode de recherche
 ```
 
-Il ne contient ni relation ni preuve.
+Il ne contient ni relation ni preuve. Il est toujours `OBSERVED` et produit par un évaluateur.
 
 Exemple :
 
@@ -394,8 +445,10 @@ Pattern:
   type:   literal
   value:  "P_SPACE_USER_CREATE"
 
-Scope:    tracked files at commit <commit>
-Method:   literal-string-search
+Scope:
+  include: [repository:takibo-iam]
+
+Method:   java.string-literal-search
 ```
 
 ## Interdit
@@ -410,17 +463,18 @@ Une absence Taxo signifie uniquement :
 
 ---
 
-# T11 — Définir les règles de COVERAGE
+# T12 — Définir les règles de COVERAGE
 
 Un fait `COVERAGE` contient obligatoirement :
 
 ```text
 subject
 coverage_type
-scope
+scope       périmètre structuré (T8)
 ```
 
-Il peut contenir une preuve (par exemple, le fichier non interprété).
+Il peut contenir une preuve (par exemple, le fichier non interprété). Il est toujours `OBSERVED` et
+produit par un évaluateur.
 
 Exemple :
 
@@ -429,12 +483,14 @@ Kind:           COVERAGE
 Status:         OBSERVED
 Subject:        symbol:java:...PolicyEvaluator
 Coverage type:  NOT_INTERPRETED
-Scope:          catalogue spring-security-rules v1
+Scope:
+  include: [module:takibo-security-management]
+Produced by:    EVALUATOR spring-security, catalogue spring-security-rules v1
 ```
 
 ---
 
-# T12 — Définir les règles d'INFERRED
+# T13 — Définir les règles d'INFERRED
 
 Un fait `INFERRED` contient :
 
@@ -445,26 +501,27 @@ counter_examples_checked
 known_gaps
 ```
 
-Au moins une prémisse et une règle sont obligatoires.
+Au moins une prémisse et une règle sont obligatoires. Le producteur est un évaluateur ou une
+projection.
 
-Exemple :
+Exemple : pourquoi cet endpoint est-il protégé ?
 
 ```text
-Conclusion:
-endpoint:POST /api/v1/orgs/{orgId}/spaces/{spaceId}/clients
-PROTECTED_BY
-symbol:java:...PolicyBasedAuthorizationManager
+F1  OBSERVED   endpoint:X  HANDLED_BY     symbol:...OAuthClientController#register
+F2  OBSERVED   route-pattern:/api/v1/**   AUTHORIZED_BY   symbol:...PolicyBasedAuthorizationManager
 
-Premises:
-F-101
-F-105
+F3  INFERRED   endpoint:X  MATCHED_BY     route-pattern:/api/v1/**
+    Premises:  F1, F2
+    Rule:      spring-security.first-matching-pattern
 
-Rule:
-security.route-covers-endpoint
-
-Known gaps:
-PolicyEvaluator internal rules not interpreted
+F4  INFERRED   endpoint:X  PROTECTED_BY   symbol:...PolicyBasedAuthorizationManager
+    Premises:  F2, F3
+    Rule:      spring-security.route-authorization-applies
+    Known gaps: PolicyEvaluator internal rules not interpreted
 ```
+
+`PROTECTED_BY` ne se déduit jamais directement de `HANDLED_BY` : `HANDLED_BY` ne prouve pas que
+`/api/v1/**` couvre l'endpoint. C'est le rôle de `MATCHED_BY`.
 
 ## Interdit
 
@@ -472,18 +529,20 @@ Aucun pourcentage de confiance. Tout champ de confiance est refusé.
 
 ---
 
-# T13 — Définir HUMAN_VALIDATED
+# T14 — Définir HUMAN_VALIDATED
 
-Une connaissance validée par une personne contient au minimum :
+Une connaissance validée par une personne a pour producteur `HUMAN` et contient au minimum :
 
 ```text
-validated_by
-validated_at
-statement
-anchors
+validation:
+  validated_at
+  statement
+  anchors
 ```
 
-Chaque ancrage désigne un symbole et son `content_hash`, calculé selon T9, pour détecter
+La personne est identifiée par `produced_by.producer_id` (T9).
+
+Chaque ancrage désigne un symbole et son `content_hash`, calculé selon T10, pour détecter
 ultérieurement que le code concerné a changé.
 
 Exemple :
@@ -498,7 +557,7 @@ sha256:<empreinte des lignes de la méthode>
 
 ---
 
-# T14 — Vocabulaire versionné
+# T15 — Vocabulaire versionné
 
 Le contrat utilise le vocabulaire v1 de l'ADR 0002 :
 
@@ -508,17 +567,18 @@ WRITTEN_IN
 USES_TECHNOLOGY
 DECLARED_BY
 
-HANDLED_BY
-ACCEPTS
-RETURNS
-
-MATCHED_BY
-PERMITS_ALL
-AUTHORIZED_BY
 ANNOTATED_WITH
 CALLS
 IMPLEMENTS
 DISPATCHES_TO
+
+HANDLED_BY
+ACCEPTS
+RETURNS
+
+PERMITS_ALL
+AUTHORIZED_BY
+MATCHED_BY
 PROTECTED_BY
 ```
 
@@ -530,34 +590,38 @@ Ajouter une relation au vocabulaire est une évolution explicite.
 
 ---
 
-# T15 — Implémenter les règles de cohérence
+# T16 — Implémenter les règles de cohérence
 
 Le validateur doit refuser, avec la raison :
 
 | # | Cas | Raison attendue |
 | --- | --- | --- |
-| 1 | `ASSERTION` `OBSERVED` sans preuve | OBSERVED exige une preuve |
-| 2 | preuve d'un autre dépôt ou d'un autre commit que l'instantané | preuve hors instantané |
-| 3 | `INFERRED` sans prémisse ou sans règle | INFERRED exige une dérivation |
-| 4 | `HUMAN_VALIDATED` sans validation complète ou sans ancrage | validation incomplète |
-| 5 | `ABSENCE` sans motif, périmètre ou méthode | absence non bornée |
-| 6 | `ABSENCE` ou `COVERAGE` avec un statut autre que `OBSERVED` | statut interdit pour cette nature |
-| 7 | `ASSERTION` sans relation, ou relation hors vocabulaire | relation invalide |
-| 8 | `COVERAGE` sans type de couverture, ou type inconnu | couverture invalide |
-| 9 | référence mal formée, ou type d'entité hors liste | référence invalide |
-| 10 | nature, statut ou validité inconnus | valeur inconnue |
-| 11 | validité différente de `VALID` à la soumission | validité réservée à la mémoire |
-| 12 | champ inconnu, dont tout champ de confiance | champ non prévu par le contrat |
-| 13 | instantané `WORKING_TREE` sans empreinte de contenu | instantané non identifiable |
-| 14 | `content_hash` au mauvais format | empreinte invalide |
+| 1 | `ASSERTION` `OBSERVED` sans preuve | une assertion observée exige une preuve |
+| 2 | `ABSENCE` avec une preuve ou une relation | une absence n'a ni preuve ni relation |
+| 3 | preuve d'un autre dépôt ou d'un autre commit que l'instantané | preuve hors instantané |
+| 4 | `INFERRED` sans prémisse ou sans règle | INFERRED exige une dérivation |
+| 5 | `HUMAN_VALIDATED` sans validation complète ou sans ancrage | validation incomplète |
+| 6 | `ABSENCE` sans motif, périmètre ou méthode | absence non bornée |
+| 7 | `COVERAGE` sans périmètre, sans type de couverture, ou avec un type inconnu | couverture invalide |
+| 8 | `ABSENCE` ou `COVERAGE` avec un statut autre que `OBSERVED` | statut interdit pour cette nature |
+| 9 | statut incompatible avec le producteur (`PROJECTION` `OBSERVED`, `HUMAN` hors `HUMAN_VALIDATED`, `EVALUATOR` `HUMAN_VALIDATED`, `ABSENCE` ou `COVERAGE` hors `EVALUATOR`) | producteur non autorisé pour ce statut |
+| 10 | `EVALUATOR` sans catalogue ; `EVALUATOR` ou `PROJECTION` sans version ou sans exécution ; `HUMAN` avec catalogue, version ou exécution | provenance incohérente |
+| 11 | périmètre sans inclusion, ou type de référence non admis dans un périmètre | périmètre invalide |
+| 12 | `ASSERTION` sans relation, ou relation hors vocabulaire | relation invalide |
+| 13 | référence mal formée, ou type d'entité hors liste | référence invalide |
+| 14 | nature, statut, validité ou type de producteur inconnus | valeur inconnue |
+| 15 | validité différente de `VALID` à la soumission | validité réservée à la mémoire |
+| 16 | champ inconnu, dont tout champ de confiance | champ non prévu par le contrat |
+| 17 | instantané `WORKING_TREE` sans empreinte de contenu | instantané non identifiable |
+| 18 | `content_hash` au mauvais format | empreinte invalide |
 
 ---
 
-# T16 — Tests positifs
+# T17 — Tests positifs
 
 Créer, sous forme de fichiers de la suite de conformité, des exemples valides pour au minimum :
 
-### ASSERTION / OBSERVED
+### ASSERTION / OBSERVED / EVALUATOR
 
 ```text
 repository:taxo
@@ -565,7 +629,15 @@ USES_TECHNOLOGY
 technology:FastAPI
 ```
 
-### ASSERTION / INFERRED
+### ASSERTION / INFERRED / EVALUATOR
+
+```text
+endpoint:POST /api/v1/orgs/{orgId}/spaces/{spaceId}/clients
+MATCHED_BY
+route-pattern:/api/v1/**
+```
+
+### ASSERTION / INFERRED / PROJECTION
 
 ```text
 endpoint:POST /api/v1/orgs/{orgId}/spaces/{spaceId}/clients
@@ -573,7 +645,7 @@ PROTECTED_BY
 symbol:java:...PolicyBasedAuthorizationManager
 ```
 
-### ASSERTION / HUMAN_VALIDATED
+### ASSERTION / HUMAN_VALIDATED / HUMAN
 
 ```text
 endpoint:POST /api/v1/orgs/{orgId}/spaces/{spaceId}/clients
@@ -585,16 +657,21 @@ policy-rule:POL_OAUTH_CLIENT_ADMIN_REQUIRED
 
 ```text
 pattern: literal "P_SPACE_USER_CREATE"
-scope:   tracked files at commit
-method:  literal-string-search
+scope:   include [repository:takibo-iam]
+method:  java.string-literal-search
 ```
 
-### COVERAGE
+### COVERAGE, avec et sans preuve
 
 ```text
 symbol:java:...PolicyEvaluator
 coverage_type: NOT_INTERPRETED
+scope: include [module:takibo-security-management]
 ```
+
+### Périmètres
+
+Tout le dépôt, un module, un ensemble de fichiers, un sous-arbre, et une inclusion avec exclusion.
 
 ### Empreinte
 
@@ -604,13 +681,13 @@ Tous doivent être acceptés.
 
 ---
 
-# T17 — Tests négatifs
+# T18 — Tests négatifs
 
-Un fichier de la suite de conformité par cas de T15, avec la raison de refus attendue.
+Un fichier de la suite de conformité par cas de T16, avec la raison de refus attendue.
 
 ---
 
-# T18 — Exemple canonique TAKIBO
+# T19 — Exemple canonique TAKIBO
 
 Ajouter une fixture de contrat avec les valeurs réelles, vérifiées le 2026-09-13 :
 
@@ -641,14 +718,15 @@ Evidence 2:
   content_hash:  sha256:554a3321bd5d9cdc6a59094935ac3d2e3d531ad045904cf06f53c565bb3b4a37
 
 Produced by:
-  evaluator_id:       spring-api
-  evaluator_version:  1.0.0
-  catalog_id:         spring-api-rules
-  catalog_version:    1
-  execution_id:       <fixture>
+  producer_type:     EVALUATOR
+  producer_id:       spring-api
+  producer_version:  1.0.0
+  execution_id:      <fixture>
+  catalog_id:        spring-api-rules
+  catalog_version:   1
 ```
 
-Les empreintes ont été calculées depuis le contenu Git du commit, selon la règle de T9. Les extraits
+Les empreintes ont été calculées depuis le contenu Git du commit, selon la règle de T10. Les extraits
 de ligne ci-dessus servent à la lecture de ce récit : ils ne font pas partie du fait.
 
 Cette fixture ne constitue pas une analyse réelle effectuée par Taxo.
@@ -658,28 +736,29 @@ Cette fixture ne constitue pas une analyse réelle effectuée par Taxo.
 # Critères d'acceptation
 
 1. Il existe une version machine du contrat : JSON Schema, validateur sémantique et suite de conformité.
-2. `ASSERTION`, `ABSENCE` et `COVERAGE` sont représentables, chacune avec sa structure propre.
-3. `OBSERVED`, `INFERRED` et `HUMAN_VALIDATED` sont représentables.
+2. `ASSERTION`, `ABSENCE` et `COVERAGE` sont représentables, chacune avec sa structure propre et sa règle de preuve.
+3. `OBSERVED`, `INFERRED` et `HUMAN_VALIDATED` sont représentables, chacun avec ses producteurs autorisés.
 4. `VALID`, `STALE` et `REVALIDATION_REQUIRED` sont représentables ; un fait soumis est `VALID`.
-5. Identité et occurrence sont séparées dans la structure.
+5. Identité et occurrence sont séparées ; le périmètre et le producteur entrent dans l'identité d'une `COVERAGE`.
 6. Les références suivent la syntaxe `type:clé` et la liste fermée des types v1.
 7. Chaque fait référence son instantané ; toute preuve appartient à cet instantané.
-8. La provenance de l'évaluateur et de son catalogue est obligatoire.
-9. `content_hash` suit l'algorithme de T9 ; LF et CRLF donnent la même empreinte.
-10. Les 14 cas de T15 sont refusés, chacun avec sa raison.
-11. Le vocabulaire des relations est versionné ; une relation inconnue est refusée.
-12. Tout champ inconnu est refusé ; aucun score de confiance n'est requis, généré ni accepté.
-13. Aucun champ ne permet de stocker du texte source.
-14. La fixture TAKIBO de T18 est acceptée.
-15. La suite de conformité ne dépend d'aucune technologie d'analyse particulière.
-16. Aucun LLM n'est utilisé.
-17. Tous les tests sont verts.
+8. Le périmètre est structuré (`include`, `exclude`) et représente dépôt, module, fichiers, sous-arbre et exclusions.
+9. La provenance suit `produced_by` ; une projection ou une personne n'est jamais enregistrée comme évaluateur.
+10. `content_hash` suit l'algorithme de T10 ; LF et CRLF donnent la même empreinte.
+11. Les 18 cas de T16 sont refusés, chacun avec sa raison.
+12. Le vocabulaire des relations est versionné ; une relation inconnue est refusée.
+13. Tout champ inconnu est refusé ; aucun score de confiance n'est requis, généré ni accepté.
+14. Aucun champ n'est destiné à conserver un extrait brut de code source ; la preuve n'en stocke jamais.
+15. La fixture TAKIBO de T19 est acceptée.
+16. La suite de conformité ne dépend d'aucune technologie d'analyse particulière.
+17. Aucun LLM n'est utilisé.
+18. Tous les tests sont verts.
 
 ---
 
 # Définition de terminé
 
-À la fin de TAXO-01A, n'importe quel futur évaluateur peut dire :
+À la fin de TAXO-01A, n'importe quel futur producteur peut dire :
 
 ```text
 Voici un fait Taxo.
@@ -695,7 +774,7 @@ ou :
 
 ```text
 REFUSÉ
-raison : OBSERVED exige une preuve
+raison : une assertion observée exige une preuve
 ```
 
 Sans connaître :
@@ -726,11 +805,13 @@ TAXO-01F  Comparaison et banc Git
        ↓
 TAXO-01G  API de lecture et vue de vérification
        ↓
-Spring API / Security
+TAXO-02 à 05  Inventory, Java Analyzer, Spring API, Spring Security
        ↓
-Première projection (PR ou diagramme)
+TAXO-PROJ-PR-01   Projection PR              démo technique
        ↓
-Ask Taxo
+TAXO-PROJ-API-01  Projection Diagramme API
+       ↓
+TAXO-ASK-01       Ask Taxo minimal           démo produit
 ```
 
 Ask Taxo ne sera fiable que parce que les faits qu'il consomme auront franchi cette frontière.
