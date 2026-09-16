@@ -10,6 +10,7 @@ from app.evaluators.inventory.evaluator import InventoryEvaluator, MAX_MANIFEST_
 from app.facts import fact_identity, validate_fact
 from app.snapshots.domain.mode import COMMIT
 from app.snapshots.domain.snapshot import Snapshot, SnapshotFile
+from app.snapshots.domain.errors import GIT_READ_ERROR, SnapshotError
 
 
 CATALOG = EvaluatorCatalog('dummy', '1', ('CONTAINS',), ('ANALYSED',))
@@ -26,7 +27,11 @@ class DummyEvaluator:
     def evaluate(self, snapshot):
         if self.status is EvaluationStatus.FAILED:
             raise RuntimeError('broken evaluator')
-        return EvaluationOutput(status=self.status)
+        coverage = {'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED',
+                    'validity': 'VALID', 'subject': f'repository:{snapshot.repository}',
+                    'coverage_type': 'ANALYSED',
+                    'scope': {'include': [f'repository:{snapshot.repository}']}}
+        return EvaluationOutput(coverage=(coverage,), status=self.status)
 
 
 def snapshot():
@@ -41,6 +46,23 @@ def test_run_evaluator_preserves_all_technical_statuses(status):
     execution = RunEvaluator()(DummyEvaluator(status), snapshot())
     expected = EvaluationStatus.FAILED if status is EvaluationStatus.FAILED else status
     assert execution.status is expected
+    assert execution.started_at.tzinfo is not None
+    assert execution.started_at <= execution.finished_at
+    assert execution.scope == {'include': ['repository:project-key'], 'exclude': []}
+    assert execution.coverage
+    assert execution.result()['scope'] == execution.scope
+
+
+def test_missing_coverage_is_failed_with_declared_fallback():
+    evaluator = DummyEvaluator()
+    evaluator.evaluate = lambda _snapshot: EvaluationOutput()
+    execution = RunEvaluator()(evaluator, snapshot())
+    assert execution.status is EvaluationStatus.FAILED
+    assert len(execution.coverage) == 1
+    assert execution.coverage[0]['coverage_type'] == 'NOT_INTERPRETED'
+    validate_fact(execution.coverage[0])
+    with pytest.raises(ValueError, match='déclarer sa couverture'):
+        replace(execution, coverage=())
 
 
 def test_registry_is_explicit_deterministic_and_rejects_duplicates():
@@ -90,7 +112,7 @@ def test_inventory_fact_identities_are_reproducible():
     assert [fact['coverage_type'] for fact in first.coverage] == [fact['coverage_type'] for fact in second.coverage]
 
 
-def test_invalid_manifest_is_partial_with_not_interpreted_coverage():
+def test_invalid_manifest_is_success_with_not_interpreted_coverage():
     class Content:
         def read_many(self, paths):
             values = {'package.json': b'{broken'}
@@ -100,7 +122,7 @@ def test_invalid_manifest_is_partial_with_not_interpreted_coverage():
     current = Snapshot('project-key', 'a' * 40, COMMIT,
                        (SnapshotFile('package.json', 7),), content=Content())
     execution = RunEvaluator()(InventoryEvaluator(), current)
-    assert execution.status is EvaluationStatus.PARTIAL
+    assert execution.status is EvaluationStatus.SUCCESS
     assert [item['coverage_type'] for item in execution.coverage] == ['ANALYSED', 'NOT_INTERPRETED']
 
 
@@ -117,7 +139,7 @@ def test_non_utf8_file_does_not_discard_other_inventory_facts(unreadable_path):
                        tuple(SnapshotFile(path, len(data)) for path, data in values.items()),
                        content=Content())
     execution = RunEvaluator()(InventoryEvaluator(), current)
-    assert execution.status is EvaluationStatus.PARTIAL
+    assert execution.status is EvaluationStatus.SUCCESS
     assert any(fact['relation'] == 'WRITTEN_IN' and fact['subject'] == 'file:App.tsx'
                for fact in execution.facts)
     assert all(evidence['path'] != unreadable_path
@@ -146,7 +168,7 @@ def test_size_limit_is_enforced_before_reading_any_file():
                        + (SnapshotFile('main.py', len(data)),), content=Content())
     execution = RunEvaluator()(InventoryEvaluator(), current)
     assert requested == ['main.py']
-    assert execution.status is EvaluationStatus.PARTIAL
+    assert execution.status is EvaluationStatus.SUCCESS
     assert {item['subject'] for item in execution.coverage if item['coverage_type'] == 'NOT_INTERPRETED'} == {
         f'file:{path}' for path in oversized}
     assert any(fact['object'] == 'file:main.py' for fact in execution.facts)
@@ -178,3 +200,23 @@ def test_inventory_releases_file_contents_while_reading():
     assert output.status is EvaluationStatus.SUCCESS
     assert len([fact for fact in output.facts if fact['relation'] == 'CONTAINS']) == 4
     assert TrackedBytes.live == 0
+
+
+def test_read_error_is_partial_with_read_error_coverage():
+    class Content:
+        def read_many(self, paths):
+            for path in paths:
+                if path == 'unreadable.py':
+                    raise SnapshotError(GIT_READ_ERROR, 'Objet Git illisible.')
+                yield path, b'print(1)\n'
+
+    current = Snapshot('project-key', 'a' * 40, COMMIT,
+                       (SnapshotFile('good.py', 9), SnapshotFile('unreadable.py', 9)),
+                       content=Content())
+    execution = RunEvaluator()(InventoryEvaluator(), current)
+    assert execution.status is EvaluationStatus.PARTIAL
+    assert any(item['subject'] == 'file:unreadable.py' and item['coverage_type'] == 'READ_ERROR'
+               for item in execution.coverage)
+    assert any(fact['subject'] == 'file:good.py' for fact in execution.facts)
+    for item in execution.coverage:
+        validate_fact(item)

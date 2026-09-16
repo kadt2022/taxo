@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-09-15 (insertion de TAXO-ARCH-01 avant 01D)
+Mise à jour : 2026-09-16 (conformité TAXO-01D à T4)
 Références : ADR 0001, ADR 0002, ADR 0004, `EPIC-TAXO-01-fondation-memoire-verifiable.md`
 
 ## MVP
@@ -45,11 +45,11 @@ Rien d'autre n'est ouvert tant que les récits 01A à 01G ne sont pas terminés.
 
 | Récit | Contenu | Tâches de l'épique | Statut |
 | --- | --- | --- | --- |
-| **01A** Contrat machine du fait | natures et règles de preuve par nature, statuts et producteurs autorisés, validité, identité et occurrence, syntaxe des références, référence d'instantané, périmètre structuré, provenance `produced_by`, preuve et empreinte, vocabulaire v1, règles de cohérence, suite de conformité | T1 | implémenté et testé ; revue et merge en attente : [récit](Terminé/TAXO-01A-contrat-machine-du-fait-TERMINÉ.md) |
-| **01B** Références stables et identité | normalisation des clés et du périmètre, stabilité entre commits, calcul de l'identité stable d'un fait | T2 | à rédiger |
-| **01C** Instantané au commit | lecture d'un commit en lecture seule ; mode `WORKING_TREE` marqué, avec empreinte du contenu ; fichiers ignorés par Git exclus | T3 | à rédiger |
-| **ARCH-01** Modularisation du backend | capacités, ports et adaptateurs ; refactoring sans changement métier ([ADR 0004](../adr/0004-monolithe-modulaire.md)) | préalable à T4 | implémenté localement, revue en attente : [récit](TAXO-ARCH-01-modulariser-backend.md) |
-| **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statut technique (`SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; `evaluators/inventory` converti en Inventory v0, premier producteur de faits réels | T4 | implémenté sur `feat/taxo-01d-evaluator-execution-coverage`, revue et merge en attente |
+| **01A** Contrat machine du fait | natures et règles de preuve par nature, statuts et producteurs autorisés, validité, identité et occurrence, syntaxe des références, référence d'instantané, périmètre structuré, provenance `produced_by`, preuve et empreinte, vocabulaire v1, règles de cohérence, suite de conformité | T1 | terminé / mergé : [récit](Terminé/TAXO-01A-contrat-machine-du-fait-TERMINÉ.md) |
+| **01B** Références stables et identité | normalisation des clés et du périmètre, stabilité entre commits, calcul de l'identité stable d'un fait | T2 | terminé / mergé : [récit](Terminé/TAXO-01B-references-stables-identite-canonique-TERMINÉ.md) |
+| **01C** Instantané au commit | lecture d'un commit en lecture seule ; mode `WORKING_TREE` marqué, avec empreinte du contenu ; fichiers ignorés par Git exclus | T3 | terminé / mergé : [récit](Terminé/TAXO-01C-instantane-git-au-commit-TERMINÉ.md) |
+| **ARCH-01** Modularisation du backend | capacités, ports et adaptateurs ; refactoring sans changement métier ([ADR 0004](../adr/0004-monolithe-modulaire.md)) | préalable à T4 | terminé / mergé : [récit](TAXO-ARCH-01-modulariser-backend.md) |
+| **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statuts T4 (`RUNNING`, `SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; `evaluators/inventory` converti en Inventory v0 | T4 | revue en cours : [récit](TAXO-01D-execution-evaluateur-et-couverture.md) |
 | **01E** Persistance | instantanés, exécutions, faits, occurrences, preuves, couvertures ; `scans.result` n'est plus la source de vérité | T5 | à rédiger |
 | **01F** Comparaison et banc Git | introduit, retiré, modifié, inchangé ; « cause possible : évolution du producteur » ; dépôt de test A/B/C | T8, T11 | à rédiger |
 | **01G** API de lecture et vue de vérification | faits par instantané, identité, sujet, objet ou relation ; preuves ; couverture ; évaluateurs exécutés ; comparaison ; liste dans le portail | T9, T10 | à rédiger |
@@ -76,7 +76,7 @@ l'inventaire avec les preuves, et distingue une évolution du logiciel d'une év
 
 | Récit | Résultat attendu |
 | --- | --- |
-| **TAXO-02** Inventory Evaluator | inventaire complet sous forme de faits ; lecture de Gradle (`build.gradle`, `settings.gradle`), aujourd'hui ignoré par `scanner.py` alors que TAKIBO est un projet Gradle |
+| **TAXO-02** Inventory Evaluator | inventaire complet sous forme de faits ; lecture de Gradle (`build.gradle`, `settings.gradle`), aujourd'hui ignoré par Inventory v0 alors que TAKIBO est un projet Gradle |
 | **TAXO-03** Java Analyzer | analyseur de langage : classes, méthodes, annotations et leurs valeurs, constantes, types, appels, héritage, interfaces, résolution de symboles, sous forme de faits (`ANNOTATED_WITH`, `CALLS`, `IMPLEMENTS`, `DISPATCHES_TO`…). **Ne connaît pas le concept d'endpoint.** Spike de deux jours sur TAKIBO, puis ADR 0003 ; recommandation à confirmer : JavaParser + JavaSymbolSolver, sources seules, processus JVM séparé qui passe la suite de conformité de 01A. Avec 01H : `DISPATCHES_TO` devient `STALE` si une deuxième implémentation apparaît |
 | **TAXO-04** Spring API Evaluator | évaluateur de framework, **propriétaire du concept d'endpoint** : consomme les primitives du Java Analyzer et produit `HANDLED_BY`, `ACCEPTS`, `RETURNS` avec des preuves dans la source |
 | **TAXO-05** Spring Security Evaluator | propriétaire des concepts Spring Security : `PERMITS_ALL`, `AUTHORIZED_BY` (`OBSERVED`), puis `MATCHED_BY` et `PROTECTED_BY` (`INFERRED`) ; mécanismes maison déclarés `NOT_INTERPRETED` ; critère anti-faux-positif bloquant |

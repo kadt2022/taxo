@@ -1,5 +1,4 @@
 """Inventory v0: deterministic observations over an already opened Snapshot."""
-import json
 import xml.etree.ElementTree as ET
 from pathlib import PurePosixPath
 
@@ -7,6 +6,7 @@ from app.evaluations.domain.evaluator import EvaluationOutput
 from app.evaluations.domain.status import EvaluationStatus
 from app.facts import content_hash
 from app.snapshots.domain.mode import COMMIT, WORKING_TREE
+from app.snapshots.domain.errors import SnapshotError
 from .catalog import CATALOG
 from .detectors.filenames import _technologies_by_name
 from .detectors.manifests import MANIFEST_READERS
@@ -31,27 +31,33 @@ class InventoryEvaluator:
         warnings = []
         observed = {(name, f.path, 'filename') for f in files
                     for name in _technologies_by_name(f.path)}
-        manifest_names = set()
+        read_error_subject = None
         for file in files:
             if file.size > MAX_MANIFEST_BYTES:
                 kind = 'Manifeste' if PurePosixPath(file.path).name in MANIFESTS else 'Fichier'
                 warnings.append(f'{kind} trop volumineux : {file.path}')
-        for path, data in snapshot.read_many(f.path for f in files if f.size <= MAX_MANIFEST_BYTES):
-            try:
-                by_path[path] = self._evidence(snapshot, path, data, 'inventory.file')
-            except UnicodeDecodeError:
-                warnings.append(f'Fichier non UTF-8 non interprété : {path}')
-                continue
-            filename = PurePosixPath(path).name
-            if filename not in MANIFESTS:
-                continue
-            try:
-                def add(name, path=path):
-                    observed.add((name, path, 'manifest'))
-                    manifest_names.add(name)
-                MANIFEST_READERS[filename](data.decode('utf-8-sig'), add)
-            except (ValueError, TypeError, AttributeError, ET.ParseError, UnicodeDecodeError):
-                warnings.append(f'Manifeste illisible ou invalide : {path}')
+        readable = tuple(f for f in files if f.size <= MAX_MANIFEST_BYTES)
+        next_file = 0
+        try:
+            for next_file, (path, data) in enumerate(snapshot.read_many(f.path for f in readable), 1):
+                try:
+                    by_path[path] = self._evidence(snapshot, path, data, 'inventory.file')
+                except UnicodeDecodeError:
+                    warnings.append(f'Fichier non UTF-8 non interprété : {path}')
+                    continue
+                filename = PurePosixPath(path).name
+                if filename not in MANIFESTS:
+                    continue
+                try:
+                    def add(name, path=path):
+                        observed.add((name, path, 'manifest'))
+                    MANIFEST_READERS[filename](data.decode('utf-8-sig'), add)
+                except (ValueError, TypeError, AttributeError, ET.ParseError, UnicodeDecodeError):
+                    warnings.append(f'Manifeste illisible ou invalide : {path}')
+        except SnapshotError as exc:
+            read_error_subject = (f'file:{readable[next_file].path}' if next_file < len(readable)
+                                  else f'repository:{snapshot.repository}')
+            warnings.append(f'Erreur de lecture : {read_error_subject} : {exc}')
         facts = []
         repository = f'repository:{snapshot.repository}'
         file_paths = {f.path for f in files}
@@ -77,7 +83,9 @@ class InventoryEvaluator:
             path = warning.rsplit(': ', 1)[-1]
             if path in file_paths:
                 coverage.append(self._coverage(f'file:{path}', 'NOT_INTERPRETED', f'file:{path}'))
-        status = EvaluationStatus.PARTIAL if warnings else EvaluationStatus.SUCCESS
+        if read_error_subject:
+            coverage.append(self._coverage(read_error_subject, 'READ_ERROR', read_error_subject))
+        status = EvaluationStatus.PARTIAL if read_error_subject else EvaluationStatus.SUCCESS
         legacy = self._legacy(snapshot, files, observed, warnings)
         return EvaluationOutput(facts, tuple(coverage), status, tuple(warnings), legacy)
 
@@ -120,25 +128,3 @@ class InventoryEvaluator:
                 'facts': [{'technology': name, 'file': path, 'status': 'OBSERVED', 'method': method}
                           for name, path, method in sorted(observed)],
                 'warnings': list(warnings)}
-
-
-def evaluate(snapshot):
-    """Compatibility view retained for callers predating TAXO-01D."""
-    files = tuple(f for f in snapshot.iter_files()
-                  if not IGNORED.intersection(f.path.split('/')[:-1]))
-    observed = {(name, f.path, 'filename') for f in files
-                for name in _technologies_by_name(f.path)}
-    warnings = []
-    manifests = [f for f in files if PurePosixPath(f.path).name in MANIFESTS]
-    for file in manifests:
-        if file.size > MAX_MANIFEST_BYTES:
-            warnings.append(f'Manifeste trop volumineux : {file.path}')
-            continue
-        try:
-            data = next(snapshot.read_many([file.path]))[1]
-            def add(name, path=file.path):
-                observed.add((name, path, 'manifest'))
-            MANIFEST_READERS[PurePosixPath(file.path).name](data.decode('utf-8-sig'), add)
-        except (ValueError, TypeError, AttributeError, ET.ParseError, UnicodeDecodeError):
-            warnings.append(f'Manifeste illisible ou invalide : {file.path}')
-    return InventoryEvaluator._legacy(snapshot, files, observed, warnings)

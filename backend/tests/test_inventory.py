@@ -2,12 +2,13 @@ import json
 from fastapi.testclient import TestClient
 from app.main import create_app
 from app.bootstrap.database import Base
-from app.evaluators.inventory.evaluator import evaluate
+from app.evaluators.inventory.evaluator import InventoryEvaluator
+from app.evaluations.application.run_evaluator import RunEvaluator
 from app.snapshots.infrastructure.git.reader import open_snapshot
 
 
 def inspect_repository(root, repository, mode='COMMIT', commit=None):
-    return evaluate(open_snapshot(root, repository, mode, commit))
+    return RunEvaluator()(InventoryEvaluator(), open_snapshot(root, repository, mode, commit)).legacy
 
 
 def test_inventory_and_exclusions(make_repo):
