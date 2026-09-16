@@ -29,36 +29,44 @@ class InventoryEvaluator:
             raise ValueError('Projet trop volumineux : limite de 50 000 fichiers.')
         by_path = {}
         warnings = []
-        for path, data in snapshot.read_many(f.path for f in files):
-            by_path[path] = data
         observed = {(name, f.path, 'filename') for f in files
                     for name in _technologies_by_name(f.path)}
         manifest_names = set()
         for file in files:
-            filename = PurePosixPath(file.path).name
+            if file.size > MAX_MANIFEST_BYTES:
+                kind = 'Manifeste' if PurePosixPath(file.path).name in MANIFESTS else 'Fichier'
+                warnings.append(f'{kind} trop volumineux : {file.path}')
+        for path, data in snapshot.read_many(f.path for f in files if f.size <= MAX_MANIFEST_BYTES):
+            try:
+                by_path[path] = self._evidence(snapshot, path, data, 'inventory.file')
+            except UnicodeDecodeError:
+                warnings.append(f'Fichier non UTF-8 non interprété : {path}')
+                continue
+            filename = PurePosixPath(path).name
             if filename not in MANIFESTS:
                 continue
-            if file.size > MAX_MANIFEST_BYTES:
-                warnings.append(f'Manifeste trop volumineux : {file.path}')
-                continue
             try:
-                def add(name, path=file.path):
+                def add(name, path=path):
                     observed.add((name, path, 'manifest'))
                     manifest_names.add(name)
-                MANIFEST_READERS[filename](by_path[file.path].decode('utf-8-sig'), add)
+                MANIFEST_READERS[filename](data.decode('utf-8-sig'), add)
             except (ValueError, TypeError, AttributeError, ET.ParseError, UnicodeDecodeError):
-                warnings.append(f'Manifeste illisible ou invalide : {file.path}')
+                warnings.append(f'Manifeste illisible ou invalide : {path}')
         facts = []
         repository = f'repository:{snapshot.repository}'
         file_paths = {f.path for f in files}
         for file in files:
-            evidence = self._evidence(snapshot, file.path, by_path[file.path], 'inventory.file')
+            if file.path not in by_path:
+                continue
+            evidence = by_path[file.path]
             facts.append(self._assertion(repository, 'CONTAINS', f'file:{file.path}', evidence))
             for language in self._languages(file.path):
                 facts.append(self._assertion(f'file:{file.path}', 'WRITTEN_IN',
                                              f'language:{language}', evidence))
         for technology, path, method in sorted(observed):
-            evidence = self._evidence(snapshot, path, by_path[path], f'inventory.{method}')
+            if path not in by_path:
+                continue
+            evidence = {**by_path[path], 'method': f'inventory.{method}'}
             key = self._technology_key(technology)
             facts.append(self._assertion(repository, 'USES_TECHNOLOGY', f'technology:{key}', evidence))
             facts.append(self._assertion(f'technology:{key}', 'DECLARED_BY', f'file:{path}', evidence))

@@ -6,8 +6,8 @@ from app.evaluations.application.registry import EvaluatorRegistry
 from app.evaluations.application.run_evaluator import RunEvaluator
 from app.evaluations.domain.evaluator import EvaluationOutput, EvaluatorCatalog
 from app.evaluations.domain.status import EvaluationStatus
-from app.evaluators.inventory.evaluator import InventoryEvaluator
-from app.facts import fact_identity
+from app.evaluators.inventory.evaluator import InventoryEvaluator, MAX_MANIFEST_BYTES
+from app.facts import fact_identity, validate_fact
 from app.snapshots.domain.mode import COMMIT
 from app.snapshots.domain.snapshot import Snapshot, SnapshotFile
 
@@ -102,3 +102,79 @@ def test_invalid_manifest_is_partial_with_not_interpreted_coverage():
     execution = RunEvaluator()(InventoryEvaluator(), current)
     assert execution.status is EvaluationStatus.PARTIAL
     assert [item['coverage_type'] for item in execution.coverage] == ['ANALYSED', 'NOT_INTERPRETED']
+
+
+@pytest.mark.parametrize('unreadable_path', ['logo.png', 'legacy.py', 'package.json'])
+def test_non_utf8_file_does_not_discard_other_inventory_facts(unreadable_path):
+    values = {'App.tsx': b'export const App = 1\n', unreadable_path: b'\x89PNG\r\n\xff'}
+
+    class Content:
+        def read_many(self, paths):
+            for path in paths:
+                yield path, values[path]
+
+    current = Snapshot('project-key', 'a' * 40, COMMIT,
+                       tuple(SnapshotFile(path, len(data)) for path, data in values.items()),
+                       content=Content())
+    execution = RunEvaluator()(InventoryEvaluator(), current)
+    assert execution.status is EvaluationStatus.PARTIAL
+    assert any(fact['relation'] == 'WRITTEN_IN' and fact['subject'] == 'file:App.tsx'
+               for fact in execution.facts)
+    assert all(evidence['path'] != unreadable_path
+               for fact in execution.facts for evidence in fact['evidence'])
+    assert any(item['subject'] == f'file:{unreadable_path}' and item['coverage_type'] == 'NOT_INTERPRETED'
+               for item in execution.coverage)
+    assert execution.legacy['files_count'] == 2
+    for fact in (*execution.facts, *execution.coverage):
+        validate_fact(fact)
+
+
+def test_size_limit_is_enforced_before_reading_any_file():
+    oversized = ('package.json', 'archive.bin', 'generated.py')
+    requested = []
+    data = b'print(1)\n'
+
+    class Content:
+        def read_many(self, paths):
+            for path in paths:
+                assert path not in oversized, 'Oversized content must never be requested'
+                requested.append(path)
+                yield path, data
+
+    current = Snapshot('project-key', 'a' * 40, COMMIT,
+                       tuple(SnapshotFile(path, MAX_MANIFEST_BYTES + 1) for path in oversized)
+                       + (SnapshotFile('main.py', len(data)),), content=Content())
+    execution = RunEvaluator()(InventoryEvaluator(), current)
+    assert requested == ['main.py']
+    assert execution.status is EvaluationStatus.PARTIAL
+    assert {item['subject'] for item in execution.coverage if item['coverage_type'] == 'NOT_INTERPRETED'} == {
+        f'file:{path}' for path in oversized}
+    assert any(fact['object'] == 'file:main.py' for fact in execution.facts)
+    assert all(evidence['path'] == 'main.py' for fact in execution.facts for evidence in fact['evidence'])
+
+
+def test_inventory_releases_file_contents_while_reading():
+    class TrackedBytes(bytes):
+        live = 0
+
+        def __new__(cls):
+            instance = super().__new__(cls, b'print(1)\n')
+            cls.live += 1
+            return instance
+
+        def __del__(self):
+            type(self).live -= 1
+
+    class Content:
+        def read_many(self, paths):
+            for path in paths:
+                assert TrackedBytes.live <= 1, 'Previous file contents are retained'
+                yield path, TrackedBytes()
+
+    current = Snapshot('project-key', 'a' * 40, COMMIT,
+                       tuple(SnapshotFile(f'file{index}.py', 9) for index in range(4)),
+                       content=Content())
+    output = InventoryEvaluator().evaluate(current)
+    assert output.status is EvaluationStatus.SUCCESS
+    assert len([fact for fact in output.facts if fact['relation'] == 'CONTAINS']) == 4
+    assert TrackedBytes.live == 0
