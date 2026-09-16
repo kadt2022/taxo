@@ -7,14 +7,19 @@ import unicodedata
 from fastapi.testclient import TestClient
 import pytest
 
-from app import snapshots
-from app.main import Base, create_app
-from app.scanner import inspect_repository
-from app.snapshots import (COMMIT, GIT_READ_ERROR, NOT_A_GIT_REPOSITORY, UNKNOWN_COMMIT, UNSUPPORTED_GIT_ENTRY,
+from app.snapshots.infrastructure.git import reader as snapshots
+from app.main import create_app
+from app.bootstrap.database import Base
+from app.evaluators.inventory.evaluator import evaluate
+from app.snapshots.infrastructure.git.reader import (COMMIT, GIT_READ_ERROR, NOT_A_GIT_REPOSITORY, UNKNOWN_COMMIT, UNSUPPORTED_GIT_ENTRY,
                            WORKING_TREE, WORKING_TREE_READ_ERROR, SnapshotError, open_snapshot)
 
 FILES = {'.gitignore': 'cache/\nignored.txt\n', 'package.json': json.dumps({'dependencies': {'react': '19'}}),
          'App.tsx': 'export const App = () => null\n', 'src/main.py': 'print(1)\n'}
+
+
+def inspect_repository(root, repository, mode=COMMIT, commit=None):
+    return evaluate(open_snapshot(root, repository, mode, commit))
 
 
 @pytest.fixture
@@ -139,7 +144,7 @@ def test_commit_content_is_read_through_one_batch_process(repo, monkeypatch):
 
 def test_missing_git_object_is_a_read_error(repo):
     snapshot = open_snapshot(repo, 'demo')
-    oid = snapshot._sources['App.tsx']
+    oid = snapshot.content.sources['App.tsx']
     obj = repo / '.git' / 'objects' / oid[:2] / oid[2:]
     os.chmod(obj, 0o644)
     obj.unlink()

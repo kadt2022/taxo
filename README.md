@@ -74,7 +74,15 @@ faits, les 8 vecteurs d'empreinte et les vecteurs d'identite canonique (19 posit
 5 negatifs). Le scanner existant conserve son format
 actuel jusqu'à TAXO-01D ; le contrat n'est pas encore une mémoire persistante.
 
-`backend/app/scanner.py` produit un inventaire déterministe. `main.py` expose les projets et snapshots via SQLAlchemy. Alembic versionne la base. Le portail interroge l'API à travers un proxy de même origine.
+Le backend est organisé par capacité : `projects`, `snapshots`, `facts`, `scans` et
+`evaluators/inventory`. Le domaine est indépendant des frameworks ; les cas
+d'utilisation passent par des ports, câblés dans `bootstrap.application`.
+`main.py` conserve la factory Uvicorn. Alembic charge les mappings via
+`bootstrap.database`. Voir [ADR 0004](docs/adr/0004-monolithe-modulaire.md).
+
+L'inventaire reçoit un Snapshot et conserve son format historique. TAXO-01D ajoutera
+le moteur générique `evaluations` et la production de Facts/Coverage ; TAXO-01E
+introduira leur persistance. Le portail interroge toujours la même API.
 
 Les scans sont synchrones et bornés à 50 000 fichiers dans cette version. Avant de traiter de gros dépôts : introduire une file durable, des workers isolés, des délais et une reprise après échec.
 

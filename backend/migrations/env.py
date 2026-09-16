@@ -1,7 +1,7 @@
 import os
 from alembic import context
 from sqlalchemy import create_engine
-from app.main import Base
+from app.bootstrap.database import Base
 
 engine = create_engine(os.environ['DATABASE_URL'])
 with engine.connect() as connection:

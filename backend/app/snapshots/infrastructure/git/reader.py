@@ -6,7 +6,6 @@ Only rev-parse, ls-tree, ls-files and cat-file are run, with core.fsmonitor disa
 no hook, filter or fsmonitor configured by the repository is ever executed. `.env` files
 are neither exposed nor read.
 """
-from dataclasses import dataclass, field
 import hashlib
 import os
 from pathlib import Path
@@ -16,12 +15,10 @@ import subprocess
 import tempfile
 import unicodedata
 
-COMMIT, WORKING_TREE = 'COMMIT', 'WORKING_TREE'
-NOT_A_GIT_REPOSITORY = 'NOT_A_GIT_REPOSITORY'
-UNKNOWN_COMMIT = 'UNKNOWN_COMMIT'
-GIT_READ_ERROR = 'GIT_READ_ERROR'
-UNSUPPORTED_GIT_ENTRY = 'UNSUPPORTED_GIT_ENTRY'
-WORKING_TREE_READ_ERROR = 'WORKING_TREE_READ_ERROR'
+from app.snapshots.domain.mode import COMMIT, WORKING_TREE
+from app.snapshots.domain.errors import (SnapshotError, NOT_A_GIT_REPOSITORY, UNKNOWN_COMMIT,
+    GIT_READ_ERROR, UNSUPPORTED_GIT_ENTRY, WORKING_TREE_READ_ERROR)
+from app.snapshots.domain.snapshot import Snapshot, SnapshotFile
 
 GIT_TIMEOUT = 120
 # Same object id rule as the fact contract: 40 or 64 lowercase hexadecimal characters.
@@ -30,54 +27,6 @@ _GIT = ['git', '-c', 'safe.directory=*', '-c', 'core.fsmonitor=false']
 _ENV = {'GIT_TERMINAL_PROMPT': '0', 'GIT_OPTIONAL_LOCKS': '0'}
 _FILE_MODES = {b'100644', b'100755'}
 _CHUNK = 1 << 16
-
-
-class SnapshotError(ValueError):
-    def __init__(self, code, message):
-        super().__init__(message)
-        self.code = code
-
-
-@dataclass(frozen=True)
-class SnapshotFile:
-    path: str
-    size: int
-
-
-@dataclass(frozen=True)
-class Snapshot:
-    repository: str
-    commit: str
-    mode: str
-    files: tuple[SnapshotFile, ...] = field(repr=False)
-    content_fingerprint: str | None = None
-    dirty: bool | None = None
-    skipped: tuple[tuple[str, str], ...] = field(default=(), repr=False)
-    _root: Path | None = field(default=None, repr=False, compare=False)
-    _sources: dict = field(default_factory=dict, repr=False, compare=False)
-
-    def iter_files(self):
-        return iter(self.files)
-
-    def read_bytes(self, path):
-        return next(self.read_many([path]))[1]
-
-    def read_many(self, paths):
-        """Yield (path, bytes) in order; COMMIT streams every blob through one git process."""
-        paths = list(paths)
-        sources = [self._sources[path] for path in paths]
-        if self.mode == COMMIT:
-            yield from zip(paths, _read_blobs(self._root, sources))
-        else:
-            for path, raw_path in zip(paths, sources):
-                yield path, _read_file(self._root, raw_path, path)
-
-    def reference(self):
-        """Snapshot fields of the fact contract (ADR 0002)."""
-        reference = {'repository': self.repository, 'commit': self.commit, 'mode': self.mode}
-        if self.content_fingerprint:
-            reference['content_fingerprint'] = self.content_fingerprint
-        return reference
 
 
 def _git(root, *args):
@@ -251,7 +200,7 @@ def _working_tree(root, repository, head):
             digests[path], sizes[path] = entry
             sources[path] = text
     return Snapshot(repository, head, WORKING_TREE, _sorted_files(sizes), _fingerprint(digests),
-                    _head_digests(root, head) != digests, tuple(skipped), root, sources)
+                    _head_digests(root, head) != digests, tuple(skipped), GitSnapshotContent(root, sources, WORKING_TREE))
 
 
 def open_snapshot(root, repository, mode=COMMIT, commit=None):
@@ -278,4 +227,21 @@ def open_snapshot(root, repository, mode=COMMIT, commit=None):
         return _working_tree(root, repository, sha)
     files, skipped = _tree(root, sha)
     return Snapshot(repository, sha, COMMIT, _sorted_files({p: size for p, (_, size) in files.items()}),
-                    skipped=tuple(skipped), _root=root, _sources={p: oid for p, (oid, _) in files.items()})
+                    skipped=tuple(skipped), content=GitSnapshotContent(root, {p: oid for p, (oid, _) in files.items()}, COMMIT))
+
+class GitSnapshotContent:
+    def __init__(self, root, sources, mode):
+        self.root, self.sources, self.mode = root, sources, mode
+
+    def read_many(self, paths):
+        paths = list(paths)
+        sources = [self.sources[path] for path in paths]
+        if self.mode == COMMIT:
+            yield from zip(paths, _read_blobs(self.root, sources))
+        else:
+            for path, raw_path in zip(paths, sources):
+                yield path, _read_file(self.root, raw_path, path)
+
+class GitSnapshotReader:
+    def open(self, root, repository, mode=COMMIT, commit=None):
+        return open_snapshot(root, repository, mode, commit)

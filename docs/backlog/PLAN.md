@@ -1,7 +1,7 @@
 # Plan Taxo
 
-Mise à jour : 2026-09-13 (revue de la PR #1)
-Références : ADR 0001, ADR 0002, `EPIC-TAXO-01-fondation-memoire-verifiable.md`
+Mise à jour : 2026-09-15 (insertion de TAXO-ARCH-01 avant 01D)
+Références : ADR 0001, ADR 0002, ADR 0004, `EPIC-TAXO-01-fondation-memoire-verifiable.md`
 
 ## MVP
 
@@ -48,7 +48,8 @@ Rien d'autre n'est ouvert tant que les récits 01A à 01G ne sont pas terminés.
 | **01A** Contrat machine du fait | natures et règles de preuve par nature, statuts et producteurs autorisés, validité, identité et occurrence, syntaxe des références, référence d'instantané, périmètre structuré, provenance `produced_by`, preuve et empreinte, vocabulaire v1, règles de cohérence, suite de conformité | T1 | implémenté et testé ; revue et merge en attente : [récit](Terminé/TAXO-01A-contrat-machine-du-fait-TERMINÉ.md) |
 | **01B** Références stables et identité | normalisation des clés et du périmètre, stabilité entre commits, calcul de l'identité stable d'un fait | T2 | à rédiger |
 | **01C** Instantané au commit | lecture d'un commit en lecture seule ; mode `WORKING_TREE` marqué, avec empreinte du contenu ; fichiers ignorés par Git exclus | T3 | à rédiger |
-| **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statut technique (`SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; `scanner.py` converti en Inventory v0, premier producteur de faits réels | T4 | à rédiger |
+| **ARCH-01** Modularisation du backend | capacités, ports et adaptateurs ; refactoring sans changement métier ([ADR 0004](../adr/0004-monolithe-modulaire.md)) | préalable à T4 | implémenté localement, revue en attente : [récit](TAXO-ARCH-01-modulariser-backend.md) |
+| **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statut technique (`SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; `evaluators/inventory` converti en Inventory v0, premier producteur de faits réels | T4 | à rédiger, après ARCH-01 |
 | **01E** Persistance | instantanés, exécutions, faits, occurrences, preuves, couvertures ; `scans.result` n'est plus la source de vérité | T5 | à rédiger |
 | **01F** Comparaison et banc Git | introduit, retiré, modifié, inchangé ; « cause possible : évolution du producteur » ; dépôt de test A/B/C | T8, T11 | à rédiger |
 | **01G** API de lecture et vue de vérification | faits par instantané, identité, sujet, objet ou relation ; preuves ; couverture ; évaluateurs exécutés ; comparaison ; liste dans le portail | T9, T10 | à rédiger |
@@ -62,7 +63,7 @@ Récits de l'épique placés au moment où ils servent :
 
 ```text
 01A Contrat ──► 01B Références ──┐
-                                 ├──► 01D Exécution ──► 01E Persistance ──► 01F Comparaison ──► 01G API + vue
+                                 ├──► ARCH-01 ──► 01D Exécution ──► 01E Persistance ──► 01F Comparaison ──► 01G API + vue
 01C Instantané ──────────────────┘
 ```
 

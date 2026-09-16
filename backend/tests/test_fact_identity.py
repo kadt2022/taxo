@@ -14,7 +14,7 @@ from app.facts import FactValidationError, fact_identity, identity_fields, valid
 from app.facts import contract
 
 
-ROOT = Path(contract.__file__).parent / 'conformance'
+ROOT = contract.SCHEMA_PATH.parent / 'conformance'
 VECTORS = json.loads((ROOT / 'identity/identity-vectors-v1.json').read_text(encoding='utf-8'))
 REFERENCE = Path(__file__).parent / 'fixtures/jcs-reference'
 
@@ -183,9 +183,9 @@ def test_fact_identity_uses_only_public_identity_boundary(monkeypatch):
 
 def test_identity_survives_new_process_and_hash_seed():
     code = ('import json; from pathlib import Path; from app.facts import fact_identity; '
-            'fact = json.loads(Path("app/facts/conformance/v1/valid-observed.json").read_text()); '
+            'fact = json.loads(Path("app/facts/infrastructure/contract/conformance/v1/valid-observed.json").read_text()); '
             'print(fact_identity(fact))')
     for seed in ['1', '7919']:
-        result = subprocess.run([sys.executable, '-c', code], cwd=ROOT.parents[2],
+        result = subprocess.run([sys.executable, '-c', code], cwd=Path(__file__).parents[1],
                                 env={**os.environ, 'PYTHONHASHSEED': seed}, capture_output=True, text=True, check=True)
         assert result.stdout.strip() == fact_identity(read())
