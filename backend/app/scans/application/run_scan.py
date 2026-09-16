@@ -8,6 +8,9 @@ from app.snapshots.domain.errors import SnapshotError
 from app.scans.domain.scan import Scan, ScanError
 from .ports import ScanRepository, Inventory
 
+# Requested modes, whatever the adapter: the use case owns this invariant, not FastAPI.
+MODES = {'commit': COMMIT, 'working-tree': WORKING_TREE}
+
 class RunScan:
     def __init__(self, projects: ProjectRepository, scans: ScanRepository,
                  paths: ProjectPathResolver, snapshots: SnapshotReader, inventory: Inventory):
@@ -15,10 +18,12 @@ class RunScan:
         self.snapshots, self.inventory = snapshots, inventory
 
     def __call__(self, project_id, mode='commit', commit=None):
+        if mode not in MODES:
+            raise ScanError('Mode de scan inconnu : « commit » ou « working-tree » attendu.')
         project = require_project(self.projects, project_id)
         path = self.paths.resolve(project.path)
         try:
-            snapshot = self.snapshots.open(path, project.id, WORKING_TREE if mode == 'working-tree' else COMMIT, commit)
+            snapshot = self.snapshots.open(path, project.id, MODES[mode], commit)
             result = self.inventory(snapshot)
         except SnapshotError as exc:
             raise ScanError(f'{exc.code} : {exc}') from exc

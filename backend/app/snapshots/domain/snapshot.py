@@ -16,10 +16,10 @@ class Snapshot:
     commit: str
     mode: str
     files: tuple[SnapshotFile, ...] = field(repr=False)
+    content: SnapshotContent = field(repr=False, compare=False)
     content_fingerprint: str | None = None
     dirty: bool | None = None
     skipped: tuple[tuple[str, str], ...] = field(default=(), repr=False)
-    content: SnapshotContent | None = field(default=None, repr=False, compare=False)
 
     def iter_files(self):
         return iter(self.files)

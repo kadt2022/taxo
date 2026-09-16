@@ -13,6 +13,7 @@ def create_router(repository, paths):
 
     @router.post('/api/projects', status_code=201)
     def add_project(data: ProjectInput):
-        return asdict(create_project(data, repository, paths))
+        return asdict(create_project(name=data.name, path=data.path,
+                                     repository=repository, paths=paths))
 
     return router

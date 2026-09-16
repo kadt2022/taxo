@@ -8,7 +8,8 @@ import sys
 import pytest
 
 from app.evaluators.inventory.evaluator import evaluate
-from app.projects.domain.project import Project
+from app.projects.application.commands import add_project
+from app.projects.domain.project import Project, ProjectError
 from app.scans.application.run_scan import RunScan
 from app.scans.domain.scan import ScanError
 from app.snapshots.domain.errors import GIT_READ_ERROR, SnapshotError
@@ -74,6 +75,30 @@ class MemoryContent:
             yield path, contents[path]
 
 
+class Projects:
+    def get(self, project_id):
+        return Project(project_id, 'demo', 'logical-location')
+
+
+class Paths:
+    def resolve(self, value):
+        return value
+
+
+class UnreadableReader:
+    def open(self, *args):
+        raise SnapshotError(GIT_READ_ERROR, 'unavailable')
+
+
+class Scans:
+    def add(self, scan):
+        pytest.fail('An unsuccessful scan must never be persisted')
+
+
+def forbidden_inventory(snapshot):
+    pytest.fail('Inventory must never run when a scan cannot proceed')
+
+
 def test_inventory_only_needs_a_snapshot():
     snapshot = Snapshot('project-key', 'a' * 40, COMMIT,
                         (SnapshotFile('package.json', 31), SnapshotFile('App.tsx', 1)),
@@ -83,26 +108,44 @@ def test_inventory_only_needs_a_snapshot():
     assert {fact['technology'] for fact in result['facts']} == {'React', 'Node.js ecosystem', 'TypeScript'}
 
 
+def test_a_snapshot_is_never_built_without_its_content():
+    """A snapshot that cannot be read is an invalid state, not a buildable one."""
+    with pytest.raises(TypeError):
+        Snapshot('project-key', 'a' * 40, COMMIT, (SnapshotFile('package.json', 31),))
+
+
 def test_failed_snapshot_never_reaches_inventory_or_persistence():
-    class Projects:
-        def get(self, project_id):
-            return Project(project_id, 'demo', 'logical-location')
-
-    class Paths:
-        def resolve(self, value):
-            return value
-
-    class Reader:
-        def open(self, *args):
-            raise SnapshotError(GIT_READ_ERROR, 'unavailable')
-
-    class Scans:
-        def add(self, scan):
-            pytest.fail('An unsuccessful scan must never be persisted')
-
-    def inventory(snapshot):
-        pytest.fail('Inventory must never run without a readable snapshot')
-
-    run = RunScan(Projects(), Scans(), Paths(), Reader(), inventory)
+    run = RunScan(Projects(), Scans(), Paths(), UnreadableReader(), forbidden_inventory)
     with pytest.raises(ScanError, match='GIT_READ_ERROR : unavailable'):
         run('project-key')
+
+
+def test_scan_mode_is_validated_by_the_use_case_not_by_its_adapter():
+    class ForbiddenReader:
+        def open(self, *args):
+            pytest.fail('An unknown mode must be refused before a snapshot is opened')
+
+    run = RunScan(Projects(), Scans(), Paths(), ForbiddenReader(), forbidden_inventory)
+    with pytest.raises(ScanError, match='Mode de scan inconnu'):
+        run('project-key', 'nimporte-quoi')
+
+
+def test_registering_a_project_takes_primitives_not_an_http_schema():
+    class Repository:
+        def __init__(self):
+            self.projects = []
+
+        def find_path(self, path):
+            return next((project for project in self.projects if project.path == path), None)
+
+        def add(self, project):
+            self.projects.append(project)
+            return project
+
+    repository, paths = Repository(), Paths()
+    project = add_project('  Demo  ', 'logical-location', repository, paths)
+    assert (project.name, project.path) == ('Demo', 'logical-location')
+    with pytest.raises(ProjectError, match='Le nom est obligatoire'):
+        add_project('   ', 'other-location', repository, paths)
+    with pytest.raises(ProjectError, match='déjà enregistré'):
+        add_project('Demo again', 'logical-location', repository, paths)

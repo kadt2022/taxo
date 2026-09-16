@@ -48,6 +48,11 @@ Les dépendances suivent ces règles :
   sérialisation canonique RFC 8785 ; le domaine n'importe pas JSON Schema.
 - Alembic charge les mappings via `bootstrap.database`, sans créer de serveur.
 
+Chaque cas d'usage protège lui-même ses invariants, sans compter sur son adaptateur :
+`add_project` reçoit des primitives et non le schéma HTTP, `RunScan` refuse un mode
+inconnu quel que soit l'appelant, et `Snapshot` ne se construit pas sans le contenu
+qu'il promet de lire.
+
 Les dictionnaires métier existants ne sont pas remplacés par un nouveau modèle
 de classes Fact/Assertion/Absence/Coverage dans ce refactoring. Leur représentation
 et la conformité v1 restent identiques. Les Protocols suffisent aux frontières ;

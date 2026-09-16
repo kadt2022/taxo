@@ -199,8 +199,9 @@ def _working_tree(root, repository, head):
         if entry:
             digests[path], sizes[path] = entry
             sources[path] = text
-    return Snapshot(repository, head, WORKING_TREE, _sorted_files(sizes), _fingerprint(digests),
-                    _head_digests(root, head) != digests, tuple(skipped), GitSnapshotContent(root, sources, WORKING_TREE))
+    return Snapshot(repository, head, WORKING_TREE, _sorted_files(sizes),
+                    GitSnapshotContent(root, sources, WORKING_TREE), _fingerprint(digests),
+                    _head_digests(root, head) != digests, tuple(skipped))
 
 
 def open_snapshot(root, repository, mode=COMMIT, commit=None):
@@ -227,7 +228,7 @@ def open_snapshot(root, repository, mode=COMMIT, commit=None):
         return _working_tree(root, repository, sha)
     files, skipped = _tree(root, sha)
     return Snapshot(repository, sha, COMMIT, _sorted_files({p: size for p, (_, size) in files.items()}),
-                    skipped=tuple(skipped), content=GitSnapshotContent(root, {p: oid for p, (oid, _) in files.items()}, COMMIT))
+                    GitSnapshotContent(root, {p: oid for p, (oid, _) in files.items()}, COMMIT), skipped=tuple(skipped))
 
 class GitSnapshotContent:
     def __init__(self, root, sources, mode):
