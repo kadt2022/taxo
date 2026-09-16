@@ -69,8 +69,9 @@ def test_registry_is_explicit_deterministic_and_rejects_duplicates():
     registry = EvaluatorRegistry([DummyEvaluator()])
     assert [e.evaluator_id for e in registry.all()] == ['taxo.dummy']
     assert registry.get('taxo.dummy').evaluator_id == 'taxo.dummy'
+    duplicate = DummyEvaluator()
     with pytest.raises(ValueError, match='existe déjà'):
-        registry.register(DummyEvaluator())
+        registry.register(duplicate)
 
 
 def test_inventory_produces_contract_facts_coverage_and_provenance():
@@ -86,7 +87,8 @@ def test_inventory_produces_contract_facts_coverage_and_provenance():
                        content=Content())
     execution = RunEvaluator()(InventoryEvaluator(), current)
     assert execution.status is EvaluationStatus.SUCCESS
-    assert execution.facts and execution.coverage
+    assert execution.facts
+    assert execution.coverage
     assert {fact['relation'] for fact in execution.facts} == {
         'CONTAINS', 'WRITTEN_IN', 'USES_TECHNOLOGY', 'DECLARED_BY'}
     assert {fact['coverage_type'] for fact in execution.coverage} == {'ANALYSED'}

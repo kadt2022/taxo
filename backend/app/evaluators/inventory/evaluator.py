@@ -27,16 +27,32 @@ class InventoryEvaluator:
                       if not IGNORED.intersection(f.path.split('/')[:-1]))
         if len(files) > MAX_FILES:
             raise ValueError('Projet trop volumineux : limite de 50 000 fichiers.')
-        by_path = {}
         warnings = []
         observed = {(name, f.path, 'filename') for f in files
                     for name in _technologies_by_name(f.path)}
-        read_error_subject = None
         for file in files:
             if file.size > MAX_MANIFEST_BYTES:
                 kind = 'Manifeste' if PurePosixPath(file.path).name in MANIFESTS else 'Fichier'
                 warnings.append(f'{kind} trop volumineux : {file.path}')
         readable = tuple(f for f in files if f.size <= MAX_MANIFEST_BYTES)
+        by_path, read_error_subject = self._read_contents(snapshot, readable, observed, warnings)
+        repository = f'repository:{snapshot.repository}'
+        facts = self._facts(files, by_path, observed, repository)
+        file_paths = {f.path for f in files}
+        coverage = [self._coverage(repository, 'ANALYSED', repository)]
+        for warning in warnings:
+            path = warning.rsplit(': ', 1)[-1]
+            if path in file_paths:
+                coverage.append(self._coverage(f'file:{path}', 'NOT_INTERPRETED', f'file:{path}'))
+        if read_error_subject:
+            coverage.append(self._coverage(read_error_subject, 'READ_ERROR', read_error_subject))
+        status = EvaluationStatus.PARTIAL if read_error_subject else EvaluationStatus.SUCCESS
+        legacy = self._legacy(snapshot, files, observed, warnings)
+        return EvaluationOutput(facts, tuple(coverage), status, tuple(warnings), legacy)
+
+    def _read_contents(self, snapshot, readable, observed, warnings):
+        by_path = {}
+        read_error_subject = None
         next_file = 0
         try:
             for next_file, (path, data) in enumerate(snapshot.read_many(f.path for f in readable), 1):
@@ -58,9 +74,10 @@ class InventoryEvaluator:
             read_error_subject = (f'file:{readable[next_file].path}' if next_file < len(readable)
                                   else f'repository:{snapshot.repository}')
             warnings.append(f'Erreur de lecture : {read_error_subject} : {exc}')
+        return by_path, read_error_subject
+
+    def _facts(self, files, by_path, observed, repository):
         facts = []
-        repository = f'repository:{snapshot.repository}'
-        file_paths = {f.path for f in files}
         for file in files:
             if file.path not in by_path:
                 continue
@@ -76,18 +93,8 @@ class InventoryEvaluator:
             key = self._technology_key(technology)
             facts.append(self._assertion(repository, 'USES_TECHNOLOGY', f'technology:{key}', evidence))
             facts.append(self._assertion(f'technology:{key}', 'DECLARED_BY', f'file:{path}', evidence))
-        facts = tuple({fact['subject'] + '|' + fact['relation'] + '|' + fact.get('object', ''): fact
-                       for fact in facts}.values())
-        coverage = [self._coverage(repository, 'ANALYSED', repository)]
-        for warning in warnings:
-            path = warning.rsplit(': ', 1)[-1]
-            if path in file_paths:
-                coverage.append(self._coverage(f'file:{path}', 'NOT_INTERPRETED', f'file:{path}'))
-        if read_error_subject:
-            coverage.append(self._coverage(read_error_subject, 'READ_ERROR', read_error_subject))
-        status = EvaluationStatus.PARTIAL if read_error_subject else EvaluationStatus.SUCCESS
-        legacy = self._legacy(snapshot, files, observed, warnings)
-        return EvaluationOutput(facts, tuple(coverage), status, tuple(warnings), legacy)
+        return tuple({fact['subject'] + '|' + fact['relation'] + '|' + fact.get('object', ''): fact
+                      for fact in facts}.values())
 
     @staticmethod
     def _languages(path):
