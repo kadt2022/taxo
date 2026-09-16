@@ -9,7 +9,7 @@ Depuis `backend`, apres installation de `requirements.txt` :
 
 ```sh
 python -m app.facts --conformance
-python -m app.facts --fact app/facts/conformance/v1/valid-takibo-t19.json
+python -m app.facts --fact app/facts/infrastructure/contract/conformance/v1/valid-takibo-t19.json
 python -m pytest -q
 ```
 
@@ -36,7 +36,7 @@ finies (ni NaN, ni tuple, ni cle numerique).
 
 ## Frontiere de validation
 
-`contract-v1.schema.json` utilise JSON Schema Draft 2020-12. Toutes les structures
+`infrastructure/contract/contract-v1.schema.json` utilise JSON Schema Draft 2020-12. Toutes les structures
 du contrat sont fermees. Seul `qualifiers` est un dictionnaire de valeurs JSON
 extensible pour les valeurs d'annotations et autres qualificatifs. Un champ dont
 le nom contient `confidence` ou `confiance`, sans distinction de casse, y est

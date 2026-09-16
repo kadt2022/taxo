@@ -64,7 +64,7 @@ def main(argv=None):
     parser.add_argument('--stored', action='store_true', help='Validate memory-owned validity states.')
     args = parser.parse_args(argv)
     if args.conformance:
-        root = Path(__file__).parent / 'conformance' / 'v1'
+        root = Path(__file__).parent / 'infrastructure' / 'contract' / 'conformance' / 'v1'
         manifest = read_json(root / 'manifest.json')
         cases = manifest['cases']
         failures = []
