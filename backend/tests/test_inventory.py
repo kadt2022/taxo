@@ -31,6 +31,8 @@ def test_api_persistence_and_boundaries(make_repo, git, tmp_path):
         response = client.post(f'/api/projects/{p["id"]}/scans')
         assert response.status_code == 201
         assert response.json()['facts'][0]['technology'] == 'Java'
+        assert response.json()['evaluation']['status'] == 'SUCCESS'
+        assert response.json()['evaluation']['facts']
         git(source, 'rm', '-q', 'Hello.java')
         git(source, 'commit', '-q', '-m', 'remove')
         assert client.post(f'/api/projects/{p["id"]}/scans').json()['facts'] == []

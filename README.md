@@ -80,9 +80,10 @@ d'utilisation passent par des ports, câblés dans `bootstrap.application`.
 `main.py` conserve la factory Uvicorn. Alembic charge les mappings via
 `bootstrap.database`. Voir [ADR 0004](docs/adr/0004-monolithe-modulaire.md).
 
-L'inventaire reçoit un Snapshot et conserve son format historique. TAXO-01D ajoutera
-le moteur générique `evaluations` et la production de Facts/Coverage ; TAXO-01E
-introduira leur persistance. Le portail interroge toujours la même API.
+L'inventaire reçoit un Snapshot et produit désormais une `EvaluatorExecution` avec
+Facts, Coverage, provenance et statut technique via le moteur `evaluations`. Les
+métadonnées historiques de l'API restent disponibles jusqu'à TAXO-01E, qui
+introduira la persistance de la mémoire. Le portail interroge toujours la même API.
 
 Les scans sont synchrones et bornés à 50 000 fichiers dans cette version. Avant de traiter de gros dépôts : introduire une file durable, des workers isolés, des délais et une reprise après échec.
 

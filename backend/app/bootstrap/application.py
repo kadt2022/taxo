@@ -7,7 +7,9 @@ from app.scans.infrastructure.sqlalchemy.scan_repository import SqlAlchemyScanRe
 from app.scans.application.run_scan import RunScan
 from app.scans.api.router import create_router as scans_router
 from app.snapshots.infrastructure.git.reader import GitSnapshotReader
-from app.evaluators.inventory.evaluator import evaluate
+from app.evaluators.inventory.evaluator import InventoryEvaluator
+from app.evaluations.application.registry import EvaluatorRegistry
+from app.evaluations.application.run_evaluator import RunEvaluator
 from app.platform.api.health import router as health_router
 from app.platform.api.errors import register_errors
 from . import settings
@@ -17,7 +19,9 @@ def create_app(database_url=None, allowed_roots=None):
     paths = LocalProjectPaths(settings.allowed_roots(allowed_roots))
     projects = SqlAlchemyProjectRepository(engine)
     scans = SqlAlchemyScanRepository(engine)
-    run = RunScan(projects, scans, paths, GitSnapshotReader(), evaluate)
+    registry = EvaluatorRegistry([InventoryEvaluator()])
+    inventory = registry.get('taxo.inventory')
+    run = RunScan(projects, scans, paths, GitSnapshotReader(), inventory, RunEvaluator())
     api = FastAPI(title='Taxo', version='0.1.0')
     api.state.engine = engine
     register_errors(api)

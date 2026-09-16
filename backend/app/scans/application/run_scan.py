@@ -13,9 +13,11 @@ MODES = {'commit': COMMIT, 'working-tree': WORKING_TREE}
 
 class RunScan:
     def __init__(self, projects: ProjectRepository, scans: ScanRepository,
-                 paths: ProjectPathResolver, snapshots: SnapshotReader, inventory: Inventory):
+                 paths: ProjectPathResolver, snapshots: SnapshotReader, inventory: Inventory,
+                 evaluator_runner=None):
         self.projects, self.scans, self.paths = projects, scans, paths
         self.snapshots, self.inventory = snapshots, inventory
+        self.evaluator_runner = evaluator_runner
 
     def __call__(self, project_id, mode='commit', commit=None):
         if mode not in MODES:
@@ -24,7 +26,11 @@ class RunScan:
         path = self.paths.resolve(project.path)
         try:
             snapshot = self.snapshots.open(path, project.id, MODES[mode], commit)
-            result = self.inventory(snapshot)
+            if self.evaluator_runner is None:
+                result = self.inventory(snapshot)
+            else:
+                execution = self.evaluator_runner(self.inventory, snapshot)
+                result = {**(execution.legacy or {}), 'evaluation': execution.result()}
         except SnapshotError as exc:
             raise ScanError(f'{exc.code} : {exc}') from exc
         except (ValueError, OSError) as exc:

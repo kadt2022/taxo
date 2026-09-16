@@ -54,6 +54,12 @@ def test_dependency_boundaries():
     assert violations == []
 
 
+def test_evaluation_engine_has_no_concrete_evaluator_dependency():
+    for path in (APP / 'evaluations').rglob('*.py'):
+        source = path.read_text(encoding='utf-8')
+        assert 'app.evaluators' not in source
+
+
 def test_importing_domains_does_not_load_technical_adapters():
     code = '''
 import sys
