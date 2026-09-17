@@ -37,6 +37,10 @@ class EvaluatorExecution:
             subjects = coverage_subjects.setdefault(coverage_type, [])
             if len(subjects) < 5 and fact['subject'] not in subjects:
                 subjects.append(fact['subject'])
+        relations = Counter(
+            fact['relation'] for fact in self.facts
+            if fact.get('kind') == 'ASSERTION' and 'relation' in fact
+        )
         return {
             'execution_id': self.execution_id,
             'evaluator_id': self.evaluator_id,
@@ -48,7 +52,7 @@ class EvaluatorExecution:
             'fact_count': len(self.facts),
             'coverage_count': len(self.coverage),
             'warning_count': len(self.warnings),
-            'relations': dict(sorted(Counter(fact['relation'] for fact in self.facts).items())),
+            'relations': dict(sorted(relations.items())),
             'coverage': [
                 {'coverage_type': kind, 'count': coverage_counts[kind], 'subjects': coverage_subjects[kind]}
                 for kind in sorted(coverage_counts)
