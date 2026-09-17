@@ -24,6 +24,7 @@ class InventoryEvaluator:
 
     def evaluate(self, snapshot):
         files, excluded, invalid_paths = self._select_files(snapshot)
+        excluded.update(self._snapshot_exclusions(snapshot))
         if len(files) > MAX_FILES:
             raise ValueError('Projet trop volumineux : limite de 50 000 fichiers.')
         warnings = [f'Chemin Git non représentable comme preuve : {path}' for path in invalid_paths]
@@ -34,7 +35,7 @@ class InventoryEvaluator:
                 kind = 'Manifeste' if PurePosixPath(file.path).name in MANIFESTS else 'Fichier'
                 warnings.append(f'{kind} trop volumineux : {file.path}')
         readable = tuple(f for f in files if f.size <= MAX_MANIFEST_BYTES)
-        by_path, read_error_subject = self._read_contents(snapshot, readable, observed, warnings)
+        by_path, read_error_subjects = self._read_contents(snapshot, readable, observed, warnings)
         repository = f'repository:{snapshot.repository}'
         facts = self._facts(files, by_path, observed, repository)
         file_paths = {f.path for f in files}
@@ -46,11 +47,19 @@ class InventoryEvaluator:
             path = warning.rsplit(': ', 1)[-1]
             if path in file_paths:
                 coverage.append(self._coverage(f'file:{path}', 'NOT_INTERPRETED', f'file:{path}'))
-        if read_error_subject:
-            coverage.append(self._coverage(read_error_subject, 'READ_ERROR', read_error_subject))
-        status = EvaluationStatus.PARTIAL if read_error_subject else EvaluationStatus.SUCCESS
+        for subject in read_error_subjects:
+            coverage.append(self._coverage(subject, 'READ_ERROR', subject))
+        status = EvaluationStatus.PARTIAL if read_error_subjects else EvaluationStatus.SUCCESS
         legacy = self._legacy(snapshot, files, observed, warnings)
         return EvaluationOutput(facts, tuple(coverage), status, tuple(warnings), legacy)
+
+    @staticmethod
+    def _snapshot_exclusions(snapshot):
+        exclusions = set()
+        for path, reason in snapshot.skipped:
+            prefix = 'directory' if reason == 'submodule' else 'file'
+            exclusions.add(f'{prefix}:{path}')
+        return exclusions
 
     @staticmethod
     def _select_files(snapshot):
@@ -73,7 +82,7 @@ class InventoryEvaluator:
 
     def _read_contents(self, snapshot, readable, observed, warnings):
         by_path = {}
-        read_error_subject = None
+        read_error_subjects = ()
         next_file = 0
         try:
             for next_file, (path, data) in enumerate(snapshot.read_many(f.path for f in readable), 1):
@@ -92,10 +101,12 @@ class InventoryEvaluator:
                 except (ValueError, TypeError, AttributeError, ET.ParseError, UnicodeDecodeError):
                     warnings.append(f'Manifeste illisible ou invalide : {path}')
         except SnapshotError as exc:
-            read_error_subject = (f'file:{readable[next_file].path}' if next_file < len(readable)
-                                  else f'repository:{snapshot.repository}')
-            warnings.append(f'Erreur de lecture : {read_error_subject} : {exc}')
-        return by_path, read_error_subject
+            remaining = readable[next_file:]
+            read_error_subjects = tuple(f'file:{file.path}' for file in remaining)
+            if not read_error_subjects:
+                read_error_subjects = (f'repository:{snapshot.repository}',)
+            warnings.append(f'Erreur de lecture : {read_error_subjects[0]} : {exc}')
+        return by_path, read_error_subjects
 
     def _facts(self, files, by_path, observed, repository):
         facts = []
