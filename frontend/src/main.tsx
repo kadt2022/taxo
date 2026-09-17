@@ -26,7 +26,7 @@ function sourceLabel(scan:Scan):string {
   return 'Source : dossier de travail au commit '+commit+changes+'.';
 }
 
-function EvaluationPanel({summary}:{summary:EvaluationSummary}){
+function EvaluationPanel({summary}:Readonly<{summary:EvaluationSummary}>){
   const relations=Object.entries(summary.relations);
   const duration=new Intl.NumberFormat('fr-CA',{minimumFractionDigits:1,maximumFractionDigits:1}).format(summary.duration_seconds)+' s';
   const date=(value:string)=>new Date(value).toLocaleString('fr-CA');
