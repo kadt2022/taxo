@@ -67,7 +67,8 @@ def test_missing_coverage_is_failed_with_declared_fallback():
 
 def test_execution_summary_aggregates_facts_and_bounds_coverage_subjects():
     execution = RunEvaluator()(DummyEvaluator(), snapshot())
-    facts = ({'relation': 'CONTAINS'}, {'relation': 'CONTAINS'}, {'relation': 'WRITTEN_IN'})
+    facts = tuple({'kind': 'ASSERTION', 'relation': relation}
+                  for relation in ('CONTAINS', 'CONTAINS', 'WRITTEN_IN'))
     coverage = tuple({'coverage_type': 'NOT_INTERPRETED', 'subject': f'file:{index}.py'}
                      for index in range(7))
     execution = replace(execution, facts=facts, coverage=coverage, warnings=('unreadable',))

@@ -9,6 +9,7 @@ import pytest
 
 from app.evaluators.inventory.evaluator import InventoryEvaluator
 from app.evaluations.application.run_evaluator import RunEvaluator
+from app.evaluations.domain.status import EvaluationStatus
 from app.projects.application.commands import add_project
 from app.projects.domain.project import Project, ProjectError
 from app.scans.application.run_scan import RunScan
@@ -155,6 +156,8 @@ def test_scan_persists_only_legacy_and_bounded_execution_summary():
     class Runner:
         def __call__(self, evaluator, snapshot):
             class Execution:
+                status = EvaluationStatus.SUCCESS
+
                 def result(self):
                     pytest.fail('The full execution must not be stored in scans.result')
 
