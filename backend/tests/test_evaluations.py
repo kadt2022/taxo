@@ -114,6 +114,61 @@ def test_inventory_fact_identities_are_reproducible():
     assert [fact['coverage_type'] for fact in first.coverage] == [fact['coverage_type'] for fact in second.coverage]
 
 
+def test_inventory_coverage_excludes_ignored_directories():
+    requested = []
+
+    class Content:
+        def read_many(self, paths):
+            for path in paths:
+                requested.append(path)
+                yield path, b'print(1)\n'
+
+    current = Snapshot('project-key', 'a' * 40, COMMIT,
+                       tuple(SnapshotFile(path, 9) for path in (
+                           'build/generated.py', 'node_modules/hidden.py',
+                           'src/target/Generated.java', 'src/good.py')),
+                       content=Content())
+    execution = RunEvaluator()(InventoryEvaluator(), current)
+
+    assert execution.status is EvaluationStatus.SUCCESS
+    assert requested == ['src/good.py']
+    assert execution.scope['exclude'] == [
+        'directory:build', 'directory:node_modules', 'directory:src/target']
+    assert execution.coverage[0]['coverage_type'] == 'ANALYSED'
+    assert execution.coverage[0]['scope'] == execution.scope
+    assert execution.legacy['files_count'] == 1
+    assert all(evidence['path'] == 'src/good.py'
+               for fact in execution.facts for evidence in fact['evidence'])
+
+
+@pytest.mark.parametrize('bad_path', ['bad:name.py', 'bad\\name.py', 'bad\nname.py'])
+def test_contract_invalid_git_path_does_not_fail_inventory(bad_path):
+    requested = []
+
+    class Content:
+        def read_many(self, paths):
+            for path in paths:
+                requested.append(path)
+                yield path, b'print(1)\n'
+
+    current = Snapshot('project-key', 'a' * 40, COMMIT,
+                       (SnapshotFile('good.py', 9), SnapshotFile(bad_path, 9)),
+                       content=Content())
+    execution = RunEvaluator()(InventoryEvaluator(), current)
+
+    assert execution.status is EvaluationStatus.SUCCESS
+    assert requested == ['good.py']
+    assert any(fact['subject'] == 'file:good.py' for fact in execution.facts)
+    assert all(evidence['path'] != bad_path
+               for fact in execution.facts for evidence in fact['evidence'])
+    assert any('Chemin Git non représentable comme preuve' in warning
+               for warning in execution.warnings)
+    assert execution.coverage[0]['coverage_type'] == 'NOT_INTERPRETED'
+    assert execution.coverage[0]['subject'] == 'repository:project-key'
+    for fact in (*execution.facts, *execution.coverage):
+        validate_fact(fact)
+
+
 def test_invalid_manifest_is_success_with_not_interpreted_coverage():
     class Content:
         def read_many(self, paths):

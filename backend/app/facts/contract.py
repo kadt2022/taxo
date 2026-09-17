@@ -10,6 +10,9 @@ from .infrastructure.contract.json_schema_validator import JsonSchemaValidator, 
 
 _validator = JsonSchemaValidator()
 
+def is_path(value):
+    return _validator.is_path(value)
+
 def validate_fact(fact, *, submission=True):
     return validate(fact, _validator, submission=submission)
 

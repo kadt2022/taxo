@@ -25,6 +25,9 @@ class RunEvaluator:
                 raise ValueError("L'évaluateur doit déclarer au moins une couverture.")
             for fact in (*facts, *coverage):
                 self.validator(fact)
+            declared_scope = next((fact['scope'] for fact in coverage
+                                   if fact['kind'] == 'COVERAGE' and fact['subject'] == repository), scope)
+            scope = {'include': declared_scope['include'], 'exclude': declared_scope.get('exclude', [])}
             return EvaluatorExecution(
                 execution_id, evaluator.evaluator_id, evaluator.producer_version,
                 evaluator.catalog, snapshot, started_at, datetime.now(timezone.utc),

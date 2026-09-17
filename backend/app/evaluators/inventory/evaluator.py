@@ -4,7 +4,7 @@ from pathlib import PurePosixPath
 
 from app.evaluations.domain.evaluator import EvaluationOutput
 from app.evaluations.domain.status import EvaluationStatus
-from app.facts import content_hash
+from app.facts import content_hash, is_path
 from app.snapshots.domain.mode import COMMIT, WORKING_TREE
 from app.snapshots.domain.errors import SnapshotError
 from .catalog import CATALOG
@@ -23,11 +23,10 @@ class InventoryEvaluator:
     catalog = CATALOG
 
     def evaluate(self, snapshot):
-        files = tuple(f for f in snapshot.iter_files()
-                      if not IGNORED.intersection(f.path.split('/')[:-1]))
+        files, excluded, invalid_paths = self._select_files(snapshot)
         if len(files) > MAX_FILES:
             raise ValueError('Projet trop volumineux : limite de 50 000 fichiers.')
-        warnings = []
+        warnings = [f'Chemin Git non représentable comme preuve : {path}' for path in invalid_paths]
         observed = {(name, f.path, 'filename') for f in files
                     for name in _technologies_by_name(f.path)}
         for file in files:
@@ -39,7 +38,10 @@ class InventoryEvaluator:
         repository = f'repository:{snapshot.repository}'
         facts = self._facts(files, by_path, observed, repository)
         file_paths = {f.path for f in files}
-        coverage = [self._coverage(repository, 'ANALYSED', repository)]
+        scope = {'include': [repository], 'exclude': sorted(excluded)}
+        coverage_type = 'NOT_INTERPRETED' if invalid_paths else 'ANALYSED'
+        coverage = [self._coverage(repository, coverage_type, repository)]
+        coverage[0]['scope'] = scope
         for warning in warnings:
             path = warning.rsplit(': ', 1)[-1]
             if path in file_paths:
@@ -49,6 +51,25 @@ class InventoryEvaluator:
         status = EvaluationStatus.PARTIAL if read_error_subject else EvaluationStatus.SUCCESS
         legacy = self._legacy(snapshot, files, observed, warnings)
         return EvaluationOutput(facts, tuple(coverage), status, tuple(warnings), legacy)
+
+    @staticmethod
+    def _select_files(snapshot):
+        files, excluded, invalid_paths = [], set(), []
+        for file in snapshot.iter_files():
+            parts = file.path.split('/')
+            ignored_at = next((index for index, part in enumerate(parts[:-1]) if part in IGNORED), None)
+            if ignored_at is not None:
+                directory_path = '/'.join(parts[:ignored_at + 1])
+                if is_path(directory_path):
+                    excluded.add(f'directory:{directory_path}')
+                else:
+                    invalid_paths.append(file.path)
+                continue
+            if not is_path(file.path):
+                invalid_paths.append(file.path)
+                continue
+            files.append(file)
+        return tuple(files), excluded, invalid_paths
 
     def _read_contents(self, snapshot, readable, observed, warnings):
         by_path = {}

@@ -32,13 +32,14 @@ def test_api_persistence_and_boundaries(make_repo, git, tmp_path):
         response = client.post(f'/api/projects/{p["id"]}/scans')
         assert response.status_code == 201
         assert response.json()['facts'][0]['technology'] == 'Java'
-        assert response.json()['evaluation']['status'] == 'SUCCESS'
-        assert response.json()['evaluation']['facts']
+        assert 'evaluation' not in response.json()
         git(source, 'rm', '-q', 'Hello.java')
         git(source, 'commit', '-q', '-m', 'remove')
         assert client.post(f'/api/projects/{p["id"]}/scans').json()['facts'] == []
     with TestClient(create_app(url, [source])) as client:
-        assert len(client.get(f'/api/projects/{p["id"]}/scans').json()) == 2
+        history = client.get(f'/api/projects/{p["id"]}/scans').json()
+        assert len(history) == 2
+        assert all('evaluation' not in scan for scan in history)
 
 
 def test_malformed_manifest(make_repo):
