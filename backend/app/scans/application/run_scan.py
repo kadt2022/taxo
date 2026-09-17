@@ -8,6 +8,7 @@ from app.snapshots.domain.errors import SnapshotError
 from app.scans.domain.scan import Scan, ScanError
 from .ports import ScanRepository, EvaluationRunner
 from app.evaluations.domain.evaluator import Evaluator
+from app.evaluations.domain.status import EvaluationStatus
 
 # Requested modes, whatever the adapter: the use case owns this invariant, not FastAPI.
 MODES = {'commit': COMMIT, 'working-tree': WORKING_TREE}
@@ -28,6 +29,10 @@ class RunScan:
         try:
             snapshot = self.snapshots.open(path, project.id, MODES[mode], commit)
             execution = self.evaluator_runner(self.evaluator, snapshot)
+            if execution.status is EvaluationStatus.FAILED:
+                detail = execution.warnings[0] if execution.warnings else "L'évaluation a échoué."
+                _, separator, message = detail.partition(': ')
+                raise ScanError(message if separator else detail)
             result = {**(execution.legacy or {}), 'evaluation_summary': execution.summary()}
         except SnapshotError as exc:
             raise ScanError(f'{exc.code} : {exc}') from exc
