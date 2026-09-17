@@ -123,9 +123,13 @@ def test_a_snapshot_is_never_built_without_its_content():
 
 
 def test_failed_snapshot_never_reaches_inventory_or_persistence():
+    projects = Projects()
+    scans = Scans()
+    paths = Paths()
+    reader = UnreadableReader()
     with pytest.raises(TypeError):
-        RunScan(Projects(), Scans(), Paths(), UnreadableReader(), forbidden_inventory)
-    run = RunScan(Projects(), Scans(), Paths(), UnreadableReader(), forbidden_inventory, RunEvaluator())
+        RunScan(projects, scans, paths, reader, forbidden_inventory)
+    run = RunScan(projects, scans, paths, reader, forbidden_inventory, RunEvaluator())
     with pytest.raises(ScanError, match='GIT_READ_ERROR : unavailable'):
         run('project-key')
 
