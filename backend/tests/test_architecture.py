@@ -140,8 +140,9 @@ def test_scan_mode_is_validated_by_the_use_case_not_by_its_adapter():
         run('project-key', 'nimporte-quoi')
 
 
-def test_scan_persists_only_the_legacy_result():
+def test_scan_persists_only_legacy_and_bounded_execution_summary():
     legacy = {'files_count': 1, 'facts': [{'technology': 'Python'}]}
+    summary = {'fact_count': 2000, 'coverage_count': 2}
 
     class Reader:
         def open(self, *args):
@@ -152,6 +153,9 @@ def test_scan_persists_only_the_legacy_result():
             class Execution:
                 def result(self):
                     pytest.fail('The full execution must not be stored in scans.result')
+
+                def summary(self):
+                    return summary
 
             execution = Execution()
             execution.legacy = legacy
@@ -164,8 +168,9 @@ def test_scan_persists_only_the_legacy_result():
 
     scans = SavedScans()
     run = RunScan(Projects(), scans, Paths(), Reader(), object(), Runner())
-    assert run('project-key').result == legacy
-    assert scans.scan.result == legacy
+    expected = {**legacy, 'evaluation_summary': summary}
+    assert run('project-key').result == expected
+    assert scans.scan.result == expected
 
 
 def test_registering_a_project_takes_primitives_not_an_http_schema():

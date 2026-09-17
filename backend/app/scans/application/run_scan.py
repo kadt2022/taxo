@@ -28,7 +28,7 @@ class RunScan:
         try:
             snapshot = self.snapshots.open(path, project.id, MODES[mode], commit)
             execution = self.evaluator_runner(self.evaluator, snapshot)
-            result = execution.legacy or {}
+            result = {**(execution.legacy or {}), 'evaluation_summary': execution.summary()}
         except SnapshotError as exc:
             raise ScanError(f'{exc.code} : {exc}') from exc
         except (ValueError, OSError) as exc:

@@ -33,6 +33,13 @@ def test_api_persistence_and_boundaries(make_repo, git, tmp_path):
         assert response.status_code == 201
         assert response.json()['facts'][0]['technology'] == 'Java'
         assert 'evaluation' not in response.json()
+        summary = response.json()['evaluation_summary']
+        assert summary['evaluator_id'] == 'taxo.inventory'
+        assert summary['status'] == 'SUCCESS'
+        assert summary['fact_count'] > 0
+        assert summary['coverage_count'] > 0
+        assert 'facts' not in summary
+        assert all('evidence' not in item for item in summary['coverage'])
         git(source, 'rm', '-q', 'Hello.java')
         git(source, 'commit', '-q', '-m', 'remove')
         assert client.post(f'/api/projects/{p["id"]}/scans').json()['facts'] == []
@@ -40,6 +47,7 @@ def test_api_persistence_and_boundaries(make_repo, git, tmp_path):
         history = client.get(f'/api/projects/{p["id"]}/scans').json()
         assert len(history) == 2
         assert all('evaluation' not in scan for scan in history)
+        assert all('evaluation_summary' in scan for scan in history)
 
 
 def test_malformed_manifest(make_repo):

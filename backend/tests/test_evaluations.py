@@ -65,6 +65,28 @@ def test_missing_coverage_is_failed_with_declared_fallback():
         replace(execution, coverage=())
 
 
+def test_execution_summary_aggregates_facts_and_bounds_coverage_subjects():
+    execution = RunEvaluator()(DummyEvaluator(), snapshot())
+    facts = ({'relation': 'CONTAINS'}, {'relation': 'CONTAINS'}, {'relation': 'WRITTEN_IN'})
+    coverage = tuple({'coverage_type': 'NOT_INTERPRETED', 'subject': f'file:{index}.py'}
+                     for index in range(7))
+    execution = replace(execution, facts=facts, coverage=coverage, warnings=('unreadable',))
+
+    summary = execution.summary()
+    assert summary['execution_id'] == execution.execution_id
+    assert summary['status'] == 'SUCCESS'
+    assert summary['fact_count'] == 3
+    assert summary['coverage_count'] == 7
+    assert summary['warning_count'] == 1
+    assert summary['relations'] == {'CONTAINS': 2, 'WRITTEN_IN': 1}
+    assert summary['coverage'] == [{
+        'coverage_type': 'NOT_INTERPRETED', 'count': 7,
+        'subjects': [f'file:{index}.py' for index in range(5)]}]
+    assert summary['snapshot']['commit'] == 'a' * 40
+    assert summary['duration_seconds'] >= 0
+    assert 'facts' not in summary
+
+
 def test_registry_is_explicit_deterministic_and_rejects_duplicates():
     registry = EvaluatorRegistry([DummyEvaluator()])
     assert [e.evaluator_id for e in registry.all()] == ['taxo.dummy']
