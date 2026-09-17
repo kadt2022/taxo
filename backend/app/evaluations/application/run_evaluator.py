@@ -23,10 +23,14 @@ class RunEvaluator:
                              for fact in output.coverage)
             if not coverage:
                 raise ValueError("L'évaluateur doit déclarer au moins une couverture.")
+            if any(fact.get('kind') != 'COVERAGE' for fact in coverage):
+                raise ValueError("output.coverage ne peut contenir que des faits COVERAGE.")
+            if any(fact.get('kind') == 'COVERAGE' for fact in facts):
+                raise ValueError("Les faits COVERAGE doivent être placés dans output.coverage.")
             for fact in (*facts, *coverage):
                 self.validator(fact)
             declared_scope = next((fact['scope'] for fact in coverage
-                                   if fact['kind'] == 'COVERAGE' and fact['subject'] == repository), scope)
+                                   if fact['subject'] == repository), scope)
             scope = {'include': declared_scope['include'], 'exclude': declared_scope.get('exclude', [])}
             return EvaluatorExecution(
                 execution_id, evaluator.evaluator_id, evaluator.producer_version,
