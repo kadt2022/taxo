@@ -24,7 +24,9 @@ class InventoryEvaluator:
 
     def evaluate(self, snapshot):
         files, excluded, invalid_paths = self._select_files(snapshot)
-        excluded.update(self._snapshot_exclusions(snapshot))
+        skipped_excluded, skipped_invalid = self._snapshot_exclusions(snapshot)
+        excluded.update(skipped_excluded)
+        invalid_paths.extend(skipped_invalid)
         if len(files) > MAX_FILES:
             raise ValueError('Projet trop volumineux : limite de 50 000 fichiers.')
         warnings = [f'Chemin Git non représentable comme preuve : {path}' for path in invalid_paths]
@@ -55,11 +57,14 @@ class InventoryEvaluator:
 
     @staticmethod
     def _snapshot_exclusions(snapshot):
-        exclusions = set()
+        exclusions, invalid_paths = set(), []
         for path, reason in snapshot.skipped:
+            if not is_path(path):
+                invalid_paths.append(path)
+                continue
             prefix = 'directory' if reason == 'submodule' else 'file'
             exclusions.add(f'{prefix}:{path}')
-        return exclusions
+        return exclusions, invalid_paths
 
     @staticmethod
     def _select_files(snapshot):
