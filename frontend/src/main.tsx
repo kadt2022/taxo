@@ -111,7 +111,7 @@ function App(){
       <div className="tags">{technologies.map(t=><span key={t}>{t}</span>)}</div>
       {legacyFacts.length?<div className="table-wrap"><table><thead><tr><th>Technologie</th><th>Fichier justificatif</th><th>Détection</th></tr></thead><tbody>{legacyFacts.map(f=><tr key={f.technology+f.file}><td>{f.technology}</td><td><code>{f.file}</code></td><td>{f.method==='manifest'?'Manifeste':'Nom de fichier'}</td></tr>)}</tbody></table></div>:<p className="empty">Aucune technologie reconnue dans ce dossier.</p>}
       <footer>{sourceLabel(scan)}</footer>
-      {(scan.warnings??[]).map((w,i)=><p className="error" key={i}>{w}</p>)}</section>
+      {[...new Set(scan.warnings??[])].map(w=><p className="error" key={w}>{w}</p>)}</section>
     </>:<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez une analyse pour obtenir un inventaire accompagné de ses sources.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
     <p className="scope">Cette première version identifie les technologies. L’extraction des API, des permissions et des relations métier n’est pas encore intégrée.</p></main>
   </div>;

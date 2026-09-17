@@ -103,7 +103,7 @@ class InventoryEvaluator:
                     def add(name, path=path):
                         observed.add((name, path, 'manifest'))
                     MANIFEST_READERS[filename](data.decode('utf-8-sig'), add)
-                except (ValueError, TypeError, AttributeError, ET.ParseError, UnicodeDecodeError):
+                except (ValueError, TypeError, AttributeError, ET.ParseError):
                     warnings.append(f'Manifeste illisible ou invalide : {path}')
         except SnapshotError as exc:
             remaining = readable[next_file:]
