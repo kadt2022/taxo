@@ -50,16 +50,16 @@ Rien d'autre n'est ouvert tant que les récits 01A à 01G ne sont pas terminés.
 | **01C** Instantané au commit | lecture d'un commit en lecture seule ; mode `WORKING_TREE` marqué, avec empreinte du contenu ; fichiers ignorés par Git exclus | T3 | à rédiger |
 | **ARCH-01** Modularisation du backend | capacités, ports et adaptateurs ; refactoring sans changement métier ([ADR 0004](../adr/0004-monolithe-modulaire.md)) | préalable à T4 | implémenté localement, revue en attente : [récit](TAXO-ARCH-01-modulariser-backend.md) |
 | **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statut technique (`SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; `evaluators/inventory` converti en Inventory v0, premier producteur de faits réels | T4 | à rédiger, après ARCH-01 |
-| **01E** Persistance | instantanés, exécutions, faits, occurrences, preuves, couvertures ; `scans.result` n'est plus la source de vérité | T5 | à rédiger |
-| **01F** Comparaison et banc Git | introduit, retiré, modifié, inchangé ; « cause possible : évolution du producteur » ; dépôt de test A/B/C | T8, T11 | à rédiger |
-| **01G** API de lecture et vue de vérification | faits par instantané, identité, sujet, objet ou relation ; preuves ; couverture ; évaluateurs exécutés ; comparaison ; liste dans le portail | T9, T10 | à rédiger |
+| **01E** Persistance | instantanés, exécutions, faits, occurrences, preuves, couvertures ; `scans.result` n'est plus la source de vérité | T5 | rédigé, à ouvrir après 01D : [récit](TAXO-01E-persistance-de-la-memoire.md) |
+| **01F** Comparaison et banc Git | introduit, retiré, modifié, inchangé ; « cause possible : évolution du producteur » ; dépôt de test A/B/C | T8, T11 | rédigé, à ouvrir après 01E : [récit](TAXO-01F-comparaison-et-banc-git.md) |
+| **01G** API de lecture et vue de vérification | faits par instantané, identité, sujet, objet ou relation ; preuves ; couverture ; évaluateurs exécutés ; comparaison ; liste dans le portail | T9, T10 | rédigé, à ouvrir après 01F : [récit](TAXO-01G-api-de-lecture-et-vue-de-verification.md) |
 
 Récits de l'épique placés au moment où ils servent :
 
 | Récit | Contenu | Tâches | À réaliser avec |
 | --- | --- | --- | --- |
 | **01H** Validité et invalidation | `STALE`, `REVALIDATION_REQUIRED` | T7 | TAXO-03, premier producteur de faits `INFERRED` (`DISPATCHES_TO`) |
-| **01I** Voisinage et projectabilité | voisinage d'une entité, reconstruction d'un flux depuis les seuls faits, trois fins de parcours | T6, T12 | TAXO-PROJ-API-01 |
+| **01I** Voisinage et projectabilité | voisinage d'une entité, reconstruction d'un flux depuis les seuls faits, trois fins de parcours ([récit](TAXO-01I-voisinage-et-projectabilite.md)) | T6, T12 | TAXO-PROJ-API-01 |
 
 ```text
 01A Contrat ──► 01B Références ──┐
@@ -83,6 +83,13 @@ l'inventaire avec les preuves, et distingue une évolution du logiciel d'une év
 | **TAXO-PROJ-PR-01** Projection PR | **démo technique** : commentaire de PR listant les endpoints et autorisations ajoutés, modifiés ou retirés entre base et tête, avec preuves et commits ; distingue changement du logiciel et changement de producteur (cas 2) |
 | **TAXO-PROJ-API-01** Projection Diagramme API | diagramme d'un endpoint construit depuis les seuls faits, statut de chaque élément, trois fins de parcours (cas 3) ; avec 01I |
 | **TAXO-ASK-01** Ask Taxo minimal | **démo produit** : « explique-moi cette API et donne-moi son diagramme » ; résout la cible, interroge la mémoire, appelle la projection Diagramme API, affiche preuves et zones non interprétées ; le LLM ne sert qu'à comprendre la question et à rédiger (NARRATION) |
+| **TAXO-TILES-01** Contrat de la Tuile | `KnowledgeTile` : projection vérifiable d'un ensemble de faits sur une frontière, trois résolutions, identité portant sur la connaissance, couverture et trous déclarés, coût annoncé ([récit](TAXO-TILES-01-contrat-de-la-tuile.md)) |
+| **TAXO-TILES-02** La Maille | `MemoryMesh` : relations dérivées des prémisses, invalidation incrémentale, sélection par parcours depuis une ancre sous budget ; réutilise le voisinage de 01I ([récit](TAXO-TILES-02-la-maille.md)) |
+| **TAXO-TILES-03** Contexte et protocole agent | `ContextSelection` : tuiles minimales pour une tâche, preuve paresseuse, déduplication de session, cache par empreinte, catégorie `ZERO-LLM`, banc d'amplification ([récit](TAXO-TILES-03-contexte-et-protocole-agent.md)) |
+
+Les trois récits TILES forment le substrat commun des projections : ce que la PR, le diagramme, Ask
+Taxo et un futur MCP consomment sans relire le dépôt. Ils sont rédigés mais **non ouverts**, et
+supposent les faits de TAXO-04 et TAXO-05. Vocabulaire figé par l'[ADR 0005](../adr/0005-vocabulaire-tuile-maille-contexte.md).
 
 Critères du spike TAXO-03 (vérifiables sur TAKIBO) :
 
