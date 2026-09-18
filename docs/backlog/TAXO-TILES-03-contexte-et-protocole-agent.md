@@ -17,8 +17,10 @@ résolution nécessaire, sous le budget disponible, sans jamais envoyer la mémo
   `delta(instantané_a, instantané_b, known)` ;
 - toute réponse dit ce qu'elle **omet** et pourquoi : budget, résolution abaissée, portée non couverte ;
 - **preuve paresseuse** : aucun extrait de code n'est transmis sans demande explicite ;
-- **déduplication de session** : les tuiles déjà connues de l'appelant ne sont pas renvoyées ; leur
-  validité est confirmée par leur seule identité ;
+- **déduplication de session** : l'appelant annonce ce qu'il détient par couples `tile_key + revision`.
+  Une `tile_key` connue dont la `revision` n'a pas bougé est confirmée valide sans rien renvoyer ; une
+  `revision` différente renvoie la tuile à jour. L'identité seule ne suffit pas : elle dit de quoi on
+  parle, pas si c'est encore vrai ;
 - cache par empreinte (instantané, sélection, version du projecteur, versions des évaluateurs) ; tout
   changement de version invalide l'entrée ;
 - catégorie `ZERO-LLM` : les réponses servies sans appel à un modèle sont comptées et affichées comme
@@ -29,9 +31,12 @@ résolution nécessaire, sous le budget disponible, sans jamais envoyer la mémo
 ## Acceptation
 
 1. Banc de huit questions réelles sur TAKIBO et `portail-math` : chaque réponse est juste, ses
-   inconnues sont déclarées, et le contexte ajouté reste **sous 2 000 tokens**.
-2. Dépôt inchangé, session connue : **zéro tuile renvoyée**, réponse « toujours valides ».
-3. Rapport d'amplification d'au moins 8x sur le banc TAKIBO, mesure de référence du 2026-09-17.
+   inconnues sont déclarées, et le contexte ajouté reste **sous 2 000 tokens du tokenizer déclaré**,
+   dont la référence et la version sont inscrites dans le banc.
+2. Dépôt inchangé, session connue : aucune `revision` n'a changé, donc **zéro tuile renvoyée** et la
+   réponse confirme « toujours valides » par `tile_key`.
+3. Rapport d'amplification d'au moins 8x sur le banc TAKIBO, mesuré par le **banc versionné dans le
+   dépôt**. Le 8,0x à 9,9x du 2026-09-17 vient d'un prototype jetable et ne fait pas référence.
 4. Aucune preuve transmise sans demande ; un test vérifie qu'aucune réponse de `context` ne contient de
    code source.
 5. Le budget demandé n'est jamais dépassé, y compris déduplication et mentions d'omission comprises.

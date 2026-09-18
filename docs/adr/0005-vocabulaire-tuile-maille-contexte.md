@@ -17,8 +17,14 @@ unités compactes sous budget de tokens. Résultats retenus :
   4 000 tokens pour lire `SecurityConfig.java` ;
 - une tâche réelle (« modifier l'autorisation de création d'un space ») est servie en 531 tokens
   au lieu de 4 266 à 13 661 tokens de fichiers, soit un facteur 8 à 10 ;
-- le commit `b3490e6` (restriction des origines CORS) modifie 16 blobs sous-jacents mais **aucun
-  fait** d'endpoint ni d'autorisation. Invalider sur les blobs aurait renvoyé 13 unités pour rien.
+- le commit `b3490e6` (restriction des origines CORS) modifie 16 blobs sous-jacents mais **aucun fait
+  pertinent pour les tuiles d'endpoint et d'autorisation considérées**. Les mécanismes CORS ne sont
+  pas modélisés à ce jour : le jour où ils le seront, ce commit changera évidemment des faits CORS.
+  Invalider sur les blobs aurait renvoyé 13 unités pour rien.
+
+Ces chiffres viennent d'un **prototype jetable et non versionné**. Ils donnent un ordre de grandeur et
+une direction, pas une référence. Toute reprise comme critère durable exige un banc versionné dans le
+dépôt et un tokenizer déclaré.
 
 Une objection a été soulevée contre le mot « tuile » : une carte a une grille régulière, la mémoire
 de Taxo est un graphe irrégulier, donc ses éléments seraient des « nœuds ». L'objection décrit la
@@ -65,15 +71,26 @@ Le sens de dérivation est unique et ne s'inverse jamais :
 Code -> Facts -> Tuiles -> Contexte -> LLM
 ```
 
-Un résumé produit par un modèle n'entre jamais dans la mémoire. Une tuile est toujours reconstructible
-depuis ses faits, et un fait depuis sa preuve.
+Un résumé produit par un modèle n'entre jamais dans la mémoire. Une tuile est reconstructible depuis
+ses Facts ; chaque Fact est explicable selon son statut par sa preuve, ses prémisses ou sa validation.
+Une `ABSENCE` n'a pas de preuve directe et un `INFERRED` se reconstruit depuis ses prémisses : parler
+de « preuve » pour tous les faits serait faux.
 
 ## Conséquences
 
-1. **L'identité d'une tuile porte sur sa connaissance, pas sur ses blobs.** Les blobs restent un
-   pré-filtre interne pour décider quoi recalculer ; ils ne décident jamais de ce qui est renvoyé.
-   Mesure à l'appui : 13 unités renvoyées pour rien sur un seul commit.
-2. **Une tuile ne cite jamais l'empreinte d'une autre tuile.** Les références se font par portée,
+1. **Une tuile s'identifie en trois plans distincts**, et les empreintes de blobs n'en font pas partie :
+
+   ```text
+   tile_key   identité logique stable de la portée
+   revision   empreinte de la connaissance projetée
+   snapshot   occurrence au commit
+   ```
+
+   La `tile_key` ne bouge pas quand la connaissance évolue : c'est elle qui rend la déduplication et le
+   suivi inter-session possibles. La `revision` dit si ce que l'agent détient est encore à jour. Les
+   empreintes de blobs restent un pré-filtre interne pour décider quoi recalculer ; elles ne décident
+   jamais de ce qui est renvoyé. Mesure à l'appui : 13 unités renvoyées pour rien sur un seul commit.
+2. **Une tuile ne cite jamais l'empreinte ni la révision d'une autre tuile.** Les références se font par portée,
    sinon la moindre modification se propage en bruit vers les tuiles d'ensemble.
 3. **La sélection parcourt la maille depuis une ancre**, elle ne compare pas des mots. Le prototype
    lexical a retenu le catalogue RBAC pour une tâche portant sur les spaces.

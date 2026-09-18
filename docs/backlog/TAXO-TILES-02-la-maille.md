@@ -15,8 +15,17 @@ parcours depuis une ancre, sous un budget de tokens.
 ## Périmètre
 
 - **les relations de maille se dérivent des faits**, elles ne sont jamais saisies à la main : une
-  tuile dépend de celles dont ses faits `INFERRED` tirent leurs prémisses. Chaîne de référence :
-  `PROTECTED_BY` dépend de `MATCHED_BY`, qui dépend de `AUTHORIZED_BY` ;
+  tuile dépend de celles dont ses faits `INFERRED` tirent leurs prémisses. Structure de référence,
+  telle que la pose TAXO-POC-01 :
+
+  ```text
+  PROTECTED_BY
+     ├─ prémisse MATCHED_BY
+     └─ prémisse AUTHORIZED_BY
+  ```
+
+  `MATCHED_BY` **ne dépend pas** de `AUTHORIZED_BY` : ses propres prémisses sont les règles de la
+  chaîne dans leur ordre. Les deux prémisses de `PROTECTED_BY` sont frères, jamais chaînés ;
 - invalidation : un fait change, les tuiles qui le citent se reconstruisent, la propagation suit les
   dépendances et s'arrête là. Le sous-graphe reconstruit est le plus petit possible ;
 - sélection : une ancre (entité ou tuile), un parcours de voisinage, un budget, un ordre de priorité
@@ -29,8 +38,9 @@ parcours depuis une ancre, sous un budget de tokens.
 
 ## Acceptation
 
-1. Un commit qui ne change aucun fait n'invalide aucune tuile et ne déclenche aucune reconstruction.
-   Banc : `b3490e6` sur TAKIBO.
+1. Un commit qui ne change aucun fait **pertinent pour les tuiles considérées** n'en invalide aucune et
+   ne déclenche aucune reconstruction. Banc : `b3490e6` sur TAKIBO, pour les tuiles d'endpoint et
+   d'autorisation, les mécanismes CORS n'étant pas modélisés à ce jour.
 2. Un commit qui modifie une règle de la chaîne de sécurité invalide la tuile Behavior et **exactement**
    les tuiles Structure dont un verdict change ; les autres restent valides.
 3. Ancre `symbol:SpaceController`, budget 600 tokens : la sélection contient la tuile Structure du
@@ -39,8 +49,10 @@ parcours depuis une ancre, sous un budget de tokens.
 4. Le budget n'est jamais dépassé, et le dépassement évité par abaissement de résolution est journalisé.
 5. Deux sélections identiques sur le même instantané renvoient les mêmes tuiles dans le même ordre.
 6. Aucun modèle de langage n'intervient dans la construction du graphe, l'invalidation ou la sélection.
-7. Le banc publie le rapport d'amplification ; la mesure de référence du 2026-09-17 est de 8,0x à 9,9x
-   sur TAKIBO.
+7. **Le banc est versionné dans le dépôt** — dépôt de test, scénario et script — et rejouable par
+   quiconque. Il publie le rapport d'amplification en unité reproductible, puis en tokens pour un
+   tokenizer déclaré. Le 8,0x à 9,9x du 2026-09-17 vient d'un prototype jetable non versionné : c'est
+   une mesure exploratoire à confirmer, pas une référence.
 
 ## Hors périmètre
 

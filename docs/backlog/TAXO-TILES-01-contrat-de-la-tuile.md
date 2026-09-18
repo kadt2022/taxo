@@ -20,10 +20,18 @@ preuves.
 
 ## Périmètre
 
-- structure d'une tuile : identité, portée, instantané, faits cités (identités de 01B), connaissance
-  rendue, couverture, inconnus, dépendances **par portée**, coût annoncé par résolution ;
-- **l'identité porte sur la connaissance normalisée** et la version du projecteur. Les empreintes de
-  blobs vivent dans `TileRevision` et ne servent qu'à décider d'un recalcul interne ;
+- structure d'une tuile : `tile_key`, `revision`, instantané, portée, faits cités (identités de 01B),
+  connaissance rendue, couverture, inconnus, dépendances **par portée**, coût annoncé par résolution ;
+- **identité en trois plans**, jamais confondus :
+
+  ```text
+  tile_key   identité logique stable de la portée, ne change pas quand la connaissance evolue
+  revision   empreinte de la connaissance projetée et de la version du projecteur
+  snapshot   occurrence au commit
+  ```
+
+  Les empreintes de blobs ne participent à aucun des trois : elles ne servent qu'à décider d'un
+  recalcul interne ;
 - provenance `PROJECTION`, jamais `EVALUATOR` : une tuile ne produit aucun fait ;
 - trois résolutions : L0 réponse, L1 travail, L2 diagnostic. La preuve (L3) n'est jamais incluse ;
   elle reste servie par l'API de lecture de 01G ;
@@ -38,15 +46,20 @@ preuves.
 2. Les cinq faits attendus de TAXO-POC-01 sont retrouvables depuis les faits cités par les tuiles
    Structure et Behavior de cette route, `MATCHED_BY` et les prémisses de `PROTECTED_BY` compris.
    Un verdict d'autorisation sans prémisse citée est un échec.
-3. Un commit qui modifie des blobs sans changer aucun fait ne change aucune identité de tuile. Banc :
-   `b3490e6` (restriction des origines CORS) modifie 16 blobs sous-jacents et zéro fait d'endpoint ou
-   d'autorisation. Mesure de référence du 2026-09-17 : invalider sur les blobs renvoyait 13 tuiles sur
-   16 pour rien.
-4. Aucune tuile ne cite l'empreinte d'une autre tuile ; les dépendances se réfèrent par portée.
-5. Le coût annoncé correspond au coût réel du rendu à 5 % près, pour les trois résolutions.
-6. Une tuile dont la portée a produit des couvertures `NOT_INTERPRETED` et qui ne déclare aucun trou
+3. Un commit qui modifie des blobs sans changer aucun fait **pertinent pour la portée de la tuile** ne
+   change ni sa `tile_key` ni sa `revision`. Banc : `b3490e6` (restriction des origines CORS) modifie
+   16 blobs sous-jacents et zéro fait d'endpoint ou d'autorisation, les mécanismes CORS n'étant pas
+   modélisés à ce jour. Mesure exploratoire du 2026-09-17, à rejouer par le banc versionné : invalider
+   sur les blobs renvoyait 13 tuiles sur 16 pour rien.
+4. Un changement réel de connaissance change la `revision` et **conserve** la `tile_key`.
+5. Aucune tuile ne cite l'empreinte ni la révision d'une autre tuile ; les dépendances se réfèrent par
+   portée.
+6. Le coût est d'abord annoncé dans une unité reproductible — octets et caractères du rendu — puis
+   estimé en tokens pour un **tokenizer déclaré, avec sa version**. La tolérance de 5 % ne vaut que
+   pour ce tokenizer : Claude, OpenAI et les autres ne découpent pas identiquement.
+7. Une tuile dont la portée a produit des couvertures `NOT_INTERPRETED` et qui ne déclare aucun trou
    est refusée.
-7. Deux exécutions sur le même instantané produisent un rendu identique, octet pour octet.
+8. Deux exécutions sur le même instantané produisent un rendu identique, octet pour octet.
 
 ## Hors périmètre
 

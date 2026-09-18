@@ -20,7 +20,9 @@ changé, et le prouver.
 - lorsque les versions d'un producteur ou de son catalogue diffèrent entre les deux instantanés, le
   résultat porte « cause possible : évolution du producteur ». Un mécanisme interprété par la version
   1.1 et pas par la 1.0 n'est **jamais** présenté comme une modification du logiciel ;
-- un fait dont seule la preuve se déplace est `MODIFIED`, avec les deux preuves citées ;
+- un fait dont la connaissance est identique et dont **seule la preuve se déplace reste `UNCHANGED`** :
+  la ligne a bougé, le fait non. Le déplacement est signalé séparément par `EVIDENCE_CHANGED`, avec les
+  deux preuves citées, et n'entre jamais dans le décompte des modifications ;
 - banc Git scénarisé dans les tests : commit A (un fichier Java), commit B (ajout d'un fichier et d'un
   manifeste), commit C (suppression d'un fichier et modification d'un manifeste) ;
 - le banc couvre aussi le changement de version d'évaluateur sur un même commit ;
@@ -33,9 +35,13 @@ changé, et le prouver.
 2. Même commit, deux versions d'évaluateur : aucun changement n'est attribué au logiciel ; la cause
    possible « évolution du producteur » est portée par le résultat.
 3. **Un commit qui ne change aucun fait produit zéro `INTRODUCED`, zéro `REMOVED`, zéro `MODIFIED`**,
-   même si des fichiers ont changé. Cas réel à ajouter au banc : la restriction des origines CORS de
-   TAKIBO (`b3490e6`) modifie des fichiers sans modifier un seul fait d'endpoint ou d'autorisation.
-4. Les preuves des deux côtés d'un `MODIFIED` sont restituées.
+   même si des fichiers ont changé, et même si des preuves se sont déplacées. Cas réel à ajouter au
+   banc : la restriction des origines CORS de TAKIBO (`b3490e6`) ne modifie aucun fait **parmi ceux que
+   les capacités en place savent produire** — endpoints et autorisations. Le jour où Taxo modélisera
+   CORS, ce commit changera des faits CORS, et le banc devra le refléter.
+4. Un déplacement de preuve sans changement de connaissance produit `UNCHANGED` **et**
+   `EVIDENCE_CHANGED`, avec les deux preuves restituées. Les preuves des deux côtés d'un `MODIFIED` le
+   sont également.
 5. La comparaison ne relit jamais le dépôt : elle travaille sur la mémoire persistée.
 6. Comparer un instantané avec lui-même produit uniquement des `UNCHANGED`.
 
