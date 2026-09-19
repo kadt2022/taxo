@@ -1,6 +1,7 @@
 """Public boundary for the Taxo fact contract."""
 
-__all__ = ['FactValidationError', 'content_hash', 'fact_identity', 'identity_fields', 'validate_fact']
+__all__ = ['FactValidationError', 'content_hash', 'fact_identity', 'identity_fields',
+           'is_path', 'validate_fact']
 
 
 def __getattr__(name):

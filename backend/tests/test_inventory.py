@@ -2,12 +2,13 @@ import json
 from fastapi.testclient import TestClient
 from app.main import create_app
 from app.bootstrap.database import Base
-from app.evaluators.inventory.evaluator import evaluate
+from app.evaluators.inventory.evaluator import InventoryEvaluator
+from app.evaluations.application.run_evaluator import RunEvaluator
 from app.snapshots.infrastructure.git.reader import open_snapshot
 
 
 def inspect_repository(root, repository, mode='COMMIT', commit=None):
-    return evaluate(open_snapshot(root, repository, mode, commit))
+    return RunEvaluator()(InventoryEvaluator(), open_snapshot(root, repository, mode, commit)).legacy
 
 
 def test_inventory_and_exclusions(make_repo):
@@ -31,11 +32,22 @@ def test_api_persistence_and_boundaries(make_repo, git, tmp_path):
         response = client.post(f'/api/projects/{p["id"]}/scans')
         assert response.status_code == 201
         assert response.json()['facts'][0]['technology'] == 'Java'
+        assert 'evaluation' not in response.json()
+        summary = response.json()['evaluation_summary']
+        assert summary['evaluator_id'] == 'taxo.inventory'
+        assert summary['status'] == 'SUCCESS'
+        assert summary['fact_count'] > 0
+        assert summary['coverage_count'] > 0
+        assert 'facts' not in summary
+        assert all('evidence' not in item for item in summary['coverage'])
         git(source, 'rm', '-q', 'Hello.java')
         git(source, 'commit', '-q', '-m', 'remove')
         assert client.post(f'/api/projects/{p["id"]}/scans').json()['facts'] == []
     with TestClient(create_app(url, [source])) as client:
-        assert len(client.get(f'/api/projects/{p["id"]}/scans').json()) == 2
+        history = client.get(f'/api/projects/{p["id"]}/scans').json()
+        assert len(history) == 2
+        assert all('evaluation' not in scan for scan in history)
+        assert all('evaluation_summary' in scan for scan in history)
 
 
 def test_malformed_manifest(make_repo):

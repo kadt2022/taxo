@@ -10,7 +10,8 @@ import pytest
 from app.snapshots.infrastructure.git import reader as snapshots
 from app.main import create_app
 from app.bootstrap.database import Base
-from app.evaluators.inventory.evaluator import evaluate
+from app.evaluators.inventory.evaluator import InventoryEvaluator
+from app.evaluations.application.run_evaluator import RunEvaluator
 from app.snapshots.infrastructure.git.reader import (COMMIT, GIT_READ_ERROR, NOT_A_GIT_REPOSITORY, UNKNOWN_COMMIT, UNSUPPORTED_GIT_ENTRY,
                            WORKING_TREE, WORKING_TREE_READ_ERROR, SnapshotError, open_snapshot)
 
@@ -19,7 +20,7 @@ FILES = {'.gitignore': 'cache/\nignored.txt\n', 'package.json': json.dumps({'dep
 
 
 def inspect_repository(root, repository, mode=COMMIT, commit=None):
-    return evaluate(open_snapshot(root, repository, mode, commit))
+    return RunEvaluator()(InventoryEvaluator(), open_snapshot(root, repository, mode, commit)).legacy
 
 
 @pytest.fixture

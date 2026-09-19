@@ -60,11 +60,26 @@ aucune hiérarchie de repositories abstraits n'est nécessaire.
 
 ## Portée et suites
 
-ARCH-01 ne crée ni EvaluatorExecution, registre, catalogue exécutable, nouveau fait,
-couverture ou table. `evaluations` sera créé dans 01D lorsque ces responsabilités
-existeront. L'inventaire garde son JSON historique jusqu'à cette conversion.
+ARCH-01 ne créait ni EvaluatorExecution, registre, catalogue exécutable, nouveau fait,
+couverture ou table. 01D porte désormais ces responsabilités dans `evaluations`.
+L'inventaire garde les métadonnées JSON historiques dans l'API pendant la transition.
 01E remplacera ensuite `scans.result` comme mémoire de référence.
 TAXO-02 enrichira Inventory, notamment avec Gradle.
+
+## Extension 01D
+
+Le moteur générique est désormais matérialisé dans `evaluations`. Il expose les
+statuts `SUCCESS`, `PARTIAL`, `FAILED` et `UNSUPPORTED`, un `EvaluatorCatalog`,
+`EvaluatorExecution`, un registre explicite et le cas d'utilisation `RunEvaluator`.
+Le moteur ajoute la provenance d'exécution et valide chaque Fact/Coverage par le
+contrat v1 avant de retourner l'exécution. Une exception d'évaluateur donne une
+exécution `FAILED`; une couverture partielle reste distincte du statut technique.
+
+`InventoryEvaluator` est l'implémentation v0 enregistrée explicitement au bootstrap.
+Il produit `CONTAINS`, `WRITTEN_IN`, `USES_TECHNOLOGY` et `DECLARED_BY`, plus une
+couverture `ANALYSED` et des couvertures `NOT_INTERPRETED` pour les manifestes qu'il
+ne peut pas interpréter. Les métadonnées historiques de `scans.result` sont dérivées
+de l'exécution jusqu'à TAXO-01E ; aucune table de mémoire n'est ajoutée.
 
 Le contrat HTTP, la factory `app.main:create_app`, les migrations et la façade
 `app.facts` restent stables. Les anciens imports internes `app.scanner`,

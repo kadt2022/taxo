@@ -6,16 +6,20 @@ from app.snapshots.application.ports import SnapshotReader
 from app.snapshots.domain.mode import COMMIT, WORKING_TREE
 from app.snapshots.domain.errors import SnapshotError
 from app.scans.domain.scan import Scan, ScanError
-from .ports import ScanRepository, Inventory
+from .ports import ScanRepository, EvaluationRunner
+from app.evaluations.domain.evaluator import Evaluator
+from app.evaluations.domain.status import EvaluationStatus
 
 # Requested modes, whatever the adapter: the use case owns this invariant, not FastAPI.
 MODES = {'commit': COMMIT, 'working-tree': WORKING_TREE}
 
 class RunScan:
     def __init__(self, projects: ProjectRepository, scans: ScanRepository,
-                 paths: ProjectPathResolver, snapshots: SnapshotReader, inventory: Inventory):
+                 paths: ProjectPathResolver, snapshots: SnapshotReader, evaluator: Evaluator,
+                 evaluator_runner: EvaluationRunner):
         self.projects, self.scans, self.paths = projects, scans, paths
-        self.snapshots, self.inventory = snapshots, inventory
+        self.snapshots, self.evaluator = snapshots, evaluator
+        self.evaluator_runner = evaluator_runner
 
     def __call__(self, project_id, mode='commit', commit=None):
         if mode not in MODES:
@@ -24,7 +28,12 @@ class RunScan:
         path = self.paths.resolve(project.path)
         try:
             snapshot = self.snapshots.open(path, project.id, MODES[mode], commit)
-            result = self.inventory(snapshot)
+            execution = self.evaluator_runner(self.evaluator, snapshot)
+            if execution.status is EvaluationStatus.FAILED:
+                detail = execution.warnings[0] if execution.warnings else "L'évaluation a échoué."
+                _, separator, message = detail.partition(': ')
+                raise ScanError(message if separator else detail)
+            result = {**(execution.legacy or {}), 'evaluation_summary': execution.summary()}
         except SnapshotError as exc:
             raise ScanError(f'{exc.code} : {exc}') from exc
         except (ValueError, OSError) as exc:
