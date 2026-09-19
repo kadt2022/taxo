@@ -9,7 +9,7 @@ Depuis `backend`, apres installation de `requirements.txt` :
 
 ```sh
 python -m app.facts --conformance
-python -m app.facts --fact app/facts/infrastructure/contract/conformance/v1/valid-takibo-t19.json
+python -m app.facts --fact app/facts/infrastructure/contract/conformance/v1/valid-real-repository-t19.json
 python -m pytest -q
 ```
 
@@ -138,7 +138,7 @@ attendus). `--conformance` les rejoue.
 La fixture T19 reprend les references et empreintes publiees dans le recit.
 Elle est un exemple de contrat, pas une analyse executee par Taxo. Les autres
 empreintes et identifiants de fixtures sont synthetiques. La suite ne verifie pas
-la presence du code TAKIBO sur la machine.
+la presence sur la machine du depot dont ces references proviennent.
 
 ## Limites de TAXO-01A
 

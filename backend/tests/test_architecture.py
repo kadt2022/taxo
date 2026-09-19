@@ -62,6 +62,32 @@ def test_evaluation_engine_has_no_concrete_evaluator_dependency():
         assert 'app.evaluators' not in source
 
 
+ANALYSED_PROJECT_NAMES = ('orgboundaryfilter', 'policybasedauthorizationmanager',
+                          'portail-math', 'takibo', 'takibu')
+
+
+def test_the_engine_never_names_an_analysed_project():
+    """Un projet analyse fournit des donnees, jamais du vocabulaire au moteur.
+
+    Les valeurs des vecteurs de conformite sont des donnees : un nom de projet peut
+    y apparaitre comme reference. La structure du moteur ne le peut pas, donc ni un
+    nom de fichier, ni le code, ni la documentation de `app/`.
+    """
+    violations = []
+    for path in APP.rglob('*'):
+        if not path.is_file() or '__pycache__' in path.parts:
+            continue
+        relative = path.relative_to(APP)
+        location = str(relative).lower()
+        violations += [f"{relative} est nomme d'apres {name}"
+                       for name in ANALYSED_PROJECT_NAMES if name in location]
+        if path.suffix in {'.py', '.md'}:
+            content = path.read_text(encoding='utf-8').lower()
+            violations += [f'{relative} nomme {name}'
+                           for name in ANALYSED_PROJECT_NAMES if name in content]
+    assert violations == []
+
+
 def test_importing_domains_does_not_load_technical_adapters():
     code = '''
 import sys
