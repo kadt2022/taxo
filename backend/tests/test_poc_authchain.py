@@ -136,7 +136,8 @@ def test_handled_by_points_at_the_handler_with_three_evidences(chain):
     assert handled['object'] == 'symbol:OrderController#list'
     lines = CONTROLLER.split('\n')
     cited = [lines[evidence['line_start'] - 1] for evidence in handled['evidence']]
-    assert '@RequestMapping' in cited[0] and '@GetMapping' in cited[1]
+    assert '@RequestMapping' in cited[0]
+    assert '@GetMapping' in cited[1]
     assert 'public OrderPage list(' in cited[2]
 
 
@@ -164,7 +165,8 @@ def test_authorized_by_is_observed_on_the_rule_line(chain):
     assert authorized['status'] == 'OBSERVED'
     assert authorized['subject'] == 'route-pattern:/api/v2/**'
     line = SECURITY.split('\n')[authorized['evidence'][0]['line_start'] - 1]
-    assert '/api/v2/**' in line and 'access(' in line
+    assert '/api/v2/**' in line
+    assert 'access(' in line
 
 
 def test_the_manager_calls_the_policy_evaluator(chain):
