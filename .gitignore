@@ -9,3 +9,5 @@ dist/
 *.egg-info/
 
 pytest-cache-files-*/
+# IDE - JetBrains / PyCharm
+.idea/
