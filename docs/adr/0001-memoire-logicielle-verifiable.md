@@ -25,6 +25,16 @@ outils gratuits.
 
 ### 1. Positionnement
 
+> **Révisé le 2026-09-19.** Le positionnement ci-dessous a été mis à l'épreuve sur quatre bancs
+> d'essai et n'a pas tenu : un agent muni des faits de Taxo n'a pas répondu plus juste qu'un agent
+> qui lit le code, sur un dépôt réel et avec un modèle de premier plan. Le texte d'origine est
+> conservé tel quel — on ne réécrit pas ce qu'on a cru. Le positionnement en vigueur est celui du
+> [manifeste](../manifeste.md) : Taxo est un moteur d'intelligence logicielle, pas une mémoire pour
+> agents. Mesures : [journal du 2026-09-19](../../bench/JOURNAL-2026-09-19.md).
+
+Texte d'origine du 2026-09-12 :
+
+
 > Les agents savent lire le code. Taxo sait ce qui est vrai dans le code.
 >
 > Taxo n'est pas un agent plus intelligent. C'est la mémoire vérifiable qui manque aux agents.
