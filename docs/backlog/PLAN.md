@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-09-19 (réorientation : prouver un fait cher et le mesurer avant 01E)
+Mise à jour : 2026-09-19 (développement gelé après trois bancs d'essai)
 Références : ADR 0001, ADR 0002, ADR 0004, `EPIC-TAXO-01-fondation-memoire-verifiable.md`
 
 ## MVP
@@ -39,23 +39,34 @@ TAXO-ASK-01        Ask Taxo minimal                        DÉMO PRODUIT
 
 La démo technique est le premier jalon. La démo produit la suit sur la même mémoire.
 
-## NOW : prouver un fait cher, puis mesurer
+## NOW : développement gelé
 
-Réorientation actée le 2026-09-17. L'épique TAXO-01 a livré la forme — contrat, identité,
-instantané, exécution, couverture — mais pas encore la preuve que Taxo établit une connaissance
-qu'une commande shell ne donne pas : sur UAA, l'inventaire demande 30 s là où `git ls-files` répond
-en 1,1 s. Persister des faits dont l'utilité n'est pas mesurée bâtirait sur une intention, ce que le
-[manifeste](../manifeste.md) interdit.
+**Gelé le 2026-09-19**, après trois bancs d'essai conduits dans la journée. Le compte rendu complet,
+erreurs d'étalon et de protocole comprises, est dans [le journal](../../bench/JOURNAL-2026-09-19.md).
 
-| # | Étape | Ce qu'elle tranche |
-| --- | --- | --- |
-| 1 | **[TAXO-POC-01](TAXO-POC-01-verite-de-reference-chaine-autorisation.md)** | une chaîne d'autorisation est-elle produite sur une route réelle, avec preuves, prémisses et limites déclarées comme couvertures ? |
-| 2 | **Benchmark manuel** (§12 du manifeste) | agent seul contre le même agent muni des faits : exactitude, complétude, fausses absences, validité des preuves, stabilité, temps, tokens |
-| 3 | **01E Persistance** | ouverte si — et seulement si — le gain est net |
-| 4 | **MCP-01** | trois outils (`find_facts`, `get_evidence`, `get_coverage`), chaque réponse portant sa couverture |
-| 5 | **HIST-01** | lineage Git : ce qu'il faut recalculer, ce qui peut être réutilisé |
+Ce qui est réfuté, sur TAKIBO et avec Opus 5 :
 
-01F et 01G reprennent ensuite l'ordre de l'épique. Rien d'autre ne s'ouvre avant la chaîne prouvée.
+- **« Taxo est la mémoire vérifiable qui manque aux agents »** — trois bancs, trois fois l'agent
+  seul a suffi. Aucun gain d'exactitude mesuré.
+- **« Taxo peut servir d'auditeur de sécurité déterministe en CI »** — le diff a répondu « aucun
+  changement de protection » sur une fenêtre de commits qui ferme un contournement d'autorisation
+  et referme la surface actuator.
+
+Ce qui reste acquis : le contrat du fait, l'identité canonique, les instantanés Git, le diff portant
+sur la connaissance (34 faux positifs ramenés à 0), et le rendu compact (90× plus petit que les
+faits bruts).
+
+**Rien ne s'ouvre** : ni 01E, ni 01F, ni 01G, ni 01H, ni 01I, ni TILES, ni MCP, ni HIST, ni
+TAXO-02 à TAXO-05.
+
+Une seule expérience reste autorisée, **une journée maximum**, sur le seul terrain non réfuté :
+l'énumération exacte des dépendants d'un symbole sur un dépôt qu'un agent ne peut pas lire en
+entier. Outillage `scip-java`, qui existe déjà — **rien à développer**. Terrain : Keycloak. La règle
+de décision est écrite d'avance dans le journal : si l'index n'apporte pas d'avantage net sur
+l'exhaustivité, le dépôt est archivé.
+
+Les tables ci-dessous décrivent la trajectoire telle qu'elle était planifiée avant le gel. Elles
+sont conservées comme mémoire du projet, pas comme file d'attente.
 
 État des récits de l'épique :
 
