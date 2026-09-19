@@ -59,7 +59,8 @@ comme chez Taxo.
 | `OrgBoundaryFilter` protège-t-il cette route ? | **Non.** Le filtre ne s'active que s'il résout un `spaceId` au format UUID. Ses motifs visent `/api/spaces/{spaceId}/**`, `/api/v1/spaces/{spaceId}/**`, `/api/organizations/{orgId}/spaces/{spaceId}/**` et `/api/v1/organizations/{orgId}/spaces/{spaceId}/**`. La route utilise `orgs/` et des codes lisibles, donc `resolveSpaceId` renvoie `null` et `shouldNotFilter` renvoie vrai. | `OrgBoundaryFilter.java:28-35`, `:53`, `:74-86` ; un commentaire ligne 31 note que le motif générique a été retiré, `PathPatternParser` le refusant |
 | `POST /api/v1/auth/login` est-il protégé par `PolicyEvaluator` ? | **Non**, bien que la route corresponde à `/api/v1/**` : une règle antérieure la rend publique. | `SecurityConfig.java:74` |
 | Quels rôles cette route exige-t-elle ? | **Hors périmètre** : donnée de politique, pas de code. | — |
-| Toutes les routes `/api/v1/**` passent-elles par `PolicyEvaluator` ? | **Non** — voir la question précédente. Une réponse affirmative est une fausse absence d'exception. | `SecurityConfig.java:51-86` |
+| La règle `/api/orgs/**` capture-t-elle cette route ? | **Non.** Le chemin est `/api/v1/orgs/...` : son deuxième segment est `v1`, pas `orgs`. La règle gagnante reste celle de la ligne 85. Conclure sur la ligne 79 donne le bon verdict avec une fausse prémisse — c'est ce que F3 doit interdire. | `SecurityConfig.java:79`, `:85` |
+| Toutes les routes `/api/v1/**` passent-elles par `PolicyEvaluator` ? | **Non** — voir la question sur `POST /api/v1/auth/login`. Une réponse affirmative est une fausse absence d'exception. | `SecurityConfig.java:51-86` |
 
 ## Ce qui rend ce fait cher
 
@@ -67,10 +68,17 @@ Trois lignes de shell ne donnent pas ce résultat : `grep PolicyEvaluator` trouv
 la route ; `grep /api/v1` trouve la règle mais ignore l'ordre ; rien n'indique que `OrgBoundaryFilter`
 ne s'applique pas. C'est le critère à appliquer à tout futur évaluateur.
 
+## Corrections de la vérité de référence
+
+- **2026-09-19.** Les preuves de F1, F2, F5 et du piège `OrgBoundaryFilter` ont été rejouées ligne
+  à ligne contre le commit `032788fb6d` : elles sont exactes. Aucun fait n'a été modifié. Une
+  cinquième question piège a été ajoutée, la règle `/api/orgs/**` de `SecurityConfig.java:79`
+  n'ayant pas été relevée à la rédaction.
+
 ## Acceptation du POC
 
 - Les cinq faits sont produits avec nature, statut, preuve et provenance.
 - F3 et F4 exposent leurs prémisses ; F4 ne dérive jamais de F1.
 - Les trois limites ci-dessus sont produites comme couvertures, pas comme silences.
-- Les quatre questions pièges reçoivent la réponse de référence, y compris « hors périmètre ».
+- Les cinq questions pièges reçoivent la réponse de référence, y compris « hors périmètre ».
 - La vérité de référence n'a pas été modifiée pour faire passer l'évaluateur.
