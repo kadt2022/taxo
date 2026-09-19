@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-09-16 (conformité TAXO-01D à T4)
+Mise à jour : 2026-09-19 (réorientation : prouver un fait cher et le mesurer avant 01E)
 Références : ADR 0001, ADR 0002, ADR 0004, `EPIC-TAXO-01-fondation-memoire-verifiable.md`
 
 ## MVP
@@ -39,9 +39,25 @@ TAXO-ASK-01        Ask Taxo minimal                        DÉMO PRODUIT
 
 La démo technique est le premier jalon. La démo produit la suit sur la même mémoire.
 
-## NOW : épique TAXO-01, Mémoire logicielle vérifiable
+## NOW : prouver un fait cher, puis mesurer
 
-Rien d'autre n'est ouvert tant que les récits 01A à 01G ne sont pas terminés.
+Réorientation actée le 2026-09-17. L'épique TAXO-01 a livré la forme — contrat, identité,
+instantané, exécution, couverture — mais pas encore la preuve que Taxo établit une connaissance
+qu'une commande shell ne donne pas : sur UAA, l'inventaire demande 30 s là où `git ls-files` répond
+en 1,1 s. Persister des faits dont l'utilité n'est pas mesurée bâtirait sur une intention, ce que le
+[manifeste](../manifeste.md) interdit.
+
+| # | Étape | Ce qu'elle tranche |
+| --- | --- | --- |
+| 1 | **[TAXO-POC-01](TAXO-POC-01-verite-de-reference-chaine-autorisation.md)** | une chaîne d'autorisation est-elle produite sur une route réelle, avec preuves, prémisses et limites déclarées comme couvertures ? |
+| 2 | **Benchmark manuel** (§12 du manifeste) | agent seul contre le même agent muni des faits : exactitude, complétude, fausses absences, validité des preuves, stabilité, temps, tokens |
+| 3 | **01E Persistance** | ouverte si — et seulement si — le gain est net |
+| 4 | **MCP-01** | trois outils (`find_facts`, `get_evidence`, `get_coverage`), chaque réponse portant sa couverture |
+| 5 | **HIST-01** | lineage Git : ce qu'il faut recalculer, ce qui peut être réutilisé |
+
+01F et 01G reprennent ensuite l'ordre de l'épique. Rien d'autre ne s'ouvre avant la chaîne prouvée.
+
+État des récits de l'épique :
 
 | Récit | Contenu | Tâches de l'épique | Statut |
 | --- | --- | --- | --- |
@@ -49,8 +65,8 @@ Rien d'autre n'est ouvert tant que les récits 01A à 01G ne sont pas terminés.
 | **01B** Références stables et identité | normalisation des clés et du périmètre, stabilité entre commits, calcul de l'identité stable d'un fait | T2 | terminé / mergé : [récit](Terminé/TAXO-01B-references-stables-identite-canonique-TERMINÉ.md) |
 | **01C** Instantané au commit | lecture d'un commit en lecture seule ; mode `WORKING_TREE` marqué, avec empreinte du contenu ; fichiers ignorés par Git exclus | T3 | terminé / mergé : [récit](Terminé/TAXO-01C-instantane-git-au-commit-TERMINÉ.md) |
 | **ARCH-01** Modularisation du backend | capacités, ports et adaptateurs ; refactoring sans changement métier ([ADR 0004](../adr/0004-monolithe-modulaire.md)) | préalable à T4 | terminé / mergé : [récit](TAXO-ARCH-01-modulariser-backend.md) |
-| **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statuts T4 (`RUNNING`, `SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; `evaluators/inventory` converti en Inventory v0 | T4 | revue en cours : [récit](TAXO-01D-execution-evaluateur-et-couverture.md) |
-| **01E** Persistance | instantanés, exécutions, faits, occurrences, preuves, couvertures ; `scans.result` n'est plus la source de vérité | T5 | rédigé, à ouvrir après 01D : [récit](TAXO-01E-persistance-de-la-memoire.md) |
+| **01D** Exécution d'évaluateur et couverture | identité, version, catalogue, statuts T4 (`RUNNING`, `SUCCESS`, `PARTIAL`, `FAILED`, `UNSUPPORTED`), couverture déclarée séparée ; `evaluators/inventory` converti en Inventory v0 | T4 | terminé / mergé : [récit](TAXO-01D-execution-evaluateur-et-couverture.md) |
+| **01E** Persistance | instantanés, exécutions, faits, occurrences, preuves, couvertures ; `scans.result` n'est plus la source de vérité | T5 | rédigé ; ouvert après la preuve et la mesure : [récit](TAXO-01E-persistance-de-la-memoire.md) |
 | **01F** Comparaison et banc Git | introduit, retiré, modifié, inchangé ; « cause possible : évolution du producteur » ; dépôt de test A/B/C | T8, T11 | rédigé, à ouvrir après 01E : [récit](TAXO-01F-comparaison-et-banc-git.md) |
 | **01G** API de lecture et vue de vérification | faits par instantané, identité, sujet, objet ou relation ; preuves ; couverture ; évaluateurs exécutés ; comparaison ; liste dans le portail | T9, T10 | rédigé, à ouvrir après 01F : [récit](TAXO-01G-api-de-lecture-et-vue-de-verification.md) |
 
