@@ -6,6 +6,23 @@ si l'une d'elles est fausse, on la corrige en citant le code, et on note la corr
 
 **Ce fichier ne doit jamais être fourni aux sessions qui exécutent les deux bras.**
 
+## Corrections apportees apres les six executions
+
+*2026-09-19, apres les runs. Trois reponses de reference ci-dessus sont fausses ou incompletes ;
+elles sont corrigees en citant le code, jamais pour arranger un resultat. Le detail et leurs
+consequences sur la notation sont dans `RESULTATS.md`.*
+
+- **Q2** : les roles NE SONT PAS hors perimetre. `PolicyEvaluator.java:111-117` teste quatre codes
+  en dur et `:256-262` refuse la surface users sans ce statut. La couverture `OUT_OF_SCOPE` que le
+  POC produit sur cette question est donc une **fausse absence**.
+- **Q10** : la question est decidable. `takibo-adp-test/build.gradle:8` ne depend que de
+  `takibo-adp-spring`, donc `SecurityConfig` n'est pas sur son classpath. Le bareme qui accordait
+  +2 a un refus de conclure etait faux.
+- **Q12** : deux applications Spring Boot, plus un troisieme livrable executable non web,
+  `takibo-install-keys` (`build.gradle:2` et `:33`, `Main-Class` sans Spring).
+
+---
+
 ## Le fait structurant, que les deux bras doivent découvrir
 
 Le dépôt contient **deux applications déployables**, et c'est ce qui décide de la moitié des
