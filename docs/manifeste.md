@@ -10,9 +10,16 @@
 
 > **Taxo est un utilitaire de vérité logicielle : il transforme le code source en faits logiciels vérifiables, reproductibles, rattachés à leurs preuves, à leur périmètre et à un état précis du logiciel.**
 
-Taxo n'est pas un agent plus intelligent.
+Taxo n'est pas une mémoire pour agents. Cette thèse a été mise à l'épreuve le 2026-09-19 sur quatre
+bancs et n'a pas tenu : sur un dépôt réel, avec un modèle de premier plan, un agent muni des faits
+de Taxo n'a pas répondu plus juste qu'un agent qui lit le code. Le compte rendu est dans
+[le journal](../bench/JOURNAL-2026-09-19.md), et les défauts qu'il a révélés sont dans
+[les défauts mesurés](backlog/DEFAUTS-MESURES.md).
 
-Taxo est la couche qui permet à un humain, une CI ou un agent IA de répondre à une question plus exigeante :
+Taxo est un moteur d'intelligence logicielle : il construit, tient à jour et rend consultable ce
+qu'on peut tenir pour vrai d'un logiciel — ses modules, ses unités déployables, ses dépendances, ses
+surfaces, et ce qui change entre deux états. Pour des humains et pour des pages, avec la même
+exigence :
 
 > **Qu'est-ce qui est réellement établi sur ce logiciel, pourquoi puis-je le croire, et jusqu'où cette réponse reste-t-elle vraie ?**
 
@@ -40,8 +47,10 @@ La question centrale de Taxo est donc :
 
 Trois formules servent de boussole :
 
-- Les agents savent lire le code. **Taxo construit ce qui peut être tenu pour vrai dans le code.**
-- Taxo n'est pas un autre copilote. **Taxo est une mémoire vérifiable du logiciel.**
+- **Une documentation qui ne peut pas dériver**, parce qu'elle est une projection du code et non un
+  texte écrit à côté de lui.
+- **Ce qui n'a pas été compris est dit**, jamais tu. Une liste sans sa couverture est une affirmation
+  déguisée en inventaire.
 - **Toute connaissance importante doit pouvoir être remontée jusqu'à ses preuves et à son périmètre.**
 
 ---
