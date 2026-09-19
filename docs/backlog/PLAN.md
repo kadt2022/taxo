@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-09-19 (développement gelé après trois bancs d'essai)
+Mise à jour : 2026-09-19 (repositionnement : intelligence logicielle, correction des défauts mesurés)
 Références : ADR 0001, ADR 0002, ADR 0004, `EPIC-TAXO-01-fondation-memoire-verifiable.md`
 
 ## MVP
@@ -39,31 +39,34 @@ TAXO-ASK-01        Ask Taxo minimal                        DÉMO PRODUIT
 
 La démo technique est le premier jalon. La démo produit la suit sur la même mémoire.
 
-## NOW : développement gelé
+## NOW : corriger les défauts mesurés
 
-**Gelé le 2026-09-19**, après trois bancs d'essai conduits dans la journée. Le compte rendu complet,
-erreurs d'étalon et de protocole comprises, est dans [le journal](../../bench/JOURNAL-2026-09-19.md).
+**Repositionné le 2026-09-19.** Taxo n'est plus présenté comme une mémoire pour agents IA : quatre
+bancs ont réfuté cette thèse, et le [journal](../../bench/JOURNAL-2026-09-19.md) la consigne
+définitivement. Taxo est un **moteur d'intelligence logicielle** : il documente un logiciel — ses
+modules, ses unités déployables, ses dépendances, ses surfaces — et ce qui change entre deux états,
+pour des humains et pour des pages.
 
-Ce qui est réfuté, sur TAKIBO et avec Opus 5 :
+Le code est conservé. Ce qui change, c'est ce qu'on en dit, et l'ordre des corrections. La file est
+[DEFAUTS-MESURES.md](DEFAUTS-MESURES.md) ; chaque entrée vient d'une mesure du 2026-09-19 :
 
-- **« Taxo est la mémoire vérifiable qui manque aux agents »** — trois bancs, trois fois l'agent
-  seul a suffi. Aucun gain d'exactitude mesuré.
-- **« Taxo peut servir d'auditeur de sécurité déterministe en CI »** — le diff a répondu « aucun
-  changement de protection » sur une fenêtre de commits qui ferme un contournement d'autorisation
-  et referme la surface actuator.
+| # | Défaut | Pourquoi dans cet ordre |
+| --- | --- | --- |
+| **D1** | l'unité déployable est ignorée | quatre questions sur douze en dépendaient, et c'est la première information de la page Architecture |
+| **D2** | le silence du parsing : ce qui n'est pas compris ne produit rien | transforme une lacune en affirmation — l'inventaire annonçait 45 endpoints, il y en a 47 |
+| **D3** | `OUT_OF_SCOPE` déclaré sans avoir cherché | une absence n'est vraie que relativement à ce qui a été inspecté |
+| **D5** | `anyRequest()` non modélisé | six routes sur 45 sans conclusion |
+| **D6** | vocabulaire de l'`ABSENCE` trop catégorique | « ne s'applique pas » n'est pas « monté mais inerte sur ce chemin » |
+| **D7** | les faits bruts ne passent pas à l'échelle | 248 000 tokens contre 2 767 pour la même information |
+| **D4** | le diff se tait sur les vrais changements de protection | à rouvrir **après** D1, D2 et D5, dont il dépend |
 
-Ce qui reste acquis : le contrat du fait, l'identité canonique, les instantanés Git, le diff portant
-sur la connaissance (34 faux positifs ramenés à 0), et le rendu compact (90× plus petit que les
-faits bruts).
+Corpus visé, mesuré le 2026-09-19 : 24 dépôts Git, et **7 projets de code sans aucun suivi Git** —
+DOCUMENTUM (534 fichiers), UdeS (798), TKM BUREAU (226), import-massif (192), jeux-video (116),
+Demo (41), CROCHET (22). Majoritairement Gradle/Java, puis Node, un cas .NET.
 
-**Rien ne s'ouvre** : ni 01E, ni 01F, ni 01G, ni 01H, ni 01I, ni TILES, ni MCP, ni HIST, ni
-TAXO-02 à TAXO-05.
-
-Une seule expérience reste autorisée, **une journée maximum**, sur le seul terrain non réfuté :
-l'énumération exacte des dépendants d'un symbole sur un dépôt qu'un agent ne peut pas lire en
-entier. Outillage `scip-java`, qui existe déjà — **rien à développer**. Terrain : Keycloak. La règle
-de décision est écrite d'avance dans le journal : si l'index n'apporte pas d'avantage net sur
-l'exhaustivité, le dépôt est archivé.
+Deux décisions restent ouvertes, et elles conditionnent la suite : accepter ou non un dossier sans
+dépôt Git — aujourd'hui refusé par `NOT_A_GIT_REPOSITORY`, ce qui exclut ces sept projets — et ce
+que « générique » recouvre exactement, au vu de ce corpus.
 
 Les tables ci-dessous décrivent la trajectoire telle qu'elle était planifiée avant le gel. Elles
 sont conservées comme mémoire du projet, pas comme file d'attente.
