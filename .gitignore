@@ -11,3 +11,5 @@ dist/
 pytest-cache-files-*/
 # IDE - JetBrains / PyCharm
 .idea/
+analyses/
+*-scan-latest.json
