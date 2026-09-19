@@ -80,5 +80,5 @@ ne s'applique pas. C'est le critère à appliquer à tout futur évaluateur.
 - Les cinq faits sont produits avec nature, statut, preuve et provenance.
 - F3 et F4 exposent leurs prémisses ; F4 ne dérive jamais de F1.
 - Les trois limites ci-dessus sont produites comme couvertures, pas comme silences.
-- Les quatre questions pièges reçoivent la réponse de référence, y compris « hors périmètre ».
+- Les cinq questions pièges reçoivent la réponse de référence, y compris « hors périmètre ».
 - La vérité de référence n'a pas été modifiée pour faire passer l'évaluateur.
