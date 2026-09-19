@@ -94,6 +94,14 @@ def test_the_engine_never_names_an_analysed_project():
     assert violations == []
 
 
+def test_the_engine_never_imports_the_throwaway_poc():
+    """Le POC a le droit d'importer le moteur ; le moteur ne doit pas le connaitre."""
+    violations = [f'{path.relative_to(APP)} importe {name}'
+                  for path in APP.rglob('*.py')
+                  for name in imports(path) if name.split('.')[0] == 'poc']
+    assert violations == []
+
+
 def test_importing_domains_does_not_load_technical_adapters():
     code = '''
 import sys
