@@ -66,12 +66,17 @@ ANALYSED_PROJECT_NAMES = ('orgboundaryfilter', 'policybasedauthorizationmanager'
                           'portail-math', 'takibo', 'takibu')
 
 
+def supplies_vector_values(relative):
+    """Un vecteur de conformite porte des valeurs de test ; son manifeste est structurel."""
+    return 'conformance' in relative.parts and relative.name != 'manifest.json'
+
+
 def test_the_engine_never_names_an_analysed_project():
     """Un projet analyse fournit des donnees, jamais du vocabulaire au moteur.
 
-    Les valeurs des vecteurs de conformite sont des donnees : un nom de projet peut
-    y apparaitre comme reference. La structure du moteur ne le peut pas, donc ni un
-    nom de fichier, ni le code, ni la documentation de `app/`.
+    Un nom de projet ne peut apparaitre que dans les valeurs d'un vecteur de
+    conformite. Tout le reste de `app/` est structurel — nom de fichier, code,
+    documentation, schema du contrat et manifeste de la suite compris.
     """
     violations = []
     for path in APP.rglob('*'):
@@ -81,10 +86,11 @@ def test_the_engine_never_names_an_analysed_project():
         location = str(relative).lower()
         violations += [f"{relative} est nomme d'apres {name}"
                        for name in ANALYSED_PROJECT_NAMES if name in location]
-        if path.suffix in {'.py', '.md'}:
-            content = path.read_text(encoding='utf-8').lower()
-            violations += [f'{relative} nomme {name}'
-                           for name in ANALYSED_PROJECT_NAMES if name in content]
+        if supplies_vector_values(relative):
+            continue
+        content = path.read_text(encoding='utf-8', errors='ignore').lower()
+        violations += [f'{relative} nomme {name}'
+                       for name in ANALYSED_PROJECT_NAMES if name in content]
     assert violations == []
 
 
