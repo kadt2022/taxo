@@ -1,0 +1,660 @@
+{
+  "coverage": [
+    {
+      "contract_version": 1,
+      "coverage_type": "ANALYSED",
+      "kind": "COVERAGE",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "scope": {
+        "exclude": [],
+        "include": [
+          "repository:takibo-iam"
+        ]
+      },
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "repository:takibo-iam",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "coverage_type": "OUT_OF_SCOPE",
+      "kind": "COVERAGE",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "scope": {
+        "exclude": [],
+        "include": [
+          "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/config/SecurityConfig.java"
+        ]
+      },
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "endpoint:GET /api/v1/me/spaces",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "coverage_type": "NOT_INTERPRETED",
+      "kind": "COVERAGE",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "scope": {
+        "exclude": [],
+        "include": [
+          "file:takibo-authorization-server/src/main/java/com/takibo/authorizationserver/infrastructure/security/pkce/PkceEnforcementFilter.java"
+        ]
+      },
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "file:takibo-authorization-server/src/main/java/com/takibo/authorizationserver/infrastructure/security/pkce/PkceEnforcementFilter.java",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "coverage_type": "NOT_INTERPRETED",
+      "kind": "COVERAGE",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "scope": {
+        "exclude": [],
+        "include": [
+          "file:takibo-authorization-server/src/main/java/com/takibo/authorizationserver/infrastructure/security/tenant/TenantResolutionFilter.java"
+        ]
+      },
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "file:takibo-authorization-server/src/main/java/com/takibo/authorizationserver/infrastructure/security/tenant/TenantResolutionFilter.java",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "coverage_type": "NOT_INTERPRETED",
+      "kind": "COVERAGE",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "scope": {
+        "exclude": [],
+        "include": [
+          "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/audit/TakibuAuditUserContextFilter.java"
+        ]
+      },
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/audit/TakibuAuditUserContextFilter.java",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "coverage_type": "NOT_INTERPRETED",
+      "kind": "COVERAGE",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "scope": {
+        "exclude": [],
+        "include": [
+          "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/security/JwtAuthenticationFilter.java"
+        ]
+      },
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/security/JwtAuthenticationFilter.java",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "coverage_type": "NOT_INTERPRETED",
+      "kind": "COVERAGE",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "scope": {
+        "exclude": [],
+        "include": [
+          "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/security/boundary/OrgBoundaryFilter.java"
+        ]
+      },
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/security/boundary/OrgBoundaryFilter.java",
+      "validity": "VALID"
+    }
+  ],
+  "facts": [
+    {
+      "contract_version": 1,
+      "evidence": [
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:afc8a57147dc1e897a9e10cf807d512ff2b530721ecaa22ad07a935fa6b3b112",
+          "line_end": 17,
+          "line_start": 17,
+          "method": "java.spring.request-mapping",
+          "path": "takibo-identity-core/src/main/java/com/takibo/identitycore/interfaces/rest/api/CurrentUserSpaceController.java",
+          "repository": "takibo-iam"
+        },
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:de47b0bbb3e1fb5a5c294441be2ee89703c5f30ee2089db15249a390784c66e7",
+          "line_end": 23,
+          "line_start": 23,
+          "method": "java.spring.method-mapping",
+          "path": "takibo-identity-core/src/main/java/com/takibo/identitycore/interfaces/rest/api/CurrentUserSpaceController.java",
+          "repository": "takibo-iam"
+        },
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:e64b7462e7824c0b5449b321ce4eff3a18a7136f1b6af31afd5e8ff178a087a5",
+          "line_end": 29,
+          "line_start": 29,
+          "method": "java.method-declaration",
+          "path": "takibo-identity-core/src/main/java/com/takibo/identitycore/interfaces/rest/api/CurrentUserSpaceController.java",
+          "repository": "takibo-iam"
+        }
+      ],
+      "kind": "ASSERTION",
+      "object": "symbol:CurrentUserSpaceController#listCurrentUserSpaces",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "qualifiers": {},
+      "relation": "HANDLED_BY",
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "endpoint:GET /api/v1/me/spaces",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "evidence": [
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:6d873719740d2613c2637584c65b1d3e2ee7481bc50d1530397e2a85cfd61d79",
+          "line_end": 85,
+          "line_start": 85,
+          "method": "java.spring.request-matcher",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/config/SecurityConfig.java",
+          "repository": "takibo-iam"
+        }
+      ],
+      "kind": "ASSERTION",
+      "object": "symbol:PolicyBasedAuthorizationManager",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "qualifiers": {},
+      "relation": "AUTHORIZED_BY",
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "route-pattern:/api/v1/**",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "derivation": {
+        "counter_examples_checked": [
+          "ligne 51 : OPTIONS /** -> permitAll : ne correspond pas",
+          "ligne 53 : /error /favicon.ico /swagger-ui/** /v3/api-docs/** /api/public/** /api/auth/** -> permitAll : ne correspond pas",
+          "ligne 64 : GET /actuator/health /actuator/health/liveness /actuator/health/readiness -> permitAll : ne correspond pas",
+          "ligne 69 : /actuator/** -> hasAuthority : ne correspond pas",
+          "ligne 74 : POST /api/v1/auth/login -> permitAll : ne correspond pas",
+          "ligne 76 : /api/platform/** -> hasAuthority : ne correspond pas",
+          "ligne 78 : /api/organizations/** -> access : ne correspond pas",
+          "ligne 79 : /api/orgs/** -> access : ne correspond pas",
+          "ligne 80 : /api/spaces/** -> access : ne correspond pas",
+          "ligne 81 : /api/users/** -> access : ne correspond pas",
+          "ligne 82 : /api/roles/** -> access : ne correspond pas",
+          "ligne 83 : /api/secrets/** -> access : ne correspond pas",
+          "ligne 84 : /api/permissions/** -> access : ne correspond pas"
+        ],
+        "known_gaps": [],
+        "premises": [
+          "ligne 51 : OPTIONS /** -> permitAll",
+          "ligne 53 : /error /favicon.ico /swagger-ui/** /v3/api-docs/** /api/public/** /api/auth/** -> permitAll",
+          "ligne 64 : GET /actuator/health /actuator/health/liveness /actuator/health/readiness -> permitAll",
+          "ligne 69 : /actuator/** -> hasAuthority",
+          "ligne 74 : POST /api/v1/auth/login -> permitAll",
+          "ligne 76 : /api/platform/** -> hasAuthority",
+          "ligne 78 : /api/organizations/** -> access",
+          "ligne 79 : /api/orgs/** -> access",
+          "ligne 80 : /api/spaces/** -> access",
+          "ligne 81 : /api/users/** -> access",
+          "ligne 82 : /api/roles/** -> access",
+          "ligne 83 : /api/secrets/** -> access",
+          "ligne 84 : /api/permissions/** -> access",
+          "ligne 85 : /api/v1/** -> access"
+        ],
+        "rule": "la premiere regle correspondante gagne (Spring Security)"
+      },
+      "evidence": [
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:c93eddb4e0f145ba71c0186a5fa6aa432ee3a64e2161b62f964c7fa45ffe63d6",
+          "line_end": 86,
+          "line_start": 51,
+          "method": "java.spring.authorize-http-requests",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/config/SecurityConfig.java",
+          "repository": "takibo-iam"
+        }
+      ],
+      "kind": "ASSERTION",
+      "object": "route-pattern:/api/v1/**",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "qualifiers": {},
+      "relation": "MATCHED_BY",
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "INFERRED",
+      "subject": "endpoint:GET /api/v1/me/spaces",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "derivation": {
+        "counter_examples_checked": [
+          "HANDLED_BY ne peut jamais servir de premisse a PROTECTED_BY"
+        ],
+        "known_gaps": [
+          "la decision elle-meme ne vient pas du code"
+        ],
+        "premises": [
+          "MATCHED_BY : endpoint:GET /api/v1/me/spaces -> route-pattern:/api/v1/**",
+          "AUTHORIZED_BY : route-pattern:/api/v1/** -> symbol:PolicyBasedAuthorizationManager"
+        ],
+        "rule": "PROTECTED_BY prend appui sur MATCHED_BY puis AUTHORIZED_BY (ADR 0002)"
+      },
+      "evidence": [
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:6d873719740d2613c2637584c65b1d3e2ee7481bc50d1530397e2a85cfd61d79",
+          "line_end": 85,
+          "line_start": 85,
+          "method": "java.spring.request-matcher",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/config/SecurityConfig.java",
+          "repository": "takibo-iam"
+        },
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:f1f00a2abf9861e28e037ca09aa34847539eddfdb034a8d4a8d967a24f195b30",
+          "line_end": 31,
+          "line_start": 31,
+          "method": "java.injected-field",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/config/SecurityConfig.java",
+          "repository": "takibo-iam"
+        }
+      ],
+      "kind": "ASSERTION",
+      "object": "symbol:PolicyBasedAuthorizationManager",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "qualifiers": {},
+      "relation": "PROTECTED_BY",
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "INFERRED",
+      "subject": "endpoint:GET /api/v1/me/spaces",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "evidence": [
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:8cc64988006d3fbcbe2551bb22d93cc2dafe981e853ebe87f9518f45d3efef17",
+          "line_end": 42,
+          "line_start": 42,
+          "method": "java.injected-field",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/adp/PolicyBasedAuthorizationManager.java",
+          "repository": "takibo-iam"
+        },
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:2cdda48c6540b8fbebe49fce295bb11d5aa9e58c44b6446ac285bc82722fbf27",
+          "line_end": 158,
+          "line_start": 158,
+          "method": "java.method-invocation",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/adp/PolicyBasedAuthorizationManager.java",
+          "repository": "takibo-iam"
+        }
+      ],
+      "kind": "ASSERTION",
+      "object": "symbol:AdaptiveDecisionPort",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "qualifiers": {},
+      "relation": "CALLS",
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "symbol:PolicyBasedAuthorizationManager",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "evidence": [
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:8873fbc34f9e00c699d79a4a424ffcadeea5d9c234d21a3227a74e3ddf698b43",
+          "line_end": 44,
+          "line_start": 44,
+          "method": "java.injected-field",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/adp/PolicyBasedAuthorizationManager.java",
+          "repository": "takibo-iam"
+        },
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:8652513e3479f52ecf57986b5bce016c7284d31a2301006b5bcabf34861ddc97",
+          "line_end": 61,
+          "line_start": 61,
+          "method": "java.method-invocation",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/adp/PolicyBasedAuthorizationManager.java",
+          "repository": "takibo-iam"
+        }
+      ],
+      "kind": "ASSERTION",
+      "object": "symbol:CurrentTakiboSecurityContextProvider",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "qualifiers": {},
+      "relation": "CALLS",
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "symbol:PolicyBasedAuthorizationManager",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "evidence": [
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:64817e93e1868484e61c99c6798bd0fd017a7711e0b9165453b3792e7711db36",
+          "line_end": 45,
+          "line_start": 45,
+          "method": "java.injected-field",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/adp/PolicyBasedAuthorizationManager.java",
+          "repository": "takibo-iam"
+        },
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:ec88601accc23b7d1d360fde492e0abc397e3f78a185099ba2007f6a553626be",
+          "line_end": 101,
+          "line_start": 101,
+          "method": "java.method-invocation",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/adp/PolicyBasedAuthorizationManager.java",
+          "repository": "takibo-iam"
+        }
+      ],
+      "kind": "ASSERTION",
+      "object": "symbol:PolicyEvaluator",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "qualifiers": {},
+      "relation": "CALLS",
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "symbol:PolicyBasedAuthorizationManager",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "evidence": [
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:d1bda0f7122258da94d8d7db2751df33c5b26e111a9dbc33983b77573c2396cc",
+          "line_end": 43,
+          "line_start": 43,
+          "method": "java.injected-field",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/adp/PolicyBasedAuthorizationManager.java",
+          "repository": "takibo-iam"
+        },
+        {
+          "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+          "content_hash": "sha256:d4f368120938cf72fce7bd9143796020ffd8a0177d55efc3793057ab4ea67ea1",
+          "line_end": 93,
+          "line_start": 93,
+          "method": "java.method-invocation",
+          "path": "takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/adp/PolicyBasedAuthorizationManager.java",
+          "repository": "takibo-iam"
+        }
+      ],
+      "kind": "ASSERTION",
+      "object": "symbol:RequestVelocityTracker",
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "qualifiers": {},
+      "relation": "CALLS",
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "subject": "symbol:PolicyBasedAuthorizationManager",
+      "validity": "VALID"
+    },
+    {
+      "contract_version": 1,
+      "kind": "ABSENCE",
+      "method": "java.spring.path-pattern",
+      "pattern": {
+        "type": "spring.path-pattern-of-filter",
+        "value": "OrgBoundaryFilter applique a endpoint:GET /api/v1/me/spaces"
+      },
+      "produced_by": {
+        "catalog_id": "spring-security-poc",
+        "catalog_version": "0",
+        "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+        "producer_id": "poc.spring-authorization-chain",
+        "producer_type": "EVALUATOR",
+        "producer_version": "0.0.1"
+      },
+      "scope": {
+        "exclude": [],
+        "include": [
+          "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/security/boundary/OrgBoundaryFilter.java"
+        ]
+      },
+      "snapshot": {
+        "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+        "mode": "COMMIT",
+        "repository": "takibo-iam"
+      },
+      "status": "OBSERVED",
+      "validity": "VALID"
+    }
+  ],
+  "summary": {
+    "coverage": [
+      {
+        "count": 1,
+        "coverage_type": "ANALYSED",
+        "subjects": [
+          "repository:takibo-iam"
+        ]
+      },
+      {
+        "count": 5,
+        "coverage_type": "NOT_INTERPRETED",
+        "subjects": [
+          "file:takibo-authorization-server/src/main/java/com/takibo/authorizationserver/infrastructure/security/pkce/PkceEnforcementFilter.java",
+          "file:takibo-authorization-server/src/main/java/com/takibo/authorizationserver/infrastructure/security/tenant/TenantResolutionFilter.java",
+          "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/audit/TakibuAuditUserContextFilter.java",
+          "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/security/JwtAuthenticationFilter.java",
+          "file:takibo-security-management/src/main/java/com/takibo/securitymanagement/infrastructure/security/boundary/OrgBoundaryFilter.java"
+        ]
+      },
+      {
+        "count": 1,
+        "coverage_type": "OUT_OF_SCOPE",
+        "subjects": [
+          "endpoint:GET /api/v1/me/spaces"
+        ]
+      }
+    ],
+    "coverage_count": 7,
+    "duration_seconds": 0.251,
+    "evaluator_id": "poc.spring-authorization-chain",
+    "execution_id": "921bf67c-01c8-4cff-93f3-468fcfa286b3",
+    "fact_count": 9,
+    "finished_at": "2026-09-19T15:14:31.386370+00:00",
+    "producer_version": "0.0.1",
+    "relations": {
+      "AUTHORIZED_BY": 1,
+      "CALLS": 4,
+      "HANDLED_BY": 1,
+      "MATCHED_BY": 1,
+      "PROTECTED_BY": 1
+    },
+    "snapshot": {
+      "commit": "032788fb6db90470ce2a7cd71193f99f6ec1e57d",
+      "mode": "COMMIT",
+      "repository": "takibo-iam"
+    },
+    "started_at": "2026-09-19T15:14:31.135784+00:00",
+    "status": "SUCCESS",
+    "warning_count": 0
+  },
+  "warnings": []
+}
