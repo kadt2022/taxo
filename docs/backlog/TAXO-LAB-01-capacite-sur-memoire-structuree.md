@@ -116,6 +116,28 @@ Pendant LAB-01, les hypothèses vivent dans l'espace de l'expérience et n'entre
 de Taxo. Les modèles expérimentaux sont entraînés à partir de zéro ; un modèle pré-entraîné
 (SmolLM2-135M) n'est ajouté qu'ensuite, comme point de comparaison, derrière le même port.
 
+## Ce que LAB-01 ne tranche pas
+
+LAB-01 répond à une seule question : **un modèle statistique ajoute-t-il une capacité** à la mémoire
+vérifiée ? Il ne dit pas si la boucle observer, vérifier, historiser apporte de la valeur. Cette boucle
+se construit sans modèle : comparaison d'instantanés (01F), contraintes explicites, oracle dynamique,
+journal des vérifications. L'endpoint oublié du POC-01 a été détecté par une règle déterministe.
+
+Un résultat nul de LAB-01 signifie donc, pour ce domaine, que la valeur vient de la mémoire et de la
+vérification, pas de la statistique. Il ne remet pas en cause la boucle.
+
+LAB-01 est **hors ligne** : les modèles sont entraînés puis gelés. Un modèle qui apprend en continu
+de ses propres vérifications (sentinelle adaptative) relève d'une expérience ultérieure, ouverte
+seulement si LAB-01 conclut positivement, et sous trois garde-fous posés dès maintenant :
+
+1. **La sentinelle n'agit que sur sa connaissance** : vérifier, interroger un oracle, alerter. Elle ne
+   modifie jamais le logiciel surveillé.
+2. **Un échantillon d'audit tiré au hasard** est vérifié indépendamment des choix du modèle. Sans lui,
+   le modèle n'apprend et n'est mesuré que là où il a choisi de regarder, et une dérive reste invisible.
+3. **Une nouvelle version du modèle ne remplace l'ancienne** qu'après avoir fait au moins aussi bien
+   sur un banc figé, jamais sur ses propres données récentes. Chaque version est enregistrée
+   (ADR 0006, champ `model`).
+
 ## Acceptation
 
 1. Hypothèses, matrice de coûts, seuils et découpage figés et datés dans cette fiche avant le premier
