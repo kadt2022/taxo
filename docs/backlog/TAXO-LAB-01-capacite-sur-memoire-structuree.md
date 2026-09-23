@@ -58,7 +58,7 @@ réfutée si un modèle sans abstention obtient un coût moyen inférieur.
 | Variante | Chaîne | Rôle |
 | --- | --- | --- |
 | A — déterministe | code → Taxo → conclusion ou abstention | référence ; définit les cas de H2 |
-| B — petit modèle + Taxo | code → Taxo → représentation → modèle → `HYPOTHESIS` → vérificateur | variable étudiée |
+| B — petit modèle + Taxo | code → Taxo → représentation → modèle → `Hypothesis` → vérificateur | variable étudiée |
 | C — petit modèle sans Taxo | code → modèle → conclusion | témoin de H1 |
 | D — LLM + Taxo | code → Taxo → contexte → LLM | comparaison avec les approches actuelles, **après** A, B, C |
 
