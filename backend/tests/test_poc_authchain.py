@@ -273,6 +273,42 @@ def test_without_a_target_every_route_is_evaluated_and_the_forgotten_one_stands_
         assert len(items) == len({repr(sorted(item.items())) for item in items}), 'aucun doublon'
 
 
+def test_a_commented_rule_does_not_exist():
+    commented = {**SOURCES, 'config/src/main/java/com/example/config/SecurityConfiguration.java':
+                 SECURITY.replace('                        .requestMatchers("/api/shops/**")',
+                                  '                        // .requestMatchers("/api/v2/**").permitAll()\n'
+                                  '                        /* .requestMatchers("/api/v2/shops/**").permitAll() */\n'
+                                  '                        .requestMatchers("/api/shops/**")')}
+    execution = execute('GET /api/v2/shops/{shopCode}/orders', commented)
+    assert execution.status is EvaluationStatus.SUCCESS
+    assert 'PERMITS_ALL' not in relations(execution), 'une regle commentee ne rend rien public'
+    assert relation(execution, 'PROTECTED_BY')['object'] == 'symbol:PolicyAuthorizationManager'
+    checked = ' | '.join(relation(execution, 'MATCHED_BY')['derivation']['counter_examples_checked'])
+    assert '/api/v2/shops/**' not in checked
+
+
+def test_a_commented_protection_does_not_protect():
+    forgotten = FORGOTTEN.replace('    @PutMapping', '    // @DeleteMapping("/{orderId}")\n    @PutMapping')
+    security = SECURITY.replace('                        .anyRequest()',
+                                '                        // .requestMatchers("/api/orders/**").access(policyAuthorizationManager)\n'
+                                '                        .anyRequest()')
+    execution = execute(None, {**SOURCES,
+                               'api/src/main/java/com/example/api/OrderEditController.java': forgotten,
+                               'config/src/main/java/com/example/config/SecurityConfiguration.java': security})
+    protected = {fact['subject'] for fact in execution.facts if fact.get('relation') == 'PROTECTED_BY'}
+    assert 'endpoint:PUT /api/orders/{orderId}' not in protected
+    handled = {fact['subject'] for fact in execution.facts if fact.get('relation') == 'HANDLED_BY'}
+    assert 'endpoint:DELETE /api/orders/{orderId}' not in handled, 'une annotation commentee ne declare rien'
+
+
+def test_a_mapping_named_path_keeps_its_suffix():
+    named = FORGOTTEN.replace('@RequestMapping("/api/orders")', '@RequestMapping(path = "/api/orders")') \
+                     .replace('@PutMapping("/{orderId}")', '@PutMapping(path = "/{orderId}")')
+    execution = execute('PUT /api/orders/{orderId}',
+                        {**SOURCES, 'api/src/main/java/com/example/api/OrderEditController.java': named})
+    assert relation(execution, 'HANDLED_BY')['subject'] == 'endpoint:PUT /api/orders/{orderId}'
+
+
 BENCH_ROOT = os.environ.get('TAXO_POC_BENCH_ROOT', 'D:/Takibu/Takibo-IAM')
 BENCH_COMMIT = '032788fb6db90470ce2a7cd71193f99f6ec1e57d'
 BENCH_TARGET = 'GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users'
