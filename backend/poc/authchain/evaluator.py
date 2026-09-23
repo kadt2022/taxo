@@ -1,4 +1,5 @@
 """Chaine d'autorisation d'une route, assemblee selon le contrat TAXO-01A. Jetable."""
+import json
 import re
 
 from app.evaluations.domain.evaluator import EvaluationOutput
@@ -17,13 +18,17 @@ DELEGATING_ACTIONS = ('access',)
 
 
 class AuthorizationChainPoc:
-    """Produit F1 a F5 pour une route donnee, et declare ce qu'il ne sait pas."""
+    """Produit F1 a F5 pour une route donnee, ou pour chaque route, et declare ce qu'il ne sait pas."""
 
     evaluator_id = 'poc.spring-authorization-chain'
-    producer_version = '0.0.1'
+    producer_version = '0.0.2'
     catalog = CATALOG
 
-    def __init__(self, target):
+    def __init__(self, target=None):
+        """Sans cible, chaque route declaree est evaluee : une route oubliee n'attend pas qu'on la nomme."""
+        self.verb = self.path = None
+        if target is None:
+            return
         verb, _, path = target.strip().partition(' ')
         if not verb or not path:
             raise ValueError("Route attendue sous la forme 'GET /chemin'.")
@@ -31,21 +36,34 @@ class AuthorizationChainPoc:
 
     def evaluate(self, snapshot):
         sources = self._sources(snapshot)
-        facts, coverage, warnings = [], [], []
-        located = self._endpoint(sources)
         repository = f'repository:{snapshot.repository}'
-        if located is None:
-            coverage.append(self._coverage(self._target(), 'NOT_INTERPRETED', [repository]))
-            return self._output(facts, coverage, warnings, EvaluationStatus.PARTIAL)
-        path, endpoint = located
+        if self.verb is None:
+            located = [(path, endpoint) for path in sorted(sources)
+                       for endpoint in spring.endpoints(sources[path])]
+        else:
+            located = self._endpoint(sources)
+            if located is None:
+                coverage = [self._coverage(self._target(), 'NOT_INTERPRETED', [repository])]
+                return self._output([], coverage, [], EvaluationStatus.PARTIAL)
+            located = [located]
+        facts, coverage, warnings = [], [self._coverage(repository, 'ANALYSED', [repository])], []
+        status = EvaluationStatus.SUCCESS
+        for path, endpoint in located:
+            if not self._chain(snapshot, sources, path, endpoint, facts, coverage, warnings):
+                status = EvaluationStatus.PARTIAL
+        return self._output(self._unique(facts), self._unique(coverage), warnings, status)
+
+    def _chain(self, snapshot, sources, path, endpoint, facts, coverage, warnings):
+        """Ajoute la chaine d'une route ; faux si une conclusion manque ou reste incertaine."""
         facts.append(self._handled_by(snapshot, path, sources[path], endpoint))
         configurations = self._configurations(sources, endpoint)
-        coverage.append(self._coverage(repository, 'ANALYSED', [repository]))
         if len(configurations) != 1:
-            include = sorted(f'file:{name}' for name, _, _ in configurations) or [repository]
+            include = (sorted(f'file:{name}' for name, _, _ in configurations)
+                       or [f'repository:{snapshot.repository}'])
             coverage.append(self._coverage(endpoint.reference(), 'NOT_INTERPRETED', include))
-            warnings.append(f'{len(configurations)} chaines de filtres candidates : aucune conclusion.')
-            return self._output(facts, coverage, warnings, EvaluationStatus.PARTIAL)
+            warnings.append(f'{endpoint.verb} {endpoint.path} : {len(configurations)} chaines de '
+                            'filtres candidates : aucune conclusion.')
+            return False
         name, rules, winner = configurations[0]
         text = sources[name]
         facts.extend(self._authorization(snapshot, name, text, rules, winner, endpoint))
@@ -53,8 +71,11 @@ class AuthorizationChainPoc:
         facts.extend(self._filters(sources, endpoint))
         coverage.extend(self._limits(sources, name, rules, winner, endpoint))
         earlier = rules[:rules.index(winner)]
-        status = EvaluationStatus.PARTIAL if any(not rule.readable for rule in earlier) else EvaluationStatus.SUCCESS
-        return self._output(facts, coverage, warnings, status)
+        return all(rule.readable for rule in earlier)
+
+    @staticmethod
+    def _unique(items):
+        return list({json.dumps(item, sort_keys=True): item for item in items}.values())
 
     def _target(self):
         return f'endpoint:{self.verb} {self.path}'
@@ -101,8 +122,8 @@ class AuthorizationChainPoc:
         pattern = next(candidate for candidate in winner.patterns
                        if spring.matches(candidate, endpoint.path))
         reference = f'route-pattern:{pattern}'
-        evidence = self._evidence(snapshot, path, text, winner.line_start, winner.line_end,
-                                  'java.spring.request-matcher')
+        method = 'java.spring.any-request' if winner.catch_all else 'java.spring.request-matcher'
+        evidence = self._evidence(snapshot, path, text, winner.line_start, winner.line_end, method)
         earlier = rules[:rules.index(winner)]
         matched = self._inference(
             endpoint.reference(), 'MATCHED_BY', reference,
