@@ -85,6 +85,25 @@ Facts, Coverage, provenance et statut technique via le moteur `evaluations`. Les
 métadonnées historiques de l'API restent disponibles jusqu'à TAXO-01E, qui
 introduira la persistance de la mémoire. Le portail interroge toujours la même API.
 
+### Mode hypothèses (expérimental, ADR 0006)
+
+Par défaut, Taxo fonctionne en mode documentaire : aucun modèle n'est chargé ni téléchargé. Le mode
+hypothèses s'active avec `TAXO_HYPOTHESES=smollm2-135m` ; au démarrage, Taxo prépare alors les poids
+du modèle. Les poids ne sont jamais dans le dépôt : `backend/app/hypotheses/infrastructure/models.json`
+porte la source, la révision exacte et l'empreinte SHA-256 de chaque fichier, et tout fichier absent ou
+altéré est retéléchargé puis vérifié.
+
+```powershell
+cd backend
+..\.venv\Scripts\python -m pip install -r requirements-hypotheses.txt
+..\.venv\Scripts\python -m app.hypotheses fetch smollm2-135m --record   # premier épinglage, à relire puis commiter
+..\.venv\Scripts\python -m app.hypotheses status
+```
+
+Une hypothèse n'est pas un fait : elle n'entre jamais dans la mémoire et aucune API ne l'expose tant
+que TAXO-LAB-01 n'a pas conclu. Les poids sont rangés dans `TAXO_MODELS_DIR`
+(par défaut `~/.cache/taxo/models`).
+
 Les scans sont synchrones et bornés à 50 000 fichiers dans cette version. Avant de traiter de gros dépôts : introduire une file durable, des workers isolés, des délais et une reprise après échec.
 
 Prochaines briques non implémentées : analyseurs JavaParser et TypeScript Compiler API, modèle de relations versionné, extraction des endpoints/DTO, comparaison sémantique, documentation générée, GitHub App et assistant IA. Aucun LLM n'est appelé.
