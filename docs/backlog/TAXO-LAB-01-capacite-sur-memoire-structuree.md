@@ -7,8 +7,8 @@ validés puis figés. L'épique TAXO-01 reste prioritaire.
 Source de vérité : cette fiche. Elle applique le [manifeste](../manifeste.md) à une question de
 recherche : ce qui est mesuré est dit mesuré, ce qui est supposé est dit supposé.
 
-Dépend de : TAXO-POC-01 (chaîne d'autorisation, `anyRequest()` compris) ; d'une décision sur le
-statut `HYPOTHESIS` (voir « Décision préalable »).
+Dépend de : TAXO-POC-01 (chaîne d'autorisation, `anyRequest()` compris) ; ADR 0006 (l'hypothèse
+statistique n'est pas un fait).
 
 ## Question
 
@@ -105,19 +105,16 @@ TAKIBO réel                  → test final   (jamais vu, jamais utilisé pour 
   familles note leur origine, pour détecter une fuite par le concepteur ;
 - le test final est lancé **une seule fois** par variante, après gel des modèles.
 
-## Décision préalable : le statut `HYPOTHESIS`
+## Décision préalable : l'hypothèse n'est pas un fait
 
-Aujourd'hui `INFERRED` désigne une dérivation déterministe avec prémisses. Une prédiction
-statistique ne doit pas partager ce statut. Proposition, à trancher par un ADR avant l'ouverture :
-
-- nouveau statut `HYPOTHESIS`, produit uniquement par un producteur de type modèle ;
-- **une `HYPOTHESIS` ne peut jamais servir de prémisse** à un autre fait ;
-- elle devient un fait `OBSERVED` ou `INFERRED` seulement après confirmation par un vérificateur,
-  qui en est alors le producteur ; rejetée, elle ne produit rien dans la mémoire, mais reste dans le
-  journal de l'expérience.
+Tranchée par l'[ADR 0006](../adr/0006-hypothese-statistique.md) (proposé) : une prédiction de modèle
+est une `Hypothesis`, objet distinct du fait. Le contrat v1 ne change pas. Une hypothèse n'est jamais
+une prémisse ; seul un vérificateur produit un fait, sous sa propre provenance ; les hypothèses
+rejetées restent dans le journal des hypothèses.
 
 Pendant LAB-01, les hypothèses vivent dans l'espace de l'expérience et n'entrent pas dans la mémoire
-de Taxo.
+de Taxo. Les modèles expérimentaux sont entraînés à partir de zéro ; un modèle pré-entraîné
+(SmolLM2-135M) n'est ajouté qu'ensuite, comme point de comparaison, derrière le même port.
 
 ## Acceptation
 
