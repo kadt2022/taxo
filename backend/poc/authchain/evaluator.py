@@ -159,7 +159,8 @@ class AuthorizationChainPoc:
             return []
         type_name = target[0]
         declaration = re.compile(r'\bclass\s+' + re.escape(type_name) + r'\b')
-        path = next((name for name in sorted(sources) if declaration.search(sources[name])), None)
+        path = next((name for name in sorted(sources)
+                     if declaration.search(spring.without_comments(sources[name]))), None)
         if path is None:
             return []
         text = sources[path]
@@ -179,7 +180,7 @@ class AuthorizationChainPoc:
         """Un filtre dont aucun motif ne capture la route : une absence, pas un silence."""
         facts = []
         for path in sorted(sources):
-            text = sources[path]
+            text = spring.without_comments(sources[path])
             declaration = FILTER_CLASS.search(text)
             if declaration is None:
                 continue
@@ -202,7 +203,7 @@ class AuthorizationChainPoc:
         if any(not rule.readable for rule in earlier):
             limits.append(self._coverage(f'file:{path}', 'NOT_INTERPRETED', [f'file:{path}']))
         for name in sorted(sources):
-            if FILTER_CLASS.search(sources[name]):
+            if FILTER_CLASS.search(spring.without_comments(sources[name])):
                 limits.append(self._coverage(f'file:{name}', 'NOT_INTERPRETED', [f'file:{name}']))
         return limits
 

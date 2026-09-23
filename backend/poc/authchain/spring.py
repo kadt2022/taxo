@@ -6,9 +6,9 @@ expressions ne connait un projet : elles connaissent Spring MVC et Spring Securi
 import re
 from dataclasses import dataclass
 
-CLASS_MAPPING = re.compile(r'@RequestMapping\s*\(\s*(?:value\s*=\s*)?"([^"]*)"')
+CLASS_MAPPING = re.compile(r'@RequestMapping\s*\(\s*(?:(?:value|path)\s*=\s*)?"([^"]*)"')
 CLASS_DECLARATION = re.compile(r'\bclass\s+(\w+)')
-METHOD_MAPPING = re.compile(r'@(Get|Post|Put|Delete|Patch)Mapping\b(?:\s*\(\s*(?:value\s*=\s*)?(?:"([^"]*)")?)?')
+METHOD_MAPPING = re.compile(r'@(Get|Post|Put|Delete|Patch)Mapping\b(?:\s*\(\s*(?:(?:value|path)\s*=\s*)?(?:"([^"]*)")?)?')
 METHOD_DECLARATION = re.compile(r'^\s*(?:public|protected|private)\s+[^;={]*?\b(\w+)\s*\(')
 INJECTED_FIELD = re.compile(r'^\s*(?:private|protected)\s+final\s+([A-Z]\w*)\s+(\w+)\s*;')
 HTTP_METHOD = re.compile(r'HttpMethod\.(\w+)')
@@ -83,6 +83,46 @@ def _closing(text, opening):
     raise ValueError('Parenthese non fermee.')
 
 
+def without_comments(text):
+    """Le texte, commentaires Java remplaces par des espaces : positions et lignes inchangees.
+
+    Une regle ou une annotation commentee n'existe pas pour Spring ; elle ne doit pas exister ici.
+    """
+    result, index, quoted = [], 0, False
+    while index < len(text):
+        char = text[index]
+        if quoted:
+            result.append(char)
+            if char == chr(92) and index + 1 < len(text):
+                result.append(text[index + 1])
+                index += 2
+                continue
+            quoted = char != '"'
+            index += 1
+            continue
+        if char == "'":
+            # Litteral de caractere, `'"'` compris : il n'ouvre pas de chaine.
+            end = text.find("'", index + 3 if text.startswith("'" + chr(92), index) else index + 1)
+            end = len(text) if end < 0 else end + 1
+            result.append(text[index:end])
+            index = end
+            continue
+        if text.startswith('//', index):
+            end = text.find('\n', index)
+            end = len(text) if end < 0 else end
+        elif text.startswith('/*', index):
+            end = text.find('*/', index + 2)
+            end = len(text) if end < 0 else end + 2
+        else:
+            quoted = char == '"'
+            result.append(char)
+            index += 1
+            continue
+        result.append(''.join(c if c == '\n' else ' ' for c in text[index:end]))
+        index = end
+    return ''.join(result)
+
+
 def _join(base, suffix):
     if not suffix:
         return base or '/'
@@ -91,7 +131,7 @@ def _join(base, suffix):
 
 def endpoints(text):
     """Endpoints declares par un controleur Spring MVC, dans l'ordre du fichier."""
-    lines = text.split('\n')
+    lines = without_comments(text).split('\n')
     type_name = base = None
     base_line = 0
     pending = None
@@ -141,6 +181,7 @@ def security_rules(text):
 
     `anyRequest()` ferme la liste : il capture toute route qu'aucune regle anterieure n'a prise.
     """
+    text = without_comments(text)
     start = text.find(AUTHORIZE_BLOCK)
     if start < 0:
         return ()
@@ -194,7 +235,7 @@ def _matches(pattern, path):
 def injected_fields(text):
     """Champs injectes : nom -> (type, ligne de declaration)."""
     fields = {}
-    for number, line in enumerate(text.split('\n'), start=1):
+    for number, line in enumerate(without_comments(text).split('\n'), start=1):
         field = INJECTED_FIELD.match(line)
         if field:
             fields[field.group(2)] = (field.group(1), number)
@@ -204,5 +245,5 @@ def injected_fields(text):
 def invocations(text, field):
     """Lignes ou `field.quelqueChose(` est appele."""
     call = re.compile(rf'\b{re.escape(field)}\s*\.\s*\w+\s*\(')
-    return tuple(number for number, line in enumerate(text.split('\n'), start=1)
+    return tuple(number for number, line in enumerate(without_comments(text).split('\n'), start=1)
                  if call.search(line))
