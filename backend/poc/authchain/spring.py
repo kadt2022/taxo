@@ -46,9 +46,10 @@ class SecurityRule:
     line_start: int
     line_end: int
     readable: bool
+    catch_all: bool = False
 
     def describe(self):
-        scope = ' '.join(self.patterns) or '(motif non lu)'
+        scope = 'anyRequest()' if self.catch_all else ' '.join(self.patterns) or '(motif non lu)'
         prefix = f'{self.verb} ' if self.verb else ''
         return f'ligne {self.line_start} : {prefix}{scope} -> {self.action}'
 
@@ -127,8 +128,19 @@ def _matcher_arguments(arguments):
     return patterns, (verb.group(1) if verb else None), readable
 
 
+def _action(text, closing, stop):
+    """Action chainee apres la parenthese `closing` et avant `stop`, avec son argument."""
+    action = ACTION.search(text, closing + 1, stop)
+    if not action:
+        return '', ''
+    return action.group(1), text[action.end():_closing(text, action.end() - 1)].strip()
+
+
 def security_rules(text):
-    """Regles d'autorisation dans leur ordre de declaration, la premiere gagnante."""
+    """Regles d'autorisation dans leur ordre de declaration, la premiere gagnante.
+
+    `anyRequest()` ferme la liste : il capture toute route qu'aucune regle anterieure n'a prise.
+    """
     start = text.find(AUTHORIZE_BLOCK)
     if start < 0:
         return ()
@@ -137,21 +149,23 @@ def security_rules(text):
     while True:
         found = text.find(MATCHERS, cursor, block_end)
         if found < 0:
-            return tuple(rules)
+            break
         opening = text.index('(', found)
         closing = _closing(text, opening)
         patterns, verb, readable = _matcher_arguments(text[opening + 1:closing])
         following = text.find(MATCHERS, closing, block_end)
         stop = following if following > 0 else text.find(ANY_REQUEST, closing, block_end)
-        tail = text[closing + 1:stop if stop > 0 else block_end]
-        action = ACTION.search(tail)
-        argument = ''
-        if action:
-            action_opening = closing + 1 + action.end() - 1
-            argument = text[action_opening + 1:_closing(text, action_opening)].strip()
-        rules.append(SecurityRule(patterns, verb, action.group(1) if action else '', argument,
+        action, argument = _action(text, closing, stop if stop > 0 else block_end)
+        rules.append(SecurityRule(patterns, verb, action, argument,
                                   _line_of(text, found), _line_of(text, closing), readable))
         cursor = closing
+    found = text.find(ANY_REQUEST, cursor, block_end)
+    if found >= 0:
+        closing = _closing(text, found + len(ANY_REQUEST) - 1)
+        action, argument = _action(text, closing, block_end)
+        rules.append(SecurityRule(('/**',), None, action, argument, _line_of(text, found),
+                                  _line_of(text, closing), True, catch_all=True))
+    return tuple(rules)
 
 
 def matches(pattern, path):

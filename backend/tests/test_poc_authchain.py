@@ -223,6 +223,56 @@ def test_an_unknown_route_concludes_nothing():
     assert execution.coverage[0]['coverage_type'] == 'NOT_INTERPRETED'
 
 
+FORGOTTEN = '''package com.example.api;
+
+@RestController
+@RequestMapping("/api/orders")
+public class OrderEditController {
+
+    @PutMapping("/{orderId}")
+    public Order update(@PathVariable long orderId, @RequestBody Order order) {
+        return orders.update(orderId, order);
+    }
+}
+'''
+WITH_FORGOTTEN = {**SOURCES, 'api/src/main/java/com/example/api/OrderEditController.java': FORGOTTEN}
+
+
+def test_a_route_no_rule_names_falls_into_any_request_and_is_not_protected():
+    execution = execute('PUT /api/orders/{orderId}', WITH_FORGOTTEN)
+    assert execution.status is EvaluationStatus.SUCCESS
+    assert 'PROTECTED_BY' not in relations(execution)
+    matched = relation(execution, 'MATCHED_BY')
+    assert matched['object'] == 'route-pattern:/**'
+    assert matched['derivation']['premises'][-1].endswith('anyRequest() -> authenticated')
+    assert len(matched['derivation']['counter_examples_checked']) == 6, 'chaque regle ecartee est citee'
+    line = SECURITY.split('\n')[matched['evidence'][0]['line_end'] - 1]
+    assert '.anyRequest().authenticated()' in line, 'la preuve couvre les regles jusqu a anyRequest()'
+
+
+def test_without_any_request_an_unmatched_route_still_concludes_nothing():
+    closed = {**WITH_FORGOTTEN, 'config/src/main/java/com/example/config/SecurityConfiguration.java':
+              SECURITY.replace('                        .anyRequest().authenticated()\n', '')}
+    execution = execute('PUT /api/orders/{orderId}', closed)
+    assert execution.status is EvaluationStatus.PARTIAL
+    assert 'MATCHED_BY' not in relations(execution)
+    declared = {(fact['subject'], fact['coverage_type']) for fact in execution.coverage}
+    assert ('endpoint:PUT /api/orders/{orderId}', 'NOT_INTERPRETED') in declared
+
+
+def test_without_a_target_every_route_is_evaluated_and_the_forgotten_one_stands_out():
+    execution = execute(None, WITH_FORGOTTEN)
+    assert execution.status is EvaluationStatus.SUCCESS
+    matched = {fact['subject']: fact['object'] for fact in execution.facts
+               if fact.get('relation') == 'MATCHED_BY'}
+    assert matched == {ENDPOINT: 'route-pattern:/api/v2/**',
+                       'endpoint:PUT /api/orders/{orderId}': 'route-pattern:/**'}
+    protected = {fact['subject'] for fact in execution.facts if fact.get('relation') == 'PROTECTED_BY'}
+    assert protected == {ENDPOINT}
+    for items in (execution.facts, execution.coverage):
+        assert len(items) == len({repr(sorted(item.items())) for item in items}), 'aucun doublon'
+
+
 BENCH_ROOT = os.environ.get('TAXO_POC_BENCH_ROOT', 'D:/Takibu/Takibo-IAM')
 BENCH_COMMIT = '032788fb6db90470ce2a7cd71193f99f6ec1e57d'
 BENCH_TARGET = 'GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users'
