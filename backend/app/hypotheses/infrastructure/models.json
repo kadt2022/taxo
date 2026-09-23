@@ -1,0 +1,15 @@
+{
+  "smollm2-135m": {
+    "family": "smollm2",
+    "repository": "HuggingFaceTB/SmolLM2-135M",
+    "license": "Apache-2.0, a confirmer sur la page du modele avant epinglage",
+    "revision": null,
+    "files": {
+      "config.json": null,
+      "model.safetensors": null,
+      "special_tokens_map.json": null,
+      "tokenizer.json": null,
+      "tokenizer_config.json": null
+    }
+  }
+}
