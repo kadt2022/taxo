@@ -2,7 +2,8 @@
 
 Memes garanties que la lecture des instantanes : seules des commandes de lecture sont lancees, sans
 hook, filtre ni fsmonitor. Aucun contenu de fichier n'est lu ici : seulement les commits, leurs parents
-et la liste des fichiers touches.
+et la liste des fichiers touches, puis, pour un diff, le contenu brut d'un objet Git : `cat-file blob`
+n'applique ni filtre ni textconv.
 """
 import os
 import re
@@ -10,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 from app.history.domain.commit import ChangedFile, Commit, is_confidential
+from app.history.domain.diff import Blob
 from app.history.domain.errors import (GIT_READ_ERROR, NOT_A_GIT_REPOSITORY, UNKNOWN_COMMIT,
                                        HistoryError)
 
@@ -17,7 +19,8 @@ GIT_TIMEOUT = 60
 MAX_COMMITS = 100
 _COMMIT_ID = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')
 _GIT = ['git', '-c', 'safe.directory=*', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false']
-_ENV = {'GIT_TERMINAL_PROMPT': '0', 'GIT_OPTIONAL_LOCKS': '0'}
+# Chemins toujours litteraux : un nom contenant * ou ? n'est jamais un motif.
+_ENV = {'GIT_TERMINAL_PROMPT': '0', 'GIT_OPTIONAL_LOCKS': '0', 'GIT_LITERAL_PATHSPECS': '1'}
 _FORMAT = '%H%x00%P%x00%an%x00%aI%x00%s%x1e'
 _STATUS = {'A': 'ADDED', 'M': 'MODIFIED', 'D': 'DELETED', 'R': 'RENAMED', 'C': 'COPIED', 'T': 'TYPE_CHANGED'}
 
@@ -82,6 +85,20 @@ class GitHistoryReader:
         statuses = _output(root, 'diff-tree', '-r', '-z', '-M', '--no-commit-id', '--name-status', *span)
         counts = _output(root, 'diff-tree', '-r', '-z', '-M', '--no-commit-id', '--numstat', *span)
         return _merge(_name_status(statuses), _numstat(counts))
+
+    def blob(self, root, revision, path):
+        """Mode, identifiant et taille de `path` dans `revision`, sans lire le contenu ; None si absent."""
+        root = _repository(root)
+        for record in filter(None, _output(root, 'ls-tree', '-z', '-l', '--full-tree', revision, '--', path)
+                             .split(b'\x00')):
+            meta, raw_path = record.split(b'\t', 1)
+            mode, kind, oid, size = meta.split()
+            if _text(raw_path) == path:
+                return Blob(_text(oid), _text(mode), int(size) if kind == b'blob' else 0)
+        return None
+
+    def content(self, root, oid):
+        return _output(_repository(root), 'cat-file', 'blob', oid)
 
 
 def _name_status(raw):
