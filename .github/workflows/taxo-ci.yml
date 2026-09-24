@@ -235,9 +235,9 @@ jobs:
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.sources=backend/app,frontend/src
-            -Dsonar.exclusions=frontend/src/**/*.test.ts
+            -Dsonar.exclusions=frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx
             -Dsonar.tests=backend/tests,frontend/src
-            -Dsonar.test.inclusions=backend/tests/**,frontend/src/**/*.test.ts
+            -Dsonar.test.inclusions=backend/tests/**,frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx
             -Dsonar.python.version=3.12
             -Dsonar.python.coverage.reportPaths=backend/reports/coverage.xml
             -Dsonar.javascript.lcov.reportPaths=frontend/coverage/lcov.info
