@@ -3,8 +3,9 @@ from typing import Protocol
 
 from app.evaluations.domain.status import EvaluationStatus
 from app.facts import fact_identity
-from app.history.domain.commit import ChangedFile, Commit
-from app.history.domain.errors import UNKNOWN_PARENT, HistoryError
+from app.history.domain.commit import ChangedFile, Commit, is_confidential
+from app.history.domain.diff import BINARY, CONFIDENTIAL, Blob, as_text, refusal, side_by_side
+from app.history.domain.errors import UNKNOWN_PARENT, UNKNOWN_PATH, HistoryError
 from app.history.domain.impact import compare, unknowns
 from app.projects.application.queries import require_project
 from app.snapshots.domain.errors import SnapshotError
@@ -17,6 +18,10 @@ class HistoryReader(Protocol):
     def commit(self, root: str, sha: str) -> Commit: ...
 
     def files(self, root: str, sha: str, parent: str | None) -> list[ChangedFile]: ...
+
+    def blob(self, root: str, revision: str, path: str) -> Blob | None: ...
+
+    def content(self, root: str, oid: str) -> bytes: ...
 
 
 class ProjectHistory:
@@ -44,6 +49,35 @@ class ProjectHistory:
         _, root = self._root(project_id)
         commit, base = self._commit_and_parent(root, sha, parent)
         return commit, base, self.reader.files(root, commit.sha, base)
+
+    def diff(self, project_id, sha, path, parent=None):
+        """Diff d'un fichier touche par le commit : parent a gauche, commit a droite.
+
+        Seul un chemin de la liste des fichiers du commit est accepte. Aucun contenu n'est lu pour un
+        fichier confidentiel, un lien, un sous-module ou un fichier trop gros, d'un cote comme de l'autre.
+        """
+        _, root = self._root(project_id)
+        commit, base = self._commit_and_parent(root, sha, parent)
+        changed = next((item for item in self.reader.files(root, commit.sha, base) if item.path == path), None)
+        if changed is None:
+            raise HistoryError(UNKNOWN_PATH, "Ce fichier n'est pas touché par ce commit.")
+        before_path = changed.old_path or changed.path
+        result = {'path': changed.path, 'old_path': changed.old_path, 'status': changed.status,
+                  'commit': commit.sha, 'parent': base, 'before': None, 'after': None, 'hunks': []}
+        if changed.confidential or is_confidential(before_path):
+            return {**result, 'displayable': False, 'reason': CONFIDENTIAL}
+        before = self.reader.blob(root, base, before_path) if base and changed.status != 'ADDED' else None
+        after = self.reader.blob(root, commit.sha, changed.path) if changed.status != 'DELETED' else None
+        sides = {'before': (before, before_path), 'after': (after, changed.path)}
+        result.update({side: {'path': name, 'size': blob.size} if blob else None
+                       for side, (blob, name) in sides.items()})
+        reason = refusal([before, after])
+        if reason:
+            return {**result, 'displayable': False, 'reason': reason}
+        texts = [as_text(self.reader.content(root, blob.oid)) if blob else '' for blob in (before, after)]
+        if None in texts:
+            return {**result, 'displayable': False, 'reason': BINARY}
+        return {**result, 'displayable': True, 'reason': None, 'hunks': side_by_side(*texts)}
 
     def impact(self, project_id, sha, parent=None):
         """Chaque evaluateur enregistre analyse le parent puis le commit ; les faits sont compares."""

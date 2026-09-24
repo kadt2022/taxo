@@ -95,6 +95,12 @@ modifiés), avec les zones non interprétées. Un fichier `.env` est nommé, jam
 fusion, le premier parent sert de référence ; `?parent=` en choisit un autre.
 
 API : `GET /api/projects/{id}/history/commits?limit=10`, `…/commits/{sha}` et `…/commits/{sha}/impact`.
+
+Chaque fichier de la fiche s'ouvre en diff côte à côte (TAXO-HIST-02) : le parent à gauche, le commit à
+droite, avec les numéros de ligne ; `…/commits/{sha}/diff?path=…&parent=…`. Seul un fichier touché par
+le commit est accepté. Aucun contenu n'est renvoyé pour un fichier confidentiel (`.env`, `.env.*`), un
+binaire, un fichier de plus de 1 Mo, un lien ou un sous-module : seule la raison est donnée. Le diff
+montre ce que Git a changé ; l'impact reste ce que Taxo en comprend.
 L'impact sur les chaînes d'autorisation passe encore par le POC Spring, hors produit :
 `py -m poc.authchain.impact --root <dépôt> --commit <sha>` (résultat marqué `provisional`).
 

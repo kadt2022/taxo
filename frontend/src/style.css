@@ -27,3 +27,22 @@
 .commit-detail dt{font-size:12px;color:#637565}
 .commit-detail dd{margin:4px 0 0}
 .commit-detail .primary{margin-top:18px}
+.diff-view{margin-top:22px}
+.diff{table-layout:fixed;font-size:13px}
+.diff .number-col{width:46px}
+.diff th{text-align:left;overflow-wrap:anywhere}
+.diff td{padding:3px 8px;border-bottom:0;vertical-align:top}
+.diff td:first-child{font-weight:400}
+.diff td code{white-space:pre-wrap;word-break:break-all;color:#1f3a33}
+.diff .number{text-align:right;color:#8a968c;user-select:none}
+.diff .removed{background:#fde8e4}
+.diff .added{background:#e6f4dc}
+.diff .hunk td{background:#f1f3ec;color:#637565;padding:6px 8px}
+@media(max-width:700px){.diff,.diff thead,.diff tbody{display:block}
+.diff colgroup{display:none}
+.diff tr{display:grid;grid-template-columns:46px minmax(0,1fr)}
+.diff thead tr{grid-template-columns:minmax(0,1fr)}
+.diff th{display:block}
+.diff .hunk td{grid-column:1/-1}
+.diff .diff-equal td:nth-child(n+3){display:none}
+}

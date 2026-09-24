@@ -69,18 +69,50 @@ type CommitDetail = {commit:Commit; parent:string|null; files:ChangedFile[]};
 type FactChange = {change:'INTRODUCED'|'REMOVED'|'MODIFIED'; kind:string; subject:string; relation:string|null; status:string; before:string|null; after:string|null};
 type Evaluation = {evaluator_id:string; producer_version:string; comparable:boolean; failures:string[]; changes:FactChange[]; unchanged_count:number; not_interpreted_before:string[]; not_interpreted_after:string[]};
 type Impact = {commit:Commit; parent:string|null; evaluations:Evaluation[]};
+type DiffLine = {number:number; text:string};
+type DiffRow = {kind:'equal'|'changed'|'added'|'removed'; before:DiffLine|null; after:DiffLine|null};
+type FileDiff = {path:string; old_path:string|null; status:string; commit:string; parent:string|null; displayable:boolean;
+  reason:string|null; before:{path:string; size:number}|null; after:{path:string; size:number}|null;
+  hunks:{before_start:number; after_start:number; rows:DiffRow[]}[]};
+const DIFF_REASONS:Record<string,string>={
+  CONFIDENTIAL:'Fichier confidentiel : Taxo le nomme, mais n’affiche jamais son contenu.',
+  BINARY:'Fichier binaire : il n’y a pas de diff texte à afficher.',
+  TOO_LARGE:'Fichier trop volumineux (plus de 1 Mo) : son contenu n’est pas affiché.',
+  NOT_A_REGULAR_FILE:'Lien symbolique ou sous-module : son contenu n’est pas affiché.',
+};
+
+function DiffView({diff}:Readonly<{diff:FileDiff}>){
+  const side=(label:string,value:FileDiff['before'],ref:string|null)=>value?`${label} — ${value.path}${ref?' @ '+ref.slice(0,7):''}`:`${label} — (aucun fichier)`;
+  return <section className="diff-view" aria-label="Diff du fichier">
+    <p className="eyebrow">DIFF — CE QUE GIT MONTRE</p>
+    <h2><code>{diff.old_path?`${diff.old_path} → ${diff.path}`:diff.path}</code></h2>
+    {!diff.displayable?<p className="muted">{DIFF_REASONS[diff.reason??'']??'Contenu non disponible.'}</p>
+    :diff.hunks.length===0?<p className="muted">Aucune ligne modifiée : seul le nom ou le mode du fichier a changé.</p>
+    :<div className="table-wrap"><table className="diff">
+      <colgroup><col className="number-col"/><col/><col className="number-col"/><col/></colgroup>
+      <thead><tr><th colSpan={2}>{side('AVANT',diff.before,diff.parent)}</th><th colSpan={2}>{side('APRÈS',diff.after,diff.commit)}</th></tr></thead>
+      {diff.hunks.map(h=><tbody key={`${h.before_start}-${h.after_start}`}>
+        <tr className="hunk"><td colSpan={4}>@@ ligne {h.before_start} → ligne {h.after_start}</td></tr>
+        {h.rows.map(r=><tr key={`${r.before?.number??'-'}-${r.after?.number??'-'}`} className={'diff-'+r.kind}>
+          <td className="number">{r.before?.number??''}</td><td className={r.before&&r.kind!=='equal'?'removed':''}><code>{r.before?.text??''}</code></td>
+          <td className="number">{r.after?.number??''}</td><td className={r.after&&r.kind!=='equal'?'added':''}><code>{r.after?.text??''}</code></td>
+        </tr>)}
+      </tbody>)}
+    </table></div>}
+  </section>;
+}
 const CHANGE_LABELS:Record<FactChange['change'],string>={INTRODUCED:'Ajouté',REMOVED:'Retiré',MODIFIED:'Modifié'};
 const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DELETED:'Supprimé',RENAMED:'Renommé',COPIED:'Copié',TYPE_CHANGED:'Type modifié'};
 
 function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
-  const [impact,setImpact]=useState<Impact|null>(null), [error,setError]=useState(''), [busy,setBusy]=useState(false);
+  const [impact,setImpact]=useState<Impact|null>(null), [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const base=`/projects/${projectId}/history/commits`;
   // Seule la derniere demande peut modifier l'ecran : une reponse arrivee trop tard est ignoree.
   const latest=useRef(0);
   useEffect(()=>{
     let active=true;
-    setCommits([]);setDetail(null);setImpact(null);setError('');
+    setCommits([]);setDetail(null);setImpact(null);setFileDiff(null);setError('');
     request<Commit[]>(`${base}?limit=10`).then(c=>{if(active)setCommits(c);}).catch(e=>{if(active)setError(e.message);});
     return ()=>{active=false;};
   },[base]);
@@ -91,7 +123,11 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
     catch(e){if(token===latest.current)setError((e as Error).message);}
     finally{if(token===latest.current)setBusy(false);}
   }
-  function open(sha:string){setImpact(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
+  function open(sha:string){setImpact(null);setFileDiff(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
+  function compare(sha:string,path:string,parent:string|null){
+    const query=new URLSearchParams({path});if(parent)query.set('parent',parent);
+    return load<FileDiff>(`${base}/${sha}/diff?${query}`,setFileDiff);
+  }
   function understand(sha:string){return load<Impact>(`${base}/${sha}/impact`,setImpact);}
   const date=(value:string)=>new Date(value).toLocaleString('fr-CA');
   // Les deux cotes comptent : une zone non lue avant le commit rend la comparaison incomplete aussi.
@@ -110,8 +146,9 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
         <div><dt>Comparé à</dt><dd>{detail.parent?<code>{detail.parent.slice(0,12)}</code>:'aucun parent : commit racine'}{detail.commit.parents.length>1&&' (premier parent d’une fusion)'}</dd></div>
       </dl>
       <div className="table-wrap"><table><thead><tr><th>Fichier</th><th>Changement</th><th>+ / −</th></tr></thead><tbody>
-        {detail.files.map(f=><tr key={f.path}><td><code>{f.old_path?`${f.old_path} → ${f.path}`:f.path}</code>{f.confidential&&<span className="muted"> · confidentiel, contenu jamais affiché</span>}</td><td>{FILE_LABELS[f.status]??f.status}</td><td>{f.additions===null?'binaire':`+${f.additions} / −${f.deletions}`}</td></tr>)}
+        {detail.files.map(f=><tr key={f.path}><td><button className="link" disabled={busy} onClick={()=>compare(detail.commit.sha,f.path,detail.parent)} aria-pressed={fileDiff?.path===f.path&&fileDiff.commit===detail.commit.sha}><code>{f.old_path?`${f.old_path} → ${f.path}`:f.path}</code></button>{f.confidential&&<span className="muted"> · confidentiel, contenu jamais affiché</span>}</td><td>{FILE_LABELS[f.status]??f.status}</td><td>{f.additions===null?'binaire':`+${f.additions} / −${f.deletions}`}</td></tr>)}
       </tbody></table></div>
+      {fileDiff&&fileDiff.commit===detail.commit.sha&&<DiffView diff={fileDiff}/>}
       <button className="primary" disabled={busy} onClick={()=>understand(detail.commit.sha)}>{busy?'Analyse en cours…':'Ce que Taxo comprend de ce commit'}</button>
     </section>}
     {impact&&impact.commit.sha===detail?.commit.sha&&<section className="impact" aria-label="Impact compris par Taxo">

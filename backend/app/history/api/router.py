@@ -3,7 +3,7 @@ from dataclasses import asdict
 from fastapi import APIRouter, Query
 
 _ERRORS = {
-    404: {'description': 'Projet ou commit introuvable.'},
+    404: {'description': 'Projet, commit, parent ou fichier introuvable.'},
     422: {'description': 'Historique illisible, par exemple « NOT_A_GIT_REPOSITORY : … ».'},
 }
 
@@ -23,6 +23,10 @@ def create_router(history):
     def commit(project_id: str, sha: str, parent: str | None = None):
         found, base, files = history.detail(project_id, sha, parent)
         return {'commit': _commit(found), 'parent': base, 'files': [asdict(item) for item in files]}
+
+    @router.get('/api/projects/{project_id}/history/commits/{sha}/diff', responses=_ERRORS)
+    def diff(project_id: str, sha: str, path: str, parent: str | None = None):
+        return history.diff(project_id, sha, path, parent)
 
     @router.get('/api/projects/{project_id}/history/commits/{sha}/impact', responses=_ERRORS)
     def impact(project_id: str, sha: str, parent: str | None = None):
