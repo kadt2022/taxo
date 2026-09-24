@@ -35,6 +35,7 @@ python -m venv .venv
 $env:DATABASE_URL = 'sqlite:///./taxo.db'
 $env:TAXO_ALLOWED_ROOTS = 'D:\Taxo;D:\Taxo\taxo'
 cd backend
+..\.venv\Scripts\python -m app.hypotheses fetch
 ..\.venv\Scripts\python -m alembic upgrade head
 ..\.venv\Scripts\python -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
 ```
@@ -85,24 +86,26 @@ Facts, Coverage, provenance et statut technique via le moteur `evaluations`. Les
 métadonnées historiques de l'API restent disponibles jusqu'à TAXO-01E, qui
 introduira la persistance de la mémoire. Le portail interroge toujours la même API.
 
-### Mode hypothèses (expérimental, ADR 0006)
+### Clochette (SmolLM2-135M, expérimental, ADR 0006)
 
-Par défaut, Taxo fonctionne en mode documentaire : aucun modèle n'est chargé ni téléchargé. Le mode
-hypothèses s'active avec `TAXO_HYPOTHESES=smollm2-135m` ; au démarrage, Taxo prépare alors les poids
-du modèle. Les poids ne sont jamais dans le dépôt : `backend/app/hypotheses/infrastructure/models.json`
-porte la source, la révision exacte et l'empreinte SHA-256 de chaque fichier, et tout fichier absent ou
-altéré est retéléchargé puis vérifié.
+Clochette est installée par l'étape `python -m app.hypotheses fetch` de la procédure ci-dessus : elle
+télécharge une seule fois la révision épinglée dans `TAXO_MODELS_DIR` (par défaut
+`~/.cache/taxo/models`), vérifie l'empreinte SHA-256 de chaque fichier et échoue si l'une ne
+correspond pas. Relancée, elle ne retélécharge que les fichiers absents ou altérés. Elle ne charge pas
+le modèle : `torch` n'est pas nécessaire pour l'installer.
 
-```powershell
-cd backend
-..\.venv\Scripts\python -m pip install -r requirements-hypotheses.txt
-..\.venv\Scripts\python -m app.hypotheses fetch smollm2-135m --record   # premier épinglage, à relire puis commiter
-..\.venv\Scripts\python -m app.hypotheses status
-```
+Les poids ne sont jamais dans le dépôt : `backend/app/hypotheses/infrastructure/models.json` porte la
+source, la révision exacte et les empreintes. Épingler une nouvelle révision
+(`fetch --record`) est une opération de maintenance de Taxo, jamais une étape d'installation.
+
+Par défaut, Taxo démarre en mode documentaire et ne charge aucun modèle. Avec
+`TAXO_HYPOTHESES=smollm2-135m`, le démarrage vérifie le cache et ne télécharge que ce qui manque. Avec
+Docker, `TAXO_HYPOTHESES=smollm2-135m docker compose up` installe Clochette au premier démarrage dans le
+volume `taxo_models`, réutilisé ensuite. Exécuter le modèle demande en plus
+`pip install -r backend/requirements-hypotheses.txt`.
 
 Une hypothèse n'est pas un fait : elle n'entre jamais dans la mémoire et aucune API ne l'expose tant
-que TAXO-LAB-01 n'a pas conclu. Les poids sont rangés dans `TAXO_MODELS_DIR`
-(par défaut `~/.cache/taxo/models`).
+que TAXO-LAB-01 n'a pas conclu.
 
 Les scans sont synchrones et bornés à 50 000 fichiers dans cette version. Avant de traiter de gros dépôts : introduire une file durable, des workers isolés, des délais et une reprise après échec.
 

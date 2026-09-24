@@ -380,3 +380,73 @@ def test_the_smollm_adapter_loads_safely_and_reads_scores_from_logits(monkeypatc
     scores = model.score(REPRESENTATION)
     assert max(scores, key=scores.get) == 'RESTRICTED'
     assert abs(sum(scores.values()) - 1) < 1e-9
+
+
+PINNED = 'a' * 40
+WEIGHTS = {'config.json': b'{"model_type": "llama"}', 'model.safetensors': b'clochette weights'}
+
+
+def installation(monkeypatch, tmp_path, contents=WEIGHTS):
+    """La commande d'installation, sur un manifeste epingle et une source simulee."""
+    from app.hypotheses import __main__ as command
+
+    path = tmp_path / 'models.json'
+    path.write_text(json.dumps({'smollm2-135m': {
+        'family': 'smollm2', 'repository': 'HuggingFaceTB/SmolLM2-135M', 'revision': PINNED,
+        'files': {name: hashlib.sha256(data).hexdigest() for name, data in WEIGHTS.items()}}}))
+    transport = Transport(contents)
+    root = tmp_path / 'cache'
+    monkeypatch.setattr(command, 'ModelStore',
+                        lambda: ModelStore(root, path, transport, log=lambda message: None))
+    return command.main, transport, root / 'smollm2-135m' / PINNED
+
+
+def test_a_fresh_installation_downloads_the_pinned_revision_once(monkeypatch, tmp_path):
+    fetch, transport, directory = installation(monkeypatch, tmp_path)
+    assert not directory.exists(), 'cache vide avant installation'
+    assert fetch(['fetch']) == 0
+    assert sorted(url.rsplit('/', 1)[-1] for url in transport.downloads) == sorted(WEIGHTS)
+    assert all(url.startswith(f'https://huggingface.co/HuggingFaceTB/SmolLM2-135M/resolve/{PINNED}/')
+               for url in transport.downloads), 'seule la revision epinglee est demandee'
+    for name, data in WEIGHTS.items():
+        assert (directory / name).read_bytes() == data
+    assert fetch(['fetch']) == 0
+    assert len(transport.downloads) == len(WEIGHTS), 'une seconde installation reutilise le cache'
+
+
+def test_an_installed_file_altered_on_disk_is_replaced(monkeypatch, tmp_path):
+    fetch, transport, directory = installation(monkeypatch, tmp_path)
+    assert fetch(['fetch']) == 0
+    (directory / 'model.safetensors').write_bytes(b'altered')
+    assert fetch(['fetch']) == 0
+    assert (directory / 'model.safetensors').read_bytes() == WEIGHTS['model.safetensors']
+    assert transport.downloads[-1].endswith('/model.safetensors')
+    assert len(transport.downloads) == len(WEIGHTS) + 1, 'seul le fichier altere est retelecharge'
+
+
+def test_an_installation_with_a_wrong_digest_fails_closed(monkeypatch, tmp_path, capsys):
+    fetch, _, directory = installation(monkeypatch, tmp_path,
+                                       {**WEIGHTS, 'model.safetensors': b'substituted weights'})
+    assert fetch(['fetch']) == 1
+    assert 'Empreinte inattendue pour model.safetensors' in capsys.readouterr().err
+    assert not (directory / 'model.safetensors').exists()
+    assert not list(directory.glob('*.part')), 'aucun fichier douteux ne reste dans le cache'
+
+
+def test_installing_never_loads_the_model_runtime():
+    code = '''
+import sys
+import app.hypotheses.__main__
+import app.bootstrap.application
+assert not {'torch', 'transformers'} & set(sys.modules)
+'''
+    subprocess.run([sys.executable, '-c', code], cwd=APP.parent, check=True)
+
+
+def test_the_shipped_clochette_manifest_is_pinned_to_an_immutable_revision():
+    entry = json.loads(MANIFEST_PATH.read_text())['smollm2-135m']
+    if entry['revision'] is None:
+        pytest.skip('Clochette pas encore epinglee : maintenance `fetch --record` depuis un poste ayant acces a Hugging Face')
+    assert len(entry['revision']) == 40 and all(c in '0123456789abcdef' for c in entry['revision'])
+    assert 'model.safetensors' in entry['files']
+    assert all(len(digest) == 64 for digest in entry['files'].values())

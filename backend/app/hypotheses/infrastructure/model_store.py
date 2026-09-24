@@ -1,8 +1,9 @@
 """Poids des modeles : hors du depot, telecharges une fois, verifies a chaque usage.
 
 Le depot porte seulement la reference du modele : depot source, revision exacte et empreinte SHA-256
-de chaque fichier (`models.json`). Un modele non epingle n'est jamais utilise : `record` l'epingle une
-premiere fois, et le resultat doit etre relu puis commite.
+de chaque fichier (`models.json`). L'installation telecharge la revision epinglee et verifie chaque
+empreinte ; un modele non epingle n'est jamais utilise. Epingler (`record`) est une operation de
+maintenance reservee au developpement de Taxo : son resultat est relu puis commite.
 """
 import hashlib
 import json
@@ -120,8 +121,9 @@ class ModelStore:
 
     @staticmethod
     def _unpinned(name):
-        return ModelStoreError(f"{name} n'est pas epingle : lancer `python -m app.hypotheses fetch "
-                               f"{name} --record`, relire puis commiter models.json.")
+        return ModelStoreError(f"{name} n'est pas epingle dans cette version de Taxo : installation "
+                               "impossible. L'epinglage (fetch --record) est une operation de maintenance "
+                               "de Taxo, pas une etape d'installation.")
 
     @staticmethod
     def _pinned(entry):
