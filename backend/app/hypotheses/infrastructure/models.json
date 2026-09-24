@@ -1,0 +1,29 @@
+{
+  "smollm2-135m": {
+    "family": "smollm2",
+    "repository": "HuggingFaceTB/SmolLM2-135M",
+    "license": "Apache-2.0",
+    "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+    "files": {
+      "config.json": "1d556eab73b69c7f11f64c557a2f9c6f440bd4c6b89bb2584a6b498c92603843",
+      "model.safetensors": "80521b40281d6ce74e35c9282c22539e75aa0ac8578892b2a59955ef78d55da1",
+      "special_tokens_map.json": "e786b595b9a23148bf1630df78d9037a048ea671e48bfd3549a1e3c233742bb3",
+      "tokenizer.json": "9ca9acddb6525a194ec8ac7a87f24fbba7232a9a15ffa1af0c1224fcd888e47c",
+      "tokenizer_config.json": "4bb9af56a342753d39374f4016a16574cab299fe088e896f425ce3c433f61424"
+    }
+  },
+  "smollm2-135m-instruct": {
+    "family": "smollm2-instruct",
+    "repository": "HuggingFaceTB/SmolLM2-135M-Instruct",
+    "license": "Apache-2.0",
+    "usage": "CLI experimentale backend/lab/clochette_chat.py uniquement ; jamais TAXO-LAB-01",
+    "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+    "files": {
+      "config.json": "8eb740e8bbe4cff95ea7b4588d17a2432deb16e8075bc5828ff7ba9be94d982a",
+      "model.safetensors": "5af571cbf074e6d21a03528d2330792e532ca608f24ac70a143f6b369968ab8c",
+      "special_tokens_map.json": "2b7379f3ae813529281a5c602bc5a11c1d4e0a99107aaa597fe936c1e813ca52",
+      "tokenizer.json": "9ca9acddb6525a194ec8ac7a87f24fbba7232a9a15ffa1af0c1224fcd888e47c",
+      "tokenizer_config.json": "4ec77d44f62efeb38d7e044a1db318f6a939438425312dfa333b8382dbad98df"
+    }
+  }
+}

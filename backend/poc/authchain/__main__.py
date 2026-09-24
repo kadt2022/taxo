@@ -1,6 +1,8 @@
 """Produit la chaine d'autorisation d'une route, en JSON, pour le banc du POC.
 
-    py -m poc.authchain --repository <cle> --root <chemin> --commit <sha> --target "GET /chemin"
+    py -m poc.authchain --repository <cle> --root <chemin> --commit <sha> [--target "GET /chemin"]
+
+Sans --target, chaque route declaree est evaluee.
 """
 import argparse
 import json
@@ -27,7 +29,7 @@ def main(argv=None):
     parser.add_argument('--root', required=True, help='racine du depot Git a lire')
     parser.add_argument('--repository', required=True, help='cle du depot dans les faits')
     parser.add_argument('--commit', required=True, help='commit a lire, 40 ou 64 hexadecimaux')
-    parser.add_argument('--target', required=True, help="route etudiee, par exemple 'GET /api/x'")
+    parser.add_argument('--target', help="route etudiee, par exemple 'GET /api/x' ; toutes par defaut")
     arguments = parser.parse_args(argv)
     result = run(arguments)
     json.dump(result, sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)

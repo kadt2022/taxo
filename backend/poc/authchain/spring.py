@@ -6,9 +6,9 @@ expressions ne connait un projet : elles connaissent Spring MVC et Spring Securi
 import re
 from dataclasses import dataclass
 
-CLASS_MAPPING = re.compile(r'@RequestMapping\s*\(\s*(?:value\s*=\s*)?"([^"]*)"')
+CLASS_MAPPING = re.compile(r'@RequestMapping\s*\(\s*(?:(?:value|path)\s*=\s*)?"([^"]*)"')
 CLASS_DECLARATION = re.compile(r'\bclass\s+(\w+)')
-METHOD_MAPPING = re.compile(r'@(Get|Post|Put|Delete|Patch)Mapping\b(?:\s*\(\s*(?:value\s*=\s*)?(?:"([^"]*)")?)?')
+METHOD_MAPPING = re.compile(r'@(Get|Post|Put|Delete|Patch)Mapping\b(?:\s*\(\s*(?:(?:value|path)\s*=\s*)?(?:"([^"]*)")?)?')
 METHOD_DECLARATION = re.compile(r'^\s*(?:public|protected|private)\s+[^;={]*?\b(\w+)\s*\(')
 INJECTED_FIELD = re.compile(r'^\s*(?:private|protected)\s+final\s+([A-Z]\w*)\s+(\w+)\s*;')
 HTTP_METHOD = re.compile(r'HttpMethod\.(\w+)')
@@ -46,9 +46,10 @@ class SecurityRule:
     line_start: int
     line_end: int
     readable: bool
+    catch_all: bool = False
 
     def describe(self):
-        scope = ' '.join(self.patterns) or '(motif non lu)'
+        scope = 'anyRequest()' if self.catch_all else ' '.join(self.patterns) or '(motif non lu)'
         prefix = f'{self.verb} ' if self.verb else ''
         return f'ligne {self.line_start} : {prefix}{scope} -> {self.action}'
 
@@ -82,6 +83,46 @@ def _closing(text, opening):
     raise ValueError('Parenthese non fermee.')
 
 
+def without_comments(text):
+    """Le texte, commentaires Java remplaces par des espaces : positions et lignes inchangees.
+
+    Une regle ou une annotation commentee n'existe pas pour Spring ; elle ne doit pas exister ici.
+    """
+    result, index, quoted = [], 0, False
+    while index < len(text):
+        char = text[index]
+        if quoted:
+            result.append(char)
+            if char == chr(92) and index + 1 < len(text):
+                result.append(text[index + 1])
+                index += 2
+                continue
+            quoted = char != '"'
+            index += 1
+            continue
+        if char == "'":
+            # Litteral de caractere, `'"'` compris : il n'ouvre pas de chaine.
+            end = text.find("'", index + 3 if text.startswith("'" + chr(92), index) else index + 1)
+            end = len(text) if end < 0 else end + 1
+            result.append(text[index:end])
+            index = end
+            continue
+        if text.startswith('//', index):
+            end = text.find('\n', index)
+            end = len(text) if end < 0 else end
+        elif text.startswith('/*', index):
+            end = text.find('*/', index + 2)
+            end = len(text) if end < 0 else end + 2
+        else:
+            quoted = char == '"'
+            result.append(char)
+            index += 1
+            continue
+        result.append(''.join(c if c == '\n' else ' ' for c in text[index:end]))
+        index = end
+    return ''.join(result)
+
+
 def _join(base, suffix):
     if not suffix:
         return base or '/'
@@ -90,7 +131,7 @@ def _join(base, suffix):
 
 def endpoints(text):
     """Endpoints declares par un controleur Spring MVC, dans l'ordre du fichier."""
-    lines = text.split('\n')
+    lines = without_comments(text).split('\n')
     type_name = base = None
     base_line = 0
     pending = None
@@ -127,8 +168,20 @@ def _matcher_arguments(arguments):
     return patterns, (verb.group(1) if verb else None), readable
 
 
+def _action(text, closing, stop):
+    """Action chainee apres la parenthese `closing` et avant `stop`, avec son argument."""
+    action = ACTION.search(text, closing + 1, stop)
+    if not action:
+        return '', ''
+    return action.group(1), text[action.end():_closing(text, action.end() - 1)].strip()
+
+
 def security_rules(text):
-    """Regles d'autorisation dans leur ordre de declaration, la premiere gagnante."""
+    """Regles d'autorisation dans leur ordre de declaration, la premiere gagnante.
+
+    `anyRequest()` ferme la liste : il capture toute route qu'aucune regle anterieure n'a prise.
+    """
+    text = without_comments(text)
     start = text.find(AUTHORIZE_BLOCK)
     if start < 0:
         return ()
@@ -137,21 +190,23 @@ def security_rules(text):
     while True:
         found = text.find(MATCHERS, cursor, block_end)
         if found < 0:
-            return tuple(rules)
+            break
         opening = text.index('(', found)
         closing = _closing(text, opening)
         patterns, verb, readable = _matcher_arguments(text[opening + 1:closing])
         following = text.find(MATCHERS, closing, block_end)
         stop = following if following > 0 else text.find(ANY_REQUEST, closing, block_end)
-        tail = text[closing + 1:stop if stop > 0 else block_end]
-        action = ACTION.search(tail)
-        argument = ''
-        if action:
-            action_opening = closing + 1 + action.end() - 1
-            argument = text[action_opening + 1:_closing(text, action_opening)].strip()
-        rules.append(SecurityRule(patterns, verb, action.group(1) if action else '', argument,
+        action, argument = _action(text, closing, stop if stop > 0 else block_end)
+        rules.append(SecurityRule(patterns, verb, action, argument,
                                   _line_of(text, found), _line_of(text, closing), readable))
         cursor = closing
+    found = text.find(ANY_REQUEST, cursor, block_end)
+    if found >= 0:
+        closing = _closing(text, found + len(ANY_REQUEST) - 1)
+        action, argument = _action(text, closing, block_end)
+        rules.append(SecurityRule(('/**',), None, action, argument, _line_of(text, found),
+                                  _line_of(text, closing), True, catch_all=True))
+    return tuple(rules)
 
 
 def matches(pattern, path):
@@ -180,7 +235,7 @@ def _matches(pattern, path):
 def injected_fields(text):
     """Champs injectes : nom -> (type, ligne de declaration)."""
     fields = {}
-    for number, line in enumerate(text.split('\n'), start=1):
+    for number, line in enumerate(without_comments(text).split('\n'), start=1):
         field = INJECTED_FIELD.match(line)
         if field:
             fields[field.group(2)] = (field.group(1), number)
@@ -190,5 +245,5 @@ def injected_fields(text):
 def invocations(text, field):
     """Lignes ou `field.quelqueChose(` est appele."""
     call = re.compile(rf'\b{re.escape(field)}\s*\.\s*\w+\s*\(')
-    return tuple(number for number, line in enumerate(text.split('\n'), start=1)
+    return tuple(number for number, line in enumerate(without_comments(text).split('\n'), start=1)
                  if call.search(line))

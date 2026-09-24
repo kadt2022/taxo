@@ -12,9 +12,10 @@ from app.evaluations.application.registry import EvaluatorRegistry
 from app.evaluations.application.run_evaluator import RunEvaluator
 from app.platform.api.health import router as health_router
 from app.platform.api.errors import register_errors
+from app.hypotheses.infrastructure.model_store import ModelStore
 from . import settings
 
-def create_app(database_url=None, allowed_roots=None):
+def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None):
     engine = create_engine(settings.database_url(database_url))
     paths = LocalProjectPaths(settings.allowed_roots(allowed_roots))
     projects = SqlAlchemyProjectRepository(engine)
@@ -22,6 +23,11 @@ def create_app(database_url=None, allowed_roots=None):
     registry = EvaluatorRegistry([InventoryEvaluator()])
     inventory = registry.get('taxo.inventory')
     run = RunScan(projects, scans, paths, GitSnapshotReader(), inventory, RunEvaluator())
+    # Mode hypotheses : les poids sont prepares et verifies au demarrage ; aucune API ne les expose
+    # tant que TAXO-LAB-01 n'a pas conclu (ADR 0006).
+    store = model_store or ModelStore()
+    for name in settings.hypotheses_models(hypotheses):
+        store.ensure(name)
     api = FastAPI(title='Taxo', version='0.1.0')
     api.state.engine = engine
     register_errors(api)

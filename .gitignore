@@ -13,3 +13,4 @@ pytest-cache-files-*/
 .idea/
 analyses/
 *-scan-latest.json
+.coverage

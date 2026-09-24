@@ -17,9 +17,12 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://taxo:taxo@db:5432/taxo
       TAXO_ALLOWED_ROOTS: /repositories:/taxo-source
+      TAXO_HYPOTHESES: ${TAXO_HYPOTHESES:-}
+      TAXO_MODELS_DIR: /models
     volumes:
       - ${TAXO_REPOSITORIES:-D:/Taxo}:/repositories:ro
       - .:/taxo-source:ro
+      - taxo_models:/models
     ports:
       - "127.0.0.1:18000:8000"
     depends_on:
@@ -33,3 +36,4 @@ services:
       - api
 volumes:
   postgres_data:
+  taxo_models:
