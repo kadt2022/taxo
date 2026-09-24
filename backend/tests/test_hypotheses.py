@@ -275,14 +275,20 @@ def test_the_hub_transport_only_talks_to_the_hub(monkeypatch, tmp_path):
 
 
 def test_the_command_reports_status_and_refuses_an_unpinned_model(monkeypatch, tmp_path, capsys):
-    from app.hypotheses.__main__ import main
+    from app.hypotheses import __main__ as command
 
     monkeypatch.setenv('TAXO_MODELS_DIR', str(tmp_path))
-    assert main(['status']) == 0
-    assert 'unpinned  model.safetensors' in capsys.readouterr().out
-    assert main(['fetch']) == 1
+    assert command.main(['status']) == 0
+    assert 'missing   model.safetensors' in capsys.readouterr().out, 'Clochette epinglee, cache vide'
+    assert command.main(['status', 'inconnu']) == 1
+    unpinned = manifest(tmp_path, revision=None, files={'config.json': None})
+    transport = Transport(CONTENTS)
+    monkeypatch.setattr(command, 'ModelStore', lambda: store(tmp_path, transport, unpinned))
+    assert command.main(['status', 'tiny']) == 0
+    assert 'unpinned  config.json' in capsys.readouterr().out
+    assert command.main(['fetch', 'tiny']) == 1
     assert "n'est pas epingle" in capsys.readouterr().err
-    assert main(['status', 'inconnu']) == 1
+    assert transport.downloads == []
 
 
 class FakeTensor:
