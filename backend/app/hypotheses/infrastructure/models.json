@@ -15,7 +15,7 @@
   "smollm2-135m-instruct": {
     "family": "smollm2-instruct",
     "repository": "HuggingFaceTB/SmolLM2-135M-Instruct",
-    "license": "Apache-2.0, a confirmer sur la page du modele avant epinglage",
+    "license": "Apache-2.0",
     "usage": "CLI experimentale backend/lab/clochette_chat.py uniquement ; jamais TAXO-LAB-01",
     "revision": null,
     "files": {
