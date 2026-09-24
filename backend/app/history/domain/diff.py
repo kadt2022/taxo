@@ -4,7 +4,6 @@ Ce que Git montre, sans interpretation : l'impact compris par Taxo reste une aut
 n'est renvoye que s'il est affichable des deux cotes ; sinon, seule la raison est donnee.
 """
 import difflib
-import re
 from dataclasses import dataclass
 
 MAX_DIFF_BYTES = 1024 * 1024
@@ -12,7 +11,6 @@ CONTEXT_LINES = 3
 # Au-dela, la comparaison exacte deviendrait quadratique : l'heuristique de difflib prend le relais. Son
 # resultat reste un diff exact (il transforme bien l'avant en apres), seulement moins compact.
 MAX_EXACT_COMPARISONS = 2_000_000
-_LINE = re.compile(r'[^\n]*\n|[^\n]+\Z')
 
 CONFIDENTIAL = 'CONFIDENTIAL'
 BINARY = 'BINARY'
@@ -52,7 +50,11 @@ def as_text(content):
 def lines(text):
     """Lignes au sens de Git, fin de ligne comprise : un passage de LF a CRLF, ou la perte du saut de
     ligne final, reste un changement visible."""
-    return _LINE.findall(text)
+    parts = text.split('\n')
+    found = [part + '\n' for part in parts[:-1]]
+    if parts[-1]:
+        found.append(parts[-1])
+    return found
 
 
 def _eol(raw):
