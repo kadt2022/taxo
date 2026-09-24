@@ -85,7 +85,7 @@ const DIFF_REASONS:Record<string,string>={
 const EOL_MARKS:Record<DiffLine['eol'],string>={LF:'',CRLF:'␍␊',NONE:'sans fin de ligne'};
 function DiffCode({line,changed}:Readonly<{line:DiffLine|null; changed:boolean}>){
   const mark=line&&changed?EOL_MARKS[line.eol]:'';
-  return <><code>{line?.text??''}</code>{mark&&<span className="eol">{mark}</span>}</>;
+  return <><code>{line?.text??''}</code>{mark===''?null:<span className="eol">{mark}</span>}</>;
 }
 
 function DiffView({diff}:Readonly<{diff:FileDiff}>){
