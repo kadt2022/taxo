@@ -86,6 +86,18 @@ Facts, Coverage, provenance et statut technique via le moteur `evaluations`. Les
 métadonnées historiques de l'API restent disponibles jusqu'à TAXO-01E, qui
 introduira la persistance de la mémoire. Le portail interroge toujours la même API.
 
+### Historique et impact des commits (TAXO-HIST-01)
+
+Le portail affiche les 10 derniers commits d'un projet, lus directement dans Git, puis la fiche d'un
+commit (fichiers touchés, lignes ajoutées et retirées) et ce que Taxo en comprend : chaque évaluateur
+analyse le parent et le commit, et les faits sont comparés par identité canonique (ajoutés, retirés,
+modifiés), avec les zones non interprétées. Un fichier `.env` est nommé, jamais lu. Pour un commit de
+fusion, le premier parent sert de référence ; `?parent=` en choisit un autre.
+
+API : `GET /api/projects/{id}/history/commits?limit=10`, `…/commits/{sha}` et `…/commits/{sha}/impact`.
+L'impact sur les chaînes d'autorisation passe encore par le POC Spring, hors produit :
+`py -m poc.authchain.impact --root <dépôt> --commit <sha>` (résultat marqué `provisional`).
+
 ### Clochette (SmolLM2-135M, expérimental, ADR 0006)
 
 Clochette est installée par l'étape `python -m app.hypotheses fetch` de la procédure ci-dessus : elle

@@ -19,3 +19,11 @@
 .evaluation-details th,.evaluation-details td{padding:10px 8px}
 .coverage-subject{display:block;margin:3px 0}
 @media(max-width:620px){.evaluation{padding:18px}.evaluation-details{gap:22px}}
+.history{margin-top:24px}
+.history tr.current td{background:#f1f7e8}
+.link{border:0;background:none;padding:0;cursor:pointer}
+.commit-detail,.impact{margin-top:26px;padding-top:22px;border-top:1px solid #edf0e8}
+.commit-detail dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0 0 18px}
+.commit-detail dt{font-size:12px;color:#637565}
+.commit-detail dd{margin:4px 0 0}
+.commit-detail .primary{margin-top:18px}

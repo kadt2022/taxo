@@ -63,6 +63,64 @@ function EvaluationPanel({summary}:Readonly<{summary:EvaluationSummary}>){
   </section>;
 }
 
+type Commit = {sha:string; parents:string[]; author:string; authored_at:string; subject:string};
+type ChangedFile = {path:string; status:string; old_path:string|null; additions:number|null; deletions:number|null; confidential:boolean};
+type CommitDetail = {commit:Commit; parent:string|null; files:ChangedFile[]};
+type FactChange = {change:'INTRODUCED'|'REMOVED'|'MODIFIED'; kind:string; subject:string; relation:string|null; status:string; before:string|null; after:string|null};
+type Evaluation = {evaluator_id:string; producer_version:string; changes:FactChange[]; unchanged_count:number; not_interpreted_after:string[]};
+type Impact = {commit:Commit; parent:string|null; evaluations:Evaluation[]};
+const CHANGE_LABELS:Record<FactChange['change'],string>={INTRODUCED:'Ajouté',REMOVED:'Retiré',MODIFIED:'Modifié'};
+const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DELETED:'Supprimé',RENAMED:'Renommé',COPIED:'Copié',TYPE_CHANGED:'Type modifié'};
+
+function HistoryPanel({projectId}:Readonly<{projectId:string}>){
+  const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
+  const [impact,setImpact]=useState<Impact|null>(null), [error,setError]=useState(''), [busy,setBusy]=useState(false);
+  const base=`/projects/${projectId}/history/commits`;
+  useEffect(()=>{
+    let active=true;
+    setCommits([]);setDetail(null);setImpact(null);setError('');
+    request<Commit[]>(`${base}?limit=10`).then(c=>{if(active)setCommits(c);}).catch(e=>{if(active)setError(e.message);});
+    return ()=>{active=false;};
+  },[base]);
+  async function open(sha:string){
+    setBusy(true);setError('');setImpact(null);
+    try{setDetail(await request<CommitDetail>(`${base}/${sha}`));}catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  }
+  async function understand(sha:string){
+    setBusy(true);setError('');
+    try{setImpact(await request<Impact>(`${base}/${sha}/impact`));}catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  }
+  const date=(value:string)=>new Date(value).toLocaleString('fr-CA');
+  return <section className="results history" aria-label="Historique Git">
+    <div className="section-heading"><div><h2>Historique Git</h2><p>Les 10 derniers commits, lus directement dans Git, et ce que Taxo comprend de chacun.</p></div></div>
+    {error&&<div role="alert" className="error">{error}</div>}
+    {commits.length?<div className="table-wrap"><table><thead><tr><th>Commit</th><th>Message</th><th>Auteur</th><th>Date</th></tr></thead><tbody>
+      {commits.map(c=><tr key={c.sha} className={detail?.commit.sha===c.sha?'current':''}><td><button className="link" disabled={busy} onClick={()=>open(c.sha)}><code>{c.sha.slice(0,7)}</code></button>{c.parents.length>1&&<span className="muted"> fusion</span>}</td><td>{c.subject}</td><td>{c.author}</td><td>{date(c.authored_at)}</td></tr>)}
+    </tbody></table></div>:!error&&<p className="empty">Aucun commit dans ce dépôt.</p>}
+    {detail&&<section className="commit-detail" aria-label="Fiche du commit">
+      <h2>Commit <code>{detail.commit.sha.slice(0,12)}</code></h2>
+      <dl>
+        <div><dt>Message</dt><dd>{detail.commit.subject}</dd></div>
+        <div><dt>Auteur</dt><dd>{detail.commit.author} · {date(detail.commit.authored_at)}</dd></div>
+        <div><dt>Comparé à</dt><dd>{detail.parent?<code>{detail.parent.slice(0,12)}</code>:'aucun parent : commit racine'}{detail.commit.parents.length>1&&' (premier parent d’une fusion)'}</dd></div>
+      </dl>
+      <div className="table-wrap"><table><thead><tr><th>Fichier</th><th>Changement</th><th>+ / −</th></tr></thead><tbody>
+        {detail.files.map(f=><tr key={f.path}><td><code>{f.old_path?`${f.old_path} → ${f.path}`:f.path}</code>{f.confidential&&<span className="muted"> · confidentiel, contenu jamais affiché</span>}</td><td>{FILE_LABELS[f.status]??f.status}</td><td>{f.additions===null?'binaire':`+${f.additions} / −${f.deletions}`}</td></tr>)}
+      </tbody></table></div>
+      <button className="primary" disabled={busy} onClick={()=>understand(detail.commit.sha)}>{busy?'Analyse en cours…':'Ce que Taxo comprend de ce commit'}</button>
+    </section>}
+    {impact&&impact.commit.sha===detail?.commit.sha&&<section className="impact" aria-label="Impact compris par Taxo">
+      {impact.evaluations.map(e=><div key={e.evaluator_id}>
+        <h2>Impact selon {e.evaluator_id} <span className="muted">v{e.producer_version}</span></h2>
+        {e.changes.length?<div className="table-wrap"><table><thead><tr><th>Changement</th><th>Sujet</th><th>Relation</th><th>Avant</th><th>Après</th><th>Statut</th></tr></thead><tbody>
+          {e.changes.map(c=><tr key={c.change+c.subject+c.relation+(c.before??'')+(c.after??'')}><td>{CHANGE_LABELS[c.change]}</td><td><code>{c.subject}</code></td><td>{c.relation??c.kind}</td><td><code>{c.before??''}</code></td><td><code>{c.after??''}</code></td><td>{c.status}</td></tr>)}
+        </tbody></table></div>:<p className="muted">Aucun fait changé parmi ceux que cet évaluateur sait produire.</p>}
+        <footer>{e.unchanged_count.toLocaleString('fr-CA')} faits inchangés. {e.not_interpreted_after.length?`Zones non interprétées : ${e.not_interpreted_after.join(', ')}.`:'Aucune zone non interprétée.'} Seuls les faits que cet évaluateur sait produire sont comparés : l’absence de changement ici ne prouve pas l’absence de changement ailleurs.</footer>
+      </div>)}
+    </section>}
+  </section>;
+}
+
 async function request<T>(path:string, init?:RequestInit):Promise<T> {
   const response = await fetch('/api'+path, init);
   if (!response.ok) {
@@ -113,6 +171,7 @@ function App(){
       <footer>{sourceLabel(scan)}</footer>
       {[...new Set(scan.warnings??[])].map(w=><p className="error" key={w}>{w}</p>)}</section>
     </>:<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez une analyse pour obtenir un inventaire accompagné de ses sources.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
+    {selected&&!loading&&<HistoryPanel projectId={selected}/>}
     <p className="scope">Cette première version identifie les technologies. L’extraction des API, des permissions et des relations métier n’est pas encore intégrée.</p></main>
   </div>;
 }
