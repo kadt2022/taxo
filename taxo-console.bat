@@ -31,7 +31,16 @@ popd
 where npm >nul 2>nul || (echo [ERREUR] Node.js 22.12+ introuvable. & pause & exit /b 1)
 if not exist "%ROOT%\frontend\node_modules" (
   echo Installation du portail...
-  pushd "%ROOT%\frontend" & call npm ci & popd
+  pushd "%ROOT%\frontend"
+  call npm ci
+  if errorlevel 1 (
+    rem Une installation incomplete serait prise pour bonne au lancement suivant.
+    rmdir /s /q node_modules 2>nul
+    popd
+    echo [ERREUR] Installation du portail echouee ^(npm ci^).
+    pause & exit /b 1
+  )
+  popd
 )
 
 echo === Taxo : demarrage ===
