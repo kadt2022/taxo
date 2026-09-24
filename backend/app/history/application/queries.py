@@ -7,6 +7,7 @@ from app.history.domain.commit import ChangedFile, Commit, is_confidential
 from app.history.domain.diff import BINARY, CONFIDENTIAL, Blob, as_text, refusal, side_by_side
 from app.history.domain.errors import UNKNOWN_PARENT, UNKNOWN_PATH, HistoryError
 from app.history.domain.impact import compare, unknowns
+from app.history.domain.links import link
 from app.projects.application.queries import require_project
 from app.snapshots.domain.errors import SnapshotError
 from app.snapshots.domain.mode import COMMIT
@@ -78,6 +79,19 @@ class ProjectHistory:
         if None in texts:
             return {**result, 'displayable': False, 'reason': BINARY}
         return {**result, 'displayable': True, 'reason': None, 'hunks': side_by_side(*texts)}
+
+    def diff_facts(self, project_id, sha, path, parent=None):
+        """Faits changes par le commit dont une preuve porte sur ce fichier, relies aux lignes du diff."""
+        diff = self.diff(project_id, sha, path, parent)
+        _, base, evaluations = self.impact(project_id, sha, diff['parent'])
+        before_path = None if base is None or diff['status'] == 'ADDED' else diff['old_path'] or diff['path']
+        after_path = None if diff['status'] == 'DELETED' else diff['path']
+        changes = [{**change, 'evaluator_id': evaluation['evaluator_id']}
+                   for evaluation in evaluations for change in evaluation['changes']]
+        return {'path': diff['path'], 'commit': diff['commit'], 'parent': base,
+                'facts': link(changes, before_path, after_path, diff['hunks']),
+                'not_comparable': [evaluation['evaluator_id'] for evaluation in evaluations
+                                   if not evaluation['comparable']]}
 
     def impact(self, project_id, sha, parent=None):
         """Chaque evaluateur enregistre analyse le parent puis le commit ; les faits sont compares."""

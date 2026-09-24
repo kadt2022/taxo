@@ -28,6 +28,10 @@ def create_router(history):
     def diff(project_id: str, sha: str, path: str, parent: str | None = None):
         return history.diff(project_id, sha, path, parent)
 
+    @router.get('/api/projects/{project_id}/history/commits/{sha}/diff/facts', responses=_ERRORS)
+    def diff_facts(project_id: str, sha: str, path: str, parent: str | None = None):
+        return history.diff_facts(project_id, sha, path, parent)
+
     @router.get('/api/projects/{project_id}/history/commits/{sha}/impact', responses=_ERRORS)
     def impact(project_id: str, sha: str, parent: str | None = None):
         found, base, evaluations = history.impact(project_id, sha, parent)

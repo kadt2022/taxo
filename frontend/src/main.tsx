@@ -74,6 +74,8 @@ type DiffRow = {kind:'equal'|'changed'|'added'|'removed'; before:DiffLine|null; 
 type FileDiff = {path:string; old_path:string|null; status:string; commit:string; parent:string|null; displayable:boolean;
   reason:string|null; before:{path:string; size:number}|null; after:{path:string; size:number}|null;
   hunks:{before_start:number; after_start:number; rows:DiffRow[]}[]};
+type LinkedFact = FactChange & {evaluator_id:string; precision:'LINE'|'FILE'; lines:{before:number[]; after:number[]}};
+type DiffFacts = {path:string; commit:string; parent:string|null; facts:LinkedFact[]; not_comparable:string[]};
 const DIFF_REASONS:Record<string,string>={
   CONFIDENTIAL:'Fichier confidentiel : Taxo le nomme, mais n’affiche jamais son contenu.',
   BINARY:'Fichier binaire : il n’y a pas de diff texte à afficher.',
@@ -88,7 +90,27 @@ function DiffCode({line,changed}:Readonly<{line:DiffLine|null; changed:boolean}>
   return <><code>{line?.text??''}</code>{mark===''?null:<span className="eol">{mark}</span>}</>;
 }
 
-function DiffView({diff}:Readonly<{diff:FileDiff}>){
+function lineLabel(lines:LinkedFact['lines']){
+  const parts=[lines.before.length&&`avant ${lines.before.join(', ')}`,lines.after.length&&`après ${lines.after.join(', ')}`].filter(Boolean);
+  return parts.length?`ligne ${parts.join(' · ')}`:'fichier : aucune ligne modifiée ne porte sa preuve';
+}
+function LinkedFacts({links}:Readonly<{links:DiffFacts}>){
+  return <section className="linked-facts" aria-label="Faits touchés par ce fichier">
+    <h3>Faits Taxo touchés par ce fichier</h3>
+    {links.not_comparable.length>0&&<p role="alert" className="error">Comparaison impossible pour {links.not_comparable.join(', ')} : ses faits ne sont pas reliés.</p>}
+    {links.facts.length?<ul>{links.facts.map(f=><li key={f.evaluator_id+f.change+f.subject+f.relation+(f.before??'')+(f.after??'')}>
+      <strong>{CHANGE_LABELS[f.change]}</strong> <code>{f.subject}</code> {f.relation??f.kind}
+      {f.before===null&&f.after===null?null:<> : <code>{f.before??'∅'}</code> → <code>{f.after??'∅'}</code></>}
+      <span className={f.precision==='LINE'?'precision line':'precision'}>{lineLabel(f.lines)}</span>
+      <span className="muted"> · {f.evaluator_id} · {f.status}</span>
+    </li>)}</ul>:<p className="muted">Aucun fait changé par ce commit n’a sa preuve dans ce fichier.</p>}
+    <footer>Le lien passe par les preuves des faits, jamais par une lecture du texte. Seuls les faits que les évaluateurs savent produire sont reliés.</footer>
+  </section>;
+}
+
+function DiffView({diff,links}:Readonly<{diff:FileDiff; links:DiffFacts|null}>){
+  const marked={before:new Set(links?.facts.flatMap(f=>f.lines.before)),after:new Set(links?.facts.flatMap(f=>f.lines.after))};
+  const number=(line:DiffLine|null,side:'before'|'after')=>line&&marked[side].has(line.number)?<td className="number linked" title="Ligne reliée à un fait Taxo">◆ {line.number}</td>:<td className="number">{line?.number??''}</td>;
   const side=(label:string,value:FileDiff['before'],ref:string|null)=>value?`${label} — ${value.path}${ref?' @ '+ref.slice(0,7):''}`:`${label} — (aucun fichier)`;
   return <section className="diff-view" aria-label="Diff du fichier">
     <p className="eyebrow">DIFF — CE QUE GIT MONTRE</p>
@@ -101,11 +123,12 @@ function DiffView({diff}:Readonly<{diff:FileDiff}>){
       {diff.hunks.map(h=><tbody key={`${h.before_start}-${h.after_start}`}>
         <tr className="hunk"><td colSpan={4}>@@ ligne {h.before_start} → ligne {h.after_start}</td></tr>
         {h.rows.map(r=><tr key={`${r.before?.number??'-'}-${r.after?.number??'-'}`} className={'diff-'+r.kind}>
-          <td className="number">{r.before?.number??''}</td><td className={r.before&&r.kind!=='equal'?'removed':''}><DiffCode line={r.before} changed={r.kind!=='equal'}/></td>
-          <td className="number">{r.after?.number??''}</td><td className={r.after&&r.kind!=='equal'?'added':''}><DiffCode line={r.after} changed={r.kind!=='equal'}/></td>
+          {number(r.before,'before')}<td className={r.before&&r.kind!=='equal'?'removed':''}><DiffCode line={r.before} changed={r.kind!=='equal'}/></td>
+          {number(r.after,'after')}<td className={r.after&&r.kind!=='equal'?'added':''}><DiffCode line={r.after} changed={r.kind!=='equal'}/></td>
         </tr>)}
       </tbody>)}
     </table></div>}
+    {links&&<LinkedFacts links={links}/>}
   </section>;
 }
 const CHANGE_LABELS:Record<FactChange['change'],string>={INTRODUCED:'Ajouté',REMOVED:'Retiré',MODIFIED:'Modifié'};
@@ -113,13 +136,13 @@ const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DEL
 
 function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
-  const [impact,setImpact]=useState<Impact|null>(null), [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [error,setError]=useState(''), [busy,setBusy]=useState(false);
+  const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const base=`/projects/${projectId}/history/commits`;
   // Seule la derniere demande peut modifier l'ecran : une reponse arrivee trop tard est ignoree.
   const latest=useRef(0);
   useEffect(()=>{
     let active=true;
-    setCommits([]);setDetail(null);setImpact(null);setFileDiff(null);setError('');
+    setCommits([]);setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setError('');
     request<Commit[]>(`${base}?limit=10`).then(c=>{if(active)setCommits(c);}).catch(e=>{if(active)setError(e.message);});
     return ()=>{active=false;};
   },[base]);
@@ -130,10 +153,15 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
     catch(e){if(token===latest.current)setError((e as Error).message);}
     finally{if(token===latest.current)setBusy(false);}
   }
-  function open(sha:string){setImpact(null);setFileDiff(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
+  function open(sha:string){setImpact(null);setFileDiff(null);setLinks(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
   function compare(sha:string,path:string,parent:string|null){
     const query=new URLSearchParams({path});if(parent)query.set('parent',parent);
+    setLinks(null);
     return load<FileDiff>(`${base}/${sha}/diff?${query}`,setFileDiff);
+  }
+  function relate(diff:FileDiff){
+    const query=new URLSearchParams({path:diff.path});if(diff.parent)query.set('parent',diff.parent);
+    return load<DiffFacts>(`${base}/${diff.commit}/diff/facts?${query}`,setLinks);
   }
   function understand(sha:string){return load<Impact>(`${base}/${sha}/impact`,setImpact);}
   const date=(value:string)=>new Date(value).toLocaleString('fr-CA');
@@ -155,7 +183,10 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
       <div className="table-wrap"><table><thead><tr><th>Fichier</th><th>Changement</th><th>+ / −</th></tr></thead><tbody>
         {detail.files.map(f=><tr key={f.path}><td><button className="link" disabled={busy} onClick={()=>compare(detail.commit.sha,f.path,detail.parent)} aria-pressed={fileDiff?.path===f.path&&fileDiff.commit===detail.commit.sha}><code>{f.old_path?`${f.old_path} → ${f.path}`:f.path}</code></button>{f.confidential&&<span className="muted"> · confidentiel, contenu jamais affiché</span>}</td><td>{FILE_LABELS[f.status]??f.status}</td><td>{f.additions===null?'binaire':`+${f.additions} / −${f.deletions}`}</td></tr>)}
       </tbody></table></div>
-      {fileDiff&&fileDiff.commit===detail.commit.sha&&<DiffView diff={fileDiff}/>}
+      {fileDiff&&fileDiff.commit===detail.commit.sha&&<>
+        <DiffView diff={fileDiff} links={links&&links.commit===fileDiff.commit&&links.path===fileDiff.path?links:null}/>
+        <button className="secondary relate" disabled={busy} onClick={()=>relate(fileDiff)}>Relier ce diff aux faits Taxo</button>
+      </>}
       <button className="primary" disabled={busy} onClick={()=>understand(detail.commit.sha)}>{busy?'Analyse en cours…':'Ce que Taxo comprend de ce commit'}</button>
     </section>}
     {impact&&impact.commit.sha===detail?.commit.sha&&<section className="impact" aria-label="Impact compris par Taxo">

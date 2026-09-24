@@ -48,3 +48,4 @@
 }
 
 .diff .eol{margin-left:6px;padding:0 4px;border-radius:3px;font-size:.75em;opacity:.7;border:1px solid currentColor;white-space:nowrap}
+.diff td.number.linked{color:#193f35;font-weight:700;background:#d4f4ab}.relate{width:auto;margin:0 12px 16px 0}.linked-facts{margin-top:16px}.linked-facts h3{font-size:15px;margin:0 0 8px}.linked-facts ul{list-style:none;padding:0;margin:0}.linked-facts li{padding:10px 0;border-bottom:1px solid #edf0e8;line-height:1.7;overflow-wrap:anywhere}.precision{display:inline-block;margin-left:8px;padding:0 8px;border-radius:10px;font-size:12px;background:#edf3e4}.precision.line{background:#d4f4ab;font-weight:600}

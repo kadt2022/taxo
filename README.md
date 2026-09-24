@@ -101,6 +101,12 @@ droite, avec les numéros de ligne ; `…/commits/{sha}/diff?path=…&parent=…
 le commit est accepté. Aucun contenu n'est renvoyé pour un fichier confidentiel (`.env`, `.env.*`), un
 binaire, un fichier de plus de 1 Mo, un lien ou un sous-module : seule la raison est donnée. Le diff
 montre ce que Git a changé ; l'impact reste ce que Taxo en comprend.
+
+Le diff se relie ensuite aux faits (TAXO-HIST-03) : `…/commits/{sha}/diff/facts?path=…&parent=…` donne
+les faits changés par le commit dont une preuve porte sur ce fichier. Le lien est `LINE` quand la plage
+de lignes d'une preuve recouvre une ligne modifiée (elle est marquée ◆ dans le diff), `FILE` sinon. Il
+passe uniquement par les preuves, jamais par une lecture du texte. L'inventaire, seul évaluateur du
+produit aujourd'hui, prouve par fichier entier : ses liens sont donc `FILE`.
 L'impact sur les chaînes d'autorisation passe encore par le POC Spring, hors produit :
 `py -m poc.authchain.impact --root <dépôt> --commit <sha>` (résultat marqué `provisional`).
 
