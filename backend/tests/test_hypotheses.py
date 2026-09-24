@@ -203,7 +203,7 @@ def test_the_smollm_adapter_scores_labels_from_logits(tmp_path):
     files = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in source.iterdir()}
     path = tmp_path / 'models.json'
     path.write_text(json.dumps({'tiny': {'family': 'llama', 'repository': 'local/tiny',
-                                         'revision': 'r1', 'files': files}}))
+                                         'revision': 'e' * 40, 'files': files}}))
 
     class Local:
         def download(self, url, destination):
@@ -214,4 +214,169 @@ def test_the_smollm_adapter_scores_labels_from_logits(tmp_path):
     assert model.identity.parameter_count > 0
     scores = model.score(REPRESENTATION)
     assert set(scores) == set(WHO_CAN_CALL.labels)
+    assert abs(sum(scores.values()) - 1) < 1e-9
+
+
+def test_names_revisions_and_files_cannot_escape_the_models_directory(tmp_path):
+    transport = Transport(CONTENTS)
+    for name, entry in {
+        '../evil': {'repository': 'org/tiny', 'revision': 'c' * 40, 'files': {'config.json': 'a'}},
+        'tiny': {'repository': 'org/tiny', 'revision': '../../etc', 'files': {'config.json': 'a'}},
+        'tiny2': {'repository': 'org/tiny', 'revision': 'c' * 40, 'files': {'../config.json': 'a'}},
+        'tiny3': {'repository': 'https://evil.example/x', 'revision': 'c' * 40, 'files': {'config.json': 'a'}},
+    }.items():
+        path = tmp_path / f'{len(name)}-{name.replace("/", "_")}.json'
+        path.write_text(json.dumps({name: {'family': 'tiny', **entry}}))
+        with pytest.raises(ModelStoreError, match='invalide'):
+            store(tmp_path, transport, path).ensure(name)
+    assert transport.downloads == []
+
+
+def test_a_recorded_revision_must_be_a_commit(tmp_path):
+    path = manifest(tmp_path, revision=None, files={'config.json': None})
+    with pytest.raises(ModelStoreError, match='Revision invalide'):
+        store(tmp_path, Transport(CONTENTS, revision='main'), path).ensure('tiny', record=True)
+
+
+def test_a_target_outside_the_root_is_refused(tmp_path):
+    models = store(tmp_path, Transport(CONTENTS), manifest(tmp_path))
+    with pytest.raises(ModelStoreError, match='hors du repertoire'):
+        models._inside(tmp_path / 'elsewhere')
+
+
+def test_the_default_root_follows_the_environment(monkeypatch, tmp_path):
+    from app.hypotheses.infrastructure.model_store import default_root
+
+    monkeypatch.setenv('TAXO_MODELS_DIR', str(tmp_path))
+    assert default_root() == tmp_path
+    monkeypatch.delenv('TAXO_MODELS_DIR')
+    assert default_root().parts[-3:] == ('.cache', 'taxo', 'models')
+
+
+def test_the_hub_transport_only_talks_to_the_hub(monkeypatch, tmp_path):
+    import io
+    from app.hypotheses.infrastructure import model_store
+
+    opened = []
+
+    def urlopen(url, timeout):
+        opened.append(url)
+        return io.BytesIO(b'{"sha": "abc"}')
+
+    monkeypatch.setattr(model_store.urllib.request, 'urlopen', urlopen)
+    transport = model_store.HubTransport()
+    transport.download('https://huggingface.co/org/tiny/resolve/x/config.json', tmp_path / 'config.json')
+    assert (tmp_path / 'config.json').read_bytes() == b'{"sha": "abc"}'
+    assert transport.json('https://huggingface.co/api/models/org/tiny/revision/main') == {'sha': 'abc'}
+    for url in ('http://huggingface.co/x', 'https://huggingface.co.evil.example/x', 'file:///etc/passwd'):
+        with pytest.raises(ModelStoreError, match='autorise'):
+            transport.json(url)
+    assert len(opened) == 2
+
+
+def test_the_command_reports_status_and_refuses_an_unpinned_model(monkeypatch, tmp_path, capsys):
+    from app.hypotheses.__main__ import main
+
+    monkeypatch.setenv('TAXO_MODELS_DIR', str(tmp_path))
+    assert main(['status']) == 0
+    assert 'unpinned  model.safetensors' in capsys.readouterr().out
+    assert main(['fetch']) == 1
+    assert "n'est pas epingle" in capsys.readouterr().err
+    assert main(['status', 'inconnu']) == 1
+
+
+class FakeTensor:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            row, column = key
+            return FakeScalar(self.rows[row][column])
+        return FakeTensor(self.rows[key])
+
+
+class FakeScalar:
+    def __init__(self, value):
+        self.value = value
+
+    def item(self):
+        return self.value
+
+
+class FakeTorch:
+    """Juste ce que l'adaptateur appelle, pour l'exercer la ou torch n'est pas installe (CI)."""
+
+    tensor = FakeTensor
+
+    class no_grad:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    @staticmethod
+    def log_softmax(logits, dim):
+        import math
+        rows = []
+        for row in logits.rows:
+            top = max(row)
+            total = math.log(sum(math.exp(value - top) for value in row)) + top
+            rows.append([value - total for value in row])
+        return FakeTensor(rows)
+
+
+VOCABULARY = {'answer': 0, 'authenticated': 1, 'only': 2, 'public': 3, 'restricted': 4}
+
+
+class FakeTokenizer:
+    def __call__(self, text, add_special_tokens=True):
+        return {'input_ids': [VOCABULARY.get(word.strip(':').lower(), 0) for word in text.split()]}
+
+
+class FakeCausalModel:
+    """Predit toujours `restricted` : l'adaptateur doit le lire dans les logits."""
+
+    def eval(self):
+        return self
+
+    def num_parameters(self):
+        return 123
+
+    def __call__(self, ids):
+        length = len(ids.rows[0])
+        row = [0.0, 0.0, 0.0, 0.0, 5.0]
+
+        class Output:
+            logits = FakeTensor([[row] * length])
+        return Output()
+
+
+def test_the_smollm_adapter_loads_safely_and_reads_scores_from_logits(monkeypatch, tmp_path):
+    import types
+    from app.hypotheses.infrastructure.smollm import SmolLmHypothesisModel
+
+    calls = []
+
+    def loader(result):
+        def from_pretrained(directory, **options):
+            calls.append(options)
+            return result
+        return types.SimpleNamespace(from_pretrained=from_pretrained)
+
+    fake_transformers = types.SimpleNamespace(AutoTokenizer=loader(FakeTokenizer()),
+                                              AutoModelForCausalLM=loader(FakeCausalModel()))
+    monkeypatch.setitem(sys.modules, 'torch', FakeTorch)
+    monkeypatch.setitem(sys.modules, 'transformers', fake_transformers)
+    contents = {'model.safetensors': b'weights'}
+    path = tmp_path / 'models.json'
+    path.write_text(json.dumps({'tiny': {'family': 'llama', 'repository': 'org/tiny', 'revision': 'c' * 40,
+                                         'files': {'model.safetensors': hashlib.sha256(b'weights').hexdigest()}}}))
+    model = SmolLmHypothesisModel.load(store(tmp_path, Transport(contents), path), 'tiny')
+    assert all(options['local_files_only'] and options['trust_remote_code'] is False for options in calls)
+    assert calls[1]['use_safetensors'] is True, 'aucun poids pickle ne doit etre charge'
+    assert model.identity.parameter_count == 123
+    scores = model.score(REPRESENTATION)
+    assert max(scores, key=scores.get) == 'RESTRICTED'
     assert abs(sum(scores.values()) - 1) < 1e-9

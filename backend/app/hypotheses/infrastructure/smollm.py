@@ -31,8 +31,11 @@ class SmolLmHypothesisModel:
 
         entry = store.entry(name)
         directory = store.ensure(name)
-        tokenizer = AutoTokenizer.from_pretrained(directory, local_files_only=True)
-        model = AutoModelForCausalLM.from_pretrained(directory, local_files_only=True)
+        # Poids verifies par le magasin, lus en local, au format safetensors seulement : aucun code
+        # distant n'est execute et aucun fichier pickle n'est deserialise.
+        options = {'local_files_only': True, 'trust_remote_code': False}
+        tokenizer = AutoTokenizer.from_pretrained(directory, **options)
+        model = AutoModelForCausalLM.from_pretrained(directory, use_safetensors=True, **options)
         model.eval()
         identity = ModelIdentity(entry['family'], name, entry['revision'], model.num_parameters(),
                                  entry['files']['model.safetensors'])

@@ -7,6 +7,7 @@ premiere fois, et le resultat doit etre relu puis commite.
 import hashlib
 import json
 import os
+import re
 import shutil
 import urllib.request
 from pathlib import Path
@@ -14,6 +15,12 @@ from pathlib import Path
 MANIFEST_PATH = Path(__file__).with_name('models.json')
 HUB = 'https://huggingface.co'
 _CHUNK = 1 << 20
+# Tout ce qui devient un chemin ou une URL est valide avant usage : un nom, une revision ou un
+# fichier du manifeste ne peut jamais sortir du repertoire des modeles ni viser un autre hote.
+_NAME = re.compile(r'[a-z0-9][a-z0-9.-]{0,63}')
+_REPOSITORY = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*')
+_REVISION = re.compile(r'[0-9a-f]{40}')
+_FILENAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*')
 
 
 class ModelStoreError(Exception):
@@ -32,13 +39,25 @@ def sha256_of(path):
     return digest.hexdigest()
 
 
+def _checked(pattern, value, what):
+    if not isinstance(value, str) or not pattern.fullmatch(value):
+        raise ModelStoreError(f'{what} invalide : {value!r}.')
+    return value
+
+
+def _open_hub(url):
+    if not url.startswith(HUB + '/'):
+        raise ModelStoreError(f'Seul {HUB} est autorise : {url}.')
+    return urllib.request.urlopen(url, timeout=60)
+
+
 class HubTransport:
     def download(self, url, destination):
-        with urllib.request.urlopen(url, timeout=60) as response, open(destination, 'wb') as out:
+        with _open_hub(url) as response, open(destination, 'wb') as out:
             shutil.copyfileobj(response, out, _CHUNK)
 
     def json(self, url):
-        with urllib.request.urlopen(url, timeout=60) as response:
+        with _open_hub(url) as response:
             return json.load(response)
 
 
@@ -56,7 +75,14 @@ class ModelStore:
         models = self.manifest()
         if name not in models:
             raise ModelStoreError(f'Modele inconnu : {name}. Connus : {", ".join(sorted(models))}.')
-        return models[name]
+        _checked(_NAME, name, 'Nom de modele')
+        entry = models[name]
+        _checked(_REPOSITORY, entry['repository'], 'Depot source')
+        if entry.get('revision') is not None:
+            _checked(_REVISION, entry['revision'], 'Revision')
+        for filename in entry['files']:
+            _checked(_FILENAME, filename, 'Nom de fichier')
+        return entry
 
     def directory(self, name):
         entry = self.entry(name)
@@ -107,7 +133,15 @@ class ModelStore:
             return 'missing'
         return 'ok' if sha256_of(path) == expected else 'corrupt'
 
+    def _inside(self, path):
+        root = self.root.resolve()
+        resolved = path.resolve()
+        if resolved != root and root not in resolved.parents:
+            raise ModelStoreError(f'Chemin hors du repertoire des modeles : {path}.')
+        return path
+
     def _download(self, entry, filename, target, expected):
+        target = self._inside(target)
         partial = target.with_name(target.name + '.part')
         url = f'{HUB}/{entry["repository"]}/resolve/{entry["revision"]}/{filename}'
         try:
@@ -121,14 +155,14 @@ class ModelStore:
 
     def _record(self, name, entry):
         """Premier epinglage : revision resolue, fichiers telecharges, empreintes inscrites."""
-        revision = entry.get('revision') or self.transport.json(
-            f'{HUB}/api/models/{entry["repository"]}/revision/main')['sha']
+        revision = entry.get('revision') or _checked(_REVISION, self.transport.json(
+            f'{HUB}/api/models/{entry["repository"]}/revision/main').get('sha'), 'Revision')
         self.log(f'[Taxo] {name} : epinglage de la revision {revision}.')
         directory = self.root / name / revision
         directory.mkdir(parents=True, exist_ok=True)
         files = {}
         for filename in entry['files']:
-            partial = directory / (filename + '.part')
+            partial = self._inside(directory / (filename + '.part'))
             try:
                 self.transport.download(f'{HUB}/{entry["repository"]}/resolve/{revision}/{filename}', partial)
                 files[filename] = sha256_of(partial)
