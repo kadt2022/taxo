@@ -17,13 +17,13 @@
     "repository": "HuggingFaceTB/SmolLM2-135M-Instruct",
     "license": "Apache-2.0",
     "usage": "CLI experimentale backend/lab/clochette_chat.py uniquement ; jamais TAXO-LAB-01",
-    "revision": null,
+    "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
     "files": {
-      "config.json": null,
-      "model.safetensors": null,
-      "special_tokens_map.json": null,
-      "tokenizer.json": null,
-      "tokenizer_config.json": null
+      "config.json": "8eb740e8bbe4cff95ea7b4588d17a2432deb16e8075bc5828ff7ba9be94d982a",
+      "model.safetensors": "5af571cbf074e6d21a03528d2330792e532ca608f24ac70a143f6b369968ab8c",
+      "special_tokens_map.json": "2b7379f3ae813529281a5c602bc5a11c1d4e0a99107aaa597fe936c1e813ca52",
+      "tokenizer.json": "9ca9acddb6525a194ec8ac7a87f24fbba7232a9a15ffa1af0c1224fcd888e47c",
+      "tokenizer_config.json": "4ec77d44f62efeb38d7e044a1db318f6a939438425312dfa333b8382dbad98df"
     }
   }
 }
