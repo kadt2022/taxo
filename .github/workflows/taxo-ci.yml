@@ -90,6 +90,18 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install locked frontend dependencies
         run: npm ci
+      - name: Test frontend with coverage
+        # Chemins de l'lcov rendus relatifs a la racine du depot, comme les sources declarees a Sonar.
+        run: |
+          npm test
+          sed -i 's#^SF:src/#SF:frontend/src/#' coverage/lcov.info
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v6
+        with:
+          name: taxo-frontend-coverage
+          path: frontend/coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 7
       - name: Type-check and build frontend
         run: npm run build
       - name: Upload frontend build
@@ -209,6 +221,11 @@ jobs:
         with:
           name: taxo-backend-tests
           path: backend/reports
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v6
+        with:
+          name: taxo-frontend-coverage
+          path: frontend/coverage
       - name: Run SonarQube Cloud analysis and wait for Quality Gate
         uses: SonarSource/sonarqube-scan-action@v8
         env:
@@ -218,9 +235,12 @@ jobs:
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.sources=backend/app,frontend/src
-            -Dsonar.tests=backend/tests
+            -Dsonar.exclusions=frontend/src/**/*.test.ts
+            -Dsonar.tests=backend/tests,frontend/src
+            -Dsonar.test.inclusions=backend/tests/**,frontend/src/**/*.test.ts
             -Dsonar.python.version=3.12
             -Dsonar.python.coverage.reportPaths=backend/reports/coverage.xml
+            -Dsonar.javascript.lcov.reportPaths=frontend/coverage/lcov.info
             -Dsonar.sourceEncoding=UTF-8
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=300

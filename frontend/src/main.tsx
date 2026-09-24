@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {createRoot} from 'react-dom/client';
 import './style.css';
+import {diffFactsPath, lineLabel, linksFor, markedLines, type LinkLines} from './links';
 
 type Project = {id:string; name:string; path:string};
 type SnapshotReference = {repository:string; commit:string; mode:'COMMIT'|'WORKING_TREE'; dirty?:boolean; content_fingerprint?:string};
@@ -74,7 +75,7 @@ type DiffRow = {kind:'equal'|'changed'|'added'|'removed'; before:DiffLine|null; 
 type FileDiff = {path:string; old_path:string|null; status:string; commit:string; parent:string|null; displayable:boolean;
   reason:string|null; before:{path:string; size:number}|null; after:{path:string; size:number}|null;
   hunks:{before_start:number; after_start:number; rows:DiffRow[]}[]};
-type LinkedFact = FactChange & {evaluator_id:string; precision:'LINE'|'FILE'; lines:{before:number[]; after:number[]}};
+type LinkedFact = FactChange & {evaluator_id:string; precision:'LINE'|'FILE'; lines:LinkLines};
 type DiffFacts = {path:string; commit:string; parent:string|null; facts:LinkedFact[]; not_comparable:string[]};
 const DIFF_REASONS:Record<string,string>={
   CONFIDENTIAL:'Fichier confidentiel : Taxo le nomme, mais n’affiche jamais son contenu.',
@@ -90,10 +91,6 @@ function DiffCode({line,changed}:Readonly<{line:DiffLine|null; changed:boolean}>
   return <><code>{line?.text??''}</code>{mark===''?null:<span className="eol">{mark}</span>}</>;
 }
 
-function lineLabel(lines:LinkedFact['lines']){
-  const parts=[lines.before.length&&`avant ${lines.before.join(', ')}`,lines.after.length&&`après ${lines.after.join(', ')}`].filter(Boolean);
-  return parts.length?`ligne ${parts.join(' · ')}`:'fichier : aucune ligne modifiée ne porte sa preuve';
-}
 function LinkedFacts({links}:Readonly<{links:DiffFacts}>){
   return <section className="linked-facts" aria-label="Faits touchés par ce fichier">
     <h3>Faits Taxo touchés par ce fichier</h3>
@@ -109,7 +106,7 @@ function LinkedFacts({links}:Readonly<{links:DiffFacts}>){
 }
 
 function DiffView({diff,links}:Readonly<{diff:FileDiff; links:DiffFacts|null}>){
-  const marked={before:new Set(links?.facts.flatMap(f=>f.lines.before)),after:new Set(links?.facts.flatMap(f=>f.lines.after))};
+  const marked=markedLines(links?.facts??[]);
   const number=(line:DiffLine|null,side:'before'|'after')=>line&&marked[side].has(line.number)?<td className="number linked" title="Ligne reliée à un fait Taxo">◆ {line.number}</td>:<td className="number">{line?.number??''}</td>;
   const side=(label:string,value:FileDiff['before'],ref:string|null)=>value?`${label} — ${value.path}${ref?' @ '+ref.slice(0,7):''}`:`${label} — (aucun fichier)`;
   return <section className="diff-view" aria-label="Diff du fichier">
@@ -160,8 +157,7 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
     return load<FileDiff>(`${base}/${sha}/diff?${query}`,setFileDiff);
   }
   function relate(diff:FileDiff){
-    const query=new URLSearchParams({path:diff.path});if(diff.parent)query.set('parent',diff.parent);
-    return load<DiffFacts>(`${base}/${diff.commit}/diff/facts?${query}`,setLinks);
+    return load<DiffFacts>(diffFactsPath(base,diff),setLinks);
   }
   function understand(sha:string){return load<Impact>(`${base}/${sha}/impact`,setImpact);}
   const date=(value:string)=>new Date(value).toLocaleString('fr-CA');
@@ -184,7 +180,7 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
         {detail.files.map(f=><tr key={f.path}><td><button className="link" disabled={busy} onClick={()=>compare(detail.commit.sha,f.path,detail.parent)} aria-pressed={fileDiff?.path===f.path&&fileDiff.commit===detail.commit.sha}><code>{f.old_path?`${f.old_path} → ${f.path}`:f.path}</code></button>{f.confidential&&<span className="muted"> · confidentiel, contenu jamais affiché</span>}</td><td>{FILE_LABELS[f.status]??f.status}</td><td>{f.additions===null?'binaire':`+${f.additions} / −${f.deletions}`}</td></tr>)}
       </tbody></table></div>
       {fileDiff&&fileDiff.commit===detail.commit.sha&&<>
-        <DiffView diff={fileDiff} links={links&&links.commit===fileDiff.commit&&links.path===fileDiff.path?links:null}/>
+        <DiffView diff={fileDiff} links={linksFor(links,fileDiff)}/>
         <button className="secondary relate" disabled={busy} onClick={()=>relate(fileDiff)}>Relier ce diff aux faits Taxo</button>
       </>}
       <button className="primary" disabled={busy} onClick={()=>understand(detail.commit.sha)}>{busy?'Analyse en cours…':'Ce que Taxo comprend de ce commit'}</button>
