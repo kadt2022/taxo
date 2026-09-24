@@ -73,50 +73,56 @@ class ModelStore:
         return json.loads(self.manifest_path.read_text(encoding='utf-8'))
 
     def entry(self, name):
+        return self._lookup(name)[1]
+
+    def _lookup(self, name):
+        """Cle et entree du manifeste. Le nom demande sert seulement a chercher : chemins et URL sont
+        construits avec la cle lue dans le manifeste, jamais avec le texte fourni par l'appelant."""
         models = self.manifest()
-        if name not in models:
-            raise ModelStoreError(f'Modele inconnu : {name}. Connus : {", ".join(sorted(models))}.')
-        _checked(_NAME, name, 'Nom de modele')
-        entry = models[name]
+        key = next((known for known in models if known == name), None)
+        if key is None:
+            raise ModelStoreError(f'Modele inconnu. Connus : {", ".join(sorted(models))}.')
+        _checked(_NAME, key, 'Nom de modele')
+        entry = models[key]
         _checked(_REPOSITORY, entry['repository'], 'Depot source')
         if entry.get('revision') is not None:
             _checked(_REVISION, entry['revision'], 'Revision')
         for filename in entry['files']:
             _checked(_FILENAME, filename, 'Nom de fichier')
-        return entry
+        return key, entry
 
     def directory(self, name):
-        entry = self.entry(name)
+        key, entry = self._lookup(name)
         if not self._pinned(entry):
-            raise self._unpinned(name)
-        return self.root / name / entry['revision']
+            raise self._unpinned(key)
+        return self._inside(self.root / key / entry['revision'])
 
     def status(self, name):
-        entry = self.entry(name)
+        key, entry = self._lookup(name)
         if not self._pinned(entry):
             return {filename: 'unpinned' for filename in entry['files']}
-        directory = self.root / name / entry['revision']
+        directory = self._inside(self.root / key / entry['revision'])
         return {filename: self._state(directory / filename, expected)
                 for filename, expected in entry['files'].items()}
 
     def ensure(self, name, record=False):
         """Repertoire du modele, telecharge et verifie si besoin ; aucun fichier douteux n'y reste."""
-        entry = self.entry(name)
+        key, entry = self._lookup(name)
         if not self._pinned(entry):
             if not record:
-                raise self._unpinned(name)
-            entry = self._record(name, entry)
-        directory = self.root / name / entry['revision']
+                raise self._unpinned(key)
+            entry = self._record(key, entry)
+        directory = self._inside(self.root / key / entry['revision'])
         directory.mkdir(parents=True, exist_ok=True)
         for filename, expected in entry['files'].items():
             target = directory / filename
             state = self._state(target, expected)
             if state == 'ok':
                 continue
-            self.log(f'[Taxo] {name} : {filename} {"absent" if state == "missing" else "altere"}, '
+            self.log(f'[Taxo] {key} : {filename} {"absent" if state == "missing" else "altere"}, '
                      'telechargement...')
             self._download(entry, filename, target, expected)
-        self.log(f'[Taxo] {name} pret ({entry["revision"][:12]}), empreintes verifiees.')
+        self.log(f'[Taxo] {key} pret ({entry["revision"][:12]}), empreintes verifiees.')
         return directory
 
     @staticmethod
@@ -160,7 +166,7 @@ class ModelStore:
         revision = entry.get('revision') or _checked(_REVISION, self.transport.json(
             f'{HUB}/api/models/{entry["repository"]}/revision/main').get('sha'), 'Revision')
         self.log(f'[Taxo] {name} : epinglage de la revision {revision}.')
-        directory = self.root / name / revision
+        directory = self._inside(self.root / name / revision)
         directory.mkdir(parents=True, exist_ok=True)
         files = {}
         for filename in entry['files']:

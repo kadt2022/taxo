@@ -464,3 +464,14 @@ def test_the_shipped_instruct_manifest_is_pinned_to_an_immutable_revision():
         pytest.skip('Variante Instruct pas encore epinglee : maintenance `fetch smollm2-135m-instruct --record`')
     assert len(entry['revision']) == 40 and all(c in '0123456789abcdef' for c in entry['revision'])
     assert all(len(digest) == 64 for digest in entry['files'].values())
+
+
+def test_a_requested_name_only_selects_a_manifest_key(tmp_path):
+    transport = Transport(CONTENTS)
+    models = store(tmp_path, transport, manifest(tmp_path))
+    with pytest.raises(ModelStoreError) as refused:
+        models.ensure('../../etc/passwd')
+    assert '../../etc/passwd' not in str(refused.value), 'le texte demande ne ressort jamais'
+    assert 'Connus : tiny' in str(refused.value)
+    assert transport.downloads == []
+    assert models.directory('tiny') == tmp_path / 'models' / 'tiny' / ('c' * 40)
