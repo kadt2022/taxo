@@ -124,6 +124,8 @@ def test_the_api_serves_history_detail_and_impact(history, tmp_path):
         impact = client.get(f'{base}/{second}/impact').json()
         inventory = impact['evaluations'][0]
         assert inventory['evaluator_id'] == 'taxo.inventory'
+        assert inventory['comparable'] is True
+        assert {'not_interpreted_before', 'not_interpreted_after'} <= inventory.keys()
         introduced = {(item['relation'], item['after']) for item in inventory['changes'] if item['change'] == INTRODUCED}
         assert ('USES_TECHNOLOGY', 'technology:React') in introduced
         assert ('CONTAINS', 'file:package.json') in introduced

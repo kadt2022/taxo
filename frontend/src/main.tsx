@@ -67,7 +67,7 @@ type Commit = {sha:string; parents:string[]; author:string; authored_at:string; 
 type ChangedFile = {path:string; status:string; old_path:string|null; additions:number|null; deletions:number|null; confidential:boolean};
 type CommitDetail = {commit:Commit; parent:string|null; files:ChangedFile[]};
 type FactChange = {change:'INTRODUCED'|'REMOVED'|'MODIFIED'; kind:string; subject:string; relation:string|null; status:string; before:string|null; after:string|null};
-type Evaluation = {evaluator_id:string; producer_version:string; comparable:boolean; failures:string[]; changes:FactChange[]; unchanged_count:number; not_interpreted_after:string[]};
+type Evaluation = {evaluator_id:string; producer_version:string; comparable:boolean; failures:string[]; changes:FactChange[]; unchanged_count:number; not_interpreted_before:string[]; not_interpreted_after:string[]};
 type Impact = {commit:Commit; parent:string|null; evaluations:Evaluation[]};
 const CHANGE_LABELS:Record<FactChange['change'],string>={INTRODUCED:'Ajouté',REMOVED:'Retiré',MODIFIED:'Modifié'};
 const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DELETED:'Supprimé',RENAMED:'Renommé',COPIED:'Copié',TYPE_CHANGED:'Type modifié'};
@@ -94,6 +94,8 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   function open(sha:string){setImpact(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
   function understand(sha:string){return load<Impact>(`${base}/${sha}/impact`,setImpact);}
   const date=(value:string)=>new Date(value).toLocaleString('fr-CA');
+  // Les deux cotes comptent : une zone non lue avant le commit rend la comparaison incomplete aussi.
+  const gaps=(side:string,zones:string[])=>zones.length?`Zones non interprétées ${side} : ${zones.join(', ')}.`:`Aucune zone non interprétée ${side}.`;
   return <section className="results history" aria-label="Historique Git">
     <div className="section-heading"><div><h2>Historique Git</h2><p>Les 10 derniers commits, lus directement dans Git, et ce que Taxo comprend de chacun.</p></div></div>
     {error&&<div role="alert" className="error">{error}</div>}
@@ -118,7 +120,7 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
         {!e.comparable?<p role="alert" className="error">Comparaison impossible : l’analyse a échoué ({e.failures.join(' ; ')}). Taxo n’affiche aucun changement plutôt que d’en inventer.</p>:e.changes.length?<div className="table-wrap"><table><thead><tr><th>Changement</th><th>Sujet</th><th>Relation</th><th>Avant</th><th>Après</th><th>Statut</th></tr></thead><tbody>
           {e.changes.map(c=><tr key={c.change+c.subject+c.relation+(c.before??'')+(c.after??'')}><td>{CHANGE_LABELS[c.change]}</td><td><code>{c.subject}</code></td><td>{c.relation??c.kind}</td><td><code>{c.before??''}</code></td><td><code>{c.after??''}</code></td><td>{c.status}</td></tr>)}
         </tbody></table></div>:<p className="muted">Aucun fait changé parmi ceux que cet évaluateur sait produire.</p>}
-        {e.comparable&&<footer>{e.unchanged_count.toLocaleString('fr-CA')} faits inchangés. {e.not_interpreted_after.length?`Zones non interprétées : ${e.not_interpreted_after.join(', ')}.`:'Aucune zone non interprétée.'} Seuls les faits que cet évaluateur sait produire sont comparés : l’absence de changement ici ne prouve pas l’absence de changement ailleurs.</footer>}
+        {e.comparable&&<footer>{e.unchanged_count.toLocaleString('fr-CA')} faits inchangés. {gaps('avant le commit',e.not_interpreted_before)} {gaps('après le commit',e.not_interpreted_after)} Seuls les faits que cet évaluateur sait produire sont comparés : l’absence de changement ici ne prouve pas l’absence de changement ailleurs.</footer>}
       </div>)}
     </section>}
   </section>;
