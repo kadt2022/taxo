@@ -1,19 +1,20 @@
-"""CLOCHETTE LAB : conversation experimentale et locale avec SmolLM2-135M.
+"""CLOCHETTE LAB : conversation experimentale et locale avec SmolLM2-135M-Instruct.
 
     cd backend
     py -m lab.clochette_chat
 
 Hors produit : aucune API, aucun branchement FastAPI, et aucune reponse ne devient un fait Taxo.
 Les poids viennent uniquement du cache TAXO_MODELS_DIR, a la revision epinglee de models.json, apres
-verification de chaque empreinte SHA-256 ; aucun telechargement n'est tente. SmolLM2-135M est un
-modele de base, pas la variante -Instruct : il n'a pas ete entraine a converser.
+verification de chaque empreinte SHA-256 ; aucun telechargement n'est tente. La conversation passe
+obligatoirement par le chat template officiel du tokenizer. Le modele de base `smollm2-135m`, celui de
+TAXO-LAB-01, n'est jamais utilise ici.
 """
 import argparse
 import os
 
 from app.hypotheses.infrastructure.model_store import MANIFEST_PATH, ModelStore, ModelStoreError
 
-MODEL = 'smollm2-135m'
+MODEL = 'smollm2-135m-instruct'
 USER, ASSISTANT = 'Pi', 'Clochette'
 HISTORY_TURNS = 4
 MAX_INPUT_TOKENS = 1024
@@ -38,18 +39,11 @@ def recent(history, turns=HISTORY_TURNS):
     return history[-2 * turns:]
 
 
-def plain_prompt(messages):
-    """Format explicite quand le tokenizer n'a pas de chat template."""
-    speakers = {'user': USER, 'assistant': ASSISTANT}
-    lines = [f'{speakers[message["role"]]}: {message["content"]}' for message in messages]
-    return '\n'.join(lines) + f'\n{ASSISTANT}:'
-
-
-def first_reply(text):
-    """Le modele continue souvent le dialogue a notre place : on garde sa premiere reponse."""
-    for marker in (f'\n{USER}:', f'\n{USER} >', f'\n{ASSISTANT}:'):
-        text = text.split(marker, 1)[0]
-    return text.strip()
+def require_chat_template(tokenizer):
+    """Pas de format de secours : sans chat template officiel, Clochette ne converse pas."""
+    if not getattr(tokenizer, 'chat_template', None):
+        raise ModelStoreError(f'Le tokenizer de {MODEL} ne fournit pas de chat template : conversation refusee.')
+    return tokenizer
 
 
 class Clochette:
@@ -60,23 +54,17 @@ class Clochette:
 
         options = {'local_files_only': True, 'trust_remote_code': False}
         self._torch = torch
-        self.tokenizer = AutoTokenizer.from_pretrained(directory, **options)
+        self.tokenizer = require_chat_template(AutoTokenizer.from_pretrained(directory, **options))
         self.model = AutoModelForCausalLM.from_pretrained(directory, use_safetensors=True, **options)
         self.model.eval()
-        self.templated = bool(getattr(self.tokenizer, 'chat_template', None))
 
     def reply(self, history):
-        messages = recent(history)
-        if self.templated:
-            ids = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True,
-                                                     return_tensors='pt')['input_ids']
-        else:
-            ids = self.tokenizer(plain_prompt(messages), return_tensors='pt')['input_ids']
-        ids = ids[:, -MAX_INPUT_TOKENS:]
+        ids = self.tokenizer.apply_chat_template(recent(history), add_generation_prompt=True, return_dict=True,
+                                                 return_tensors='pt')['input_ids'][:, -MAX_INPUT_TOKENS:]
         with self._torch.no_grad():
             output = self.model.generate(ids, attention_mask=self._torch.ones_like(ids),
                                          pad_token_id=self.tokenizer.eos_token_id, **GENERATION)
-        return first_reply(self.tokenizer.decode(output[0, ids.shape[1]:], skip_special_tokens=True))
+        return self.tokenizer.decode(output[0, ids.shape[1]:], skip_special_tokens=True).strip()
 
 
 def main(argv=None, read=input, write=print, model_factory=Clochette):
@@ -90,9 +78,12 @@ def main(argv=None, read=input, write=print, model_factory=Clochette):
         write(f'[Clochette] {exc}')
         return 1
     write(BANNER)
-    clochette = model_factory(directory)
-    fmt = 'chat template du tokenizer' if clochette.templated else 'dialogue simple « Pi: / Clochette: »'
-    write(f'(modèle de base SmolLM2-135M, révision {directory.name[:12]}, format : {fmt} ; /reset vide '
+    try:
+        clochette = model_factory(directory)
+    except ModelStoreError as exc:
+        write(f'[Clochette] {exc}')
+        return 1
+    write(f'(SmolLM2-135M-Instruct, révision {directory.name[:12]}, chat template officiel ; /reset vide '
           f'l\'historique, {HISTORY_TURNS} derniers échanges conservés)\n')
     history = []
     while True:

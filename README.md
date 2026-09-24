@@ -104,9 +104,11 @@ Docker, `TAXO_HYPOTHESES=smollm2-135m docker compose up` installe Clochette au p
 volume `taxo_models`, réutilisé ensuite. Exécuter le modèle demande en plus
 `pip install -r backend/requirements-hypotheses.txt`.
 
-Pour converser avec Clochette en local, à titre expérimental et hors produit (cache vérifié, aucun
-téléchargement, aucune réponse ne devient un fait) : depuis `backend`, `py -m lab.clochette_chat`,
-après `py -m pip install -r requirements-hypotheses.txt`.
+Pour converser avec Clochette en local, à titre expérimental et hors produit (cache vérifié, chat
+template officiel, aucun téléchargement, aucune réponse ne devient un fait), le laboratoire utilise la
+variante `smollm2-135m-instruct`, distincte du modèle de base de TAXO-LAB-01 : depuis `backend`,
+`py -m app.hypotheses fetch smollm2-135m-instruct`, puis `py -m lab.clochette_chat`, après
+`py -m pip install -r requirements-hypotheses.txt`.
 
 Une hypothèse n'est pas un fait : elle n'entre jamais dans la mémoire et aucune API ne l'expose tant
 que TAXO-LAB-01 n'a pas conclu.

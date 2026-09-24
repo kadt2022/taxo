@@ -11,5 +11,19 @@
       "tokenizer.json": "9ca9acddb6525a194ec8ac7a87f24fbba7232a9a15ffa1af0c1224fcd888e47c",
       "tokenizer_config.json": "4bb9af56a342753d39374f4016a16574cab299fe088e896f425ce3c433f61424"
     }
+  },
+  "smollm2-135m-instruct": {
+    "family": "smollm2-instruct",
+    "repository": "HuggingFaceTB/SmolLM2-135M-Instruct",
+    "license": "Apache-2.0, a confirmer sur la page du modele avant epinglage",
+    "usage": "CLI experimentale backend/lab/clochette_chat.py uniquement ; jamais TAXO-LAB-01",
+    "revision": null,
+    "files": {
+      "config.json": null,
+      "model.safetensors": null,
+      "special_tokens_map.json": null,
+      "tokenizer.json": null,
+      "tokenizer_config.json": null
+    }
   }
 }
