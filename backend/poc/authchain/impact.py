@@ -11,6 +11,7 @@ import json
 import sys
 
 from app.evaluations.application.run_evaluator import RunEvaluator
+from app.evaluations.domain.status import EvaluationStatus
 from app.facts import fact_identity
 from app.history.domain.errors import UNKNOWN_PARENT, HistoryError
 from app.history.domain.impact import compare, unknowns
@@ -29,8 +30,12 @@ def impact(root, commit, parent=None, repository='poc'):
     run = RunEvaluator()
     after = run(AuthorizationChainPoc(), open_snapshot(root, repository, COMMIT, found.sha))
     before = run(AuthorizationChainPoc(), open_snapshot(root, repository, COMMIT, base)) if base else None
-    changes, unchanged = compare(before.facts if before else (), after.facts, fact_identity)
-    return {'commit': found.sha, 'parent': base, 'provisional': True,
+    failed = [execution for execution in (before, after)
+              if execution is not None and execution.status is EvaluationStatus.FAILED]
+    changes, unchanged = ([], 0) if failed else compare(before.facts if before else (), after.facts,
+                                                        fact_identity)
+    return {'commit': found.sha, 'parent': base, 'provisional': True, 'comparable': not failed,
+            'failures': [warning for execution in failed for warning in execution.warnings],
             'evaluator_id': AuthorizationChainPoc.evaluator_id,
             'producer_version': AuthorizationChainPoc.producer_version,
             'changes': changes, 'unchanged_count': unchanged,

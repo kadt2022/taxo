@@ -1,6 +1,7 @@
 """Historique d'un projet : commits, fichiers touches, et ce que Taxo comprend de chaque commit."""
 from typing import Protocol
 
+from app.evaluations.domain.status import EvaluationStatus
 from app.facts import fact_identity
 from app.history.domain.commit import ChangedFile, Commit
 from app.history.domain.errors import UNKNOWN_PARENT, HistoryError
@@ -58,13 +59,21 @@ class ProjectHistory:
     def _evaluate(self, evaluator, before, after):
         executed_after = self.runner(evaluator, after)
         executed_before = self.runner(evaluator, before) if before else None
-        changes, unchanged = compare(executed_before.facts if executed_before else (),
-                                     executed_after.facts, fact_identity)
+        failed = [execution for execution in (executed_before, executed_after)
+                  if execution is not None and execution.status is EvaluationStatus.FAILED]
+        if failed:
+            # Une execution echouee n'a produit aucun fait : la comparer inventerait des changements.
+            changes, unchanged = [], 0
+        else:
+            changes, unchanged = compare(executed_before.facts if executed_before else (),
+                                         executed_after.facts, fact_identity)
         return {
             'evaluator_id': evaluator.evaluator_id,
             'producer_version': evaluator.producer_version,
             'status_before': executed_before.status.value if executed_before else None,
             'status_after': executed_after.status.value,
+            'comparable': not failed,
+            'failures': [warning for execution in failed for warning in execution.warnings],
             'changes': changes,
             'unchanged_count': unchanged,
             'not_interpreted_before': unknowns(executed_before.coverage) if executed_before else [],

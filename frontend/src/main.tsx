@@ -1,4 +1,4 @@
-import {useEffect, useState, type FormEvent} from 'react';
+import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {createRoot} from 'react-dom/client';
 import './style.css';
 
@@ -67,7 +67,7 @@ type Commit = {sha:string; parents:string[]; author:string; authored_at:string; 
 type ChangedFile = {path:string; status:string; old_path:string|null; additions:number|null; deletions:number|null; confidential:boolean};
 type CommitDetail = {commit:Commit; parent:string|null; files:ChangedFile[]};
 type FactChange = {change:'INTRODUCED'|'REMOVED'|'MODIFIED'; kind:string; subject:string; relation:string|null; status:string; before:string|null; after:string|null};
-type Evaluation = {evaluator_id:string; producer_version:string; changes:FactChange[]; unchanged_count:number; not_interpreted_after:string[]};
+type Evaluation = {evaluator_id:string; producer_version:string; comparable:boolean; failures:string[]; changes:FactChange[]; unchanged_count:number; not_interpreted_after:string[]};
 type Impact = {commit:Commit; parent:string|null; evaluations:Evaluation[]};
 const CHANGE_LABELS:Record<FactChange['change'],string>={INTRODUCED:'Ajouté',REMOVED:'Retiré',MODIFIED:'Modifié'};
 const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DELETED:'Supprimé',RENAMED:'Renommé',COPIED:'Copié',TYPE_CHANGED:'Type modifié'};
@@ -76,20 +76,23 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
   const [impact,setImpact]=useState<Impact|null>(null), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const base=`/projects/${projectId}/history/commits`;
+  // Seule la derniere demande peut modifier l'ecran : une reponse arrivee trop tard est ignoree.
+  const latest=useRef(0);
   useEffect(()=>{
     let active=true;
     setCommits([]);setDetail(null);setImpact(null);setError('');
     request<Commit[]>(`${base}?limit=10`).then(c=>{if(active)setCommits(c);}).catch(e=>{if(active)setError(e.message);});
     return ()=>{active=false;};
   },[base]);
-  async function open(sha:string){
-    setBusy(true);setError('');setImpact(null);
-    try{setDetail(await request<CommitDetail>(`${base}/${sha}`));}catch(e){setError((e as Error).message);}finally{setBusy(false);}
-  }
-  async function understand(sha:string){
+  async function load<T>(path:string, apply:(value:T)=>void){
+    const token=++latest.current;
     setBusy(true);setError('');
-    try{setImpact(await request<Impact>(`${base}/${sha}/impact`));}catch(e){setError((e as Error).message);}finally{setBusy(false);}
+    try{const value=await request<T>(path);if(token===latest.current)apply(value);}
+    catch(e){if(token===latest.current)setError((e as Error).message);}
+    finally{if(token===latest.current)setBusy(false);}
   }
+  function open(sha:string){setImpact(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
+  function understand(sha:string){return load<Impact>(`${base}/${sha}/impact`,setImpact);}
   const date=(value:string)=>new Date(value).toLocaleString('fr-CA');
   return <section className="results history" aria-label="Historique Git">
     <div className="section-heading"><div><h2>Historique Git</h2><p>Les 10 derniers commits, lus directement dans Git, et ce que Taxo comprend de chacun.</p></div></div>
@@ -112,10 +115,10 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
     {impact&&impact.commit.sha===detail?.commit.sha&&<section className="impact" aria-label="Impact compris par Taxo">
       {impact.evaluations.map(e=><div key={e.evaluator_id}>
         <h2>Impact selon {e.evaluator_id} <span className="muted">v{e.producer_version}</span></h2>
-        {e.changes.length?<div className="table-wrap"><table><thead><tr><th>Changement</th><th>Sujet</th><th>Relation</th><th>Avant</th><th>Après</th><th>Statut</th></tr></thead><tbody>
+        {!e.comparable?<p role="alert" className="error">Comparaison impossible : l’analyse a échoué ({e.failures.join(' ; ')}). Taxo n’affiche aucun changement plutôt que d’en inventer.</p>:e.changes.length?<div className="table-wrap"><table><thead><tr><th>Changement</th><th>Sujet</th><th>Relation</th><th>Avant</th><th>Après</th><th>Statut</th></tr></thead><tbody>
           {e.changes.map(c=><tr key={c.change+c.subject+c.relation+(c.before??'')+(c.after??'')}><td>{CHANGE_LABELS[c.change]}</td><td><code>{c.subject}</code></td><td>{c.relation??c.kind}</td><td><code>{c.before??''}</code></td><td><code>{c.after??''}</code></td><td>{c.status}</td></tr>)}
         </tbody></table></div>:<p className="muted">Aucun fait changé parmi ceux que cet évaluateur sait produire.</p>}
-        <footer>{e.unchanged_count.toLocaleString('fr-CA')} faits inchangés. {e.not_interpreted_after.length?`Zones non interprétées : ${e.not_interpreted_after.join(', ')}.`:'Aucune zone non interprétée.'} Seuls les faits que cet évaluateur sait produire sont comparés : l’absence de changement ici ne prouve pas l’absence de changement ailleurs.</footer>
+        {e.comparable&&<footer>{e.unchanged_count.toLocaleString('fr-CA')} faits inchangés. {e.not_interpreted_after.length?`Zones non interprétées : ${e.not_interpreted_after.join(', ')}.`:'Aucune zone non interprétée.'} Seuls les faits que cet évaluateur sait produire sont comparés : l’absence de changement ici ne prouve pas l’absence de changement ailleurs.</footer>}
       </div>)}
     </section>}
   </section>;
@@ -171,7 +174,7 @@ function App(){
       <footer>{sourceLabel(scan)}</footer>
       {[...new Set(scan.warnings??[])].map(w=><p className="error" key={w}>{w}</p>)}</section>
     </>:<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez une analyse pour obtenir un inventaire accompagné de ses sources.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
-    {selected&&!loading&&<HistoryPanel projectId={selected}/>}
+    {selected&&!loading&&<HistoryPanel key={selected} projectId={selected}/>}
     <p className="scope">Cette première version identifie les technologies. L’extraction des API, des permissions et des relations métier n’est pas encore intégrée.</p></main>
   </div>;
 }

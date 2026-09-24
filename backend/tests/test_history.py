@@ -156,3 +156,36 @@ def test_a_merge_commit_compares_with_the_chosen_parent(make_repo, git, tmp_path
         assert client.get(base).json()['parent'] == main
         against_side = client.get(base, params={'parent': side}).json()
         assert {item['path'] for item in against_side['files']} == {'main.java'}
+
+
+def test_a_failed_evaluation_is_not_comparable_and_invents_no_change(history):
+    from app.evaluations.application.run_evaluator import RunEvaluator
+    from app.evaluators.inventory.evaluator import InventoryEvaluator
+    from app.history.application.queries import ProjectHistory
+    from app.projects.domain.project import Project
+    from app.snapshots.infrastructure.git.reader import GitSnapshotReader
+
+    repo, _, second, third = history
+
+    class FailsOnCommit(InventoryEvaluator):
+        def evaluate(self, snapshot):
+            if snapshot.commit == third:
+                raise ValueError('Projet trop volumineux : limite de 50 000 fichiers.')
+            return super().evaluate(snapshot)
+
+    class Projects:
+        def get(self, project_id):
+            return Project(project_id, 'demo', str(repo))
+
+    class Paths:
+        def resolve(self, value):
+            return value
+
+    history_of = ProjectHistory(Projects(), Paths(), READER, GitSnapshotReader(), [FailsOnCommit()], RunEvaluator())
+    _, _, (failed,) = history_of.impact('demo', third)
+    assert failed['comparable'] is False
+    assert failed['changes'] == [] and failed['unchanged_count'] == 0, 'un echec ne devient jamais « tout est retire »'
+    assert failed['status_after'] == 'FAILED'
+    assert '50 000 fichiers' in failed['failures'][0]
+    _, _, (healthy,) = history_of.impact('demo', second)
+    assert healthy['comparable'] is True and healthy['changes']
