@@ -13,6 +13,9 @@ from app.evaluations.application.run_evaluator import RunEvaluator
 from app.platform.api.health import router as health_router
 from app.platform.api.errors import register_errors
 from app.hypotheses.infrastructure.model_store import ModelStore
+from app.history.application.queries import ProjectHistory
+from app.history.infrastructure.git_history import GitHistoryReader
+from app.history.api.router import create_router as history_router
 from . import settings
 
 def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None):
@@ -23,6 +26,8 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     registry = EvaluatorRegistry([InventoryEvaluator()])
     inventory = registry.get('taxo.inventory')
     run = RunScan(projects, scans, paths, GitSnapshotReader(), inventory, RunEvaluator())
+    history = ProjectHistory(projects, paths, GitHistoryReader(), GitSnapshotReader(),
+                             registry.all(), RunEvaluator())
     # Mode hypotheses : les poids sont prepares et verifies au demarrage ; aucune API ne les expose
     # tant que TAXO-LAB-01 n'a pas conclu (ADR 0006).
     store = model_store or ModelStore()
@@ -34,4 +39,5 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     api.include_router(health_router)
     api.include_router(projects_router(projects, paths))
     api.include_router(scans_router(projects, scans, run))
+    api.include_router(history_router(history))
     return api

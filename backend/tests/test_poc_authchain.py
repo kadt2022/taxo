@@ -339,3 +339,35 @@ def test_the_bench_reproduces_the_reference_truth():
     absences = {fact['pattern']['value'].split(' ')[0] for fact in execution.facts
                 if fact['kind'] == 'ABSENCE'}
     assert 'OrgBoundaryFilter' in absences, "le filtre ne s'applique pas, et cela doit etre dit"
+
+
+def test_the_impact_of_commits_on_authorization_chains(make_repo, git):
+    from poc.authchain.impact import impact
+
+    repo = make_repo(SOURCES, 'authchain-history')
+    path = 'api/src/main/java/com/example/api/OrderEditController.java'
+    (repo / path).write_text(FORGOTTEN)
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'ajoute la modification de commande')
+    forgotten = git(repo, 'rev-parse', 'HEAD')
+    config = repo / 'config/src/main/java/com/example/config/SecurityConfiguration.java'
+    config.write_text(config.read_text().replace(
+        '                        .anyRequest()',
+        '                        .requestMatchers("/api/orders/**").access(policyAuthorizationManager)\n'
+        '                        .anyRequest()'))
+    git(repo, 'commit', '-qam', 'protege la modification de commande')
+    protected = git(repo, 'rev-parse', 'HEAD')
+
+    added = impact(repo, forgotten)
+    assert added['provisional'] is True
+    introduced = {(item['subject'], item['relation'], item['after']) for item in added['changes']
+                  if item['change'] == 'INTRODUCED'}
+    assert ('endpoint:PUT /api/orders/{orderId}', 'MATCHED_BY', 'route-pattern:/**') in introduced
+    assert not any(item['relation'] == 'PROTECTED_BY' and 'orders/{orderId}' in item['subject']
+                   for item in added['changes']), "la route oubliee n'est protegee par rien"
+
+    fixed = {(item['change'], item['subject'], item['relation']): item for item in impact(repo, protected)['changes']}
+    matched = fixed[('MODIFIED', 'endpoint:PUT /api/orders/{orderId}', 'MATCHED_BY')]
+    assert (matched['before'], matched['after']) == ('route-pattern:/**', 'route-pattern:/api/orders/**')
+    assert ('INTRODUCED', 'endpoint:PUT /api/orders/{orderId}', 'PROTECTED_BY') in fixed
+    assert fixed[('INTRODUCED', 'endpoint:PUT /api/orders/{orderId}', 'PROTECTED_BY')]['derivation']['premises']
