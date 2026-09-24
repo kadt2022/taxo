@@ -46,3 +46,5 @@
 .diff .hunk td{grid-column:1/-1}
 .diff .diff-equal td:nth-child(n+3){display:none}
 }
+
+.diff .eol{margin-left:6px;padding:0 4px;border-radius:3px;font-size:.75em;opacity:.7;border:1px solid currentColor;white-space:nowrap}

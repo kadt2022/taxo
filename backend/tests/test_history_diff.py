@@ -1,5 +1,6 @@
 """TAXO-HIST-02 : diff cote a cote d'un fichier, parent a gauche, commit a droite."""
 import json
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -60,11 +61,12 @@ def test_a_modified_file_puts_the_parent_left_and_the_commit_right(story, client
     assert result['before'] == {'path': 'app.py', 'size': 18}
     changed = [row for row in rows(result) if row['kind'] != 'equal']
     assert changed == [
-        {'kind': 'changed', 'before': {'number': 2, 'text': 'b = 2'}, 'after': {'number': 2, 'text': 'b = 20'}},
-        {'kind': 'added', 'before': None, 'after': {'number': 4, 'text': 'd = 4'}},
+        {'kind': 'changed', 'before': {'number': 2, 'text': 'b = 2', 'eol': 'LF'},
+         'after': {'number': 2, 'text': 'b = 20', 'eol': 'LF'}},
+        {'kind': 'added', 'before': None, 'after': {'number': 4, 'text': 'd = 4', 'eol': 'LF'}},
     ]
-    assert rows(result)[0] == {'kind': 'equal', 'before': {'number': 1, 'text': 'a = 1'},
-                               'after': {'number': 1, 'text': 'a = 1'}}
+    assert rows(result)[0] == {'kind': 'equal', 'before': {'number': 1, 'text': 'a = 1', 'eol': 'LF'},
+                               'after': {'number': 1, 'text': 'a = 1', 'eol': 'LF'}}
 
 
 def test_an_added_file_has_an_empty_left_side_and_a_deleted_one_an_empty_right_side(story, client):
@@ -74,7 +76,7 @@ def test_an_added_file_has_an_empty_left_side_and_a_deleted_one_an_empty_right_s
     assert added['before'] is None and [row['kind'] for row in rows(added)] == ['added']
     deleted = diff(http, base, second, 'gone.txt').json()
     assert deleted['after'] is None and rows(deleted) == [
-        {'kind': 'removed', 'before': {'number': 1, 'text': 'adieu'}, 'after': None}]
+        {'kind': 'removed', 'before': {'number': 1, 'text': 'adieu', 'eol': 'LF'}, 'after': None}]
 
 
 def test_a_renamed_file_shows_the_old_path_left_and_the_new_path_right(story, client):
@@ -183,3 +185,35 @@ def test_long_unchanged_stretches_are_folded_into_hunks():
     hunks = side_by_side(before, after)
     assert [(hunk['before_start'], hunk['after_start']) for hunk in hunks] == [(2, 2), (32, 32)]
     assert all(len(hunk['rows']) == 7 for hunk in hunks), '3 lignes de contexte de chaque cote'
+
+
+def test_a_line_ending_change_alone_is_still_a_visible_change():
+    hunks = side_by_side('a\nb\nc\n', 'a\r\nb\nc\n')
+    [row] = [row for hunk in hunks for row in hunk['rows'] if row['kind'] != 'equal']
+    assert (row['before']['eol'], row['after']['eol']) == ('LF', 'CRLF')
+    assert row['before']['text'] == row['after']['text'] == 'a'
+
+
+def test_a_removed_final_newline_is_still_a_visible_change():
+    hunks = side_by_side('a\nb\n', 'a\nb')
+    [row] = [row for hunk in hunks for row in hunk['rows'] if row['kind'] != 'equal']
+    assert (row['kind'], row['before']['eol'], row['after']['eol']) == ('changed', 'LF', 'NONE')
+
+
+def test_repeated_lines_do_not_make_the_diff_quadratic():
+    before = 'x\n' * 60_000
+    after = before[:60_000] + 'y\n' + before[60_002:]
+    started = time.perf_counter()
+    hunks = side_by_side(before, after)
+    assert time.perf_counter() - started < 2
+    changed = [row for hunk in hunks for row in hunk['rows'] if row['kind'] != 'equal']
+    assert [(row['before']['number'], row['after']['text']) for row in changed] == [(30_001, 'y')]
+
+
+def test_a_large_file_entirely_rewritten_stays_fast():
+    before = ''.join(f'avant {n}\n' for n in range(20_000))
+    after = ''.join(f'apres {n}\n' for n in range(20_000))
+    started = time.perf_counter()
+    rows_ = [row for hunk in side_by_side(before, after) for row in hunk['rows']]
+    assert time.perf_counter() - started < 2
+    assert len(rows_) == 20_000 and all(row['kind'] == 'changed' for row in rows_)

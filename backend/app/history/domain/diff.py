@@ -4,10 +4,15 @@ Ce que Git montre, sans interpretation : l'impact compris par Taxo reste une aut
 n'est renvoye que s'il est affichable des deux cotes ; sinon, seule la raison est donnee.
 """
 import difflib
+import re
 from dataclasses import dataclass
 
 MAX_DIFF_BYTES = 1024 * 1024
 CONTEXT_LINES = 3
+# Au-dela, la comparaison exacte deviendrait quadratique : l'heuristique de difflib prend le relais. Son
+# resultat reste un diff exact (il transforme bien l'avant en apres), seulement moins compact.
+MAX_EXACT_COMPARISONS = 2_000_000
+_LINE = re.compile(r'[^\n]*\n|[^\n]+\Z')
 
 CONFIDENTIAL = 'CONFIDENTIAL'
 BINARY = 'BINARY'
@@ -44,19 +49,75 @@ def as_text(content):
         return None
 
 
+def lines(text):
+    """Lignes au sens de Git, fin de ligne comprise : un passage de LF a CRLF, ou la perte du saut de
+    ligne final, reste un changement visible."""
+    return _LINE.findall(text)
+
+
+def _eol(raw):
+    if raw.endswith('\r\n'):
+        return 'CRLF'
+    return 'LF' if raw.endswith('\n') else 'NONE'
+
+
+def _line(number, raw):
+    return {'number': number, 'text': raw.rstrip('\n').removesuffix('\r'), 'eol': _eol(raw)}
+
+
 def _row(kind, before=None, after=None):
     return {'kind': kind, 'before': before, 'after': after}
 
 
-def _line(number, text):
-    return {'number': number, 'text': text}
+def _opcodes(left, right):
+    """Operations de diff, lignes communes du debut et de la fin mises a part avant toute comparaison."""
+    prefix = 0
+    while prefix < min(len(left), len(right)) and left[prefix] == right[prefix]:
+        prefix += 1
+    suffix = 0
+    while (suffix < min(len(left), len(right)) - prefix
+           and left[len(left) - 1 - suffix] == right[len(right) - 1 - suffix]):
+        suffix += 1
+    middle_left, middle_right = left[prefix:len(left) - suffix], right[prefix:len(right) - suffix]
+    exact = len(middle_left) * len(middle_right) <= MAX_EXACT_COMPARISONS
+    matcher = difflib.SequenceMatcher(None, middle_left, middle_right, autojunk=not exact)
+    codes = [('equal', 0, prefix, 0, prefix)] if prefix else []
+    codes += [(tag, i1 + prefix, i2 + prefix, j1 + prefix, j2 + prefix)
+              for tag, i1, i2, j1, j2 in matcher.get_opcodes()]
+    if suffix:
+        codes.append(('equal', len(left) - suffix, len(left), len(right) - suffix, len(right)))
+    return codes
+
+
+def _groups(codes, context):
+    """Blocs de changements avec `context` lignes autour, comme difflib.get_grouped_opcodes."""
+    codes = [code for code in codes if code[1] != code[2] or code[3] != code[4]]
+    if not codes:
+        return []
+    if codes[0][0] == 'equal':
+        tag, i1, i2, j1, j2 = codes[0]
+        codes[0] = tag, max(i1, i2 - context), i2, max(j1, j2 - context), j2
+    if codes[-1][0] == 'equal':
+        tag, i1, i2, j1, j2 = codes[-1]
+        codes[-1] = tag, i1, min(i2, i1 + context), j1, min(j2, j1 + context)
+    groups, group = [], []
+    for tag, i1, i2, j1, j2 in codes:
+        if tag == 'equal' and i2 - i1 > 2 * context:
+            group.append((tag, i1, min(i2, i1 + context), j1, min(j2, j1 + context)))
+            groups.append(group)
+            group = []
+            i1, j1 = max(i1, i2 - context), max(j1, j2 - context)
+        group.append((tag, i1, i2, j1, j2))
+    if group and not (len(group) == 1 and group[0][0] == 'equal'):
+        groups.append(group)
+    return groups
 
 
 def side_by_side(before, after, context=CONTEXT_LINES):
     """Blocs de lignes alignees ; chaque rangee porte la ligne de gauche, celle de droite, ou les deux."""
-    left, right = before.splitlines(), after.splitlines()
+    left, right = lines(before), lines(after)
     hunks = []
-    for group in difflib.SequenceMatcher(None, left, right, autojunk=False).get_grouped_opcodes(context):
+    for group in _groups(_opcodes(left, right), context):
         rows = []
         for tag, i1, i2, j1, j2 in group:
             if tag == 'equal':

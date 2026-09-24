@@ -69,7 +69,7 @@ type CommitDetail = {commit:Commit; parent:string|null; files:ChangedFile[]};
 type FactChange = {change:'INTRODUCED'|'REMOVED'|'MODIFIED'; kind:string; subject:string; relation:string|null; status:string; before:string|null; after:string|null};
 type Evaluation = {evaluator_id:string; producer_version:string; comparable:boolean; failures:string[]; changes:FactChange[]; unchanged_count:number; not_interpreted_before:string[]; not_interpreted_after:string[]};
 type Impact = {commit:Commit; parent:string|null; evaluations:Evaluation[]};
-type DiffLine = {number:number; text:string};
+type DiffLine = {number:number; text:string; eol:'LF'|'CRLF'|'NONE'};
 type DiffRow = {kind:'equal'|'changed'|'added'|'removed'; before:DiffLine|null; after:DiffLine|null};
 type FileDiff = {path:string; old_path:string|null; status:string; commit:string; parent:string|null; displayable:boolean;
   reason:string|null; before:{path:string; size:number}|null; after:{path:string; size:number}|null;
@@ -80,6 +80,13 @@ const DIFF_REASONS:Record<string,string>={
   TOO_LARGE:'Fichier trop volumineux (plus de 1 Mo) : son contenu n’est pas affiché.',
   NOT_A_REGULAR_FILE:'Lien symbolique ou sous-module : son contenu n’est pas affiché.',
 };
+
+// Une fin de ligne differente reste visible : LF, la plus courante, n'est pas signalee.
+const EOL_MARKS:Record<DiffLine['eol'],string>={LF:'',CRLF:'␍␊',NONE:'sans fin de ligne'};
+function DiffCode({line,changed}:Readonly<{line:DiffLine|null; changed:boolean}>){
+  const mark=line&&changed?EOL_MARKS[line.eol]:'';
+  return <><code>{line?.text??''}</code>{mark&&<span className="eol">{mark}</span>}</>;
+}
 
 function DiffView({diff}:Readonly<{diff:FileDiff}>){
   const side=(label:string,value:FileDiff['before'],ref:string|null)=>value?`${label} — ${value.path}${ref?' @ '+ref.slice(0,7):''}`:`${label} — (aucun fichier)`;
@@ -94,8 +101,8 @@ function DiffView({diff}:Readonly<{diff:FileDiff}>){
       {diff.hunks.map(h=><tbody key={`${h.before_start}-${h.after_start}`}>
         <tr className="hunk"><td colSpan={4}>@@ ligne {h.before_start} → ligne {h.after_start}</td></tr>
         {h.rows.map(r=><tr key={`${r.before?.number??'-'}-${r.after?.number??'-'}`} className={'diff-'+r.kind}>
-          <td className="number">{r.before?.number??''}</td><td className={r.before&&r.kind!=='equal'?'removed':''}><code>{r.before?.text??''}</code></td>
-          <td className="number">{r.after?.number??''}</td><td className={r.after&&r.kind!=='equal'?'added':''}><code>{r.after?.text??''}</code></td>
+          <td className="number">{r.before?.number??''}</td><td className={r.before&&r.kind!=='equal'?'removed':''}><DiffCode line={r.before} changed={r.kind!=='equal'}/></td>
+          <td className="number">{r.after?.number??''}</td><td className={r.after&&r.kind!=='equal'?'added':''}><DiffCode line={r.after} changed={r.kind!=='equal'}/></td>
         </tr>)}
       </tbody>)}
     </table></div>}
