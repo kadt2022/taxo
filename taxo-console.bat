@@ -4,7 +4,7 @@ chcp 65001 >nul
 title Taxo - console d'administration
 
 rem ==== A adapter : depots que Taxo a le droit de lire (separes par ;) ====
-set "TAXO_ALLOWED_ROOTS=D:\Taxo;D:\Taxo\taxo;D:\Taxo\demo-diff"
+set "TAXO_ALLOWED_ROOTS=D:\Taxo;D:\Taxo\taxo;D:\Taxo\demo-diff;D:\Takibu"
 
 rem Ce fichier se place a la racine du depot Taxo (a cote de backend et frontend).
 set "ROOT=%~dp0"
