@@ -5,7 +5,7 @@ import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
 import {MiniaView, type MiniaAnswer} from './minia';
 import {ConsultForm} from './consult';
-import {ProjectNav, ProjectOverview, technologiesOf, type Scan} from './overview';
+import {panelKey, ProjectNav, ProjectOverview, technologiesOf, type Scan} from './overview';
 import {AnalysisDetails} from './details';
 import {EVALUATORS, label} from './vocabulary';
 import {AskTaxo} from './query';
@@ -157,8 +157,8 @@ function App(){
       </section>
       <AnalysisDetails scan={shown}/>
     </>:!running&&<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
-    {selected&&!loading&&scan&&<AskTaxo key={selected} base={`/projects/${selected}`} request={request}/>}
-    {selected&&!loading&&<HistoryPanel key={selected} projectId={selected}/>}
+    {selected&&!loading&&scan&&<AskTaxo key={panelKey('ask',selected)} base={`/projects/${selected}`} request={request}/>}
+    {selected&&!loading&&<HistoryPanel key={panelKey('history',selected)} projectId={selected}/>}
     </main>
   </div>;
 }

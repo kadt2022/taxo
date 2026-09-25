@@ -95,6 +95,9 @@ export function sections(scan:Scan|undefined){
   return [...(scan?items:[]), {id:'historique', label:'Historique'}];
 }
 
+/** Cle d'un panneau propre a un projet : unique parmi ses voisins, sinon React duplique le panneau a chaque changement. */
+export const panelKey=(panel:string, projectId:string)=>`${panel}:${projectId}`;
+
 export function ProjectNav({scan}:Readonly<{scan:Scan|undefined}>){
   return <nav className="project-nav" aria-label="Sections du projet">
     {sections(scan).map(item=><a key={item.id} href={`#${item.id}`}>{item.label}</a>)}
