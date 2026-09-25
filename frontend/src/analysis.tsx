@@ -74,11 +74,29 @@ export function pendingEvaluators(run:Run){
   return run.steps.filter(step=>step.id!==PREPARE&&step.id!==CONSOLIDATE&&step.state!=='done'&&step.state!=='failed').map(step=>step.id);
 }
 
-/** Lance une analyse et suit ses evenements jusqu'a la fin. */
-export async function follow(start:()=>Promise<{events:string}>, open:(url:string)=>Promise<AsyncIterable<ServerEvent>|Iterable<ServerEvent>>,
-  onEvent:(event:ServerEvent)=>void){
+type Open = (url:string, lastEventId?:string)=>Promise<AsyncIterable<ServerEvent>|Iterable<ServerEvent>>;
+const TERMINAL=new Set(['analysis.completed','analysis.failed']);
+export const RECONNECTIONS=5;
+export const LOST='Connexion perdue avec Taxo : l’analyse continue sur le serveur, relancez la page pour voir son résultat.';
+const pause=(ms:number)=>new Promise(resolve=>setTimeout(resolve, ms));
+
+/** Lance une analyse et suit ses evenements jusqu'a la fin, en reprenant apres le dernier recu si le flux se coupe. */
+export async function follow(start:()=>Promise<{events:string}>, open:Open, onEvent:(event:ServerEvent)=>void,
+  wait:(ms:number)=>Promise<unknown>=pause){
   const {events}=await start();
-  for await(const event of await open(events))onEvent(event);
+  let last:string|undefined, failures=0;
+  for(;;){
+    try{
+      for await(const event of await open(events, last)){
+        if(event.id){last=event.id;failures=0;}
+        onEvent(event);
+        if(TERMINAL.has(event.type))return;
+      }
+    }
+    catch{/* coupure : on reprend apres le dernier evenement recu */}
+    if(++failures>RECONNECTIONS)throw new Error(LOST);
+    await wait(500*failures);
+  }
 }
 
 const MARKS:Record<StepState,string>={pending:'○', running:'●', done:'✓', failed:'!'};
@@ -99,8 +117,7 @@ export function AnalysisProgress({run}:Readonly<{run:Run}>){
   </section>;
 }
 
-type Launch = {request:<T>(path:string, init?:RequestInit)=>Promise<T>;
-  open:(url:string)=>Promise<AsyncIterable<ServerEvent>>; setRun:(change:(run:Run|null)=>Run|null)=>void;
+type Launch = {request:<T>(path:string, init?:RequestInit)=>Promise<T>; open:Open; setRun:(change:(run:Run|null)=>Run|null)=>void;
   addScan:(scan:Scan)=>void; setError:(message:string)=>void; setBusy:(busy:boolean)=>void};
 
 /** Lance l'analyse globale d'un projet et fait vivre l'ecran avec ses evenements. */
@@ -112,6 +129,11 @@ export async function analyzeProject(projectId:string, {request, open, setRun, a
       if(event.type==='analysis.completed')addScan((event.data as {scan:Scan}).scan);
     });
   }
-  catch(e){setError((e as Error).message);setRun(()=>null);}
+  catch(e){
+    const message=(e as Error).message;
+    // Un lancement refuse n'a rien a montrer ; une analyse perdue de vue garde ses etapes, marquees interrompues.
+    setRun(run=>run&&run.steps.length>1?reduce(run, {type:'analysis.failed', data:{message}}):null);
+    if(message!==LOST)setError(message);
+  }
   finally{setBusy(false);}
 }

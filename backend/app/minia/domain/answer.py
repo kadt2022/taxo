@@ -75,6 +75,8 @@ def parse(raw, refs):
 
 
 def _text(value):
+    # Une moitie de paire de substitution isolee n'est pas un caractere : elle devient U+FFFD.
+    value = value.encode('utf-16', 'surrogatepass').decode('utf-16', 'replace')
     return '' if _EMPTY.fullmatch(value) else value.strip()
 
 
@@ -116,12 +118,34 @@ class AnswerStream:
             if not escape:
                 break
             if escape == 'u':
-                digits = self._raw[self._position + 2:self._position + 6]
-                if len(digits) < 4:
+                decoded = self._unicode()
+                if decoded is None:
                     break
-                out.append(chr(int(digits, 16)) if re.fullmatch('[0-9a-fA-F]{4}', digits) else '')
-                self._position += 6
+                out.append(decoded)
                 continue
             out.append(_ESCAPES.get(escape, escape))
             self._position += 2
         return ''.join(out)
+
+    def _unicode(self):
+        """Un echappement \\uXXXX, ou une paire de substitution entiere ; None s'il manque encore des caracteres."""
+        start = self._position
+        digits = self._raw[start + 2:start + 6]
+        if len(digits) < 4:
+            return None
+        if not re.fullmatch('[0-9a-fA-F]{4}', digits):
+            self._position = start + 6
+            return ''
+        code = int(digits, 16)
+        if 0xD800 <= code <= 0xDBFF:
+            low = self._raw[start + 6:start + 12]
+            if len(low) < 6 and '\\u'.startswith(low[:2]):
+                return None
+            if re.fullmatch(r'\\u[dD][c-fC-F][0-9a-fA-F]{2}', low):
+                self._position = start + 12
+                return chr(0x10000 + ((code - 0xD800) << 10) + (int(low[2:], 16) - 0xDC00))
+            code = 0xFFFD
+        elif 0xDC00 <= code <= 0xDFFF:
+            code = 0xFFFD
+        self._position = start + 6
+        return chr(code)

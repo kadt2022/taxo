@@ -133,7 +133,7 @@ function App(){
   }
   const [run,setRun]=useState<Run|null>(null);
   function analyze(){
-    return analyzeProject(selected,{request, open:url=>openStream(url), setRun, setError, setBusy, addScan:s=>{setScans(past=>[s,...past]);setScanId(s.id);}});
+    return analyzeProject(selected,{request, open:(url,last)=>openStream(url,last?{headers:{'Last-Event-ID':last}}:undefined), setRun, setError, setBusy, addScan:s=>{setScans(past=>[s,...past]);setScanId(s.id);}});
   }
   const running=run?.status==='running';
   const shown=running?liveScan(scan,run):scan;

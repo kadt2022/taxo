@@ -1,7 +1,7 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it, vi} from 'vitest';
 import {openStream, parseEvents, readEvents, type ServerEvent} from './sse';
-import {AnalysisProgress, analyzeProject, follow, liveScan, pendingEvaluators, progressText, reduce, startRun, type Run} from './analysis';
+import {AnalysisProgress, analyzeProject, follow, LOST, RECONNECTIONS, liveScan, pendingEvaluators, progressText, reduce, startRun, type Run} from './analysis';
 import {ask, askButton, MiniaProgress, questionInit, reduceMinia, stageText, startMinia} from './minia-live';
 import {ProjectOverview, type EvaluationSummary, type Scan} from './overview';
 
@@ -123,7 +123,7 @@ describe('suivre une analyse', ()=>{
       setRun:vi.fn((change:(value:Run|null)=>Run|null)=>{run=change(run);}), addScan:vi.fn(), setError:vi.fn(), setBusy:vi.fn()};
     await analyzeProject('p', deps);
     expect(deps.request).toHaveBeenCalledWith('/projects/p/analyses', {method:'POST'});
-    expect(deps.open).toHaveBeenCalledWith('/api/projects/p/analyses/j/events');
+    expect(deps.open).toHaveBeenCalledWith('/api/projects/p/analyses/j/events', undefined);
     expect(deps.addScan).toHaveBeenCalledWith({id:'s9', created_at:''});
     expect((run as Run|null)?.status).toBe('done');
     expect(deps.setBusy.mock.calls.map(call=>call[0])).toEqual([true,false]);
@@ -137,8 +137,8 @@ describe('suivre une analyse', ()=>{
     expect(run).toBeNull();
     expect(deps.open).not.toHaveBeenCalled();
     const seen:string[]=[];
-    await follow(async()=>({events:'/e'}), async()=>[event('a'), event('b')], item=>seen.push(item.type));
-    expect(seen).toEqual(['a','b']);
+    await follow(async()=>({events:'/e'}), async()=>[event('a'), event('analysis.failed', {message:'x'})], item=>seen.push(item.type));
+    expect(seen).toEqual(['a','analysis.failed']);
   });
 });
 
@@ -170,5 +170,39 @@ describe('Minia en direct', ()=>{
     expect(askButton(true, 'Demander à Minia')).toBe('● Minia travaille…');
     expect(askButton(false, 'Demander à Minia')).toBe('Demander à Minia');
     expect(questionInit({question:'q'})).toMatchObject({method:'POST', body:'{"question":"q"}'});
+  });
+});
+
+describe('reprise du flux', ()=>{
+  const noWait=async()=>undefined;
+  it('reprend après le dernier événement reçu quand le flux se coupe', async ()=>{
+    const calls:(string|undefined)[]=[];
+    const seen:string[]=[];
+    const open=vi.fn(async(_url:string, last?:string)=>{
+      calls.push(last);
+      if(calls.length===1)return [{id:'1', type:'analysis.started', data:{evaluators:[]}}, {id:'2', type:'evaluator.started', data:{}}];
+      if(calls.length===2)return (async function*(){yield {id:'3', type:'evaluator.completed', data:{}};throw new Error('réseau');})();
+      return [{id:'4', type:'analysis.completed', data:{scan:{id:'s', created_at:''}}}, {id:'5', type:'jamais', data:{}}];
+    });
+    await follow(async()=>({events:'/e'}), open, item=>seen.push(item.type), noWait);
+    expect(calls).toEqual([undefined, '2', '3']);
+    expect(seen).toEqual(['analysis.started','evaluator.started','evaluator.completed','analysis.completed']);
+  });
+  it('renonce après plusieurs coupures sans rien de neuf, sans perdre les étapes', async ()=>{
+    const open=vi.fn(async()=>[] as ServerEvent[]);
+    await expect(follow(async()=>({events:'/e'}), open, ()=>undefined, noWait)).rejects.toThrow(LOST);
+    expect(open).toHaveBeenCalledTimes(RECONNECTIONS+1);
+    let run:Run|null=null;
+    const deps={request:vi.fn().mockResolvedValue({events:'/e'}),
+      open:vi.fn().mockResolvedValue([event('analysis.started', {evaluators:['taxo.inventory']})]),
+      setRun:vi.fn((change:(value:Run|null)=>Run|null)=>{run=change(run);}), addScan:vi.fn(), setError:vi.fn(), setBusy:vi.fn()};
+    vi.useFakeTimers();
+    const pending=analyzeProject('p', deps);
+    await vi.runAllTimersAsync();
+    await pending;
+    vi.useRealTimers();
+    expect((run as Run|null)?.status).toBe('failed');
+    expect((run as Run|null)?.message).toBe(LOST);
+    expect(deps.setError).toHaveBeenCalledTimes(1);
   });
 });

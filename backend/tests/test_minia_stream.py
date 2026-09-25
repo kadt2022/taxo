@@ -160,3 +160,20 @@ def test_an_unreachable_ollama_is_reported_while_streaming():
 
     with pytest.raises(MiniaError, match='ollama serve'):
         list(OllamaModel('m', 'http://ollama.test', transport=httpx.MockTransport(handler)).stream('s', 'u'))
+
+
+def test_escaped_emoji_and_lone_surrogates_never_break_the_stream(repo, tmp_path):
+    raw = '{"cited":[],"answer":"ok \\ud83d\\ude00 \\udc00 \\ud800x","unknown":""}'
+    stream = AnswerStream()
+    assert ''.join(stream.feed(char) for char in raw) == 'ok 😀 � �x'
+
+    class EscapingModel(StreamingModel):
+        def __init__(self):
+            super().__init__()
+            self.raw = raw
+
+    path, sha = repo
+    client, base = client_for(path, tmp_path, EscapingModel())
+    events = events_of(client.post(f'{base}/history/commits/{sha}/ask/stream', json={'question': 'Pourquoi ?'}))
+    streamed = ''.join(data['text'] for event_type, data in events if event_type == 'minia.delta')
+    assert streamed == 'ok 😀 � �x' and events[-1][0] == 'minia.completed'
