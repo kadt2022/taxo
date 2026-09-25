@@ -137,6 +137,29 @@ Les faits de chaque évaluateur sont conservés et s'interrogent après l'analys
 Git et ceux du code se rejoignent par la même référence `file:`. L'impact d'un commit et Minia ne
 comparent que les évaluateurs de contenu.
 
+### Interroger Taxo (TAXO-QUERY-01)
+
+> Les évaluateurs savent observer. Taxo sait conserver et relier les faits. La requête sait sélectionner.
+> Minia sait expliquer.
+
+Le panneau « Interroger Taxo » sélectionne, parmi les faits Git conservés par la dernière analyse
+globale, ceux que la requête vise, sans relire le dépôt :
+
+- un nombre explicite de derniers commits : « les 10 derniers commits » → 10, « 3 derniers » → 3 ;
+- un commit, par son identifiant (7 caractères au moins) : « le commit 5b9022b » ;
+- une période, en dates ISO : « depuis 2026-09-01 », « entre 2026-09-01 et 2026-09-10 », « en 2026-09 » ;
+- un nombre et une période ensemble : « les 3 derniers commits depuis 2026-09-01 ».
+
+Aucun nombre n'est supposé : « Analyse le projet » ou « les derniers commits » restent une requête
+globale, jamais « les 10 derniers commits ». Les commits suivent l'ordre de `git log --date-order`
+(un commit avant ses parents), reconstruit à partir des faits `CHILD_OF`. Chaque fait sélectionné garde sa
+provenance et sa preuve.
+
+« Demander à Minia » transmet au modèle uniquement les faits de la sélection. Sans sélection (requête
+globale), ou sans commit correspondant, le modèle n'est pas appelé et Minia le dit.
+
+API : `GET /api/projects/{id}/query?q=…` et `POST /api/projects/{id}/ask` avec `{"question": "…"}`.
+
 ### Minia : demander ce que signifie un commit (TAXO-MINIA-01)
 
 Dans la fiche d'un commit, « Demander à Minia » pose une question en langage courant. Minia répond à

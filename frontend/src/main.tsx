@@ -5,6 +5,7 @@ import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
 import {MiniaView, type MiniaAnswer} from './minia';
 import {ConsultForm} from './consult';
+import {AskTaxo} from './query';
 
 type Project = {id:string; name:string; path:string};
 type SnapshotReference = {repository:string; commit:string; mode:'COMMIT'|'WORKING_TREE'; dirty?:boolean; content_fingerprint?:string};
@@ -203,6 +204,7 @@ function App(){
       <footer>{sourceLabel(scan)}</footer>
       {[...new Set(scan.warnings??[])].map(w=><p className="error" key={w}>{w}</p>)}</section>
     </>:<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale pour obtenir les faits du projet, accompagnés de leurs sources.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
+    {selected&&!loading&&scan&&<AskTaxo key={selected} base={`/projects/${selected}`} request={request}/>}
     {selected&&!loading&&<HistoryPanel key={selected} projectId={selected}/>}
     <p className="scope">Cette première version identifie les technologies. L’extraction des API, des permissions et des relations métier n’est pas encore intégrée.</p></main>
   </div>;
