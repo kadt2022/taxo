@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {gaps, gitFile, MiniaView, named, place, type MiniaAnswer} from './minia';
+import {gaps, gitFile, MiniaView, named, place, sentence, type MiniaAnswer} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
   parent:'a'.repeat(40), project:{id:'p-1', name:'Takibo-IAM'}, files_not_sent:0,
@@ -25,8 +25,8 @@ describe('place', ()=>{
 describe('gaps', ()=>{
   it('ajoute aux inconnues de Minia les limites que Taxo connaît', ()=>{
     const all=gaps({...answer, not_interpreted:['file:A'], failures:['e : boom'], files_not_sent:4, facts_not_sent:3, rejected_citations:['F9']});
-    expect(all).toEqual(['Le motif métier n’est pas connu.', 'Zones non interprétées par Taxo : file:A.',
-      'Évaluateurs en échec : e : boom.', '4 fichiers du commit n’ont pas été transmis à Minia (limite de taille).',
+    expect(all).toEqual(['Le motif métier n’est pas connu.', 'Non analysé par Taxo : file:A.',
+      'Analyses en échec : e : boom.', '4 fichiers du commit n’ont pas été transmis à Minia (limite de taille).',
       '3 faits n’ont pas été transmis à Minia (limite de taille).',
       'Références inventées par Minia et écartées : F9.']);
     expect(gaps({...answer, unknown:''})).toEqual([]);
@@ -64,7 +64,11 @@ describe('MiniaView', ()=>{
     expect(html).toContain('MINIA · ollama qwen2.5:3b');
     expect(html).toContain('route-pattern:/api/**');
     expect(html).toContain('Security.java:5-7');
-    expect(html).toContain('non vérifiée');
+    expect(html).toContain('non vérifié');
+    expect(html).toContain('Ce que Taxo sait');
+    expect(html).toContain('Ce que Minia en déduit');
+    expect(html).toContain('Ce que Taxo ne sait pas');
+    expect(html).toContain('Inventaire du code');
     expect(html).toContain('L’équipe aurait restreint l’accès.');
     expect(html).toContain('Le motif métier n’est pas connu.');
   });
@@ -80,5 +84,20 @@ describe('MiniaView', ()=>{
     const html=renderToStaticMarkup(<MiniaView answer={{...answer, git:{...answer.git, files:[]}, facts:[{...answer.facts[0], before:null, after:null, relation:null}]}}/>);
     expect(html).toContain('ASSERTION');
     expect(html).not.toContain('→');
+  });
+});
+
+describe('sentence', ()=>{
+  it('dit le fait en clair, la preuve technique restant disponible', ()=>{
+    const fact=answer.facts[0];
+    expect(sentence(fact, answer.project)).toBe('routes /api/** est autorisé par : symbole permitAll → symbole hasRole');
+    expect(sentence({...fact, subject:'repository:p-1', relation:'USES_TECHNOLOGY', before:null, after:'technology:react'}, answer.project))
+      .toBe('dépôt Takibo-IAM utilise technologie react');
+    expect(sentence({...fact, relation:'DECLARED_BY', before:'file:pom.xml', after:null}, answer.project))
+      .toBe('routes /api/** est déclarée dans pom.xml');
+    expect(sentence({...fact, relation:null, kind:'ASSERTION', before:null, after:null}, answer.project)).toBe('routes /api/** assertion');
+    const html=renderToStaticMarkup(<MiniaView answer={answer}/>);
+    expect(html).toContain('<summary>Preuve</summary>');
+    expect(html).toContain('AUTHORIZED_BY');
   });
 });

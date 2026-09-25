@@ -99,6 +99,16 @@ choisir de commits à montrer. La liste des commits est une consultation distinc
 demande, avec un nombre de commits explicite : aucune fenêtre n'est imposée par défaut. Le plafond de 100 commits par consultation borne le coût d'une requête ; ce n'est
 pas une valeur par défaut.
 
+### Une vue humaine du projet (TAXO-UI-01)
+
+Après l'analyse globale, le portail présente d'abord ce que Taxo a compris du projet : une vue d'ensemble
+(technologies, fichiers analysés, historique Git) et, pour ce que Taxo ne sait pas encore déterminer
+(architecture, API, sécurité), la mention « Non analysé » : une absence d'information n'est jamais
+présentée comme un résultat. La navigation ne propose que les sections réellement disponibles
+(Vue d'ensemble, Technologies, Historique). Le vocabulaire du contrat de faits est traduit dans la couche
+de présentation (`frontend/src/vocabulary.ts`), sans rien renommer côté backend. Évaluateurs, versions,
+identifiants d'exécution, couverture et relations restent consultables sous « Détails de l'analyse ».
+
 ### Historique et impact des commits (TAXO-HIST-01)
 
 Sur demande, le portail affiche les derniers commits d'un projet, lus directement dans Git, puis la fiche d'un
