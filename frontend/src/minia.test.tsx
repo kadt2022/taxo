@@ -1,9 +1,12 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {gaps, MiniaView, place, type MiniaAnswer} from './minia';
+import {gaps, gitFile, MiniaView, named, place, type MiniaAnswer} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
-  parent:'a'.repeat(40), model:{configured:true, provider:'ollama', model:'qwen2.5:3b'},
+  parent:'a'.repeat(40), project:{id:'p-1', name:'Takibo-IAM'}, files_not_sent:0,
+  git:{sha:'b'.repeat(40), parent:'a'.repeat(40), author:'Pi', authored_at:'2026-09-25T00:00:00Z', subject:'Termine SEC-TMS-01',
+    files:[{status:'RENAMED', path:'docs/terminer/R1.md', old_path:'docs/backlog/R1.md'}, {status:'MODIFIED', path:'Security.java', old_path:null}]},
+  model:{configured:true, provider:'ollama', model:'qwen2.5:3b'},
   facts:[{ref:'F1', evaluator_id:'taxo.inventory', change:'MODIFIED', kind:'ASSERTION', subject:'route-pattern:/api/**',
     relation:'AUTHORIZED_BY', status:'OBSERVED', before:'symbol:permitAll', after:'symbol:hasRole',
     evidence_before:[{path:'Security.java', line_start:5, line_end:5}], evidence_after:[{path:'Security.java', line_start:5, line_end:7}]}],
@@ -21,15 +24,41 @@ describe('place', ()=>{
 
 describe('gaps', ()=>{
   it('ajoute aux inconnues de Minia les limites que Taxo connaît', ()=>{
-    const all=gaps({...answer, not_interpreted:['file:A'], failures:['e : boom'], facts_not_sent:3, rejected_citations:['F9']});
+    const all=gaps({...answer, not_interpreted:['file:A'], failures:['e : boom'], files_not_sent:4, facts_not_sent:3, rejected_citations:['F9']});
     expect(all).toEqual(['Le motif métier n’est pas connu.', 'Zones non interprétées par Taxo : file:A.',
-      'Évaluateurs en échec : e : boom.', '3 faits n’ont pas été transmis à Minia (limite de taille).',
+      'Évaluateurs en échec : e : boom.', '4 fichiers du commit n’ont pas été transmis à Minia (limite de taille).',
+      '3 faits n’ont pas été transmis à Minia (limite de taille).',
       'Références inventées par Minia et écartées : F9.']);
     expect(gaps({...answer, unknown:''})).toEqual([]);
   });
 });
 
+describe('named et gitFile', ()=>{
+  it('désigne le dépôt par le nom du projet', ()=>{
+    expect(named('repository:p-1', answer.project)).toBe('dépôt Takibo-IAM');
+    expect(named('file:A', answer.project)).toBe('file:A');
+    expect(named(null, answer.project)).toBeNull();
+  });
+  it('décrit un fichier comme Git, renommage compris', ()=>{
+    expect(gitFile(answer.git.files[0])).toBe('docs/backlog/R1.md → docs/terminer/R1.md (renommé)');
+    expect(gitFile({status:'UNKNOWN', path:'x', old_path:null})).toBe('x (UNKNOWN)');
+  });
+});
+
 describe('MiniaView', ()=>{
+  it('montre toujours ce que Git sait du commit', ()=>{
+    const html=renderToStaticMarkup(<MiniaView answer={{...answer, facts:[], git:{...answer.git, files:[]}}}/>);
+    expect(html).toContain('bbbbbbbbbbbb');
+    expect(html).toContain('Pi');
+    expect(html).toContain('Termine SEC-TMS-01');
+    expect(html).toContain('aucun');
+  });
+  it('nomme le type de changement et le projet', ()=>{
+    const html=renderToStaticMarkup(<MiniaView answer={{...answer, facts:[{...answer.facts[0], change:'REMOVED', subject:'repository:p-1'}]}}/>);
+    expect(html).toContain('<strong>Retiré</strong>');
+    expect(html).toContain('dépôt Takibo-IAM');
+    expect(html).toContain('docs/backlog/R1.md → docs/terminer/R1.md (renommé)');
+  });
   it('sépare le fait Taxo, l’interprétation et l’inconnu', ()=>{
     const html=renderToStaticMarkup(<MiniaView answer={answer}/>);
     expect(html).toContain('MINIA · ollama qwen2.5:3b');
@@ -48,7 +77,7 @@ describe('MiniaView', ()=>{
     expect(html).toContain('>MINIA<');
   });
   it('affiche un fait sans avant ni après', ()=>{
-    const html=renderToStaticMarkup(<MiniaView answer={{...answer, facts:[{...answer.facts[0], before:null, after:null, relation:null}]}}/>);
+    const html=renderToStaticMarkup(<MiniaView answer={{...answer, git:{...answer.git, files:[]}, facts:[{...answer.facts[0], before:null, after:null, relation:null}]}}/>);
     expect(html).toContain('ASSERTION');
     expect(html).not.toContain('→');
   });
