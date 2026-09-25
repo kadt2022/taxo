@@ -91,15 +91,23 @@ Facts, Coverage, provenance et statut technique via le moteur `evaluations`. Les
 métadonnées historiques de l'API restent disponibles jusqu'à TAXO-01E, qui
 introduira la persistance de la mémoire. Le portail interroge toujours la même API.
 
+### Analyse globale et historique (TAXO-EVAL-01)
+
+Le comportement par défaut de Taxo est l'**analyse globale** du projet (« Lancer l'analyse globale ») :
+elle produit les faits du projet et ne consulte pas l'historique Git. L'historique est une consultation
+distincte, faite seulement sur demande, avec un nombre de commits explicite : aucune fenêtre n'est
+imposée par défaut. Le plafond de 100 commits par consultation borne le coût d'une requête ; ce n'est
+pas une valeur par défaut.
+
 ### Historique et impact des commits (TAXO-HIST-01)
 
-Le portail affiche les 10 derniers commits d'un projet, lus directement dans Git, puis la fiche d'un
+Sur demande, le portail affiche les derniers commits d'un projet, lus directement dans Git, puis la fiche d'un
 commit (fichiers touchés, lignes ajoutées et retirées) et ce que Taxo en comprend : chaque évaluateur
 analyse le parent et le commit, et les faits sont comparés par identité canonique (ajoutés, retirés,
 modifiés), avec les zones non interprétées. Un fichier `.env` est nommé, jamais lu. Pour un commit de
 fusion, le premier parent sert de référence ; `?parent=` en choisit un autre.
 
-API : `GET /api/projects/{id}/history/commits?limit=10`, `…/commits/{sha}` et `…/commits/{sha}/impact`.
+API : `GET /api/projects/{id}/history/commits?limit=<nombre>` (obligatoire, 1 à 100), `…/commits/{sha}` et `…/commits/{sha}/impact`.
 
 Chaque fichier de la fiche s'ouvre en diff côte à côte (TAXO-HIST-02) : le parent à gauche, le commit à
 droite, avec les numéros de ligne ; `…/commits/{sha}/diff?path=…&parent=…`. Seul un fichier touché par

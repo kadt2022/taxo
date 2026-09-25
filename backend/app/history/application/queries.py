@@ -34,7 +34,8 @@ class ProjectHistory:
         project = require_project(self.projects, project_id)
         return project, self.paths.resolve(project.path)
 
-    def commits(self, project_id, limit=10):
+    def commits(self, project_id, limit):
+        """Consultation explicite de l'historique : distincte de l'analyse globale du projet."""
         _, root = self._root(project_id)
         return self.reader.commits(root, limit)
 

@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 
+# Plafond de protection d'une consultation de l'historique ; jamais une valeur par defaut.
+MAX_COMMITS = 100
+
 
 @dataclass(frozen=True)
 class Commit:
