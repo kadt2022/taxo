@@ -31,12 +31,12 @@ group('outcome et factLine', ()=>{
     expect(outcome({...selection, status:'AUTRE'})).toBe('AUTRE');
   });
   it('écrit un fait Git en une ligne', ()=>{
-    expect(factLine(fact)).toBe(`commit:${'b'.repeat(40)} CHANGES file:docs/done/R1.md (RENAMED, depuis docs/backlog/R1.md)`);
-    expect(factLine({subject:'repository:p', relation:'HAS_COMMIT', object:'commit:c'})).toBe('repository:p HAS_COMMIT commit:c');
+    expect(factLine(fact)).toBe('commit bbbbbbbbbbbb modifie docs/done/R1.md (RENAMED, depuis docs/backlog/R1.md)');
+    expect(factLine({subject:'repository:p', relation:'HAS_COMMIT', object:'commit:c'})).toBe('dépôt p contient le commit c');
     expect(factLine({subject:'repository:p', relation:'HAS_COMMIT', object:'commit:c',
       qualifiers:{subject:'R1 termine', authored_at:'2026-09-25T09:00:00+00:00'}}))
-      .toBe('repository:p HAS_COMMIT commit:c (« R1 termine », 2026-09-25T09:00:00+00:00)');
-    expect(factLine({subject:'commit:c', relation:'AUTHORED_BY', object:'person:pi@x', qualifiers:{name:'Pi'}})).toBe('commit:c AUTHORED_BY person:pi@x (Pi)');
+      .toBe('dépôt p contient le commit c (« R1 termine », 2026-09-25T09:00:00+00:00)');
+    expect(factLine({subject:'commit:c', relation:'AUTHORED_BY', object:'person:pi@x', qualifiers:{name:'Pi'}})).toBe('commit c a pour auteur pi@x (Pi)');
   });
 });
 
@@ -61,8 +61,11 @@ group('vues', ()=>{
   it('sépare les faits de Taxo, l’interprétation et l’inconnu', ()=>{
     const html=renderToStaticMarkup(<SelectionAnswerView answer={answer}/>);
     expect(html).toContain('MINIA · ollama qwen2.5:3b · 3 derniers commits');
-    expect(html).toContain('taxo.git');
-    expect(html).toContain('non vérifiée');
+    expect(html).toContain('CHANGES');
+    expect(html).toContain('non vérifié');
+    expect(html).toContain('Ce que Taxo sait');
+    expect(html).toContain('<summary>Preuve</summary>');
+    expect(html).toContain('Historique Git');
     expect(html).toContain('Aucune limite signalée.');
     expect(html).toContain('R1 termine');
     expect(renderToStaticMarkup(<SelectionAnswerView answer={{...answer, not_interpreted:['commit:x']}}/>)).toContain('Non analysé par Taxo : commit:x.');

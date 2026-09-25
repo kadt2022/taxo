@@ -79,6 +79,9 @@ def test_execution_summary_aggregates_facts_and_bounds_coverage_subjects():
     assert summary['fact_count'] == 3
     assert summary['coverage_count'] == 7
     assert summary['warning_count'] == 1
+    assert summary['warnings'] == ['unreadable'], 'le resume explique ses avertissements'
+    many = replace(execution, warnings=tuple(f'w{index}' for index in range(8)) + ('w0',)).summary()
+    assert (many['warning_count'], many['warnings']) == (9, ['w0', 'w1', 'w2', 'w3', 'w4'])
     assert summary['relations'] == {'CONTAINS': 2, 'WRITTEN_IN': 1}
     assert summary['coverage'] == [{
         'coverage_type': 'NOT_INTERPRETED', 'count': 7,

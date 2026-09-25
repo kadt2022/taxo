@@ -2,6 +2,7 @@
 // Minia n'explique que cette selection. Les faits affiches sont ceux de Taxo, avec leur provenance.
 import {useState, type FormEvent} from 'react';
 import {typed} from './consult';
+import {EVALUATORS, VERBS, label, reference} from './vocabulary';
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
 type SelectedCommit = {sha:string; authored_at?:string; subject?:string};
@@ -41,7 +42,7 @@ export function factLine(fact:GitFact){
   const q=fact.qualifiers??{};
   const detail=[q.subject?`« ${q.subject} »`:null, q.authored_at??null, q.name??null, q.change??null,
     q.old_path?`depuis ${q.old_path}`:null].filter(Boolean).join(', ');
-  return `${fact.subject} ${fact.relation} ${fact.object}${detail?` (${detail})`:''}`;
+  return `${reference(fact.subject)} ${label(VERBS,fact.relation)} ${reference(fact.object)}${detail?` (${detail})`:''}`;
 }
 
 const short=(sha:string)=>sha.slice(0,12);
@@ -70,17 +71,19 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
     <p className="minia-question">{answer.question}</p>
     <div className="minia-blocks">
       <article className="minia-block fact">
-        <h3>Fait Taxo</h3>
+        <h3>Ce que Taxo sait</h3>
         {answer.commits.length>0&&<ul className="selected-commits">{answer.commits.map(c=><li key={c.sha}><code>{short(c.sha)}</code> {c.subject??''} <span className="muted">{when(c.authored_at)}</span></li>)}</ul>}
-        {answer.facts.length?<ul>{answer.facts.map(f=><li key={f.ref}>{factLine(f)}<span className="muted"> · {f.produced_by?.producer_id}</span></li>)}</ul>
+        {answer.facts.length?<ul>{answer.facts.map(f=><li key={f.ref}>{factLine(f)}
+          <details className="proof"><summary>Preuve</summary><code>{f.subject}</code> {f.relation} <code>{f.object}</code>
+            <span className="muted"> · {f.produced_by?label(EVALUATORS,f.produced_by.producer_id):''}</span></details></li>)}</ul>
           :<p className="muted">Aucun fait de Taxo n’appuie cette réponse.</p>}
       </article>
       <article className="minia-block interpretation">
-        <h3>Interprétation Minia <span className="badge">non vérifiée</span></h3>
+        <h3>Ce que Minia en déduit <span className="badge">non vérifié</span></h3>
         <p>{answer.answer||'Minia ne propose aucune interprétation.'}</p>
       </article>
       <article className="minia-block unknown">
-        <h3>Inconnu / non interprété</h3>
+        <h3>Ce que Taxo ne sait pas</h3>
         {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée.</p>}
       </article>
     </div>
