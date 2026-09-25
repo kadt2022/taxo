@@ -94,9 +94,9 @@ introduira la persistance de la mémoire. Le portail interroge toujours la même
 ### Analyse globale et historique (TAXO-EVAL-01)
 
 Le comportement par défaut de Taxo est l'**analyse globale** du projet (« Lancer l'analyse globale ») :
-elle produit les faits du projet et ne consulte pas l'historique Git. L'historique est une consultation
-distincte, faite seulement sur demande, avec un nombre de commits explicite : aucune fenêtre n'est
-imposée par défaut. Le plafond de 100 commits par consultation borne le coût d'une requête ; ce n'est
+elle produit les faits du projet, ceux du code et ceux de tout l'historique Git (TAXO-EVAL-02), sans
+choisir de commits à montrer. La liste des commits est une consultation distincte, faite seulement sur
+demande, avec un nombre de commits explicite : aucune fenêtre n'est imposée par défaut. Le plafond de 100 commits par consultation borne le coût d'une requête ; ce n'est
 pas une valeur par défaut.
 
 ### Historique et impact des commits (TAXO-HIST-01)
