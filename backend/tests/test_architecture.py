@@ -197,6 +197,7 @@ def test_scan_persists_only_legacy_and_bounded_execution_summary():
         def __call__(self, evaluator, snapshot):
             class Execution:
                 status = EvaluationStatus.SUCCESS
+                evaluator_id, facts, coverage = 'fake', ({'kind': 'ASSERTION'},) * 2000, ()
 
                 def result(self):
                     pytest.fail('The full execution must not be stored in scans.result')
@@ -215,9 +216,9 @@ def test_scan_persists_only_legacy_and_bounded_execution_summary():
 
     scans = SavedScans()
     run = RunScan(Projects(), scans, Paths(), Reader(), object(), Runner())
-    expected = {**legacy, 'evaluation_summary': summary}
+    expected = {**legacy, 'evaluation_summary': summary, 'evaluations': [summary]}
     assert run('project-key').result == expected
-    assert scans.scan.result == expected
+    assert scans.scan.result == expected, 'les faits vont au magasin des faits, jamais dans scans.result'
 
 
 def test_registering_a_project_takes_primitives_not_an_http_schema():

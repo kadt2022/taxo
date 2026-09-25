@@ -23,3 +23,7 @@ class EvaluatorRegistry:
 
     def all(self):
         return tuple(self._evaluators[key] for key in sorted(self._evaluators))
+
+    def content(self):
+        """Evaluateurs qui decrivent le contenu d'un instantane ; l'historique (Git) n'en fait pas partie."""
+        return tuple(item for item in self.all() if getattr(item, 'describes_content', True))

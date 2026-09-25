@@ -22,7 +22,15 @@ RELATIONS = {
     'AUTHORIZED_BY': ({'route-pattern'}, {'symbol'}, {'OBSERVED'}),
     'MATCHED_BY': ({'endpoint'}, {'route-pattern'}, {'INFERRED'}),
     'PROTECTED_BY': ({'endpoint'}, {'symbol', 'policy-rule'}, {'INFERRED', 'HUMAN_VALIDATED'}),
+    # Historique Git (ADR 0007) : un commit, son auteur, ses parents et les fichiers qu'il change.
+    'HAS_COMMIT': ({'repository'}, {'commit'}, {'OBSERVED'}),
+    'AUTHORED_BY': ({'commit'}, {'person'}, {'OBSERVED'}),
+    'CHILD_OF': ({'commit'}, {'commit'}, {'OBSERVED'}),
+    'CHANGES': ({'commit'}, {'file'}, {'OBSERVED'}),
 }
+# Un commit est designe par son identifiant Git complet, comme l'instantane (ADR 0007).
+_COMMIT_KEY = re.compile(r'(?:[0-9a-f]{40}|[0-9a-f]{64})')
+_GIT_RELATIONS = {'HAS_COMMIT', 'AUTHORED_BY', 'CHILD_OF', 'CHANGES'}
 _STATUS_PRODUCERS = {
     'OBSERVED': {'EVALUATOR'},
     'INFERRED': {'EVALUATOR', 'PROJECTION'},
@@ -49,6 +57,8 @@ def validate_semantics(fact, rules, *, submission=True):
             reject('REFERENCE', path, 'Reference keys must be nonblank and contain no control characters.')
         if entity_type in {'file', 'directory'} and not rules.is_path(key):
             reject('REFERENCE_PATH', path, 'Expected a relative repository path with forward slashes.')
+        if entity_type == 'commit' and not _COMMIT_KEY.fullmatch(key):
+            reject('REFERENCE_COMMIT', path, 'Expected a full lowercase Git object id.')
         return entity_type
 
     if 'subject' in fact:
@@ -82,6 +92,10 @@ def validate_semantics(fact, rules, *, submission=True):
             reject('EVIDENCE_LINES', path, 'End line must not precede start line.')
         if 'symbol' in evidence:
             reference(evidence['symbol'], path + '/symbol')
+        # Une preuve Git (objet commit) prouve l'historique, et l'historique ne se prouve que par elle.
+        history = fact['kind'] == 'ASSERTION' and fact['relation'] in _GIT_RELATIONS
+        if ('object' in evidence) != history:
+            reject('EVIDENCE_OBJECT', path, 'Git history relations need Git object evidence, and only they accept it.')
     for index, anchor in enumerate(fact.get('validation', {}).get('anchors', [])):
         reference(anchor['symbol'], f'/validation/anchors/{index}/symbol')
     if issues:

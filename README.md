@@ -75,7 +75,7 @@ validateur sémantique, empreintes normalisées et suite de conformité indépen
 du langage. Voir [le guide du contrat](backend/app/facts/README.md) pour les
 formats, les décisions de représentation et les limites de validation.
 
-Depuis `backend`, `python -m app.facts --conformance` rejoue les 76 exemples de
+Depuis `backend`, `python -m app.facts --conformance` rejoue les 84 exemples de
 faits, les 8 vecteurs d'empreinte et les vecteurs d'identite canonique (19 positifs,
 5 negatifs). Le scanner existant conserve son format
 actuel jusqu'à TAXO-01D ; le contrat n'est pas encore une mémoire persistante.
@@ -94,9 +94,9 @@ introduira la persistance de la mémoire. Le portail interroge toujours la même
 ### Analyse globale et historique (TAXO-EVAL-01)
 
 Le comportement par défaut de Taxo est l'**analyse globale** du projet (« Lancer l'analyse globale ») :
-elle produit les faits du projet et ne consulte pas l'historique Git. L'historique est une consultation
-distincte, faite seulement sur demande, avec un nombre de commits explicite : aucune fenêtre n'est
-imposée par défaut. Le plafond de 100 commits par consultation borne le coût d'une requête ; ce n'est
+elle produit les faits du projet, ceux du code et ceux de tout l'historique Git (TAXO-EVAL-02), sans
+choisir de commits à montrer. La liste des commits est une consultation distincte, faite seulement sur
+demande, avec un nombre de commits explicite : aucune fenêtre n'est imposée par défaut. Le plafond de 100 commits par consultation borne le coût d'une requête ; ce n'est
 pas une valeur par défaut.
 
 ### Historique et impact des commits (TAXO-HIST-01)
@@ -122,6 +122,20 @@ passe uniquement par les preuves, jamais par une lecture du texte. L'inventaire,
 produit aujourd'hui, prouve par fichier entier : ses liens sont donc `FILE`.
 L'impact sur les chaînes d'autorisation passe encore par le POC Spring, hors produit :
 `py -m poc.authchain.impact --root <dépôt> --commit <sha>` (résultat marqué `provisional`).
+
+### Git, deuxième évaluateur (TAXO-EVAL-02, ADR 0007)
+
+L'analyse globale exécute tous les évaluateurs sur le même instantané. À côté de l'inventaire, Git
+transforme **tout** l'historique atteignable en faits : `HAS_COMMIT` (dépôt → commit, date et message),
+`AUTHORED_BY` (commit → personne), `CHILD_OF` (commit → parent) et `CHANGES` (commit → fichier, avec le
+type de changement et l'ancien chemin d'un renommage). Leur preuve est l'objet Git, dans le commit de
+l'instantané. L'évaluateur n'a aucune fenêtre de commits ; au-delà d'un budget de lecture de 50 000
+commits, la suite est déclarée non interprétée. Si Git échoue, l'analyse du code aboutit quand même.
+
+Les faits de chaque évaluateur sont conservés et s'interrogent après l'analyse :
+`GET /api/projects/{id}/scans/{scan_id}/facts?evaluator=&kind=&subject=&relation=&object=`. Les faits
+Git et ceux du code se rejoignent par la même référence `file:`. L'impact d'un commit et Minia ne
+comparent que les évaluateurs de contenu.
 
 ### Minia : demander ce que signifie un commit (TAXO-MINIA-01)
 

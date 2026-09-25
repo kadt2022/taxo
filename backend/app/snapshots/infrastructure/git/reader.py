@@ -2,8 +2,9 @@
 
 COMMIT reads Git objects only and never touches the working tree. WORKING_TREE reads the
 files Git tracks or would track (not ignored) and is identified by a content fingerprint.
-Only rev-parse, ls-tree, ls-files and cat-file are run, with core.fsmonitor disabled:
-no hook, filter or fsmonitor configured by the repository is ever executed. `.env` files
+Only rev-parse, ls-tree, ls-files, cat-file and log are run, with core.fsmonitor disabled:
+no hook, filter, fsmonitor, external diff or signature check configured by the repository is ever
+executed. `.env` files
 are neither exposed nor read.
 """
 import hashlib
@@ -18,6 +19,7 @@ import unicodedata
 from app.snapshots.domain.mode import COMMIT, WORKING_TREE
 from app.snapshots.domain.errors import (SnapshotError, NOT_A_GIT_REPOSITORY, UNKNOWN_COMMIT,
     GIT_READ_ERROR, UNSUPPORTED_GIT_ENTRY, WORKING_TREE_READ_ERROR)
+from app.snapshots.domain.history import HistoryChange, HistoryCommit
 from app.snapshots.domain.snapshot import Snapshot, SnapshotFile
 
 GIT_TIMEOUT = 120
@@ -27,6 +29,11 @@ _GIT = ['git', '-c', 'safe.directory=*', '-c', 'core.fsmonitor=false']
 _ENV = {'GIT_TERMINAL_PROMPT': '0', 'GIT_OPTIONAL_LOCKS': '0'}
 _FILE_MODES = {b'100644', b'100755'}
 _CHUNK = 1 << 16
+# Historique (ADR 0007) : lecture seule, sans diff externe, textconv ni verification de signature.
+_LOG = ['-c', 'log.showSignature=false', '-c', 'diff.external=', 'log', '-z', '--no-color', '--no-ext-diff',
+        '--no-textconv', '--format=%x1e%H%x00%P%x00%an%x00%ae%x00%aI%x00%s', '--name-status', '-M',
+        '--diff-merges=first-parent']
+_CHANGES = {'A': 'ADDED', 'M': 'MODIFIED', 'D': 'DELETED', 'R': 'RENAMED', 'C': 'COPIED', 'T': 'TYPE_CHANGED'}
 
 
 def _git(root, *args):
@@ -230,9 +237,61 @@ def open_snapshot(root, repository, mode=COMMIT, commit=None):
     return Snapshot(repository, sha, COMMIT, _sorted_files({p: size for p, (_, size) in files.items()}),
                     GitSnapshotContent(root, {p: oid for p, (oid, _) in files.items()}, COMMIT), skipped=tuple(skipped))
 
+def _text(raw):
+    """Metadonnee affichee (auteur, message) : un octet non UTF-8 devient U+FFFD, jamais un faux caractere."""
+    return raw.decode('utf-8', 'replace')
+
+
+def _path(raw):
+    """Chemin historique, en NFC comme ceux de l'instantane ; un octet non UTF-8 reste visible (substitut)
+    pour que l'evaluateur declare le chemin non representable au lieu de le deformer."""
+    return unicodedata.normalize('NFC', raw.decode('utf-8', 'surrogateescape'))
+
+
+_STATUS = re.compile(rb'[A-Z][0-9]*')
+
+
+def _history(root, commit, limit):
+    """Commits atteignables depuis `commit`, du plus recent au plus ancien, fichiers compares au premier parent.
+
+    La sortie est lue jeton par jeton (separateur NUL) : un chemin est pris a sa position, jamais
+    reinterprete ; seul le separateur de ligne qui precede un statut ou un commit est retire.
+    """
+    if type(limit) is not int or limit < 1:
+        raise ValueError("Le nombre de commits de l'historique doit etre un entier positif.")
+    tokens = _git_output(root, *_LOG, f'--max-count={limit}', commit, '--').split(b'\x00')
+    index, header = 0, None
+    while index < len(tokens):
+        token = tokens[index].lstrip(b'\n')
+        if token.startswith(b'\x1e'):
+            if header:
+                yield HistoryCommit(*header[:6], tuple(header[6]))
+            sha, parents, name, email, date, subject = [token[1:], *tokens[index + 1:index + 6]]
+            header = [sha.decode('ascii'), tuple(parents.decode('ascii').split()), _text(name), _text(email),
+                      _text(date), _text(subject), []]
+            index += 6
+        elif header and _STATUS.fullmatch(token):
+            code = token.decode('ascii')
+            if code[0] in 'RC':
+                header[6].append(HistoryChange(_CHANGES[code[0]], _path(tokens[index + 2]), _path(tokens[index + 1])))
+                index += 3
+            else:
+                header[6].append(HistoryChange(_CHANGES.get(code[0], 'UNKNOWN'), _path(tokens[index + 1])))
+                index += 2
+        elif token:
+            raise ValueError('Sortie de git log inattendue.')
+        else:
+            index += 1
+    if header:
+        yield HistoryCommit(*header[:6], tuple(header[6]))
+
+
 class GitSnapshotContent:
     def __init__(self, root, sources, mode):
         self.root, self.sources, self.mode = root, sources, mode
+
+    def history(self, commit, limit):
+        yield from _history(self.root, commit, limit)
 
     def read_many(self, paths):
         paths = list(paths)
