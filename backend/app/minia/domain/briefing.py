@@ -16,6 +16,11 @@ MAX_FILES = 200
 _EVIDENCE_KEYS = ('path', 'line_start', 'line_end', 'commit')
 
 
+def _compact(payload):
+    # Sans indentation : les espaces ne disent rien au modele et occupent sa fenetre de contexte.
+    return json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+
+
 @dataclass(frozen=True)
 class Briefing:
     text: str
@@ -90,7 +95,7 @@ def build(question, commit, parent, evaluations, files=(), project=None, diff=No
     if diff is not None:
         payload['diff_context'] = diff.files
         payload['diff_not_sent'] = diff.not_sent
-    return Briefing(json.dumps(payload, ensure_ascii=False, indent=1), refs, len(changes) - len(kept),
+    return Briefing(_compact(payload), refs, len(changes) - len(kept),
                     max(len(files) - MAX_FILES, 0), not_interpreted, failures, bool(diff and diff.files))
 
 
@@ -117,5 +122,5 @@ def selection(question, projection, project=None):
         'facts_not_sent': len(facts) - len(kept),
         'not_interpreted': projection['not_interpreted'],
     }
-    return Briefing(json.dumps(payload, ensure_ascii=False, indent=1), refs, len(facts) - len(kept), 0,
+    return Briefing(_compact(payload), refs, len(facts) - len(kept), 0,
                     tuple(projection['not_interpreted']), ())

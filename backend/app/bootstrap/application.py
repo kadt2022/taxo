@@ -33,7 +33,7 @@ def minia_model(options):
     """Adaptateur du modele de Minia ; None si aucun modele n'est configure."""
     if options['provider'] != 'ollama':
         raise ValueError(f"MINIA_PROVIDER inconnu : {options['provider']} (seul « ollama » est disponible).")
-    return OllamaModel(options['model'], options['url']) if options['model'] else None
+    return OllamaModel(options['model'], options['url'], num_ctx=options.get('num_ctx', 16384)) if options['model'] else None
 
 
 def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None, minia=_FROM_SETTINGS,

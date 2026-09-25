@@ -15,7 +15,8 @@ MODES = (OFF, DIFF)
 
 MAX_DIFF_FILES = 20
 MAX_DIFF_LINES = 1500
-MAX_DIFF_BYTES = 100 * 1024
+# 32 Ko, environ 11 000 tokens : le diff tient avec les faits dans la fenetre par defaut de Minia (16 384).
+MAX_DIFF_BYTES = 32 * 1024
 
 LIMIT, GENERATED = 'LIMIT', 'GENERATED'
 # Fichiers produits par un outil : volumineux, sans intention d'auteur a interpreter.

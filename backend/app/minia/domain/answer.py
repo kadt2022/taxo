@@ -80,9 +80,10 @@ def parse(raw, refs):
         data = json.loads(raw)
     except (TypeError, ValueError) as exc:
         raise MiniaError(INVALID_ANSWER, "Minia n'a pas rendu de JSON lisible.") from exc
-    if not isinstance(data, dict) or not {'cited', 'answer', 'unknown'} <= data.keys():
+    # Seul "answer" est indispensable : un petit modele omet parfois une liste vide ou un texte vide.
+    if not isinstance(data, dict) or 'answer' not in data:
         raise MiniaError(INVALID_ANSWER, "Minia n'a pas rendu l'objet attendu (cited, answer, unknown).")
-    cited, answer, unknown = data['cited'], data['answer'], data['unknown']
+    cited, answer, unknown = data.get('cited', []), data['answer'], data.get('unknown', '')
     if not isinstance(cited, list) or not isinstance(answer, str) or not isinstance(unknown, str):
         raise MiniaError(INVALID_ANSWER, "Minia n'a pas rendu les champs attendus.")
     kept, rejected = [], []

@@ -25,7 +25,7 @@ a changé, pas ce qui a changé dedans, tant qu'aucun évaluateur ne sait le for
    sont jamais lus, d'un côté comme de l'autre. Aucune commande Git n'exécute de hook, de filtre ni de
    code du dépôt. Minia n'a pas de moteur de lecture propre.
 3. **Le diff seulement.** Seuls les blocs modifiés (avec les lignes de contexte du diff) sont transmis,
-   jamais les fichiers entiers ni le reste du dépôt. Limites : 20 fichiers, 1 500 lignes, 100 Ko. Un
+   jamais les fichiers entiers ni le reste du dépôt. Limites : 20 fichiers, 1 500 lignes, 32 Ko (pour tenir, avec les faits, dans la fenêtre de 16 384 tokens de Minia). Un
    fichier qui dépasse n'est pas tronqué : il n'est pas transmis. Les fichiers générés (verrous de
    dépendances, `*.min.js`, `*.map`, `*.snap`) ne sont pas lus. Chaque fichier non transmis est nommé
    avec sa raison (`LIMIT`, `GENERATED`, `CONFIDENTIAL`, `BINARY`, `TOO_LARGE`, `NOT_A_REGULAR_FILE`),

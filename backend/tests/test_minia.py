@@ -227,8 +227,28 @@ def test_the_ollama_adapter_asks_for_deterministic_json():
     assert ollama(handler).complete('sys', 'user') == '{"cited": []}'
     body = seen[0]
     assert (body['model'], body['format'], body['stream'], body['options']) == ('qwen2.5:3b', 'json', False,
-                                                                                {'temperature': 0})
+                                                                                {'temperature': 0, 'num_ctx': 16384})
     assert [message['role'] for message in body['messages']] == ['system', 'user']
+
+
+def test_a_request_that_would_not_fit_is_refused_rather_than_truncated():
+    def handler(request):
+        raise AssertionError('Ollama ne doit pas etre appele : il tronquerait les consignes en silence')
+
+    model = OllamaModel('qwen2.5:3b', 'http://ollama.test:11434', transport=httpx.MockTransport(handler), num_ctx=4096)
+    with pytest.raises(MiniaError) as error:
+        model.complete('consignes', 'x' * 3 * 4096)
+    assert error.value.code == 'MINIA_CONTEXT_TOO_LARGE' and 'MINIA_OLLAMA_NUM_CTX' in str(error.value)
+    with pytest.raises(MiniaError):
+        list(model.stream('consignes', 'x' * 3 * 4096))
+    with pytest.raises(ValueError, match='NUM_CTX'):
+        OllamaModel('m', num_ctx=512)
+
+
+def test_a_small_model_may_omit_empty_fields():
+    assert parse('{"answer": "Le commit restreindrait les origines."}', {}) == {
+        'cited': [], 'rejected': [], 'answer': 'Le commit restreindrait les origines.', 'unknown': ''}
+    assert parse('{"answer": "a", "cited": ["F1"]}', {'F1': {}})['cited'] == ['F1']
 
 
 @pytest.mark.parametrize('handler, expected', [
@@ -259,12 +279,14 @@ def test_the_ollama_url_must_be_http(url):
 
 
 def test_settings_choose_the_provider(monkeypatch):
-    for name in ('MINIA_PROVIDER', 'MINIA_OLLAMA_URL', 'MINIA_OLLAMA_MODEL'):
+    for name in ('MINIA_PROVIDER', 'MINIA_OLLAMA_URL', 'MINIA_OLLAMA_MODEL', 'MINIA_OLLAMA_NUM_CTX'):
         monkeypatch.delenv(name, raising=False)
-    assert settings.minia() == {'provider': 'ollama', 'url': 'http://127.0.0.1:11434', 'model': ''}
+    assert settings.minia() == {'provider': 'ollama', 'url': 'http://127.0.0.1:11434', 'model': '', 'num_ctx': 16384}
     assert minia_model(settings.minia()) is None, 'sans modele, Minia reste desactivee'
     monkeypatch.setenv('MINIA_OLLAMA_MODEL', ' qwen2.5:3b ')
     model = minia_model(settings.minia())
     assert (model.provider, model.model_name, model.url) == ('ollama', 'qwen2.5:3b', 'http://127.0.0.1:11434')
+    monkeypatch.setenv('MINIA_OLLAMA_NUM_CTX', '32768')
+    assert minia_model(settings.minia()).num_ctx == 32768
     with pytest.raises(ValueError, match='seul « ollama »'):
         minia_model(settings.minia(provider='claude'))
