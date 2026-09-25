@@ -17,6 +17,10 @@ export type Scan = {id:string; created_at:string; files_count?:number; commit?:s
 export type CardState = 'known'|'partial'|'failed'|'unknown';
 export type Card = {id:string; title:string; value:string; detail:string; state:CardState};
 
+// Carte -> evaluateur qui la nourrit : pendant une nouvelle analyse, une carte reste marquee tant que
+// son evaluateur n'a pas termine.
+export const CARD_SOURCES:Record<string,string>={technologies:'taxo.inventory', project:'taxo.inventory', history:'taxo.git'};
+
 /** Toutes les executions de l'analyse ; une analyse ancienne n'a que le resume de l'inventaire. */
 export function evaluationsOf(scan:Scan):EvaluationSummary[]{
   if(scan.evaluations?.length)return scan.evaluations;
@@ -112,12 +116,15 @@ export function CardIcon({id}:Readonly<{id:string}>){
 
 const BADGES:Record<CardState,string|null>={known:null, partial:'En partie', failed:'Échec', unknown:'Non analysé'};
 
-export function ProjectOverview({scan}:Readonly<{scan:Scan}>){
-  return <section className="overview" id="vue-ensemble" aria-label="Vue d’ensemble">
-    <p className={`outcome outcome-${outcomeState(scan)}`} role="status">{outcome(scan)}</p>
+export function ProjectOverview({scan, pending}:Readonly<{scan:Scan; pending?:string[]}>){
+  const refreshing=pending!==undefined;
+  const stale=(id:string)=>refreshing&&pending.includes(CARD_SOURCES[id]);
+  return <section className={`overview${refreshing?' is-refreshing':''}`} id="vue-ensemble" aria-label="Vue d’ensemble" aria-busy={refreshing}>
+    {refreshing?<p className="outcome outcome-running" role="status">Nouvelle analyse en cours…</p>
+      :<p className={`outcome outcome-${outcomeState(scan)}`} role="status">{outcome(scan)}</p>}
     <h2>Vue d’ensemble</h2>
     <div className="cards">
-      {overviewCards(scan).map(card=><article key={card.id} className={`card card-${card.state}`} aria-label={card.title}>
+      {overviewCards(scan).map(card=><article key={card.id} className={`card card-${card.state}${stale(card.id)?' card-stale':''}`} aria-label={card.title}>
         <h3><CardIcon id={card.id}/>{card.title}{BADGES[card.state]&&card.value!==BADGES[card.state]&&<span className="badge">{BADGES[card.state]}</span>}</h3>
         <strong>{card.value}</strong>
         <p>{card.detail}</p>

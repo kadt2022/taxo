@@ -42,8 +42,11 @@ def test_failed_evaluation_is_not_persisted_as_successful_scan():
         status = EvaluationStatus.FAILED
         warnings = ('ValueError: Projet trop volumineux : limite de 50 000 fichiers.',)
 
+        def summary(self):
+            return {'status': 'FAILED'}
+
     class Runner:
-        def __call__(self, evaluator, snapshot):
+        def __call__(self, evaluator, snapshot, progress=None):
             return FailedExecution()
 
     run = RunScan(Projects(), Scans(), Paths(), Reader(), object(), Runner())

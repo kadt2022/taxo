@@ -3,6 +3,7 @@ import xml.etree.ElementTree as ET
 from pathlib import PurePosixPath
 
 from app.evaluations.domain.evaluator import EvaluationOutput
+from app.evaluations.domain.progress import silent
 from app.evaluations.domain.status import EvaluationStatus
 from app.facts import content_hash, is_path
 from app.snapshots.domain.mode import COMMIT, WORKING_TREE
@@ -15,6 +16,8 @@ IGNORED = {'.git', 'node_modules', '.venv', 'venv', 'dist', 'build', 'target', '
 MANIFESTS = {'package.json', 'pom.xml', 'requirements.txt'}
 MAX_FILES = 50000
 MAX_MANIFEST_BYTES = 1024 * 1024
+# Frequence des nouvelles de lecture : assez pour paraitre vivant, sans inonder le flux.
+PROGRESS_EVERY = 250
 
 
 class InventoryEvaluator:
@@ -22,8 +25,9 @@ class InventoryEvaluator:
     producer_version = '0.1.0'
     catalog = CATALOG
 
-    def evaluate(self, snapshot):
+    def evaluate(self, snapshot, progress=silent):
         files, excluded, invalid_paths = self._select_files(snapshot)
+        progress('files', 'Fichiers recensés', len(files), len(files))
         skipped_excluded, skipped_invalid = self._snapshot_exclusions(snapshot)
         excluded.update(skipped_excluded)
         invalid_paths.extend(skipped_invalid)
@@ -37,7 +41,7 @@ class InventoryEvaluator:
                 kind = 'Manifeste' if PurePosixPath(file.path).name in MANIFESTS else 'Fichier'
                 warnings.append(f'{kind} trop volumineux : {file.path}')
         readable = tuple(f for f in files if f.size <= MAX_MANIFEST_BYTES)
-        by_path, read_error_subjects = self._read_contents(snapshot, readable, observed, warnings)
+        by_path, read_error_subjects = self._read_contents(snapshot, readable, observed, warnings, progress)
         repository = f'repository:{snapshot.repository}'
         facts = self._facts(files, by_path, observed, repository)
         file_paths = {f.path for f in files}
@@ -85,12 +89,14 @@ class InventoryEvaluator:
             files.append(file)
         return tuple(files), excluded, invalid_paths
 
-    def _read_contents(self, snapshot, readable, observed, warnings):
+    def _read_contents(self, snapshot, readable, observed, warnings, progress=silent):
         by_path = {}
         read_error_subjects = ()
         next_file = 0
         try:
             for next_file, (path, data) in enumerate(snapshot.read_many(f.path for f in readable), 1):
+                if next_file % PROGRESS_EVERY == 0 or next_file == len(readable):
+                    progress('reading', 'Fichiers lus', next_file, len(readable))
                 try:
                     by_path[path] = self._evidence(snapshot, path, data, 'inventory.file')
                 except UnicodeDecodeError:

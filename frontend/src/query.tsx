@@ -3,6 +3,8 @@
 import {useState, type FormEvent} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
+import {ask as askMinia, askButton, MiniaProgress, type MiniaLive} from './minia-live';
+import {openStream, type ServerEvent} from './sse';
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
 type SelectedCommit = {sha:string; authored_at?:string; subject?:string};
@@ -106,31 +108,34 @@ export async function track<T>(pending:()=>Promise<T>, {setBusy, setError, setVa
 /** Soumission du formulaire : la page ne se recharge pas, l'action choisie est lancee. */
 export const submitWith=(action:()=>unknown)=>(event:Pick<FormEvent,'preventDefault'>)=>{event.preventDefault();return action();};
 
+type Stream = (url:string, init?:RequestInit)=>Promise<AsyncIterable<ServerEvent>>;
+type Live = MiniaLive<SelectionAnswer>;
 type PanelSetters = {setBusy:(value:boolean)=>void; setError:(value:string)=>void;
-  setResult:(value:Selection)=>void; setAnswer:(value:SelectionAnswer|null)=>void};
+  setResult:(value:Selection)=>void; setLive:(change:(live:Live|null)=>Live|null)=>void};
 
 /** Les deux actions du panneau : selectionner des faits, ou demander a Minia d'expliquer la selection. */
-export function actions(base:string, text:string, request:Run, set:PanelSetters){
+export function actions(base:string, text:string, request:Run, set:PanelSetters, stream:Stream=openStream){
   const common={setBusy:set.setBusy, setError:set.setError};
   return {
-    select:()=>track(()=>request<Selection>(queryPath(base,text)), {...common, setValue:(value:Selection)=>{set.setResult(value);set.setAnswer(null);}}),
-    explain:()=>track(()=>request<SelectionAnswer>(`${base}/ask`,askInit(text)), {...common, setValue:set.setAnswer}),
+    select:()=>track(()=>request<Selection>(queryPath(base,text)), {...common, setValue:(value:Selection)=>{set.setResult(value);set.setLive(()=>null);}}),
+    explain:()=>track(()=>askMinia<SelectionAnswer>(()=>stream(`/api${base}/ask/stream`,askInit(text)), change=>set.setLive(live=>change(live as Live))),
+      {...common, setValue:()=>undefined}),
   };
 }
 
-export function AskTaxo({base, request}:Readonly<{base:string; request:Run}>){
+export function AskTaxo({base, request, stream}:Readonly<{base:string; request:Run; stream?:Stream}>){
   const [text,setText]=useState(''), [busy,setBusy]=useState(false), [error,setError]=useState('');
-  const [result,setResult]=useState<Selection|null>(null), [answer,setAnswer]=useState<SelectionAnswer|null>(null);
-  const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setAnswer});
+  const [result,setResult]=useState<Selection|null>(null), [live,setLive]=useState<Live|null>(null);
+  const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setLive},stream);
   return <section className="results ask-taxo" aria-label="Interroger Taxo">
     <div className="section-heading"><div><h2>Interroger Taxo</h2><p>Taxo sélectionne parmi les faits de la dernière analyse globale : « les 3 derniers commits », « le commit 5b9022b », « depuis 2026-09-01 ».</p></div></div>
     <form onSubmit={submitWith(select)}>
       <label htmlFor="taxo-query">Votre requête</label>
       <input id="taxo-query" required maxLength={1000} value={text} onChange={typed(setText)} placeholder="les 3 derniers commits"/>
       <div className="actions"><button type="submit" className="secondary" disabled={busy}>Sélectionner</button>
-        <button type="button" className="secondary" disabled={busy||!text.trim()} onClick={explain}>Demander à Minia</button></div>
+        <button type="button" className="secondary" disabled={busy||!text.trim()} onClick={explain}>{askButton(busy&&live!==null&&!live.result,'Demander à Minia')}</button></div>
     </form>
     {error&&<div role="alert" className="error">{error}</div>}
-    {answer?<SelectionAnswerView answer={answer}/>:result&&<SelectionView result={result}/>}
+    {live?.result?<SelectionAnswerView answer={live.result}/>:live?<MiniaProgress live={live}/>:result&&<SelectionView result={result}/>}
   </section>;
 }

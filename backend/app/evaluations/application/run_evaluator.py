@@ -1,3 +1,4 @@
+import inspect
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -10,13 +11,17 @@ class RunEvaluator:
     def __init__(self, validator=validate_fact):
         self.validator = validator
 
-    def __call__(self, evaluator, snapshot):
+    def __call__(self, evaluator, snapshot, progress=None):
         execution_id = str(uuid4())
         started_at = datetime.now(timezone.utc)
         repository = f'repository:{snapshot.repository}'
         scope = {'include': [repository], 'exclude': []}
         try:
-            output = evaluator.evaluate(snapshot)
+            # Un evaluateur qui sait rapporter sa progression la recoit ; les autres sont appeles comme avant.
+            if progress is not None and 'progress' in inspect.signature(evaluator.evaluate).parameters:
+                output = evaluator.evaluate(snapshot, progress=progress)
+            else:
+                output = evaluator.evaluate(snapshot)
             facts = tuple(self._with_provenance(fact, evaluator, snapshot, execution_id)
                           for fact in output.facts)
             coverage = tuple(self._with_provenance(fact, evaluator, snapshot, execution_id)

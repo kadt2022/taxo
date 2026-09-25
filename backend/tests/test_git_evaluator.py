@@ -79,7 +79,7 @@ def test_a_merge_keeps_both_parents_and_its_changes_against_the_first(story):
 
 
 def test_the_evaluator_has_no_presentation_window():
-    assert list(inspect.signature(GitEvaluator.evaluate).parameters) == ['self', 'snapshot']
+    assert list(inspect.signature(GitEvaluator.evaluate).parameters) == ['self', 'snapshot', 'progress']
     assert 'limit' not in inspect.signature(GitEvaluator).parameters
 
 

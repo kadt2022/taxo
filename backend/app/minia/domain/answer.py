@@ -76,3 +76,52 @@ def parse(raw, refs):
 
 def _text(value):
     return '' if _EMPTY.fullmatch(value) else value.strip()
+
+
+_ANSWER_START = re.compile(r'"answer"\s*:\s*"')
+_ESCAPES = {'"': '"', '\\': '\\', '/': '/', 'b': '\b', 'f': '\f', 'n': '\n', 'r': '\r', 't': '\t'}
+
+
+class AnswerStream:
+    """Extrait, au fil des morceaux produits par le modele, le texte du champ "answer" (TAXO-UX-02).
+
+    Ce texte est provisoire : il n'est ni une citation ni un fait. La reponse definitive reste celle que
+    `parse` valide une fois le modele termine.
+    """
+
+    def __init__(self):
+        self._raw, self._position, self._started, self._closed = '', 0, False, False
+
+    def feed(self, chunk):
+        """Texte nouvellement decode de "answer" ; chaine vide s'il n'y en a pas encore."""
+        self._raw += chunk
+        if self._closed:
+            return ''
+        if not self._started:
+            match = _ANSWER_START.search(self._raw)
+            if not match:
+                return ''
+            self._started, self._position = True, match.end()
+        out = []
+        while self._position < len(self._raw):
+            char = self._raw[self._position]
+            if char == '"':
+                self._closed = True
+                break
+            if char != '\\':
+                out.append(char)
+                self._position += 1
+                continue
+            escape = self._raw[self._position + 1:self._position + 2]
+            if not escape:
+                break
+            if escape == 'u':
+                digits = self._raw[self._position + 2:self._position + 6]
+                if len(digits) < 4:
+                    break
+                out.append(chr(int(digits, 16)) if re.fullmatch('[0-9a-fA-F]{4}', digits) else '')
+                self._position += 6
+                continue
+            out.append(_ESCAPES.get(escape, escape))
+            self._position += 2
+        return ''.join(out)

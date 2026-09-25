@@ -5,6 +5,7 @@ from app.projects.infrastructure.paths import LocalProjectPaths
 from app.projects.api.router import create_router as projects_router
 from app.scans.infrastructure.sqlalchemy.scan_repository import SqlAlchemyScanRepository
 from app.scans.application.run_scan import RunScan
+from app.scans.application.analysis_jobs import AnalysisJobs
 from app.scans.api.router import create_router as scans_router
 from app.snapshots.infrastructure.git.reader import GitSnapshotReader
 from app.evaluators.inventory.evaluator import InventoryEvaluator
@@ -59,7 +60,8 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     register_errors(api)
     api.include_router(health_router)
     api.include_router(projects_router(projects, paths))
-    api.include_router(scans_router(projects, scans, run, facts))
+    # Analyse observable : lancee en tache de fond, ses evenements reels sont diffuses (TAXO-UX-02).
+    api.include_router(scans_router(projects, scans, run, facts, AnalysisJobs(run, projects)))
     api.include_router(history_router(history))
     # La requete selectionne parmi les faits conserves ; elle ne relit jamais le depot (TAXO-QUERY-01).
     query = ProjectQuery(projects, scans, facts)
