@@ -219,7 +219,7 @@ details>summary{list-style:none;cursor:pointer}
 .proof[open]{display:block;margin:4px 0 0}
 .ask-taxo{margin-top:28px}.ask-taxo form{display:block}.ask-taxo input{margin-bottom:10px}
 .ask-taxo .actions{display:flex;flex-wrap:wrap;gap:8px}.ask-taxo .actions .secondary{width:auto}
-.selection{margin-top:18px}.selected-commits{list-style:none;padding:0;margin:0 0 10px}
+.selection{margin-top:18px}.selection td code{white-space:nowrap}.selected-commits{list-style:none;padding:0;margin:0 0 10px}
 
 /* ——— Tablette ——— */
 @media(max-width:1000px){

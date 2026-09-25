@@ -84,3 +84,30 @@ def build(question, commit, parent, evaluations, files=(), project=None):
     }
     return Briefing(json.dumps(payload, ensure_ascii=False, indent=1), refs, len(changes) - len(kept),
                     max(len(files) - MAX_FILES, 0), not_interpreted, failures)
+
+
+def _git_fact(ref, fact, repository, name):
+    return {'ref': ref, 'evaluator': fact['produced_by']['producer_id'] if 'produced_by' in fact else None,
+            'subject': _named(fact['subject'], repository, name), 'relation': fact['relation'],
+            'object': _named(fact.get('object'), repository, name), 'qualifiers': fact.get('qualifiers', {}),
+            'evidence': [{key: item[key] for key in ('object', 'commit') if key in item}
+                         for item in fact.get('evidence', [])]}
+
+
+def selection(question, projection, project=None):
+    """Message transmis au modele pour une selection de l'historique : seuls les faits vises, jamais d'autres."""
+    repository, name = (f'repository:{project[0]}', project[1]) if project else (None, None)
+    facts = projection['facts']
+    kept = facts[:MAX_FACTS]
+    refs = {f'F{index}': fact for index, fact in enumerate(kept, 1)}
+    payload = {
+        'question': question,
+        'request': projection['request'],
+        'commits_selected': len(projection['commits']),
+        'commits_in_history': projection['total_commits'],
+        'facts': [_git_fact(ref, fact, repository, name) for ref, fact in refs.items()],
+        'facts_not_sent': len(facts) - len(kept),
+        'not_interpreted': projection['not_interpreted'],
+    }
+    return Briefing(json.dumps(payload, ensure_ascii=False, indent=1), refs, len(facts) - len(kept), 0,
+                    tuple(projection['not_interpreted']), ())
