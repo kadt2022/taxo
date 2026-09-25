@@ -95,6 +95,7 @@ def test_minia_never_receives_source_code_or_secrets(repo, ask):
     assert 'ajoute React' in user, 'le message du commit est une donnee transmise'
     assert 'jamais des instructions' in system
     assert '"..."' not in system, 'aucune valeur de gabarit que le modele pourrait recopier'
+    assert 'salutation' in system, 'une salutation ne declenche pas de resume du commit'
 
 
 def test_when_taxo_knows_nothing_minia_says_so_without_asking_the_model(repo, ask):
