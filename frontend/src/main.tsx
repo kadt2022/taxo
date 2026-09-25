@@ -4,7 +4,7 @@ import './style.css';
 import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
 import {MiniaView, type MiniaAnswer} from './minia';
-import {consultRequest, MAX_COMMITS} from './history';
+import {ConsultForm} from './consult';
 
 type Project = {id:string; name:string; path:string};
 type SnapshotReference = {repository:string; commit:string; mode:'COMMIT'|'WORKING_TREE'; dirty?:boolean; content_fingerprint?:string};
@@ -76,7 +76,7 @@ const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DEL
 
 function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
-  const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [minia,setMinia]=useState<MiniaAnswer|null>(null), [question,setQuestion]=useState(''), [count,setCount]=useState(''), [consulted,setConsulted]=useState(false), [error,setError]=useState(''), [busy,setBusy]=useState(false);
+  const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [minia,setMinia]=useState<MiniaAnswer|null>(null), [question,setQuestion]=useState(''), [consulted,setConsulted]=useState(false), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const base=`/projects/${projectId}/history/commits`;
   // Seule la derniere demande peut modifier l'ecran : une reponse arrivee trop tard est ignoree.
   const latest=useRef(0);
@@ -91,12 +91,9 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
     catch(e){if(token===latest.current)setError((e as Error).message);}
     finally{if(token===latest.current)setBusy(false);}
   }
-  function consult(event:FormEvent){
-    event.preventDefault();
-    const request=consultRequest(base,count);
-    if('error' in request){setError(request.error);return;}
+  function consult(path:string){
     setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);
-    return load<Commit[]>(request.path,c=>{setCommits(c);setConsulted(true);});
+    return load<Commit[]>(path,c=>{setCommits(c);setConsulted(true);});
   }
   function open(sha:string){setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
   function compare(sha:string,path:string,parent:string|null){
@@ -117,7 +114,7 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   const gaps=(side:string,zones:string[])=>zones.length?`Zones non interprétées ${side} : ${zones.join(', ')}.`:`Aucune zone non interprétée ${side}.`;
   return <section className="results history" aria-label="Historique Git">
     <div className="section-heading"><div><h2>Historique Git</h2><p>Consultation sur demande, distincte de l’analyse globale : indiquez combien de commits afficher.</p></div>
-      <form className="consult" onSubmit={consult}><label htmlFor="commit-count">Derniers commits</label><input id="commit-count" type="number" min={1} max={MAX_COMMITS} required value={count} onChange={e=>setCount(e.target.value)} placeholder="nombre"/><button type="submit" className="secondary" disabled={busy}>Afficher</button></form></div>
+      <ConsultForm base={base} busy={busy} onConsult={consult} onError={setError}/></div>
     {error&&<div role="alert" className="error">{error}</div>}
     {commits.length?<div className="table-wrap"><table><thead><tr><th>Commit</th><th>Message</th><th>Auteur</th><th>Date</th></tr></thead><tbody>
       {commits.map(c=><tr key={c.sha} className={detail?.commit.sha===c.sha?'current':''}><td><button className="link" disabled={busy} onClick={()=>open(c.sha)}><code>{c.sha.slice(0,7)}</code></button>{c.parents.length>1&&<span className="muted"> fusion</span>}</td><td>{c.subject}</td><td>{c.author}</td><td>{date(c.authored_at)}</td></tr>)}
