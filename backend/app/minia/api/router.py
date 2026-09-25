@@ -14,6 +14,10 @@ class Question(BaseModel):
     parent: str | None = None
 
 
+class ProjectQuestion(BaseModel):
+    question: str
+
+
 def create_router(minia):
     router = APIRouter()
 
@@ -24,5 +28,10 @@ def create_router(minia):
     @router.post('/api/projects/{project_id}/history/commits/{sha}/ask', responses=_ERRORS)
     def ask(project_id: str, sha: str, body: Question):
         return minia.about_commit(project_id, sha, body.question, body.parent)
+
+    @router.post('/api/projects/{project_id}/ask', responses={
+        **_ERRORS, 409: {'description': 'Aucune analyse globale pour ce projet.'}})
+    def ask_project(project_id: str, body: ProjectQuestion):
+        return minia.about_project(project_id, body.question)
 
     return router

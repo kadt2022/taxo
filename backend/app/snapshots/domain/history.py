@@ -18,5 +18,6 @@ class HistoryCommit:
     author_name: str
     author_email: str
     authored_at: str
+    committed_at: str
     subject: str
     changes: tuple[HistoryChange, ...]

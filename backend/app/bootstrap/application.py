@@ -19,6 +19,8 @@ from app.history.application.queries import ProjectHistory
 from app.history.infrastructure.git_history import GitHistoryReader
 from app.history.api.router import create_router as history_router
 from app.minia.application.ask import AskMinia
+from app.projection.application.query import ProjectQuery
+from app.projection.api.router import create_router as query_router
 from app.minia.infrastructure.ollama import OllamaModel
 from app.minia.api.router import create_router as minia_router
 from . import settings
@@ -59,7 +61,10 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     api.include_router(projects_router(projects, paths))
     api.include_router(scans_router(projects, scans, run, facts))
     api.include_router(history_router(history))
+    # La requete selectionne parmi les faits conserves ; elle ne relit jamais le depot (TAXO-QUERY-01).
+    query = ProjectQuery(projects, scans, facts)
+    api.include_router(query_router(query))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ADR 0004, regle 14).
     model = minia_model(settings.minia()) if minia is _FROM_SETTINGS else minia
-    api.include_router(minia_router(AskMinia(history, model, projects)))
+    api.include_router(minia_router(AskMinia(history, model, projects, query)))
     return api

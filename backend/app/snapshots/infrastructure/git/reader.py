@@ -31,7 +31,7 @@ _FILE_MODES = {b'100644', b'100755'}
 _CHUNK = 1 << 16
 # Historique (ADR 0007) : lecture seule, sans diff externe, textconv ni verification de signature.
 _LOG = ['-c', 'log.showSignature=false', '-c', 'diff.external=', 'log', '-z', '--no-color', '--no-ext-diff',
-        '--no-textconv', '--format=%x1e%H%x00%P%x00%an%x00%ae%x00%aI%x00%s', '--name-status', '-M',
+        '--no-textconv', '--format=%x1e%H%x00%P%x00%an%x00%ae%x00%aI%x00%cI%x00%s', '--name-status', '-M',
         '--diff-merges=first-parent']
 _CHANGES = {'A': 'ADDED', 'M': 'MODIFIED', 'D': 'DELETED', 'R': 'RENAMED', 'C': 'COPIED', 'T': 'TYPE_CHANGED'}
 
@@ -265,25 +265,25 @@ def _history(root, commit, limit):
         token = tokens[index].lstrip(b'\n')
         if token.startswith(b'\x1e'):
             if header:
-                yield HistoryCommit(*header[:6], tuple(header[6]))
-            sha, parents, name, email, date, subject = [token[1:], *tokens[index + 1:index + 6]]
+                yield HistoryCommit(*header[:7], tuple(header[7]))
+            sha, parents, name, email, authored, committed, subject = [token[1:], *tokens[index + 1:index + 7]]
             header = [sha.decode('ascii'), tuple(parents.decode('ascii').split()), _text(name), _text(email),
-                      _text(date), _text(subject), []]
-            index += 6
+                      _text(authored), _text(committed), _text(subject), []]
+            index += 7
         elif header and _STATUS.fullmatch(token):
             code = token.decode('ascii')
             if code[0] in 'RC':
-                header[6].append(HistoryChange(_CHANGES[code[0]], _path(tokens[index + 2]), _path(tokens[index + 1])))
+                header[7].append(HistoryChange(_CHANGES[code[0]], _path(tokens[index + 2]), _path(tokens[index + 1])))
                 index += 3
             else:
-                header[6].append(HistoryChange(_CHANGES.get(code[0], 'UNKNOWN'), _path(tokens[index + 1])))
+                header[7].append(HistoryChange(_CHANGES.get(code[0], 'UNKNOWN'), _path(tokens[index + 1])))
                 index += 2
         elif token:
             raise ValueError('Sortie de git log inattendue.')
         else:
             index += 1
     if header:
-        yield HistoryCommit(*header[:6], tuple(header[6]))
+        yield HistoryCommit(*header[:7], tuple(header[7]))
 
 
 class GitSnapshotContent:
