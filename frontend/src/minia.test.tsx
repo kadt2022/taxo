@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {gaps, gitFile, MiniaView, named, place, sentence, type MiniaAnswer} from './minia';
+import {gaps, gitFile, MiniaView, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
   parent:'a'.repeat(40), project:{id:'p-1', name:'Takibo-IAM'}, files_not_sent:0,
@@ -99,5 +99,41 @@ describe('sentence', ()=>{
     const html=renderToStaticMarkup(<MiniaView answer={answer}/>);
     expect(html).toContain('<summary>Preuve</summary>');
     expect(html).toContain('AUTHORIZED_BY');
+  });
+});
+
+describe('contexte de diff (TAXO-MINIA-02)', ()=>{
+  const sent={status:'SENT' as const, files_sent:['Cors.java','App.java'], lines_sent:12, bytes_sent:400,
+    files_not_sent:[{path:'.env', reason:'CONFIDENTIAL'}, {path:'package-lock.json', reason:'GENERATED'}, {path:'Big.java', reason:'LIMIT'}, {path:'x', reason:'AUTRE'}]};
+  it('dit ce qui a été transmis, et pourquoi le reste ne l’a pas été', ()=>{
+    expect(sourceSummary(sent)).toEqual(['Diff de 2 fichiers transmis à Minia, 4 fichiers non transmis : .env (confidentiel), package-lock.json (fichier généré), Big.java (limite de taille), x (AUTRE).']);
+    expect(sourceSummary({...sent, files_sent:['A'], files_not_sent:[]})).toEqual(['Diff de 1 fichier transmis à Minia.']);
+    expect(sourceSummary({status:'DISABLED'})[0]).toContain('MINIA_SOURCE_CONTEXT vaut off');
+    expect(sourceSummary({status:'NOT_REQUESTED'})).toEqual([]);
+    expect(sourceSummary(undefined)).toEqual([]);
+    expect(gaps({...answer, unknown:'', source_context:sent})).toHaveLength(1);
+  });
+  it('précise la source de l’interprétation quand le diff a été lu', ()=>{
+    const html=renderToStaticMarkup(<MiniaView answer={{...answer, source_context:sent}}/>);
+    expect(html).toContain('À partir des faits de Taxo et du diff du commit.');
+    expect(html).toContain('les blocs modifiés du diff, jamais le reste du dépôt');
+    expect(renderToStaticMarkup(<MiniaView answer={answer}/>)).toContain('Minia ne lit ni le dépôt ni le code');
+  });
+  const status:MiniaStatus={configured:true, provider:'ollama', model:'qwen2.5:3b', source_context:'diff', remote:false};
+  it('ne propose la case que si le réglage l’autorise, décochée si le modèle est distant', ()=>{
+    expect(sourceConsent(null)).toBeNull();
+    expect(sourceConsent({...status, source_context:'off'})).toBeNull();
+    expect(sourceConsent({...status, configured:false})).toBeNull();
+    expect(sourceConsent(status)).toEqual({checked:true, warning:''});
+    expect(sourceConsent({...status, remote:true})?.checked).toBe(false);
+    expect(sourceConsent({...status, remote:true})?.warning).toContain('quittera la machine de Taxo');
+  });
+  it('affiche la case et l’avertissement', ()=>{
+    const noop=()=>undefined;
+    expect(renderToStaticMarkup(<SourceConsent status={{...status, source_context:'off'}} checked={false} onChange={noop}/>)).toBe('');
+    const html=renderToStaticMarkup(<SourceConsent status={{...status, remote:true}} checked={false} onChange={noop}/>);
+    expect(html).toContain('Autoriser Minia à lire le diff de ce commit');
+    expect(html).toContain('class="warning"');
+    expect(renderToStaticMarkup(<SourceConsent status={status} checked onChange={noop}/>)).not.toContain('warning');
   });
 });

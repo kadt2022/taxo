@@ -146,7 +146,8 @@ def test_a_renamed_file_reaches_minia_with_its_old_path(make_repo, git, ask, tmp
 def test_minia_without_a_model_is_disabled_but_taxo_still_works(repo, ask):
     _, added, _ = repo
     client, post = ask(None)
-    assert client.get('/api/minia/status').json() == {'configured': False, 'provider': None, 'model': None}
+    assert client.get('/api/minia/status').json() == {'configured': False, 'provider': None, 'model': None,
+                                                      'source_context': 'off', 'remote': False}
     response = post(added)
     assert response.status_code == 503 and 'MINIA_NOT_CONFIGURED' in response.json()['detail']
 

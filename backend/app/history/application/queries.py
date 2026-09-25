@@ -63,6 +63,16 @@ class ProjectHistory:
         changed = next((item for item in self.reader.files(root, commit.sha, base) if item.path == path), None)
         if changed is None:
             raise HistoryError(UNKNOWN_PATH, "Ce fichier n'est pas touché par ce commit.")
+        return self._file_diff(root, commit, base, changed)
+
+    def diffs(self, project_id, sha, parent=None):
+        """Fichiers du commit et lecteur de leur diff : chaque contenu n'est lu qu'a la demande, avec les
+        memes refus que `diff` (TAXO-MINIA-02)."""
+        _, root = self._root(project_id)
+        commit, base = self._commit_and_parent(root, sha, parent)
+        return self.reader.files(root, commit.sha, base), lambda changed: self._file_diff(root, commit, base, changed)
+
+    def _file_diff(self, root, commit, base, changed):
         before_path = changed.old_path or changed.path
         result = {'path': changed.path, 'old_path': changed.old_path, 'status': changed.status,
                   'commit': commit.sha, 'parent': base, 'before': None, 'after': None, 'hunks': []}

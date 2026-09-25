@@ -199,6 +199,9 @@ details>summary{list-style:none;cursor:pointer}
 .ask-minia{margin:26px 0 8px}
 .ask-minia textarea{resize:vertical;margin:6px 0 10px}
 .ask-minia .secondary{width:auto}
+.source-consent{margin:0 0 12px}.source-consent label{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:var(--text-2)}
+.source-consent input{width:auto;margin:0;accent-color:var(--ok)}
+.source-consent .warning{margin:6px 0 0;padding:8px 12px;border-radius:var(--r-sm);background:var(--warn-soft);color:var(--warn);font-size:13.5px}
 .minia{margin-top:18px}
 .minia-question{font-weight:600;margin:0 0 12px;font-size:15px}
 .minia-blocks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}

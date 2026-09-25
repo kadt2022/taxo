@@ -7,8 +7,11 @@ type Evidence = {path:string; line_start?:number; line_end?:number};
 export type CitedFact = FactChange & {ref:string; evaluator_id:string; evidence_before:Evidence[]; evidence_after:Evidence[]};
 type GitFile = {status:string; path:string; old_path:string|null};
 export type GitCommit = {sha:string; parent:string|null; author:string; authored_at:string; subject:string; files:GitFile[]};
+type NotSent = {path:string; reason:string};
+export type SourceContext = {status:'NOT_REQUESTED'|'DISABLED'}|{status:'SENT'; files_sent:string[]; files_not_sent:NotSent[]; lines_sent:number; bytes_sent:number};
+export type MiniaStatus = {configured:boolean; provider:string|null; model:string|null; source_context:'off'|'diff'; remote:boolean};
 export type MiniaAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'; question:string; commit:string; parent:string|null;
-  project:{id:string; name:string}; git:GitCommit; files_not_sent:number;
+  project:{id:string; name:string}; git:GitCommit; files_not_sent:number; source_context?:SourceContext;
   model:{configured:boolean; provider:string|null; model:string|null}; facts:CitedFact[]; answer:string; unknown:string;
   not_interpreted:string[]; failures:string[]; facts_not_sent:number; rejected_citations:string[]};
 
@@ -41,11 +44,40 @@ export function sentence(fact:CitedFact, project:MiniaAnswer['project']){
   return value===null?`${who} ${verb}`:`${who} ${verb} ${value}`;
 }
 
+const REASONS:Record<string,string>={LIMIT:'limite de taille', GENERATED:'fichier généré', CONFIDENTIAL:'confidentiel',
+  BINARY:'binaire', TOO_LARGE:'trop gros', NOT_A_REGULAR_FILE:'lien ou sous-module'};
+const files=(count:number)=>`${count} fichier${count>1?'s':''}`;
+
+/** Ce que Minia a lu du diff (TAXO-MINIA-02) : fichiers transmis, et chaque fichier non transmis avec sa raison. */
+export function sourceSummary(context:SourceContext|undefined){
+  if(context?.status==='DISABLED')return ['Le diff n’a pas été transmis à Minia : MINIA_SOURCE_CONTEXT vaut off.'];
+  if(context?.status!=='SENT')return [];
+  const notSent=context.files_not_sent;
+  const reasons=notSent.map(item=>`${item.path} (${REASONS[item.reason]??item.reason})`).join(', ');
+  return [`Diff de ${files(context.files_sent.length)} transmis à Minia${notSent.length?`, ${files(notSent.length)} non transmis : ${reasons}`:''}.`];
+}
+
+/** La case d'accord : proposee seulement si le reglage l'autorise ; decochee et signalee si le modele est distant. */
+export function sourceConsent(status:MiniaStatus|null){
+  if(!status?.configured||status.source_context!=='diff')return null;
+  return {checked:!status.remote, warning:status.remote?'Le modèle de Minia est sur une autre machine : le diff de ce commit quittera la machine de Taxo.':''};
+}
+
+export function SourceConsent({status, checked, onChange}:Readonly<{status:MiniaStatus|null; checked:boolean; onChange:(value:boolean)=>void}>){
+  const consent=sourceConsent(status);
+  if(!consent)return null;
+  return <div className="source-consent">
+    <label><input type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)}/> Autoriser Minia à lire le diff de ce commit</label>
+    {consent.warning&&<p className="warning">{consent.warning}</p>}
+  </div>;
+}
+
 /** Tout ce qui limite la reponse : le texte de Minia, puis les limites que Taxo connait lui-meme. */
 export function gaps(answer:MiniaAnswer){
   const items=answer.unknown?[answer.unknown]:[];
   if(answer.not_interpreted.length)items.push(`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`);
   if(answer.failures.length)items.push(`Analyses en échec : ${answer.failures.join(' ; ')}.`);
+  items.push(...sourceSummary(answer.source_context));
   if(answer.files_not_sent)items.push(`${answer.files_not_sent} fichiers du commit n’ont pas été transmis à Minia (limite de taille).`);
   if(answer.facts_not_sent)items.push(`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`);
   if(answer.rejected_citations.length)items.push(`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`);
@@ -53,7 +85,7 @@ export function gaps(answer:MiniaAnswer){
 }
 
 export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
-  const limits=gaps(answer);
+  const limits=gaps(answer), diff=answer.source_context?.status==='SENT';
   return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{answer.model.model?` · ${answer.model.provider} ${answer.model.model}`:''}</p>
     <p className="minia-question">{answer.question}</p>
@@ -77,6 +109,7 @@ export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
       </article>
       <article className="minia-block interpretation">
         <h3>Ce que Minia en déduit <span className="badge">non vérifié</span></h3>
+        {diff&&<p className="muted">À partir des faits de Taxo et du diff du commit.</p>}
         <p>{answer.answer||'Minia ne propose aucune interprétation.'}</p>
       </article>
       <article className="minia-block unknown">
@@ -84,6 +117,7 @@ export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
         {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée.</p>}
       </article>
     </div>
-    <footer>Minia ne lit ni le dépôt ni le code : elle ne reçoit que ce que Git sait du commit (sans contenu), les faits de Taxo, leurs preuves et la couverture. Sa réponse n’est jamais enregistrée comme un fait.</footer>
+    <footer>{diff?'Minia a reçu ce que Git sait du commit, les faits de Taxo, leurs preuves, la couverture et les blocs modifiés du diff, jamais le reste du dépôt.'
+      :'Minia ne lit ni le dépôt ni le code : elle ne reçoit que ce que Git sait du commit (sans contenu), les faits de Taxo, leurs preuves et la couverture.'} Sa réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
 }

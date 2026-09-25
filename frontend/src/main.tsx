@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import './style.css';
 import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
-import {MiniaView, type MiniaAnswer} from './minia';
+import {MiniaView, SourceConsent, sourceConsent, type MiniaAnswer, type MiniaStatus} from './minia';
 import {ConsultForm} from './consult';
 import {panelKey, ProjectNav, ProjectOverview, technologiesOf, type Scan} from './overview';
 import {AnalysisDetails} from './details';
@@ -26,6 +26,8 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
   const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [question,setQuestion]=useState(''), [live,setLive]=useState<MiniaLive<MiniaAnswer>|null>(null), [consulted,setConsulted]=useState(false), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const base=`/projects/${projectId}/history/commits`;
+  const [minia,setMinia]=useState<MiniaStatus|null>(null), [source,setSource]=useState(false);
+  useEffect(()=>{request<MiniaStatus>('/minia/status').then(s=>{setMinia(s);setSource(sourceConsent(s)?.checked??false);}).catch(()=>setMinia(null));},[]);
   // Seule la derniere demande peut modifier l'ecran : une reponse arrivee trop tard est ignoree.
   const latest=useRef(0);
   // Changer de projet efface la consultation : l'historique ne s'affiche que sur demande explicite.
@@ -56,7 +58,7 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
     event.preventDefault();
     const token=++latest.current;
     setBusy(true);setError('');setLive(null);
-    try{await askMinia<MiniaAnswer>(()=>openStream(`/api${base}/${sha}/ask/stream`,questionInit({question,parent})),change=>{if(token===latest.current)setLive(l=>change(l??startMinia()));});}
+    try{await askMinia<MiniaAnswer>(()=>openStream(`/api${base}/${sha}/ask/stream`,questionInit({question,parent,source_context:source&&sourceConsent(minia)!==null})),change=>{if(token===latest.current)setLive(l=>change(l??startMinia()));});}
     catch(e){if(token===latest.current)setError((e as Error).message);}
     finally{if(token===latest.current)setBusy(false);}
   }
@@ -89,6 +91,7 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
       <form className="ask-minia" onSubmit={e=>ask(e,detail.commit.sha,detail.parent)}>
         <label htmlFor="minia-question">Demander à Minia</label>
         <textarea id="minia-question" rows={2} maxLength={1000} value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Que change ce commit, et est-ce risqué ?"/>
+        <SourceConsent status={minia} checked={source} onChange={setSource}/>
         <button type="submit" className="secondary" disabled={busy||!question.trim()}>{askButton(busy&&live!==null&&!live.result,'Demander à Minia')}</button>
       </form>
       {live?.result?.commit===detail.commit.sha?<MiniaView answer={live.result}/>:live&&!live.result&&<MiniaProgress live={live}/>}

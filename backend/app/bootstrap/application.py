@@ -36,7 +36,8 @@ def minia_model(options):
     return OllamaModel(options['model'], options['url']) if options['model'] else None
 
 
-def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None, minia=_FROM_SETTINGS):
+def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None, minia=_FROM_SETTINGS,
+               source_context=None):
     engine = create_engine(settings.database_url(database_url))
     paths = LocalProjectPaths(settings.allowed_roots(allowed_roots))
     projects = SqlAlchemyProjectRepository(engine)
@@ -68,5 +69,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     api.include_router(query_router(query))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ADR 0004, regle 14).
     model = minia_model(settings.minia()) if minia is _FROM_SETTINGS else minia
-    api.include_router(minia_router(AskMinia(history, model, projects, query)))
+    # Le diff d'un commit ne lui est joint que si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise (ADR 0008).
+    source = settings.minia_source_context(source_context)
+    api.include_router(minia_router(AskMinia(history, model, projects, query, source)))
     return api

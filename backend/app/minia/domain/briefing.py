@@ -1,4 +1,7 @@
-"""Ce que Minia recoit : le commit vu par Git, les faits changes, leurs preuves et la couverture. Jamais de code.
+"""Ce que Minia recoit : le commit vu par Git, les faits changes, leurs preuves et la couverture.
+
+Aucun code, sauf un choix explicite (TAXO-MINIA-02, ADR 0008) : le diff du commit, limite aux blocs
+modifies, est alors joint comme contexte a interpreter, jamais comme un fait.
 
 Chaque fait recoit une reference courte (F1, F2...) : Minia cite ces references, et seul Taxo affiche
 les faits cites. Une preuve est reduite a sa localisation (chemin, lignes, commit) : son contenu n'est
@@ -21,15 +24,16 @@ class Briefing:
     files_truncated: int
     not_interpreted: tuple
     failures: tuple
+    diff: bool = False
 
     @property
     def empty(self):
-        """Aucun fait change et aucun echec : Taxo ne sait rien du commit, le modele n'a rien a lire.
+        """Aucun fait change, aucun echec et aucun diff : le modele n'a rien a lire.
 
         Une zone non interpretee ne suffit pas : elle peut exister dans tous les instantanes sans que le
         commit l'ait touchee.
         """
-        return not self.refs and not self.failures
+        return not self.refs and not self.failures and not self.diff
 
 
 def _evidence(items):
@@ -57,10 +61,11 @@ def commit_view(commit, parent, files):
                       for item in files[:MAX_FILES]]}
 
 
-def build(question, commit, parent, evaluations, files=(), project=None):
+def build(question, commit, parent, evaluations, files=(), project=None, diff=None):
     """Message transmis au modele, et table des references vers les changements de Taxo.
 
     `project` est un couple (identifiant, nom) : `repository:<identifiant>` devient `repository:<nom>`.
+    `diff` est le contexte de diff (source_context.DiffContext) quand il a ete autorise.
     """
     repository, name = (f'repository:{project[0]}', project[1]) if project else (None, None)
     changes = [{**change, 'evaluator_id': evaluation['evaluator_id']}
@@ -82,8 +87,11 @@ def build(question, commit, parent, evaluations, files=(), project=None):
         'not_interpreted': list(not_interpreted),
         'evaluator_failures': list(failures),
     }
+    if diff is not None:
+        payload['diff_context'] = diff.files
+        payload['diff_not_sent'] = diff.not_sent
     return Briefing(json.dumps(payload, ensure_ascii=False, indent=1), refs, len(changes) - len(kept),
-                    max(len(files) - MAX_FILES, 0), not_interpreted, failures)
+                    max(len(files) - MAX_FILES, 0), not_interpreted, failures, bool(diff and diff.files))
 
 
 def _git_fact(ref, fact, repository, name):
