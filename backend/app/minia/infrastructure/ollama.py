@@ -1,4 +1,9 @@
-"""Adaptateur Ollama de Minia : un modele local, rien ne quitte la machine."""
+"""Adaptateur Ollama de Minia.
+
+Le modele recoit uniquement la projection Taxo de MINIA-01 (faits changes, localisation des preuves,
+couverture, metadonnees du commit), jamais le code source brut. MINIA_OLLAMA_URL peut viser un Ollama
+local ou distant : s'il est distant, ces donnees quittent le processus et la machine de Taxo.
+"""
 from urllib.parse import urlsplit
 
 import httpx

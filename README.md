@@ -121,7 +121,9 @@ inventée par le modèle est écartée et signalée. Si Taxo n'a vu changer aucu
 appelé et Minia dit qu'elle ne sait pas. Aucune réponse n'est conservée, et une réponse n'est jamais
 enregistrée comme un fait (ADR 0004, règle 14). Minia est indépendante de Clochette.
 
-Minia fonctionne avec un modèle local servi par [Ollama](https://ollama.com), gratuit :
+Minia fonctionne avec un modèle servi par [Ollama](https://ollama.com), gratuit. `MINIA_OLLAMA_URL`
+peut viser un Ollama local ou distant : Minia n'envoie jamais le code source brut, seulement la
+projection Taxo décrite ci-dessus, mais si Ollama est distant, ces données quittent la machine de Taxo.
 
 ```powershell
 ollama pull qwen2.5:3b
