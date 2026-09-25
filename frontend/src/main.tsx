@@ -4,7 +4,7 @@ import './style.css';
 import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
 import {MiniaView, type MiniaAnswer} from './minia';
-import {commitCount, MAX_COMMITS} from './history';
+import {consultRequest, MAX_COMMITS} from './history';
 
 type Project = {id:string; name:string; path:string};
 type SnapshotReference = {repository:string; commit:string; mode:'COMMIT'|'WORKING_TREE'; dirty?:boolean; content_fingerprint?:string};
@@ -93,10 +93,10 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   }
   function consult(event:FormEvent){
     event.preventDefault();
-    const wanted=commitCount(count);
-    if(wanted===null){setError(`Indiquez un nombre de commits entre 1 et ${MAX_COMMITS}.`);return;}
+    const request=consultRequest(base,count);
+    if('error' in request){setError(request.error);return;}
     setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);
-    return load<Commit[]>(`${base}?limit=${wanted}`,c=>{setCommits(c);setConsulted(true);});
+    return load<Commit[]>(request.path,c=>{setCommits(c);setConsulted(true);});
   }
   function open(sha:string){setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
   function compare(sha:string,path:string,parent:string|null){
