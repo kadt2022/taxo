@@ -36,10 +36,11 @@ export function outcome(result:Selection){
   return STATUS[result.status]??result.status;
 }
 
-/** Un fait Git en une ligne : sujet, relation, objet et qualificatifs utiles. */
+/** Un fait Git en une ligne : sujet, relation, objet, et les qualificatifs qui l'appuient (message, date, auteur, changement). */
 export function factLine(fact:GitFact){
-  const change=fact.qualifiers?.change, old=fact.qualifiers?.old_path;
-  const detail=[change, old?`depuis ${old}`:null].filter(Boolean).join(', ');
+  const q=fact.qualifiers??{};
+  const detail=[q.subject?`« ${q.subject} »`:null, q.authored_at??null, q.name??null, q.change??null,
+    q.old_path?`depuis ${q.old_path}`:null].filter(Boolean).join(', ');
   return `${fact.subject} ${fact.relation} ${fact.object}${detail?` (${detail})`:''}`;
 }
 
@@ -61,7 +62,8 @@ export function SelectionView({result}:Readonly<{result:Selection}>){
 }
 
 export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>){
-  const limits=[answer.unknown, answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
+  const limits=[answer.unknown, answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
+    answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:''].filter(Boolean);
   return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{answer.model.model?` · ${answer.model.provider} ${answer.model.model}`:''} · {describe(answer.request)}</p>
@@ -69,6 +71,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
     <div className="minia-blocks">
       <article className="minia-block fact">
         <h3>Fait Taxo</h3>
+        {answer.commits.length>0&&<ul className="selected-commits">{answer.commits.map(c=><li key={c.sha}><code>{short(c.sha)}</code> {c.subject??''} <span className="muted">{when(c.authored_at)}</span></li>)}</ul>}
         {answer.facts.length?<ul>{answer.facts.map(f=><li key={f.ref}>{factLine(f)}<span className="muted"> · {f.produced_by?.producer_id}</span></li>)}</ul>
           :<p className="muted">Aucun fait de Taxo n’appuie cette réponse.</p>}
       </article>

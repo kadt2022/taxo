@@ -67,6 +67,12 @@ def test_children_always_come_before_their_parents_then_newest_first():
     assert log_order(commits, parents) == ['merge', 'b', 'a', 'root']
 
 
+def test_like_git_the_most_recently_committed_tip_comes_first():
+    commits = {'rebased': {'authored_at': '2026-01-01T00:00:00+00:00', 'committed_at': '2026-09-20T00:00:00+00:00'},
+               'fresh': {'authored_at': '2026-09-10T00:00:00+00:00', 'committed_at': '2026-09-10T00:00:00+00:00'}}
+    assert log_order(commits, {'rebased': [], 'fresh': []}) == ['rebased', 'fresh']
+
+
 def commit_on(git, repo, name, day):
     (repo / f'{name}.txt').write_text(f'{name}\n')
     git(repo, 'add', '-A')

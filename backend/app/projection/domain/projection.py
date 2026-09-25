@@ -4,7 +4,8 @@ L'evaluateur Git a observe tout l'historique ; la projection choisit, parmi ces 
 la requete vise. Les faits sont rendus tels quels : provenance, preuves et qualificatifs compris.
 
 L'ordre des commits est celui de `git log --date-order`, reconstruit a partir des faits : un commit vient
-toujours avant ses parents (CHILD_OF), et parmi les commits disponibles le plus recent d'abord.
+toujours avant ses parents (CHILD_OF), et parmi les commits disponibles le plus recemment commite d'abord
+(date de commit, comme Git ; date d'auteur pour une analyse plus ancienne qui ne la porte pas).
 """
 import heapq
 from collections import defaultdict
@@ -27,6 +28,10 @@ def _moment(value):
         return 0.0
 
 
+def _when(commit):
+    return _moment(commit.get('committed_at') or commit.get('authored_at'))
+
+
 def _index(facts):
     commits, attached, parents = {}, defaultdict(list), defaultdict(list)
     for fact in facts:
@@ -44,13 +49,13 @@ def _index(facts):
 
 
 def log_order(commits, parents):
-    """Enfants avant parents ; a egalite, date d'auteur la plus recente, puis identifiant."""
+    """Enfants avant parents ; a egalite, date de commit la plus recente, puis identifiant."""
     children = defaultdict(int)
     for sha in commits:
         for parent in parents[sha]:
             if parent in commits:
                 children[parent] += 1
-    ready = [(-_moment(commits[sha].get('authored_at')), sha) for sha in commits if not children[sha]]
+    ready = [(-_when(commits[sha]), sha) for sha in commits if not children[sha]]
     heapq.heapify(ready)
     order = []
     while ready:
@@ -60,11 +65,12 @@ def log_order(commits, parents):
             if parent in commits:
                 children[parent] -= 1
                 if not children[parent]:
-                    heapq.heappush(ready, (-_moment(commits[parent].get('authored_at')), parent))
+                    heapq.heappush(ready, (-_when(commits[parent]), parent))
     return order
 
 
 def _in_period(commit, request):
+    # Une periode se lit sur la date d'auteur, celle que `git log` affiche par defaut.
     day = (commit.get('authored_at') or '')[:10]
     return (not request.since or day >= request.since) and (not request.until or day <= request.until)
 

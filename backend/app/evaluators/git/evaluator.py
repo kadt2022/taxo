@@ -63,7 +63,8 @@ class GitEvaluator:
         evidence = {'repository': snapshot.repository, 'commit': snapshot.commit, 'method': METHOD,
                     'object': subject}
         facts = [self._assertion(repository, 'HAS_COMMIT', subject,
-                                 {'authored_at': commit.authored_at, 'subject': commit.subject}, evidence)]
+                                 {'authored_at': commit.authored_at, 'committed_at': commit.committed_at,
+                                  'subject': commit.subject}, evidence)]
         author = (commit.author_email or commit.author_name).strip()
         if author:
             facts.append(self._assertion(subject, 'AUTHORED_BY', f'person:{author}',

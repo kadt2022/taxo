@@ -33,6 +33,10 @@ group('outcome et factLine', ()=>{
   it('écrit un fait Git en une ligne', ()=>{
     expect(factLine(fact)).toBe(`commit:${'b'.repeat(40)} CHANGES file:docs/done/R1.md (RENAMED, depuis docs/backlog/R1.md)`);
     expect(factLine({subject:'repository:p', relation:'HAS_COMMIT', object:'commit:c'})).toBe('repository:p HAS_COMMIT commit:c');
+    expect(factLine({subject:'repository:p', relation:'HAS_COMMIT', object:'commit:c',
+      qualifiers:{subject:'R1 termine', authored_at:'2026-09-25T09:00:00+00:00'}}))
+      .toBe('repository:p HAS_COMMIT commit:c (« R1 termine », 2026-09-25T09:00:00+00:00)');
+    expect(factLine({subject:'commit:c', relation:'AUTHORED_BY', object:'person:pi@x', qualifiers:{name:'Pi'}})).toBe('commit:c AUTHORED_BY person:pi@x (Pi)');
   });
 });
 
@@ -60,6 +64,8 @@ group('vues', ()=>{
     expect(html).toContain('taxo.git');
     expect(html).toContain('non vérifiée');
     expect(html).toContain('Aucune limite signalée.');
+    expect(html).toContain('R1 termine');
+    expect(renderToStaticMarkup(<SelectionAnswerView answer={{...answer, not_interpreted:['commit:x']}}/>)).toContain('Non analysé par Taxo : commit:x.');
     const nothing=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, status:'NEEDS_SELECTION', facts:[], answer:'',
       unknown:'Précisez.', facts_not_sent:2, rejected_citations:['F9'], model:{provider:null, model:null}}}/>);
     expect(nothing).toContain('Aucun fait de Taxo n’appuie cette réponse.');

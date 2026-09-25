@@ -29,7 +29,7 @@ Aucun fait v1 existant ne change de sens ni de validité.
 
   | Relation | Sujet | Objet | Qualificatifs |
   | --- | --- | --- | --- |
-  | `HAS_COMMIT` | `repository` | `commit` | `authored_at`, `subject` |
+  | `HAS_COMMIT` | `repository` | `commit` | `authored_at`, `committed_at`, `subject` |
   | `AUTHORED_BY` | `commit` | `person` | `name` |
   | `CHILD_OF` | `commit` | `commit` | `position` (1 = premier parent) |
   | `CHANGES` | `commit` | `file` | `change`, `old_path` pour un renommage |
