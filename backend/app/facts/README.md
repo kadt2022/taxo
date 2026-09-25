@@ -79,6 +79,11 @@ Le schema seul ne constitue donc pas un validateur Taxo complet.
   chemins relatifs avec `/`, sans segment `.` ou `..`, ni `/` final.
   Aucune reference invalide n'est reparee : la canonicalisation ne s'applique qu'a
   une valeur deja valide.
+- Une preuve cite soit un fichier (`path`, `content_hash`), soit un objet Git
+  (`object: commit:<sha>`), jamais les deux. Seules les relations d'historique
+  (`HAS_COMMIT`, `AUTHORED_BY`, `CHILD_OF`, `CHANGES`) exigent un objet Git,
+  et elles seules l'acceptent (ADR 0007). `evidence.commit` reste celui de
+  l'instantane.
 - Les lignes d'une preuve sont optionnelles mais doivent etre presentes ensemble,
   entieres, positives, et ordonnees. Une preuve sans lignes cite le fichier entier.
 - `PERMITS_ALL` interdit `object`, y compris `null`. `AUTHORIZED_BY` accepte

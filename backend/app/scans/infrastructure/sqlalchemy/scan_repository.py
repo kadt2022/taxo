@@ -23,6 +23,11 @@ class SqlAlchemyScanRepository:
             return [_scan(row) for row in db.scalars(select(ScanRow).where(
                 ScanRow.project_id == project_id).order_by(ScanRow.created_at.desc()))]
 
+    def get(self, project_id, scan_id):
+        with Session(self.engine) as db:
+            row = db.get(ScanRow, scan_id)
+            return _scan(row) if row is not None and row.project_id == project_id else None
+
     def add(self, scan):
         with Session(self.engine) as db:
             row = ScanRow(id=scan.id, project_id=scan.project_id, created_at=scan.created_at, result=scan.result)

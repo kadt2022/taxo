@@ -1,0 +1,34 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "subject": "commit:2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+  "relation": "CHANGES",
+  "object": "file:docs/termine/R1.md",
+  "qualifiers": {
+    "change": "RENAMED",
+    "old_path": "docs/backlog/R1.md"
+  },
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+    "mode": "COMMIT"
+  },
+  "evidence": [
+    {
+      "repository": "taxo",
+      "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+      "method": "git.log",
+      "object": "commit:2fd4e1c67a2d28fced849ee1bb76e7391b93eb12"
+    }
+  ],
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "taxo.git",
+    "producer_version": "0.1.0",
+    "execution_id": "fixture",
+    "catalog_id": "git",
+    "catalog_version": "1"
+  }
+}

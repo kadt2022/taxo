@@ -11,7 +11,7 @@
     "status": {"enum": ["OBSERVED", "INFERRED", "HUMAN_VALIDATED"]},
     "validity": {"enum": ["VALID", "STALE", "REVALIDATION_REQUIRED"]},
     "subject": {"$ref": "#/$defs/reference"},
-    "relation": {"enum": ["CONTAINS", "WRITTEN_IN", "USES_TECHNOLOGY", "DECLARED_BY", "ANNOTATED_WITH", "CALLS", "IMPLEMENTS", "DISPATCHES_TO", "HANDLED_BY", "ACCEPTS", "RETURNS", "PERMITS_ALL", "AUTHORIZED_BY", "MATCHED_BY", "PROTECTED_BY"]},
+    "relation": {"enum": ["CONTAINS", "WRITTEN_IN", "USES_TECHNOLOGY", "DECLARED_BY", "ANNOTATED_WITH", "CALLS", "IMPLEMENTS", "DISPATCHES_TO", "HANDLED_BY", "ACCEPTS", "RETURNS", "PERMITS_ALL", "AUTHORIZED_BY", "MATCHED_BY", "PROTECTED_BY", "HAS_COMMIT", "AUTHORED_BY", "CHILD_OF", "CHANGES"]},
     "object": {"$ref": "#/$defs/text"},
     "qualifiers": {"$ref": "#/$defs/qualifiers"},
     "pattern": {
@@ -76,7 +76,8 @@
     "text": {"type": "string", "minLength": 1, "pattern": "\\S"},
     "commit": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})(?![\\s\\S])"},
     "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])"},
-    "reference": {"type": "string", "pattern": "^(repository|module|directory|file|symbol|endpoint|route-pattern|technology|language|annotation|role|permission|policy-rule):[^\\s].*$"},
+    "reference": {"type": "string", "pattern": "^(repository|module|directory|file|symbol|endpoint|route-pattern|technology|language|annotation|role|permission|policy-rule|commit|person):[^\\s].*$"},
+    "commitReference": {"type": "string", "pattern": "^commit:(?:[0-9a-f]{40}|[0-9a-f]{64})(?![\\s\\S])"},
     "symbol": {"type": "string", "pattern": "^symbol:[^\\s].*$"},
     "scopeReference": {"type": "string", "pattern": "^(repository|module|directory|file):[^\\s].*$"},
     "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*[\\\\:\\u0000-\\u001f\\u007f])(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)[^\\r\\n]*[^/\\r\\n](?![\\s\\S])"},
@@ -88,13 +89,18 @@
       }
     },
     "evidence": {
-      "type": "object", "additionalProperties": false, "required": ["repository", "commit", "path", "method", "content_hash"],
+      "type": "object", "additionalProperties": false, "required": ["repository", "commit", "method"],
       "properties": {
         "repository": {"$ref": "#/$defs/text"}, "commit": {"$ref": "#/$defs/commit"}, "path": {"$ref": "#/$defs/path"},
         "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1},
-        "symbol": {"$ref": "#/$defs/symbol"}, "method": {"$ref": "#/$defs/text"}, "content_hash": {"$ref": "#/$defs/hash"}
+        "symbol": {"$ref": "#/$defs/symbol"}, "method": {"$ref": "#/$defs/text"}, "content_hash": {"$ref": "#/$defs/hash"},
+        "object": {"$ref": "#/$defs/commitReference"}
       },
-      "dependentRequired": {"line_start": ["line_end"], "line_end": ["line_start"]}
+      "dependentRequired": {"line_start": ["line_end"], "line_end": ["line_start"]},
+      "oneOf": [
+        {"required": ["path", "content_hash"], "properties": {"object": false}},
+        {"required": ["object"], "properties": {"path": false, "content_hash": false, "line_start": false, "line_end": false, "symbol": false}}
+      ]
     },
     "qualifiers": {
       "type": "object", "propertyNames": {"not": {"pattern": "[Cc][Oo][Nn][Ff](?:[Ii][Dd][Ee][Nn][Cc][Ee]|[Ii][Aa][Nn][Cc][Ee])"}},

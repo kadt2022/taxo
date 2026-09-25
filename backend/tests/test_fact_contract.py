@@ -93,15 +93,31 @@ def test_permits_all_forbids_object_and_inference_relations_forbid_observation()
         validate_fact(fact)
 
 
+GIT_RELATIONS = {'HAS_COMMIT', 'AUTHORED_BY', 'CHILD_OF', 'CHANGES'}
+SHA = '1' * 40
+
+
+def reference(entity_type):
+    return f'commit:{SHA}' if entity_type == 'commit' else f'{entity_type}:example'
+
+
+def git_evidence(fact):
+    snapshot = fact['snapshot']
+    return {'repository': snapshot['repository'], 'commit': snapshot['commit'], 'method': 'git.log',
+            'object': f'commit:{SHA}'}
+
+
 @pytest.mark.parametrize('relation', RELATIONS)
 def test_every_relation_has_valid_typed_example(relation):
     sources, targets, statuses = RELATIONS[relation]
     fact = read('valid-inferred-evaluator' if 'INFERRED' in statuses else 'valid-observed')
-    fact.update(relation=relation, subject=sorted(sources)[0] + ':example')
+    fact.update(relation=relation, subject=reference(sorted(sources)[0]))
     if targets:
-        fact['object'] = sorted(targets)[0] + ':example'
+        fact['object'] = reference(sorted(targets)[0])
     else:
         fact.pop('object')
+    if relation in GIT_RELATIONS:
+        fact['evidence'] = [git_evidence(fact)]
     validate_fact(fact)
     fact['subject'] = 'role:R_ADMIN'
     with pytest.raises(FactValidationError, match='Subject type'):

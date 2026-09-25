@@ -722,6 +722,61 @@
         "path": "/validation/validated_at"
       },
       "reason": "Validation requires a timestamp."
+    },
+    {
+      "file": "valid-git-has-commit.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-git-authored-by.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-git-changes-renamed.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "invalid-git-short-commit.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "REFERENCE_COMMIT",
+        "path": "/object"
+      },
+      "reason": "A commit reference uses the full Git object id."
+    },
+    {
+      "file": "invalid-git-file-evidence.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "EVIDENCE_OBJECT",
+        "path": "/evidence/0"
+      },
+      "reason": "Git history is proven by a Git object, not by file content."
+    },
+    {
+      "file": "invalid-git-evidence-for-code.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "EVIDENCE_OBJECT",
+        "path": "/evidence/0"
+      },
+      "reason": "A Git object does not prove a fact about code."
+    },
+    {
+      "file": "invalid-git-evidence-path-and-object.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_oneOf",
+        "path": "/evidence/0"
+      },
+      "reason": "Evidence is either file content or a Git object, never both."
     }
   ]
 }

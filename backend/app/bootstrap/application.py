@@ -8,6 +8,8 @@ from app.scans.application.run_scan import RunScan
 from app.scans.api.router import create_router as scans_router
 from app.snapshots.infrastructure.git.reader import GitSnapshotReader
 from app.evaluators.inventory.evaluator import InventoryEvaluator
+from app.evaluators.git.evaluator import GitEvaluator
+from app.scans.infrastructure.sqlalchemy.fact_store import SqlAlchemyAnalysisFacts
 from app.evaluations.application.registry import EvaluatorRegistry
 from app.evaluations.application.run_evaluator import RunEvaluator
 from app.platform.api.health import router as health_router
@@ -36,11 +38,15 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     paths = LocalProjectPaths(settings.allowed_roots(allowed_roots))
     projects = SqlAlchemyProjectRepository(engine)
     scans = SqlAlchemyScanRepository(engine)
-    registry = EvaluatorRegistry([InventoryEvaluator()])
+    registry = EvaluatorRegistry([InventoryEvaluator(), GitEvaluator()])
     inventory = registry.get('taxo.inventory')
-    run = RunScan(projects, scans, paths, GitSnapshotReader(), inventory, RunEvaluator())
+    facts = SqlAlchemyAnalysisFacts(engine)
+    # Analyse globale : chaque evaluateur observe l'instantane ; l'inventaire du code reste le principal.
+    run = RunScan(projects, scans, paths, GitSnapshotReader(), inventory, RunEvaluator(),
+                  others=tuple(item for item in registry.all() if item is not inventory), facts=facts)
+    # L'impact d'un commit compare le contenu de deux instantanes : l'historique Git n'y entre pas.
     history = ProjectHistory(projects, paths, GitHistoryReader(), GitSnapshotReader(),
-                             registry.all(), RunEvaluator())
+                             registry.content(), RunEvaluator())
     # Mode hypotheses : les poids sont prepares et verifies au demarrage ; aucune API ne les expose
     # tant que TAXO-LAB-01 n'a pas conclu (ADR 0006).
     store = model_store or ModelStore()
@@ -51,7 +57,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     register_errors(api)
     api.include_router(health_router)
     api.include_router(projects_router(projects, paths))
-    api.include_router(scans_router(projects, scans, run))
+    api.include_router(scans_router(projects, scans, run, facts))
     api.include_router(history_router(history))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ADR 0004, regle 14).
     model = minia_model(settings.minia()) if minia is _FROM_SETTINGS else minia
