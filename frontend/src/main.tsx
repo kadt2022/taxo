@@ -9,6 +9,7 @@ import {ProjectNav, ProjectOverview, technologiesOf, type Scan} from './overview
 import {AnalysisDetails} from './details';
 import {EVALUATORS, label} from './vocabulary';
 import {AskTaxo} from './query';
+import {apiUrl} from './api';
 
 type Project = {id:string; name:string; path:string};
 type Commit = {sha:string; parents:string[]; author:string; authored_at:string; subject:string};
@@ -98,7 +99,7 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
 }
 
 async function request<T>(path:string, init?:RequestInit):Promise<T> {
-  const response = await fetch('/api'+path, init);
+  const response = await fetch(apiUrl(path), init);
   if (!response.ok) {
     const body = await response.json().catch(()=>null);
     throw new Error(typeof body?.detail === 'string' ? body.detail : `La requête a échoué (${response.status}).`);
