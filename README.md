@@ -75,7 +75,7 @@ validateur sémantique, empreintes normalisées et suite de conformité indépen
 du langage. Voir [le guide du contrat](backend/app/facts/README.md) pour les
 formats, les décisions de représentation et les limites de validation.
 
-Depuis `backend`, `python -m app.facts --conformance` rejoue les 83 exemples de
+Depuis `backend`, `python -m app.facts --conformance` rejoue les 84 exemples de
 faits, les 8 vecteurs d'empreinte et les vecteurs d'identite canonique (19 positifs,
 5 negatifs). Le scanner existant conserve son format
 actuel jusqu'à TAXO-01D ; le contrat n'est pas encore une mémoire persistante.

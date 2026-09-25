@@ -37,10 +37,10 @@ Aucun fait v1 existant ne change de sens ni de validité.
 - Une preuve porte soit un fichier (`path`, `content_hash`, lignes et symbole facultatifs), soit un
   objet Git (`object: commit:<sha>`), jamais les deux (`oneOf` du schéma).
 - Les relations d'historique exigent une preuve par objet Git, et elles seules l'acceptent
-  (`EVIDENCE_OBJECT`). La règle 4 de l'ADR 0002 reste entière : `evidence.repository` et
+  (`EVIDENCE_OBJECT`) : ni un autre fait, ni une couverture ne peut en porter. La règle 4 de l'ADR 0002 reste entière : `evidence.repository` et
   `evidence.commit` sont ceux de l'instantané ; l'objet cité est atteignable depuis ce commit.
 
-Sept cas de conformité couvrent l'extension (83 au total).
+Huit cas de conformité couvrent l'extension (84 au total).
 
 ### 2. Pas de fenêtre de présentation
 
@@ -51,8 +51,9 @@ décide jamais que « les 10 derniers commits » comptent ; c'est à la requête
 
 `MAX_COMMITS` (50 000) n'est qu'un budget de lecture, pas une fenêtre. Au-delà, le premier commit
 non lu est déclaré `NOT_INTERPRETED` et l'exécution est `PARTIAL` : rien n'est tronqué en silence.
-Un chemin que le contrat ne sait pas représenter (par exemple `a:b.txt`) déclare son commit
-`NOT_INTERPRETED` au lieu d'être ignoré.
+Les chemins historiques sont normalisés en NFC, comme ceux de l'instantané, pour que les références
+`file:` se rejoignent. Un chemin que le contrat ne sait pas représenter (par exemple `a:b.txt`, ou un
+nom qui n'est pas de l'UTF-8) déclare son commit `NOT_INTERPRETED` au lieu d'être ignoré ou déformé.
 
 La lecture reste celle des lectures Git de Taxo : aucun hook, filtre, fsmonitor, pilote de diff
 externe ni vérification de signature du dépôt ; `--diff-merges=first-parent` pour une fusion ;

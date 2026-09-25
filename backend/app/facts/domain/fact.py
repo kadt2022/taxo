@@ -94,7 +94,7 @@ def validate_semantics(fact, rules, *, submission=True):
             reference(evidence['symbol'], path + '/symbol')
         # Une preuve Git (objet commit) prouve l'historique, et l'historique ne se prouve que par elle.
         history = fact['kind'] == 'ASSERTION' and fact['relation'] in _GIT_RELATIONS
-        if ('object' in evidence) != history and fact['kind'] == 'ASSERTION':
+        if ('object' in evidence) != history:
             reject('EVIDENCE_OBJECT', path, 'Git history relations need Git object evidence, and only they accept it.')
     for index, anchor in enumerate(fact.get('validation', {}).get('anchors', [])):
         reference(anchor['symbol'], f'/validation/anchors/{index}/symbol')

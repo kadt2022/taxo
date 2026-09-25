@@ -18,6 +18,15 @@ MAX_COMMITS = 50000
 METHOD = 'git.log'
 
 
+def _representable(path):
+    """Un chemin devient une reference `file:` s'il est valide pour le contrat et fait de valeurs Unicode."""
+    try:
+        path.encode('utf-8')
+    except UnicodeEncodeError:
+        return False
+    return is_path(path)
+
+
 class GitEvaluator:
     evaluator_id = 'taxo.git'
     producer_version = '0.1.0'
@@ -63,7 +72,7 @@ class GitEvaluator:
             facts.append(self._assertion(subject, 'CHILD_OF', f'commit:{parent}', {'position': position}, evidence))
         for change in commit.changes:
             paths = [change.path] + ([change.old_path] if change.old_path else [])
-            if not all(is_path(path) for path in paths):
+            if not all(_representable(path) for path in paths):
                 invalid.append((commit.sha, change.path))
                 continue
             qualifiers = {'change': change.status}

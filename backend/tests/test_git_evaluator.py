@@ -208,3 +208,42 @@ def test_a_third_evaluator_joins_without_touching_the_first_two(story, tmp_path)
     result = run('demo').result
     assert [item['evaluator_id'] for item in result['evaluations']] == ['taxo.inventory', 'taxo.git', 'test.third']
     assert set(store.by_evaluator) == {'taxo.inventory', 'taxo.git', 'test.third'}
+
+
+def test_history_paths_are_nfc_like_the_snapshot(make_repo, git):
+    repo = make_repo({'a.txt': 'a\n'}, 'nfc')
+    (repo / 'café.py').write_text('x = 1\n')
+    sha = commit_all(git, repo, 'chemin decompose')
+    execution = execute(repo)
+    assert [fact['object'] for fact in facts_of(execution, 'CHANGES', f'commit:{sha}')] == ['file:café.py']
+
+
+def test_a_non_utf8_path_is_declared_not_interpreted_not_failed(make_repo, git):
+    import os
+    repo = make_repo({'a.txt': 'a\n'}, 'latin')
+    with open(os.path.join(os.fsencode(repo), b'caf\xe9.txt'), 'wb') as handle:
+        handle.write(b'b\n')
+    sha = commit_all(git, repo, 'chemin latin-1')
+    os.remove(os.path.join(os.fsencode(repo), b'caf\xe9.txt'))
+    commit_all(git, repo, "absent de l'instantane, present dans l'historique")
+    execution = execute(repo)
+    assert execution.status is EvaluationStatus.PARTIAL, execution.warnings
+    assert not facts_of(execution, 'CHANGES', f'commit:{sha}')
+    assert f'commit:{sha}' in {fact['subject'] for fact in execution.coverage if fact['coverage_type'] == 'NOT_INTERPRETED'}
+
+
+def test_a_leading_newline_stays_part_of_the_path(make_repo, git):
+    repo = make_repo({'secret.txt': 's\n'}, 'newline')
+    (repo / '\nsecret.txt').write_text('autre\n')
+    sha = commit_all(git, repo, 'nom avec saut de ligne')
+    execution = execute(repo)
+    assert 'file:secret.txt' not in {fact['object'] for fact in facts_of(execution, 'CHANGES', f'commit:{sha}')}
+
+
+def test_a_non_utf8_commit_message_does_not_fail_the_history(make_repo, git):
+    repo = make_repo({'a.txt': 'a\n'}, 'message')
+    (repo / 'b.txt').write_text('b\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'résumé'.encode('latin-1').decode('utf-8', 'surrogateescape'))
+    execution = execute(repo)
+    assert execution.status is EvaluationStatus.SUCCESS, execution.warnings

@@ -238,33 +238,52 @@ def open_snapshot(root, repository, mode=COMMIT, commit=None):
                     GitSnapshotContent(root, {p: oid for p, (oid, _) in files.items()}, COMMIT), skipped=tuple(skipped))
 
 def _text(raw):
-    return raw.decode('utf-8', 'surrogateescape')
+    """Metadonnee affichee (auteur, message) : un octet non UTF-8 devient U+FFFD, jamais un faux caractere."""
+    return raw.decode('utf-8', 'replace')
 
 
-def _changes(tokens):
-    changes, index = [], 0
-    while index < len(tokens):
-        code = _text(tokens[index])
-        if code[:1] in 'RC':
-            changes.append(HistoryChange(_CHANGES[code[0]], _text(tokens[index + 2]), _text(tokens[index + 1])))
-            index += 3
-        else:
-            changes.append(HistoryChange(_CHANGES.get(code[:1], 'UNKNOWN'), _text(tokens[index + 1])))
-            index += 2
-    return tuple(changes)
+def _path(raw):
+    """Chemin historique, en NFC comme ceux de l'instantane ; un octet non UTF-8 reste visible (substitut)
+    pour que l'evaluateur declare le chemin non representable au lieu de le deformer."""
+    return unicodedata.normalize('NFC', raw.decode('utf-8', 'surrogateescape'))
+
+
+_STATUS = re.compile(rb'[A-Z][0-9]*')
 
 
 def _history(root, commit, limit):
-    """Commits atteignables depuis `commit`, du plus recent au plus ancien, fichiers compares au premier parent."""
+    """Commits atteignables depuis `commit`, du plus recent au plus ancien, fichiers compares au premier parent.
+
+    La sortie est lue jeton par jeton (separateur NUL) : un chemin est pris a sa position, jamais
+    reinterprete ; seul le separateur de ligne qui precede un statut ou un commit est retire.
+    """
     if type(limit) is not int or limit < 1:
         raise ValueError("Le nombre de commits de l'historique doit etre un entier positif.")
-    raw = _git_output(root, *_LOG, f'--max-count={limit}', commit, '--')
-    for record in raw.split(b'\x1e')[1:]:
-        fields = record.split(b'\x00')
-        sha, parents, name, email, date, subject = (_text(field) for field in fields[:6])
-        tokens = [token.lstrip(b'\n') for token in fields[6:]]
-        yield HistoryCommit(sha, tuple(parents.split()), name, email, date, subject,
-                            _changes([token for token in tokens if token]))
+    tokens = _git_output(root, *_LOG, f'--max-count={limit}', commit, '--').split(b'\x00')
+    index, header = 0, None
+    while index < len(tokens):
+        token = tokens[index].lstrip(b'\n')
+        if token.startswith(b'\x1e'):
+            if header:
+                yield HistoryCommit(*header[:6], tuple(header[6]))
+            sha, parents, name, email, date, subject = [token[1:], *tokens[index + 1:index + 6]]
+            header = [sha.decode('ascii'), tuple(parents.decode('ascii').split()), _text(name), _text(email),
+                      _text(date), _text(subject), []]
+            index += 6
+        elif header and _STATUS.fullmatch(token):
+            code = token.decode('ascii')
+            if code[0] in 'RC':
+                header[6].append(HistoryChange(_CHANGES[code[0]], _path(tokens[index + 2]), _path(tokens[index + 1])))
+                index += 3
+            else:
+                header[6].append(HistoryChange(_CHANGES.get(code[0], 'UNKNOWN'), _path(tokens[index + 1])))
+                index += 2
+        elif token:
+            raise ValueError('Sortie de git log inattendue.')
+        else:
+            index += 1
+    if header:
+        yield HistoryCommit(*header[:6], tuple(header[6]))
 
 
 class GitSnapshotContent:

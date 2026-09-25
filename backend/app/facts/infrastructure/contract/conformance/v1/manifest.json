@@ -769,6 +769,16 @@
       "reason": "A Git object does not prove a fact about code."
     },
     {
+      "file": "invalid-git-evidence-on-coverage.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "EVIDENCE_OBJECT",
+        "path": "/evidence/0"
+      },
+      "reason": "Only Git history assertions accept Git object evidence; coverage does not."
+    },
+    {
       "file": "invalid-git-evidence-path-and-object.json",
       "submission": true,
       "accepted": false,
