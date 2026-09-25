@@ -13,8 +13,8 @@
   --shadow-sm:0 1px 2px rgba(18,43,37,.06),0 1px 1px rgba(18,43,37,.04);
   --shadow:0 1px 2px rgba(18,43,37,.05),0 6px 18px -8px rgba(18,43,37,.14);
   --ring:0 0 0 3px rgba(43,107,89,.28);
-  font-family:var(--font);color:var(--text);background:var(--bg);font-synthesis:none;
-  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;font-feature-settings:"cv11","ss01";
+  font-family:var(--font),sans-serif;color:var(--text);background:var(--bg);font-synthesis:none;
+  text-rendering:optimizeLegibility;font-feature-settings:"cv11","ss01";
 }
 *{box-sizing:border-box}
 body{margin:0;line-height:1.5}
@@ -25,7 +25,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 a{color:var(--brand-3)}
 h1,h2,h3,h4{color:var(--text);letter-spacing:-.01em}
 h2{font-size:18px;font-weight:650;margin:0 0 14px}
-code{font-family:var(--mono);font-size:12.5px;color:var(--text-2);overflow-wrap:anywhere}
+code{font-family:var(--mono),monospace;font-size:12.5px;color:var(--text-2);overflow-wrap:anywhere}
 .muted{color:var(--muted);font-size:14px;line-height:1.65}
 
 /* ——— Mise en page ——— */
@@ -68,7 +68,7 @@ input::placeholder,textarea::placeholder{color:#9aa79f}
 header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:22px}
 .eyebrow{font-size:11.5px;font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
 h1{font-size:clamp(28px,3vw,38px);font-weight:700;letter-spacing:-.025em;line-height:1.15;margin:0 0 10px;overflow-wrap:anywhere}
-.path{display:inline-block;font-family:var(--mono);font-size:12.5px;color:var(--text-2);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 12px;overflow-wrap:anywhere;margin:0}
+.path{display:inline-block;font-family:var(--mono),monospace;font-size:12.5px;color:var(--text-2);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 12px;overflow-wrap:anywhere;margin:0}
 header .primary{padding:12px 20px}
 
 .project-nav{position:sticky;top:0;z-index:5;display:flex;gap:4px;margin:0 0 28px;padding:10px 0;background:linear-gradient(var(--bg) 75%,rgba(245,246,242,0));border-bottom:1px solid var(--border)}
@@ -115,7 +115,7 @@ footer{font-size:12.5px;line-height:1.6;color:var(--muted);margin-top:20px}
 .welcome{padding:64px 28px;text-align:center;border:1px dashed var(--border-strong);border-radius:var(--r-lg);background:radial-gradient(circle at 50% 0%,var(--accent-soft),var(--surface-2) 70%)}
 .welcome h2{font-size:24px;letter-spacing:-.02em}
 .welcome p{line-height:1.7;max-width:520px;margin:12px auto;color:var(--text-2)}
-.welcome .muted{font-family:var(--mono);font-size:12.5px}
+.welcome .muted{font-family:var(--mono),monospace;font-size:12.5px}
 .glyph{display:inline-grid;place-items:center;width:64px;height:64px;border-radius:18px;background:var(--brand);color:var(--accent);font-size:30px;margin-bottom:20px;box-shadow:var(--shadow)}
 
 /* ——— Tableaux ——— */
@@ -130,7 +130,6 @@ td:first-child{font-weight:550}
 
 /* ——— Details replies ——— */
 details>summary{list-style:none;cursor:pointer}
-details>summary::-webkit-details-marker{display:none}
 .evidence-files,.analysis-details{margin-top:16px}
 .evidence-files>summary,.analysis-details>summary{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14.5px;color:var(--brand-3);padding:6px 0}
 .evidence-files>summary::before,.analysis-details>summary::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s;margin-right:2px}
@@ -179,15 +178,15 @@ details>summary::-webkit-details-marker{display:none}
 .diff-view{margin-top:22px}
 .diff{table-layout:fixed;font-size:13px}
 .diff .number-col{width:46px}
-.diff th{text-align:left;overflow-wrap:anywhere;text-transform:none;letter-spacing:0;font-family:var(--mono);font-size:12px}
+.diff th{text-align:left;overflow-wrap:anywhere;text-transform:none;letter-spacing:0;font-family:var(--mono),monospace;font-size:12px}
 .diff td{padding:2px 8px;border-bottom:0;vertical-align:top}
 .diff tbody tr:hover td{background:inherit}
 .diff td:first-child{font-weight:400}
 .diff td code{white-space:pre-wrap;word-break:break-all;color:#1f3a33}
-.diff .number{text-align:right;color:#98a49c;user-select:none;font-family:var(--mono);font-size:12px}
+.diff .number{text-align:right;color:#98a49c;user-select:none;font-family:var(--mono),monospace;font-size:12px}
 .diff .removed{background:#fdebe7}
 .diff .added{background:#e8f5de}
-.diff .hunk td{background:var(--surface-3);color:var(--muted);padding:6px 8px;font-family:var(--mono);font-size:12px}
+.diff .hunk td{background:var(--surface-3);color:var(--muted);padding:6px 8px;font-family:var(--mono),monospace;font-size:12px}
 .diff .eol{margin-left:6px;padding:0 4px;border-radius:3px;font-size:.75em;opacity:.7;border:1px solid currentColor;white-space:nowrap}
 .diff td.number.linked{color:var(--brand);font-weight:700;background:var(--accent)}
 .linked-facts{margin-top:16px}.linked-facts h3{font-size:15px;margin:0 0 8px}
@@ -211,7 +210,7 @@ details>summary::-webkit-details-marker{display:none}
 .minia-block.interpretation{background:var(--info-soft);border-color:#d6e0f5}.minia-block.interpretation h3{color:var(--info)}
 .minia-block.unknown{background:var(--warn-soft);border-color:#f1dfb9}.minia-block.unknown h3{color:var(--warn)}
 .minia .badge{white-space:nowrap;font-size:11px;font-weight:600;text-transform:none;letter-spacing:0;background:var(--surface);border-radius:var(--r-pill);padding:1px 8px}
-.minia .evidence{display:inline-block;margin-left:6px;font-family:var(--mono);font-size:11.5px;background:var(--surface);border-radius:4px;padding:0 5px}
+.minia .evidence{display:inline-block;margin-left:6px;font-family:var(--mono),monospace;font-size:11.5px;background:var(--surface);border-radius:4px;padding:0 5px}
 .minia-commit{margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid #cde8d6}
 .minia-commit div{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px}
 .minia-commit dt{font-weight:600}.minia-commit dd{margin:0}.minia-commit ul{padding-left:16px}
