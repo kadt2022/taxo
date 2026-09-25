@@ -133,7 +133,7 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
       <form className="ask-minia" onSubmit={e=>ask(e,detail.commit.sha,detail.parent)}>
         <label htmlFor="minia-question">Demander à Minia</label>
         <textarea id="minia-question" rows={2} maxLength={1000} value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Que change ce commit, et est-ce risqué ?"/>
-        <button className="secondary" disabled={busy||!question.trim()}>{busy?'Minia réfléchit…':'Demander à Minia'}</button>
+        <button type="submit" className="secondary" disabled={busy||!question.trim()}>{busy?'Minia réfléchit…':'Demander à Minia'}</button>
       </form>
       {minia&&minia.commit===detail.commit.sha&&<MiniaView answer={minia}/>}
     </section>}
