@@ -117,7 +117,9 @@ def test_a_question_must_be_meaningful(repo, ask, question):
     assert post(repo[1], question).status_code == 422
 
 
-@pytest.mark.parametrize('reply', ['pas du json', '[1, 2]', '{"cited": "F1"}', '{"answer": 3}'])
+@pytest.mark.parametrize('reply', ['pas du json', '[1, 2]', '{}', '{"cited": []}',
+                                   '{"cited": "F1", "answer": "", "unknown": ""}',
+                                   '{"cited": [], "answer": 3, "unknown": ""}'])
 def test_an_unreadable_answer_is_refused(repo, ask, reply):
     _, post = ask(FakeModel(reply))
     response = post(repo[1])
