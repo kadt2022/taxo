@@ -11,3 +11,9 @@ def hypotheses_models(value=None):
     """Modeles a preparer au demarrage : TAXO_HYPOTHESES vide = mode documentaire, rien n'est telecharge."""
     raw = value if value is not None else os.getenv('TAXO_HYPOTHESES', '')
     return [name.strip() for name in raw.split(',') if name.strip()]
+
+def minia(provider=None, url=None, model=None):
+    """Reglages de Minia : fournisseur, adresse et modele. Sans modele, Minia reste desactivee."""
+    return {'provider': (provider or os.getenv('MINIA_PROVIDER', 'ollama')).strip().lower(),
+            'url': url or os.getenv('MINIA_OLLAMA_URL', 'http://127.0.0.1:11434'),
+            'model': (model if model is not None else os.getenv('MINIA_OLLAMA_MODEL', '')).strip()}

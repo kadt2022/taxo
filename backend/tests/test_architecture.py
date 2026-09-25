@@ -239,3 +239,16 @@ def test_registering_a_project_takes_primitives_not_an_http_schema():
         add_project('   ', 'other-location', repository, paths)
     with pytest.raises(ProjectError, match='déjà enregistré'):
         add_project('Demo again', 'logical-location', repository, paths)
+
+
+def test_minia_explains_but_never_writes_facts_and_stays_apart_from_clochette():
+    """Minia lit l'impact de Taxo ; elle ne connait ni le contrat du fait ni Clochette (ADR 0004, ADR 0006)."""
+    violations = []
+    for path in APP.rglob('*.py'):
+        parts = path.relative_to(APP).parts
+        for name in imports(path):
+            if parts[0] == 'minia' and name.startswith(('app.facts', 'app.hypotheses', 'app.evaluations')):
+                violations.append(f'{path.relative_to(APP)} importe {name}')
+            if parts[0] not in {'minia', 'bootstrap', 'platform'} and name.startswith('app.minia'):
+                violations.append(f'{path.relative_to(APP)} importe {name}')
+    assert violations == []

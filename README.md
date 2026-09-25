@@ -110,6 +110,33 @@ produit aujourd'hui, prouve par fichier entier : ses liens sont donc `FILE`.
 L'impact sur les chaînes d'autorisation passe encore par le POC Spring, hors produit :
 `py -m poc.authchain.impact --root <dépôt> --commit <sha>` (résultat marqué `provisional`).
 
+### Minia : demander ce que signifie un commit (TAXO-MINIA-01)
+
+Dans la fiche d'un commit, « Demander à Minia » pose une question en langage courant. Minia répond à
+partir des seuls faits de Taxo : les faits changés par le commit, leurs preuves (chemin et lignes,
+jamais le contenu), les zones non interprétées et les évaluateurs en échec. Elle ne reçoit jamais le
+code source. La réponse est présentée en trois blocs séparés : **Fait Taxo** (les faits cités, affichés
+depuis Taxo), **Interprétation Minia** (non vérifiée) et **Inconnu / non interprété**. Une référence
+inventée par le modèle est écartée et signalée. Si Taxo n'a vu changer aucun fait, le modèle n'est pas
+appelé et Minia dit qu'elle ne sait pas. Aucune réponse n'est conservée, et une réponse n'est jamais
+enregistrée comme un fait (ADR 0004, règle 14). Minia est indépendante de Clochette.
+
+Minia fonctionne avec un modèle servi par [Ollama](https://ollama.com), gratuit. `MINIA_OLLAMA_URL`
+peut viser un Ollama local ou distant : Minia n'envoie jamais le code source brut, seulement la
+projection Taxo décrite ci-dessus, mais si Ollama est distant, ces données quittent la machine de Taxo.
+
+```powershell
+ollama pull qwen2.5:3b
+$env:MINIA_PROVIDER = 'ollama'                       # valeur par défaut
+$env:MINIA_OLLAMA_URL = 'http://127.0.0.1:11434'     # valeur par défaut
+$env:MINIA_OLLAMA_MODEL = 'qwen2.5:3b'
+```
+
+Sans `MINIA_OLLAMA_MODEL`, Minia est désactivée et le reste de Taxo fonctionne normalement.
+API : `GET /api/minia/status` et `POST …/commits/{sha}/ask` avec `{"question": "…", "parent": null}`.
+Le modèle est derrière l'interface `MiniaModel` : un adaptateur Claude pourra s'ajouter sans toucher au
+reste (`MINIA_PROVIDER=claude`, pas encore disponible).
+
 ### Clochette (SmolLM2-135M, expérimental, ADR 0006)
 
 Clochette est installée par l'étape `python -m app.hypotheses fetch` de la procédure ci-dessus : elle
