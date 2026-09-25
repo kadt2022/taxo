@@ -17,3 +17,8 @@ def minia(provider=None, url=None, model=None):
     return {'provider': (provider or os.getenv('MINIA_PROVIDER', 'ollama')).strip().lower(),
             'url': url or os.getenv('MINIA_OLLAMA_URL', 'http://127.0.0.1:11434'),
             'model': (model if model is not None else os.getenv('MINIA_OLLAMA_MODEL', '')).strip()}
+
+def minia_source_context(value=None):
+    """Code source que Minia peut recevoir : `off` (defaut, aucun) ou `diff` (le diff d'un commit, sur
+    accord de chaque demande). Avec un Ollama distant, `diff` fait sortir du code de la machine."""
+    return (value or os.getenv('MINIA_SOURCE_CONTEXT', 'off')).strip().lower()

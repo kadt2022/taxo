@@ -197,8 +197,8 @@ API : `GET /api/projects/{id}/query?q=…` et `POST /api/projects/{id}/ask` avec
 Dans la fiche d'un commit, « Demander à Minia » pose une question en langage courant. Minia répond à
 partir de ce que Git sait du commit (auteur, date, message, fichiers et statuts, renommages compris,
 sans contenu) et des seuls faits de Taxo : les faits changés par le commit, leurs preuves (chemin et
-lignes, jamais le contenu), les zones non interprétées et les évaluateurs en échec. Elle ne reçoit jamais le
-code source. La réponse est présentée en trois blocs séparés : **Fait Taxo** (les faits cités, affichés
+lignes, jamais le contenu), les zones non interprétées et les évaluateurs en échec. Elle ne reçoit pas le
+code source, sauf le diff du commit sur double accord (TAXO-MINIA-02, ci-dessous). La réponse est présentée en trois blocs séparés : **Fait Taxo** (les faits cités, affichés
 depuis Taxo), **Interprétation Minia** (non vérifiée) et **Inconnu / non interprété**. Une référence
 inventée par le modèle est écartée et signalée. Ce que Git sait du commit est toujours affiché, tiré de
 Git et non du modèle. Si Taxo n'a vu changer aucun fait et qu'aucun évaluateur n'a échoué, le modèle
@@ -206,8 +206,9 @@ n'est pas appelé et Minia dit qu'elle ne sait pas (une zone non interprétée s
 enregistrée comme un fait (ADR 0004, règle 14). Minia est indépendante de Clochette.
 
 Minia fonctionne avec un modèle servi par [Ollama](https://ollama.com), gratuit. `MINIA_OLLAMA_URL`
-peut viser un Ollama local ou distant : Minia n'envoie jamais le code source brut, seulement la
-projection Taxo décrite ci-dessus, mais si Ollama est distant, ces données quittent la machine de Taxo.
+peut viser un Ollama local ou distant : sans `MINIA_SOURCE_CONTEXT=diff` (voir TAXO-MINIA-02), Minia
+n'envoie jamais de code source, seulement la projection Taxo décrite ci-dessus ; si Ollama est distant,
+ces données quittent la machine de Taxo.
 
 ```powershell
 ollama pull qwen2.5:3b
@@ -220,6 +221,27 @@ Sans `MINIA_OLLAMA_MODEL`, Minia est désactivée et le reste de Taxo fonctionne
 API : `GET /api/minia/status` et `POST …/commits/{sha}/ask` avec `{"question": "…", "parent": null}`.
 Le modèle est derrière l'interface `MiniaModel` : un adaptateur Claude pourra s'ajouter sans toucher au
 reste (`MINIA_PROVIDER=claude`, pas encore disponible).
+
+### Minia lit le diff d'un commit (TAXO-MINIA-02, ADR 0008)
+
+> Taxo établit. Git montre ce qui a changé. Minia lit les deux et explique.
+
+Sur accord explicite, Minia reçoit aussi le diff du commit : seulement les blocs modifiés, lus par
+l'historique avec ses refus (`.env` et fichiers confidentiels, binaires, liens, sous-modules, gros
+fichiers : jamais lus). Limites : 20 fichiers, 1 500 lignes, 100 Ko ; les fichiers générés (verrous de
+dépendances, fichiers minifiés, snapshots) ne sont pas lus. La réponse dit combien de fichiers ont été
+transmis et pourquoi les autres ne l'ont pas été. Le diff n'est jamais un fait : Minia ne cite que des
+faits de Taxo, et ce qu'elle déduit du diff reste dans « Ce que Minia en déduit », non vérifié. Le code
+est traité comme une donnée : un commentaire du genre « ignore les instructions précédentes » n'est
+jamais suivi.
+
+```powershell
+$env:MINIA_SOURCE_CONTEXT = 'diff'    # défaut : off, aucun code transmis
+```
+
+Il faut aussi cocher « Autoriser Minia à lire le diff de ce commit » (`"source_context": true` dans
+l'API). Si `MINIA_OLLAMA_URL` vise une autre machine, le portail avertit que le diff quittera la machine
+de Taxo, et la case n'est pas cochée par défaut.
 
 ### Clochette (SmolLM2-135M, expérimental, ADR 0006)
 

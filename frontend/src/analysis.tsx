@@ -101,10 +101,14 @@ export async function follow(start:()=>Promise<{events:string}>, open:Open, onEv
 
 const MARKS:Record<StepState,string>={pending:'○', running:'●', done:'✓', failed:'!'};
 
+/** Texte suivi de points animes en CSS : le texte reste immobile, seul le span des points change. Un seul
+ * element, pour que l'espacement d'un parent flex ne separe pas le texte de ses points. */
+export const Working=({text}:Readonly<{text:string}>)=><span>{text}<span className="animated-dots" aria-hidden="true"/></span>;
+
 export function AnalysisProgress({run}:Readonly<{run:Run}>){
   const evaluators=run.steps.filter(step=>step.id!==PREPARE&&step.id!==CONSOLIDATE);
   const finished=evaluators.filter(step=>step.state==='done'||step.state==='failed').length;
-  const title=run.status==='running'?'Analyse en cours':run.status==='done'?'Analyse terminée':'Analyse interrompue';
+  const title=run.status==='running'?<Working text="Analyse en cours"/>:run.status==='done'?'Analyse terminée':'Analyse interrompue';
   return <section className={`progress progress-${run.status}`} aria-label="Progression de l’analyse" aria-live="polite">
     <p className="progress-title">{title}</p>
     <ol>{run.steps.map(step=><li key={step.id} className={`step step-${step.state}`}>

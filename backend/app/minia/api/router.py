@@ -18,6 +18,8 @@ _ERRORS = {
 class Question(BaseModel):
     question: str
     parent: str | None = None
+    # Accord de la demande pour joindre le diff du commit ; sans effet si MINIA_SOURCE_CONTEXT vaut off.
+    source_context: bool = False
 
 
 class ProjectQuestion(BaseModel):
@@ -46,11 +48,11 @@ def create_router(minia):
 
     @router.post('/api/projects/{project_id}/history/commits/{sha}/ask', responses=_ERRORS)
     def ask(project_id: str, sha: str, body: Question):
-        return minia.about_commit(project_id, sha, body.question, body.parent)
+        return minia.about_commit(project_id, sha, body.question, body.parent, body.source_context)
 
     @router.post('/api/projects/{project_id}/history/commits/{sha}/ask/stream', responses=_ERRORS)
     def ask_stream(project_id: str, sha: str, body: Question):
-        return _stream(minia.about_commit_events(project_id, sha, body.question, body.parent))
+        return _stream(minia.about_commit_events(project_id, sha, body.question, body.parent, body.source_context))
 
     @router.post('/api/projects/{project_id}/ask/stream', responses={
         **_ERRORS, 409: {'description': 'Aucune analyse globale pour ce projet.'}})

@@ -1,9 +1,11 @@
 """Adaptateur Ollama de Minia.
 
-Le modele recoit uniquement la projection Taxo de MINIA-01 (faits changes, localisation des preuves,
-couverture, metadonnees du commit), jamais le code source brut. MINIA_OLLAMA_URL peut viser un Ollama
-local ou distant : s'il est distant, ces donnees quittent le processus et la machine de Taxo.
+Le modele recoit la projection Taxo de MINIA-01 (faits changes, localisation des preuves, couverture,
+metadonnees du commit) et, seulement si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise, le diff
+du commit (ADR 0008). MINIA_OLLAMA_URL peut viser un Ollama local ou distant : s'il est distant, ces
+donnees quittent le processus et la machine de Taxo ; `remote` le signale au portail.
 """
+import ipaddress
 import json
 from urllib.parse import urlsplit
 
@@ -14,6 +16,16 @@ from app.minia.domain.errors import UNAVAILABLE, MiniaError
 DEFAULT_URL = 'http://127.0.0.1:11434'
 
 
+def _loopback(host):
+    """Vrai si l'adresse designe cette machine : ce qui y est envoye ne la quitte pas."""
+    if host.lower() == 'localhost':
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 class OllamaModel:
     provider = 'ollama'
 
@@ -22,6 +34,7 @@ class OllamaModel:
         if parts.scheme not in {'http', 'https'} or not parts.hostname:
             raise ValueError(f'MINIA_OLLAMA_URL invalide : {url}')
         self.model_name, self.url = model_name, url.rstrip('/')
+        self.remote = not _loopback(parts.hostname)
         self._client = httpx.Client(timeout=timeout, transport=transport)
 
     def _body(self, system, user, stream):
