@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {evaluationsOf, shortList, outcome, overviewCards, ProjectNav, ProjectOverview, sections, type EvaluationSummary, type Scan} from './overview';
+import {CardIcon, evaluationsOf, outcomeState, shortList, outcome, overviewCards, ProjectNav, ProjectOverview, sections, type EvaluationSummary, type Scan} from './overview';
 import {AnalysisDetails, EvaluationPanel, warningsOf} from './details';
 import {label, reference, RELATIONS} from './vocabulary';
 
@@ -56,6 +56,13 @@ describe('shortList', ()=>{
   });
 });
 
+describe('CardIcon', ()=>{
+  it('reste décorative, avec une icône par défaut', ()=>{
+    expect(renderToStaticMarkup(<CardIcon id="history"/>)).toContain('aria-hidden="true"');
+    expect(renderToStaticMarkup(<CardIcon id="inconnue"/>)).toContain('<path d="M3 7a2');
+  });
+});
+
 describe('outcome et sections', ()=>{
   it('résume l’analyse en une phrase', ()=>{
     expect(outcome(scan)).toBe('Analyse terminée');
@@ -63,6 +70,11 @@ describe('outcome et sections', ()=>{
     expect(outcome({...scan, warnings:['manifeste illisible'], evaluations:[{...inventory, warning_count:1}, {...git, status:'FAILED', warning_count:1}]}))
       .toBe('Analyse terminée, une partie a échoué · 2 points à vérifier');
     expect(outcome({id:'old', created_at:'', warnings:['a','a','b']})).toBe('Analyse terminée · 2 points à vérifier');
+  });
+  it('donne la tonalité du résultat', ()=>{
+    expect(outcomeState(scan)).toBe('ok');
+    expect(outcomeState({...scan, evaluations:[inventory, {...git, status:'PARTIAL'}]})).toBe('partial');
+    expect(outcomeState({...scan, evaluations:[inventory, {...git, status:'FAILED'}]})).toBe('failed');
   });
   it('ne propose que les sections réellement disponibles', ()=>{
     expect(sections(scan).map(item=>item.label)).toEqual(['Vue d’ensemble', 'Technologies', 'Historique']);

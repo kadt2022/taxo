@@ -79,6 +79,12 @@ export function outcome(scan:Scan){
   return points?`${state} · ${count(points)} point${points>1?'s':''} à vérifier`:state;
 }
 
+/** Tonalite du resultat : succes, partiel ou echec, pour la pastille qui l'accompagne. */
+export function outcomeState(scan:Scan){
+  const statuses=evaluationsOf(scan).map(item=>item.status);
+  return statuses.includes('FAILED')?'failed':statuses.includes('PARTIAL')?'partial':'ok';
+}
+
 /** Sections proposees : seulement celles qui correspondent a une capacite reelle de Taxo. */
 export function sections(scan:Scan|undefined){
   const items=[{id:'vue-ensemble', label:'Vue d’ensemble'}, {id:'technologies', label:'Technologies'}];
@@ -91,15 +97,28 @@ export function ProjectNav({scan}:Readonly<{scan:Scan|undefined}>){
   </nav>;
 }
 
+// Icones au trait, purement decoratives : le titre de la carte porte le sens.
+const ICONS:Record<string,string>={
+  technologies:'M4 7h16M4 12h16M4 17h10',
+  project:'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  history:'M12 8v4l3 2M3 12a9 9 0 1 0 3-6.7M3 4v4h4',
+  architecture:'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
+  api:'M8 8l-4 4 4 4M16 8l4 4-4 4M13 6l-2 12',
+  security:'M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z'};
+
+export function CardIcon({id}:Readonly<{id:string}>){
+  return <svg className="card-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={ICONS[id]??ICONS.project}/></svg>;
+}
+
 const BADGES:Record<CardState,string|null>={known:null, partial:'En partie', failed:'Échec', unknown:'Non analysé'};
 
 export function ProjectOverview({scan}:Readonly<{scan:Scan}>){
   return <section className="overview" id="vue-ensemble" aria-label="Vue d’ensemble">
-    <p className="outcome" role="status">{outcome(scan)}</p>
+    <p className={`outcome outcome-${outcomeState(scan)}`} role="status">{outcome(scan)}</p>
     <h2>Vue d’ensemble</h2>
     <div className="cards">
       {overviewCards(scan).map(card=><article key={card.id} className={`card card-${card.state}`} aria-label={card.title}>
-        <h3>{card.title}{BADGES[card.state]&&card.value!==BADGES[card.state]&&<span className="badge">{BADGES[card.state]}</span>}</h3>
+        <h3><CardIcon id={card.id}/>{card.title}{BADGES[card.state]&&card.value!==BADGES[card.state]&&<span className="badge">{BADGES[card.state]}</span>}</h3>
         <strong>{card.value}</strong>
         <p>{card.detail}</p>
       </article>)}
