@@ -75,4 +75,77 @@ def parse(raw, refs):
 
 
 def _text(value):
+    # Une moitie de paire de substitution isolee n'est pas un caractere : elle devient U+FFFD.
+    value = value.encode('utf-16', 'surrogatepass').decode('utf-16', 'replace')
     return '' if _EMPTY.fullmatch(value) else value.strip()
+
+
+_ANSWER_START = re.compile(r'"answer"\s*:\s*"')
+_ESCAPES = {'"': '"', '\\': '\\', '/': '/', 'b': '\b', 'f': '\f', 'n': '\n', 'r': '\r', 't': '\t'}
+
+
+class AnswerStream:
+    """Extrait, au fil des morceaux produits par le modele, le texte du champ "answer" (TAXO-UX-02).
+
+    Ce texte est provisoire : il n'est ni une citation ni un fait. La reponse definitive reste celle que
+    `parse` valide une fois le modele termine.
+    """
+
+    def __init__(self):
+        self._raw, self._position, self._started, self._closed = '', 0, False, False
+
+    def feed(self, chunk):
+        """Texte nouvellement decode de "answer" ; chaine vide s'il n'y en a pas encore."""
+        self._raw += chunk
+        if self._closed:
+            return ''
+        if not self._started:
+            match = _ANSWER_START.search(self._raw)
+            if not match:
+                return ''
+            self._started, self._position = True, match.end()
+        out = []
+        while self._position < len(self._raw):
+            char = self._raw[self._position]
+            if char == '"':
+                self._closed = True
+                break
+            if char != '\\':
+                out.append(char)
+                self._position += 1
+                continue
+            escape = self._raw[self._position + 1:self._position + 2]
+            if not escape:
+                break
+            if escape == 'u':
+                decoded = self._unicode()
+                if decoded is None:
+                    break
+                out.append(decoded)
+                continue
+            out.append(_ESCAPES.get(escape, escape))
+            self._position += 2
+        return ''.join(out)
+
+    def _unicode(self):
+        """Un echappement \\uXXXX, ou une paire de substitution entiere ; None s'il manque encore des caracteres."""
+        start = self._position
+        digits = self._raw[start + 2:start + 6]
+        if len(digits) < 4:
+            return None
+        if not re.fullmatch('[0-9a-fA-F]{4}', digits):
+            self._position = start + 6
+            return ''
+        code = int(digits, 16)
+        if 0xD800 <= code <= 0xDBFF:
+            low = self._raw[start + 6:start + 12]
+            if len(low) < 6 and '\\u'.startswith(low[:2]):
+                return None
+            if re.fullmatch(r'\\u[dD][c-fC-F][0-9a-fA-F]{2}', low):
+                self._position = start + 12
+                return chr(0x10000 + ((code - 0xD800) << 10) + (int(low[2:], 16) - 0xDC00))
+            code = 0xFFFD
+        elif 0xDC00 <= code <= 0xDFFF:
+            code = 0xFFFD
+        self._position = start + 6
+        return chr(code)

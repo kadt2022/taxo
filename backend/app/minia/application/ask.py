@@ -5,9 +5,13 @@ fichiers et statuts), les faits changes par le commit (impact de Taxo), leurs pr
 Ce que Git sait est toujours renvoye tel quel, quelle que soit la reponse du modele. Sans fait change et
 sans echec d'evaluateur, le modele n'est pas appele : Taxo ne sait rien de plus, et Minia le dit. Aucune
 reponse n'est conservee.
+
+Chaque demande se deroule en etapes reelles (TAXO-UX-02) : selection des faits, preparation du contexte,
+interpretation. Quand le fournisseur sait diffuser sa reponse, le texte provisoire arrive au fil de l'eau ;
+la reponse definitive, citations validees, n'est rendue qu'a la fin.
 """
 from app.minia.domain import briefing
-from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, parse
+from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, AnswerStream, parse
 from app.minia.domain.errors import INVALID_QUESTION, NOT_CONFIGURED, MiniaError
 from app.minia.domain.model import MiniaModel
 from app.projects.application.queries import require_project
@@ -22,6 +26,17 @@ _EMPTY = {'SELECTED': "Aucun commit de l'historique analysé ne correspond à ce
           'NOT_FOUND': "Aucun commit de l'historique analysé ne commence par cet identifiant.",
           'AMBIGUOUS': 'Plusieurs commits commencent par cet identifiant : donnez-en davantage de caractères.',
           'NO_GIT_FACTS': "La dernière analyse globale ne contient pas de faits Git : relancez-la."}
+
+
+def _stage(stage, state, label, count=None):
+    return 'minia.stage', {'stage': stage, 'state': state, 'label': label, 'count': count}
+
+
+def _final(events):
+    """Resultat d'une demande dont on n'observe pas les etapes : le dernier evenement, `minia.completed`."""
+    for event_type, data in events:
+        if event_type == 'minia.completed':
+            return data
 
 
 def _change(ref, change):
@@ -48,39 +63,80 @@ class AskMinia:
         return question
 
     def about_commit(self, project_id, sha, question, parent=None):
+        return _final(self.about_commit_events(project_id, sha, question, parent))
+
+    def about_commit_events(self, project_id, sha, question, parent=None):
+        """Valide la demande tout de suite (question, projet, commit), puis rend ses etapes a observer."""
         question = self._checked(question)
         project = require_project(self.projects, project_id)
         commit, base, files = self.history.detail(project_id, sha, parent)
-        _, _, evaluations = self.history.impact(project_id, sha, base)
+        return self._commit_steps(question, project, commit, base, files)
+
+    def _commit_steps(self, question, project, commit, base, files):
+        yield _stage('facts', 'running', 'Sélection des faits pertinents')
+        _, _, evaluations = self.history.impact(project.id, commit.sha, base)
         brief = briefing.build(question, commit, base, evaluations, files, (project.id, project.name))
+        yield _stage('facts', 'done', 'Sélection des faits pertinents', len(brief.refs))
+        yield _stage('context', 'done', 'Préparation du contexte')
         result = {'question': question, 'commit': commit.sha, 'parent': base, 'model': self.status(),
                   'project': {'id': project.id, 'name': project.name},
                   'git': briefing.commit_view(commit, base, files), 'files_not_sent': brief.files_truncated,
                   'not_interpreted': list(brief.not_interpreted), 'failures': list(brief.failures),
                   'facts_not_sent': brief.truncated, 'rejected_citations': []}
         if brief.empty:
-            return {**result, 'status': NOTHING_KNOWN, 'facts': [], 'answer': '', 'unknown': _NOTHING}
-        answer = parse(self.model.complete(SYSTEM, brief.text), brief.refs)
-        return {**result, 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
-                'facts': [_change(ref, brief.refs[ref]) for ref in answer['cited']],
-                'rejected_citations': answer['rejected']}
+            yield 'minia.completed', {**result, 'status': NOTHING_KNOWN, 'facts': [], 'answer': '', 'unknown': _NOTHING}
+            return
+        raw = yield from self._interpret(SYSTEM, brief)
+        answer = parse(raw, brief.refs)
+        yield 'minia.completed', {**result, 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
+                                  'facts': [_change(ref, brief.refs[ref]) for ref in answer['cited']],
+                                  'rejected_citations': answer['rejected']}
 
     def about_project(self, project_id, question):
+        return _final(self.about_project_events(project_id, question))
+
+    def about_project_events(self, project_id, question):
         """Question sur l'historique du projet : la requete selectionne, Minia n'explique que la selection."""
         question = self._checked(question)
         projection = self.query(project_id, question)
+        return self._project_steps(question, projection)
+
+    def _project_steps(self, question, projection):
+        yield _stage('facts', 'done', 'Sélection des faits pertinents', len(projection['facts']))
         result = {'question': question, 'model': self.status(), 'project': projection['project'],
                   'analysis': projection['analysis'], 'request': projection['request'],
                   'selection': projection['status'], 'commits': projection['commits'],
                   'total_commits': projection['total_commits'], 'not_interpreted': projection['not_interpreted'],
                   'facts_not_sent': 0, 'rejected_citations': [], 'facts': [], 'answer': ''}
         if projection['status'] == 'GLOBAL':
-            return {**result, 'status': NEEDS_SELECTION, 'unknown': _SELECT}
+            yield 'minia.completed', {**result, 'status': NEEDS_SELECTION, 'unknown': _SELECT}
+            return
         if not projection['facts']:
-            return {**result, 'status': NOTHING_KNOWN, 'unknown': _EMPTY[projection['status']]}
+            yield 'minia.completed', {**result, 'status': NOTHING_KNOWN, 'unknown': _EMPTY[projection['status']]}
+            return
         project = projection['project']
         brief = briefing.selection(question, projection, (project['id'], project['name']))
-        answer = parse(self.model.complete(SYSTEM_SELECTION, brief.text), brief.refs)
-        return {**result, 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
-                'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
-                'facts_not_sent': brief.truncated, 'rejected_citations': answer['rejected']}
+        yield _stage('context', 'done', 'Préparation du contexte')
+        raw = yield from self._interpret(SYSTEM_SELECTION, brief)
+        answer = parse(raw, brief.refs)
+        yield 'minia.completed', {**result, 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
+                                  'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
+                                  'facts_not_sent': brief.truncated, 'rejected_citations': answer['rejected']}
+
+    def _interpret(self, system, brief):
+        """Texte brut du modele ; diffuse le texte provisoire de la reponse si le fournisseur le permet."""
+        label = f'Minia interprète {len(brief.refs)} fait{"s" if len(brief.refs) > 1 else ""} Taxo'
+        yield _stage('interpretation', 'running', label, len(brief.refs))
+        stream = getattr(self.model, 'stream', None)
+        if stream is None:
+            raw = self.model.complete(system, brief.text)
+        else:
+            chunks, extractor = [], AnswerStream()
+            for chunk in stream(system, brief.text):
+                chunks.append(chunk)
+                text = extractor.feed(chunk)
+                if text:
+                    yield 'minia.delta', {'text': text}
+            raw = ''.join(chunks)
+        yield _stage('interpretation', 'done', label, len(brief.refs))
+        return raw

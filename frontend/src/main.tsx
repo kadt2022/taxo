@@ -10,6 +10,9 @@ import {AnalysisDetails} from './details';
 import {EVALUATORS, label} from './vocabulary';
 import {AskTaxo} from './query';
 import {apiUrl} from './api';
+import {openStream} from './sse';
+import {AnalysisProgress, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
+import {ask as askMinia, askButton, MiniaProgress, questionInit, startMinia, type MiniaLive} from './minia-live';
 
 type Project = {id:string; name:string; path:string};
 type Commit = {sha:string; parents:string[]; author:string; authored_at:string; subject:string};
@@ -21,13 +24,13 @@ const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DEL
 
 function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
-  const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [minia,setMinia]=useState<MiniaAnswer|null>(null), [question,setQuestion]=useState(''), [consulted,setConsulted]=useState(false), [error,setError]=useState(''), [busy,setBusy]=useState(false);
+  const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [question,setQuestion]=useState(''), [live,setLive]=useState<MiniaLive<MiniaAnswer>|null>(null), [consulted,setConsulted]=useState(false), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const base=`/projects/${projectId}/history/commits`;
   // Seule la derniere demande peut modifier l'ecran : une reponse arrivee trop tard est ignoree.
   const latest=useRef(0);
   // Changer de projet efface la consultation : l'historique ne s'affiche que sur demande explicite.
   useEffect(()=>{
-    setCommits([]);setConsulted(false);setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);setError('');
+    setCommits([]);setConsulted(false);setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setLive(null);setError('');
   },[base]);
   async function load<T>(path:string, apply:(value:T)=>void, init?:RequestInit){
     const token=++latest.current;
@@ -37,10 +40,10 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
     finally{if(token===latest.current)setBusy(false);}
   }
   function consult(path:string){
-    setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);
+    setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setLive(null);
     return load<Commit[]>(path,c=>{setCommits(c);setConsulted(true);});
   }
-  function open(sha:string){setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
+  function open(sha:string){setImpact(null);setFileDiff(null);setLinks(null);setLive(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
   function compare(sha:string,path:string,parent:string|null){
     const query=new URLSearchParams({path});if(parent)query.set('parent',parent);
     setLinks(null);
@@ -49,9 +52,13 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   function relate(diff:FileDiff){
     return load<DiffFacts>(diffFactsPath(base,diff),setLinks);
   }
-  function ask(event:FormEvent, sha:string, parent:string|null){
+  async function ask(event:FormEvent, sha:string, parent:string|null){
     event.preventDefault();
-    return load<MiniaAnswer>(`${base}/${sha}/ask`,setMinia,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,parent})});
+    const token=++latest.current;
+    setBusy(true);setError('');setLive(null);
+    try{await askMinia<MiniaAnswer>(()=>openStream(`/api${base}/${sha}/ask/stream`,questionInit({question,parent})),change=>{if(token===latest.current)setLive(l=>change(l??startMinia()));});}
+    catch(e){if(token===latest.current)setError((e as Error).message);}
+    finally{if(token===latest.current)setBusy(false);}
   }
   function understand(sha:string){return load<Impact>(`${base}/${sha}/impact`,setImpact);}
   const date=(value:string)=>new Date(value).toLocaleString('fr-CA');
@@ -82,9 +89,9 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
       <form className="ask-minia" onSubmit={e=>ask(e,detail.commit.sha,detail.parent)}>
         <label htmlFor="minia-question">Demander à Minia</label>
         <textarea id="minia-question" rows={2} maxLength={1000} value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Que change ce commit, et est-ce risqué ?"/>
-        <button type="submit" className="secondary" disabled={busy||!question.trim()}>{busy?'Minia réfléchit…':'Demander à Minia'}</button>
+        <button type="submit" className="secondary" disabled={busy||!question.trim()}>{askButton(busy&&live!==null&&!live.result,'Demander à Minia')}</button>
       </form>
-      {minia&&minia.commit===detail.commit.sha&&<MiniaView answer={minia}/>}
+      {live?.result?.commit===detail.commit.sha?<MiniaView answer={live.result}/>:live&&!live.result&&<MiniaProgress live={live}/>}
     </section>}
     {impact&&impact.commit.sha===detail?.commit.sha&&<section className="impact" aria-label="Impact compris par Taxo">
       {impact.evaluations.map(e=><div key={e.evaluator_id}>
@@ -125,13 +132,14 @@ function App(){
     try{const p=await request<Project>('/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,path})});setProjects(past=>[...past,p]);setSelected(p.id);setName('');setPath('');}
     catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
-  async function analyze(){
-    setBusy(true);setError('');
-    try{const s=await request<Scan>(`/projects/${selected}/scans`,{method:'POST'});setScans(past=>[s,...past]);setScanId(s.id);}
-    catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  const [run,setRun]=useState<Run|null>(null);
+  function analyze(){
+    return analyzeProject(selected,{request, open:(url,last)=>openStream(url,last?{headers:{'Last-Event-ID':last}}:undefined), setRun, setError, setBusy, addScan:s=>{setScans(past=>[s,...past]);setScanId(s.id);}});
   }
-  const legacyFacts=scan?.facts??[];
-  const technologies=scan?technologiesOf(scan):[];
+  const running=run?.status==='running';
+  const shown=running?liveScan(scan,run):scan;
+  const legacyFacts=shown?.facts??[];
+  const technologies=shown?technologiesOf(shown):[];
   return <div className="layout">
     <aside><a className="brand" href="/"><svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="7"/><path d="M10 11h12M16 11v11"/></svg>Taxo<span>EXPLORATEUR LOGICIEL</span></a><h2>Projets <span>{projects.length}</span></h2>
     <nav aria-label="Projets">{projects.map(p=><button type="button" disabled={busy} aria-current={selected===p.id?'page':undefined} className={selected===p.id?'selected':''} key={p.id} onClick={()=>{setError('');setSelected(p.id);}}>{p.name}<span>↗</span></button>)}</nav>
@@ -140,14 +148,15 @@ function App(){
     <main><header><div><p className="eyebrow">PROJET</p><h1>{project?.name??'Votre logiciel, à découvert.'}</h1><p className="path">{project?.path??'Ajoutez un dossier pour découvrir les technologies de votre projet.'}</p></div><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?'Analyse en cours…':'Lancer l’analyse globale'}</button></header>
     {selected&&!loading&&<ProjectNav scan={scan}/>}
     {error&&<div role="alert" className="error">{error}</div>}
-    {loading?<p role="status">Chargement…</p>:scan?<>
-      <ProjectOverview scan={scan}/>
-      <section className="results" id="technologies"><div className="section-heading"><div><h2>Technologies</h2><p>Reconnues par les noms de fichiers et les dépendances déclarées ; une dépendance déclarée ne prouve pas qu’elle est utilisée.</p></div><label>Analyse du<select value={scan.id} onChange={e=>setScanId(e.target.value)}>{scans.map(s=><option key={s.id} value={s.id}>{new Date(s.created_at).toLocaleString('fr-CA')}</option>)}</select></label></div>
+    {run&&run.status!=='done'&&<AnalysisProgress run={run}/>}
+    {loading?<p role="status">Chargement…</p>:shown?<>
+      <ProjectOverview scan={shown} pending={running?pendingEvaluators(run):undefined}/>
+      <section className="results" id="technologies"><div className="section-heading"><div><h2>Technologies</h2><p>Reconnues par les noms de fichiers et les dépendances déclarées ; une dépendance déclarée ne prouve pas qu’elle est utilisée.</p></div><label>Analyse du<select value={shown.id} onChange={e=>setScanId(e.target.value)}>{scans.map(s=><option key={s.id} value={s.id}>{new Date(s.created_at).toLocaleString('fr-CA')}</option>)}</select></label></div>
       {technologies.length?<div className="tags">{technologies.map(t=><span key={t}>{t}</span>)}</div>:<p className="empty">Aucune technologie reconnue dans ce dossier.</p>}
       {legacyFacts.length>0&&<details className="evidence-files"><summary>Fichiers justificatifs ({legacyFacts.length})</summary><div className="table-wrap"><table><thead><tr><th>Technologie</th><th>Fichier justificatif</th><th>Détection</th></tr></thead><tbody>{legacyFacts.map(f=><tr key={f.technology+f.file}><td>{f.technology}</td><td><code>{f.file}</code></td><td>{f.method==='manifest'?'Manifeste':'Nom de fichier'}</td></tr>)}</tbody></table></div></details>}
       </section>
-      <AnalysisDetails scan={scan}/>
-    </>:<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
+      <AnalysisDetails scan={shown}/>
+    </>:!running&&<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
     {selected&&!loading&&scan&&<AskTaxo key={selected} base={`/projects/${selected}`} request={request}/>}
     {selected&&!loading&&<HistoryPanel key={selected} projectId={selected}/>}
     </main>

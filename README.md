@@ -109,6 +109,28 @@ présentée comme un résultat. La navigation ne propose que les sections réell
 de présentation (`frontend/src/vocabulary.ts`), sans rien renommer côté backend. Évaluateurs, versions,
 identifiants d'exécution, couverture et relations restent consultables sous « Détails de l'analyse ».
 
+### Des analyses et une Minia progressives (TAXO-UX-02)
+
+Taxo ne paraît jamais figé pendant qu'il travaille, et n'invente aucune progression : chaque étape
+affichée correspond à un événement réel du serveur.
+
+- `POST /api/projects/{id}/analyses` lance l'analyse globale en tâche de fond (`202`), puis
+  `GET …/analyses/{job}/events` diffuse ses événements en Server-Sent Events : `analysis.started`,
+  `snapshot.ready`, `evaluator.started`, `evaluator.progress` (fichiers lus, commits lus, avec un total
+  seulement s'il est connu), `evaluator.completed` ou `evaluator.failed`, `analysis.consolidating`, puis
+  `analysis.completed` ou `analysis.failed`. `Last-Event-ID` reprend après le dernier événement reçu.
+  `POST …/scans` reste disponible et synchrone.
+- Le portail montre les étapes dès le clic ; les résultats d'un évaluateur remplacent les anciens dès
+  qu'il termine, les autres cartes restent visibles et marquées « Mise à jour… ». Un évaluateur en échec
+  est signalé sans interrompre l'analyse.
+- Minia annonce ses étapes (sélection des faits, contexte, « Minia interprète N faits Taxo ») et, si le
+  fournisseur le permet (Ollama), affiche sa réponse pendant qu'elle l'écrit :
+  `POST …/commits/{sha}/ask/stream` et `POST /api/projects/{id}/ask/stream`. Ce texte est provisoire ;
+  les faits cités et la réponse validée n'arrivent qu'à la fin.
+
+Les journaux d'analyse vivent dans la mémoire du processus : un déploiement à plusieurs instances devra
+les partager, ou router un client vers l'instance qui a lancé son analyse.
+
 ### Historique et impact des commits (TAXO-HIST-01)
 
 Sur demande, le portail affiche les derniers commits d'un projet, lus directement dans Git, puis la fiche d'un

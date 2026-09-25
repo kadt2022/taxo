@@ -194,7 +194,7 @@ def test_scan_persists_only_legacy_and_bounded_execution_summary():
             return Snapshot('project-key', 'a' * 40, COMMIT, (), content=MemoryContent())
 
     class Runner:
-        def __call__(self, evaluator, snapshot):
+        def __call__(self, evaluator, snapshot, progress=None):
             class Execution:
                 status = EvaluationStatus.SUCCESS
                 evaluator_id, facts, coverage = 'fake', ({'kind': 'ASSERTION'},) * 2000, ()

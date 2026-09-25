@@ -10,12 +10,14 @@ premier parent). Les fichiers sont des references `file:`, les memes que celles 
 par elles que les faits Git se relient aux faits du code.
 """
 from app.evaluations.domain.evaluator import EvaluationOutput
+from app.evaluations.domain.progress import silent
 from app.evaluations.domain.status import EvaluationStatus
 from app.facts import is_path
 from .catalog import CATALOG
 
 MAX_COMMITS = 50000
 METHOD = 'git.log'
+PROGRESS_EVERY = 500
 
 
 def _representable(path):
@@ -37,9 +39,15 @@ class GitEvaluator:
     def __init__(self, max_commits=MAX_COMMITS):
         self.max_commits = max_commits
 
-    def evaluate(self, snapshot):
+    def evaluate(self, snapshot, progress=silent):
         repository = f'repository:{snapshot.repository}'
-        commits = list(snapshot.history(self.max_commits + 1))
+        commits = []
+        for commit in snapshot.history(self.max_commits + 1):
+            commits.append(commit)
+            if len(commits) % PROGRESS_EVERY == 0:
+                progress('history', 'Commits lus', len(commits))
+        read = min(len(commits), self.max_commits)
+        progress('history', 'Commits lus', read, read)
         unread = commits[self.max_commits:]
         facts, invalid = [], []
         for commit in commits[:self.max_commits]:

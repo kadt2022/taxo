@@ -90,19 +90,26 @@ group('actions', ()=>{
     expect(queryPath('/projects/p', '3 derniers commits')).toBe('/projects/p/query?q=3+derniers+commits');
     expect(JSON.parse(askInit('Pourquoi ?').body as string)).toEqual({question:'Pourquoi ?'});
   });
-  it('sélectionne, puis fait expliquer la sélection', async ()=>{
-    const run=vi.fn().mockResolvedValueOnce(selection).mockResolvedValueOnce(answer);
-    const set={setBusy:vi.fn(), setError:vi.fn(), setResult:vi.fn(), setAnswer:vi.fn()};
-    const {select, explain}=actions('/projects/p', '3 derniers', run, set);
+  it('sélectionne, puis fait expliquer la sélection au fil de l’eau', async ()=>{
+    const run=vi.fn().mockResolvedValueOnce(selection);
+    let live:any=null;
+    const set={setBusy:vi.fn(), setError:vi.fn(), setResult:vi.fn(), setLive:vi.fn((change:(value:any)=>any)=>{live=change(live);})};
+    async function* events(){
+      yield {type:'minia.stage', data:{stage:'facts', state:'done', label:'Sélection des faits pertinents', count:2}};
+      yield {type:'minia.delta', data:{text:'Le récit '}};
+      yield {type:'minia.completed', data:answer};
+    }
+    const stream=vi.fn().mockResolvedValue(events());
+    const {select, explain}=actions('/projects/p', '3 derniers', run, set, stream);
     const event={preventDefault:vi.fn()};
     await submitWith(select)(event);
     expect(event.preventDefault).toHaveBeenCalled();
     expect(run).toHaveBeenCalledWith('/projects/p/query?q=3+derniers');
     expect(set.setResult).toHaveBeenCalledWith(selection);
-    expect(set.setAnswer).toHaveBeenCalledWith(null);
+    expect(live).toBeNull();
     await explain();
-    expect(run.mock.calls[1][0]).toBe('/projects/p/ask');
-    expect(set.setAnswer).toHaveBeenLastCalledWith(answer);
+    expect(stream.mock.calls[0][0]).toBe('/api/projects/p/ask/stream');
+    expect(live).toMatchObject({text:'Le récit ', result:answer, stages:[{stage:'facts', count:2}]});
     expect(set.setBusy.mock.calls.map(call=>call[0])).toEqual([true, false, true, false]);
   });
   it('montre l’erreur sans rester occupé', async ()=>{
