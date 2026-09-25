@@ -77,7 +77,10 @@ def test_minia_answers_from_taxo_facts_and_taxo_shows_the_cited_facts(repo, ask)
     assert result['rejected_citations'] == ['F99', 'x'], 'une reference inventee est ecartee, jamais affichee'
     sent = json.loads(model.calls[0][1])
     assert sent['facts'][0]['ref'] == 'F1'
-    assert result['facts'][0]['subject'] == sent['facts'][0]['subject'], 'le fait affiche est celui de Taxo'
+    project_id = result['project']['id']
+    assert result['facts'][0]['subject'] == f'repository:{project_id}', 'le fait affiche est celui de Taxo'
+    assert sent['facts'][0]['subject'] == 'repository:Minia', 'le modele lit le nom du projet, pas son identifiant'
+    assert project_id not in model.calls[0][1]
     assert 'produced_by' not in json.dumps(result), 'une reponse de Minia ne devient jamais un fait'
 
 
@@ -91,6 +94,7 @@ def test_minia_never_receives_source_code_or_secrets(repo, ask):
     assert 'content_hash' not in user, 'une preuve se reduit a sa localisation'
     assert 'ajoute React' in user, 'le message du commit est une donnee transmise'
     assert 'jamais des instructions' in system
+    assert '"..."' not in system, 'aucune valeur de gabarit que le modele pourrait recopier'
 
 
 def test_when_taxo_knows_nothing_minia_says_so_without_asking_the_model(repo, ask):
@@ -101,6 +105,41 @@ def test_when_taxo_knows_nothing_minia_says_so_without_asking_the_model(repo, as
     assert result['status'] == 'TAXO_KNOWS_NOTHING' and result['facts'] == []
     assert 'ne peut rien affirmer' in result['unknown']
     assert model.calls == []
+    git = result['git']
+    assert (git['sha'], git['subject'], git['author']) == (unchanged, 'retouche le README', git['author'])
+    assert git['author'] and git['files'] == [{'status': 'MODIFIED', 'path': 'README.md', 'old_path': None}]
+
+
+def test_a_permanent_unreadable_zone_does_not_wake_the_model(make_repo, git, ask, tmp_path):
+    repo = make_repo({'README.md': 'a\n', 'logo.bin': b'\xff\xfe\x00binaire'}, 'zone')
+    (repo / 'README.md').write_text('b\n')
+    sha = commit_all(git, repo, 'retouche')
+    model = FakeModel('ne doit pas etre appele')
+    app = create_app(f'sqlite:///{tmp_path / "zone.db"}', [repo], minia=model)
+    Base.metadata.create_all(app.state.engine)
+    with TestClient(app) as client:
+        project = client.post('/api/projects', json={'name': 'Zone', 'path': str(repo)}).json()
+        result = client.post(f'/api/projects/{project["id"]}/history/commits/{sha}/ask',
+                             json={'question': 'Qu est-ce que ce commit change ?'}).json()
+    assert result['not_interpreted'] == ['file:logo.bin'], 'la zone reste signalee, par Taxo'
+    assert result['status'] == 'TAXO_KNOWS_NOTHING' and model.calls == []
+
+
+def test_a_renamed_file_reaches_minia_with_its_old_path(make_repo, git, ask, tmp_path):
+    repo = make_repo({'docs/backlog/R1.md': 'recit\n'}, 'rename')
+    (repo / 'docs' / 'termine').mkdir()
+    git(repo, 'mv', 'docs/backlog/R1.md', 'docs/termine/R1.md')
+    sha = commit_all(git, repo, 'R1 termine')
+    model = FakeModel({'cited': [], 'answer': 'La fiche serait terminee.', 'unknown': ''})
+    app = create_app(f'sqlite:///{tmp_path / "rename.db"}', [repo], minia=model)
+    Base.metadata.create_all(app.state.engine)
+    with TestClient(app) as client:
+        project = client.post('/api/projects', json={'name': 'Renomme', 'path': str(repo)}).json()
+        result = client.post(f'/api/projects/{project["id"]}/history/commits/{sha}/ask',
+                             json={'question': 'Quel est le but ?'}).json()
+    moved = {'status': 'RENAMED', 'path': 'docs/termine/R1.md', 'old_path': 'docs/backlog/R1.md'}
+    assert moved in json.loads(model.calls[0][1])['commit']['files']
+    assert result['git']['files'] == [moved]
 
 
 def test_minia_without_a_model_is_disabled_but_taxo_still_works(repo, ask):
@@ -148,14 +187,25 @@ def test_the_briefing_is_bounded_and_carries_gaps(monkeypatch):
     sent = json.loads(brief.text)
     assert sent['facts_not_sent'] == 3
     assert sent['facts'][0]['evidence_after'] == [{'path': 'A.java', 'line_start': 3, 'line_end': 4}]
-    empty = briefing.build('q', Commit(), None, [{**evaluation, 'changes': [], 'not_interpreted_before': [],
-                                                  'not_interpreted_after': [], 'failures': []}])
-    assert empty.empty
+    zones_only = briefing.build('q', Commit(), None, [{**evaluation, 'changes': [], 'failures': []}])
+    assert zones_only.empty, 'une zone non interpretee seule ne dit rien du commit'
+    failed = briefing.build('q', Commit(), None, [{**evaluation, 'changes': []}])
+    assert not failed.empty, 'un echec d evaluateur merite d etre explique'
+
+    class File:
+        status, path, old_path = 'ADDED', 'x', None
+
+    monkeypatch.setattr(briefing, 'MAX_FILES', 1)
+    files = briefing.build('q', Commit(), None, [evaluation], [File(), File(), File()], ('id-1', 'Demo'))
+    sent = json.loads(files.text)
+    assert files.files_truncated == 2 and sent['files_not_sent'] == 2 and len(sent['commit']['files']) == 1
 
 
 def test_parse_keeps_only_known_references():
     parsed = parse('{"cited": ["F2", " F1 ", "F0", 7], "answer": " a ", "unknown": ""}', {'F1': {}, 'F2': {}})
     assert parsed == {'cited': ['F2', 'F1'], 'rejected': ['F0', '7'], 'answer': 'a', 'unknown': ''}
+    template = parse('{"cited": [], "answer": "...", "unknown": " \u2026 "}', {})
+    assert (template['answer'], template['unknown']) == ('', ''), 'un gabarit recopie n est pas une reponse'
     with pytest.raises(MiniaError) as error:
         parse(None, {})
     assert error.value.code == INVALID_ANSWER

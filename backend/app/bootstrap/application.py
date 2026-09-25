@@ -55,5 +55,5 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     api.include_router(history_router(history))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ADR 0004, regle 14).
     model = minia_model(settings.minia()) if minia is _FROM_SETTINGS else minia
-    api.include_router(minia_router(AskMinia(history, model)))
+    api.include_router(minia_router(AskMinia(history, model, projects)))
     return api

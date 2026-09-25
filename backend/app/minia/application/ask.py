@@ -1,13 +1,16 @@
 """Demander a Minia ce que signifie un commit, a partir de ce que Taxo en sait.
 
-Minia ne lit ni le depot ni le code : elle recoit les faits changes par le commit (impact de Taxo),
-leurs preuves et la couverture. Sans fait, sans zone non interpretee et sans echec, le modele n'est pas
-appele : Taxo ne sait rien de plus, et Minia le dit. Aucune reponse n'est conservee.
+Minia ne lit ni le depot ni le code : elle recoit ce que Git sait du commit (auteur, date, message,
+fichiers et statuts), les faits changes par le commit (impact de Taxo), leurs preuves et la couverture.
+Ce que Git sait est toujours renvoye tel quel, quelle que soit la reponse du modele. Sans fait change et
+sans echec d'evaluateur, le modele n'est pas appele : Taxo ne sait rien de plus, et Minia le dit. Aucune
+reponse n'est conservee.
 """
 from app.minia.domain import briefing
 from app.minia.domain.answer import SYSTEM, parse
 from app.minia.domain.errors import INVALID_QUESTION, NOT_CONFIGURED, MiniaError
 from app.minia.domain.model import MiniaModel
+from app.projects.application.queries import require_project
 
 MAX_QUESTION = 1000
 ANSWERED, NOTHING_KNOWN = 'ANSWERED', 'TAXO_KNOWS_NOTHING'
@@ -22,8 +25,8 @@ def _change(ref, change):
 
 
 class AskMinia:
-    def __init__(self, history, model: MiniaModel | None):
-        self.history, self.model = history, model
+    def __init__(self, history, model: MiniaModel | None, projects):
+        self.history, self.model, self.projects = history, model, projects
 
     def status(self):
         if self.model is None:
@@ -36,9 +39,13 @@ class AskMinia:
             raise MiniaError(INVALID_QUESTION, f'La question doit compter entre 1 et {MAX_QUESTION} caractères.')
         if self.model is None:
             raise MiniaError(NOT_CONFIGURED, 'Minia n’est pas configurée : définir MINIA_OLLAMA_MODEL (et lancer Ollama).')
-        commit, base, evaluations = self.history.impact(project_id, sha, parent)
-        brief = briefing.build(question, commit, base, evaluations)
+        project = require_project(self.projects, project_id)
+        commit, base, files = self.history.detail(project_id, sha, parent)
+        _, _, evaluations = self.history.impact(project_id, sha, base)
+        brief = briefing.build(question, commit, base, evaluations, files, (project.id, project.name))
         result = {'question': question, 'commit': commit.sha, 'parent': base, 'model': self.status(),
+                  'project': {'id': project.id, 'name': project.name},
+                  'git': briefing.commit_view(commit, base, files), 'files_not_sent': brief.files_truncated,
                   'not_interpreted': list(brief.not_interpreted), 'failures': list(brief.failures),
                   'facts_not_sent': brief.truncated, 'rejected_citations': []}
         if brief.empty:
