@@ -2,6 +2,8 @@ from dataclasses import asdict
 
 from fastapi import APIRouter, Query
 
+from app.history.domain.commit import MAX_COMMITS
+
 _ERRORS = {
     404: {'description': 'Projet, commit, parent ou fichier introuvable.'},
     422: {'description': 'Historique illisible, par exemple « NOT_A_GIT_REPOSITORY : … ».'},
@@ -16,7 +18,8 @@ def create_router(history):
     router = APIRouter()
 
     @router.get('/api/projects/{project_id}/history/commits', responses=_ERRORS)
-    def commits(project_id: str, limit: int = Query(10, ge=1, le=100)):
+    def commits(project_id: str, limit: int = Query(..., ge=1, le=MAX_COMMITS,
+                                                   description='Nombre de commits demandé ; aucun par défaut.')):
         return [_commit(commit) for commit in history.commits(project_id, limit)]
 
     @router.get('/api/projects/{project_id}/history/commits/{sha}', responses=_ERRORS)

@@ -4,6 +4,7 @@ import './style.css';
 import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
 import {MiniaView, type MiniaAnswer} from './minia';
+import {commitCount, MAX_COMMITS} from './history';
 
 type Project = {id:string; name:string; path:string};
 type SnapshotReference = {repository:string; commit:string; mode:'COMMIT'|'WORKING_TREE'; dirty?:boolean; content_fingerprint?:string};
@@ -75,15 +76,13 @@ const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DEL
 
 function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
-  const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [minia,setMinia]=useState<MiniaAnswer|null>(null), [question,setQuestion]=useState(''), [error,setError]=useState(''), [busy,setBusy]=useState(false);
+  const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [minia,setMinia]=useState<MiniaAnswer|null>(null), [question,setQuestion]=useState(''), [count,setCount]=useState(''), [consulted,setConsulted]=useState(false), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const base=`/projects/${projectId}/history/commits`;
   // Seule la derniere demande peut modifier l'ecran : une reponse arrivee trop tard est ignoree.
   const latest=useRef(0);
+  // Changer de projet efface la consultation : l'historique ne s'affiche que sur demande explicite.
   useEffect(()=>{
-    let active=true;
-    setCommits([]);setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);setError('');
-    request<Commit[]>(`${base}?limit=10`).then(c=>{if(active)setCommits(c);}).catch(e=>{if(active)setError(e.message);});
-    return ()=>{active=false;};
+    setCommits([]);setConsulted(false);setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);setError('');
   },[base]);
   async function load<T>(path:string, apply:(value:T)=>void, init?:RequestInit){
     const token=++latest.current;
@@ -91,6 +90,13 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
     try{const value=await request<T>(path,init);if(token===latest.current)apply(value);}
     catch(e){if(token===latest.current)setError((e as Error).message);}
     finally{if(token===latest.current)setBusy(false);}
+  }
+  function consult(event:FormEvent){
+    event.preventDefault();
+    const wanted=commitCount(count);
+    if(wanted===null){setError(`Indiquez un nombre de commits entre 1 et ${MAX_COMMITS}.`);return;}
+    setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);
+    return load<Commit[]>(`${base}?limit=${wanted}`,c=>{setCommits(c);setConsulted(true);});
   }
   function open(sha:string){setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
   function compare(sha:string,path:string,parent:string|null){
@@ -110,11 +116,12 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   // Les deux cotes comptent : une zone non lue avant le commit rend la comparaison incomplete aussi.
   const gaps=(side:string,zones:string[])=>zones.length?`Zones non interprétées ${side} : ${zones.join(', ')}.`:`Aucune zone non interprétée ${side}.`;
   return <section className="results history" aria-label="Historique Git">
-    <div className="section-heading"><div><h2>Historique Git</h2><p>Les 10 derniers commits, lus directement dans Git, et ce que Taxo comprend de chacun.</p></div></div>
+    <div className="section-heading"><div><h2>Historique Git</h2><p>Consultation sur demande, distincte de l’analyse globale : indiquez combien de commits afficher.</p></div>
+      <form className="consult" onSubmit={consult}><label htmlFor="commit-count">Derniers commits</label><input id="commit-count" type="number" min={1} max={MAX_COMMITS} required value={count} onChange={e=>setCount(e.target.value)} placeholder="nombre"/><button type="submit" className="secondary" disabled={busy}>Afficher</button></form></div>
     {error&&<div role="alert" className="error">{error}</div>}
     {commits.length?<div className="table-wrap"><table><thead><tr><th>Commit</th><th>Message</th><th>Auteur</th><th>Date</th></tr></thead><tbody>
       {commits.map(c=><tr key={c.sha} className={detail?.commit.sha===c.sha?'current':''}><td><button className="link" disabled={busy} onClick={()=>open(c.sha)}><code>{c.sha.slice(0,7)}</code></button>{c.parents.length>1&&<span className="muted"> fusion</span>}</td><td>{c.subject}</td><td>{c.author}</td><td>{date(c.authored_at)}</td></tr>)}
-    </tbody></table></div>:!error&&<p className="empty">Aucun commit dans ce dépôt.</p>}
+    </tbody></table></div>:consulted&&!error&&<p className="empty">Aucun commit dans ce dépôt.</p>}
     {detail&&<section className="commit-detail" aria-label="Fiche du commit">
       <h2>Commit <code>{detail.commit.sha.slice(0,12)}</code></h2>
       <dl>
@@ -188,7 +195,7 @@ function App(){
     <nav aria-label="Projets">{projects.map(p=><button disabled={busy} aria-current={selected===p.id?'page':undefined} className={selected===p.id?'selected':''} key={p.id} onClick={()=>{setError('');setSelected(p.id);}}>{p.name}<span>↗</span></button>)}</nav>
     <form onSubmit={add}><h2>Ajouter un projet</h2><label>Nom<input required maxLength={120} value={name} onChange={e=>setName(e.target.value)} placeholder="Mon application"/></label><label>Dossier local<input required value={path} onChange={e=>setPath(e.target.value)} placeholder="D:\MonProjet"/></label><button className="secondary" disabled={busy||loading}>Enregistrer le projet</button></form>
     <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
-    <main><header><div><p className="eyebrow">INVENTAIRE / TECHNOLOGIES</p><h1>{project?.name??'Votre logiciel, à découvert.'}</h1><p className="path">{project?.path??'Ajoutez un dossier pour découvrir les technologies de votre projet.'}</p></div><button className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?'Opération en cours…':'↻ Lancer une analyse'}</button></header>
+    <main><header><div><p className="eyebrow">ANALYSE GLOBALE / INVENTAIRE</p><h1>{project?.name??'Votre logiciel, à découvert.'}</h1><p className="path">{project?.path??'Ajoutez un dossier pour découvrir les technologies de votre projet.'}</p></div><button className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?'Opération en cours…':'↻ Lancer l’analyse globale'}</button></header>
     {error&&<div role="alert" className="error">{error}</div>}
     {loading?<p role="status">Chargement…</p>:scan?<>
       {scan.evaluation_summary&&<EvaluationPanel summary={scan.evaluation_summary}/>}
@@ -198,7 +205,7 @@ function App(){
       {legacyFacts.length?<div className="table-wrap"><table><thead><tr><th>Technologie</th><th>Fichier justificatif</th><th>Détection</th></tr></thead><tbody>{legacyFacts.map(f=><tr key={f.technology+f.file}><td>{f.technology}</td><td><code>{f.file}</code></td><td>{f.method==='manifest'?'Manifeste':'Nom de fichier'}</td></tr>)}</tbody></table></div>:<p className="empty">Aucune technologie reconnue dans ce dossier.</p>}
       <footer>{sourceLabel(scan)}</footer>
       {[...new Set(scan.warnings??[])].map(w=><p className="error" key={w}>{w}</p>)}</section>
-    </>:<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez une analyse pour obtenir un inventaire accompagné de ses sources.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
+    </>:<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale pour obtenir les faits du projet, accompagnés de leurs sources.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
     {selected&&!loading&&<HistoryPanel key={selected} projectId={selected}/>}
     <p className="scope">Cette première version identifie les technologies. L’extraction des API, des permissions et des relations métier n’est pas encore intégrée.</p></main>
   </div>;
