@@ -98,7 +98,7 @@ describe('vues de progression', ()=>{
     const run:Run=played(event('analysis.started', {evaluators:['taxo.inventory','taxo.git']}), event('snapshot.ready', {commit:'c'}),
       event('evaluator.started', {evaluator:'taxo.inventory'}));
     const html=renderToStaticMarkup(<AnalysisProgress run={run}/>);
-    expect(html).toContain('Analyse en cours');
+    expect(html).toContain('<p class="progress-title"><span>Analyse en cours<span class="animated-dots" aria-hidden="true"></span></span></p>');
     expect(html).toContain('Inventaire du code…');
     expect(html).toContain('0 / 2 analyses terminées');
     expect(html).not.toMatch(/%|taxo\.git/);

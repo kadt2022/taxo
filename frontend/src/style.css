@@ -301,3 +301,8 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
 .minia-draft{margin:14px 0 0;padding:12px 16px;border-left:3px solid var(--info);background:var(--info-soft);border-radius:0 var(--r-sm) var(--r-sm) 0;font-size:14px;line-height:1.65;white-space:pre-wrap}
 .minia-draft .badge{display:inline-block;margin:0 8px 6px 0;font-size:11px;font-weight:600;color:var(--info);background:var(--surface);border-radius:var(--r-pill);padding:1px 8px}
 @keyframes taxo-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+/* « Analyse en cours » reste fixe : seuls les points changent, dans une largeur reservee (aucun decalage). */
+.animated-dots{display:inline-block;width:1.1em;text-align:left}
+.animated-dots::after{content:"...";animation:taxo-dots 1.2s steps(1,end) infinite}
+@keyframes taxo-dots{0%{content:"."}33%{content:".."}66%{content:"..."}}
+@media(prefers-reduced-motion:reduce){.animated-dots::after{animation:none;content:"..."}}
