@@ -1,7 +1,7 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
 import {evaluationsOf, shortList, outcome, overviewCards, ProjectNav, ProjectOverview, sections, type EvaluationSummary, type Scan} from './overview';
-import {AnalysisDetails, EvaluationPanel} from './details';
+import {AnalysisDetails, EvaluationPanel, warningsOf} from './details';
 import {label, reference, RELATIONS} from './vocabulary';
 
 const snapshot={repository:'p-1', commit:'a'.repeat(40), mode:'COMMIT' as const};
@@ -60,7 +60,9 @@ describe('outcome et sections', ()=>{
   it('résume l’analyse en une phrase', ()=>{
     expect(outcome(scan)).toBe('Analyse terminée');
     expect(outcome({...scan, evaluations:[inventory, {...git, status:'PARTIAL', warning_count:1}]})).toBe('Analyse terminée, en partie · 1 point à vérifier');
-    expect(outcome({...scan, warnings:['a','a','b'], evaluations:[inventory, {...git, status:'FAILED'}]})).toBe('Analyse terminée, une partie a échoué · 2 points à vérifier');
+    expect(outcome({...scan, warnings:['manifeste illisible'], evaluations:[{...inventory, warning_count:1}, {...git, status:'FAILED', warning_count:1}]}))
+      .toBe('Analyse terminée, une partie a échoué · 2 points à vérifier');
+    expect(outcome({id:'old', created_at:'', warnings:['a','a','b']})).toBe('Analyse terminée · 2 points à vérifier');
   });
   it('ne propose que les sections réellement disponibles', ()=>{
     expect(sections(scan).map(item=>item.label)).toEqual(['Vue d’ensemble', 'Technologies', 'Historique']);
@@ -91,6 +93,14 @@ describe('AnalysisDetails', ()=>{
       'Non analysé par Taxo', 'NOT_INTERPRETED', 'Fichiers modifiés', 'CHANGES', 'Éléments identifiés', 'Points à vérifier', 'Terminée'])
       expect(html).toContain(text);
     expect(html.match(/Fichier illisible : x/g)).toHaveLength(1);
+  });
+  it('explique chaque avertissement par l’évaluateur qui l’a émis, sans doublon', ()=>{
+    const partial={...git, status:'PARTIAL', warning_count:7, warnings:['Historique au-delà de 50000 commits non lu']};
+    expect(warningsOf({...scan, warnings:['ignoré'], evaluations:[inventory, partial]})).toEqual([
+      {source:'Historique Git', text:'Historique au-delà de 50000 commits non lu'},
+      {source:'Historique Git', text:'+ 6 autres avertissements'}]);
+    const html=renderToStaticMarkup(<AnalysisDetails scan={{...scan, evaluations:[inventory, partial]}}/>);
+    expect(html).toContain('<strong>Historique Git : </strong>Historique au-delà de 50000 commits non lu');
   });
   it('dit quand rien n’est détaillé', ()=>{
     const html=renderToStaticMarkup(<EvaluationPanel summary={summary('autre')}/>);

@@ -7,6 +7,9 @@ from app.evaluations.domain.evaluator import EvaluatorCatalog
 from app.evaluations.domain.status import EvaluationStatus
 from app.snapshots.domain.snapshot import Snapshot
 
+# Le resume reste borne : les premiers avertissements suffisent a expliquer un statut partiel ou en echec.
+SUMMARY_WARNINGS = 5
+
 
 @dataclass(frozen=True)
 class EvaluatorExecution:
@@ -52,6 +55,7 @@ class EvaluatorExecution:
             'fact_count': len(self.facts),
             'coverage_count': len(self.coverage),
             'warning_count': len(self.warnings),
+            'warnings': list(dict.fromkeys(self.warnings))[:SUMMARY_WARNINGS],
             'relations': dict(sorted(relations.items())),
             'coverage': [
                 {'coverage_type': kind, 'count': coverage_counts[kind], 'subjects': coverage_subjects[kind]}

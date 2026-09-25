@@ -45,12 +45,23 @@ export function EvaluationPanel({summary}:Readonly<{summary:EvaluationSummary}>)
 }
 
 /** Deuxieme niveau de lecture : replie par defaut, il contient tout ce qui sert a verifier l'analyse. */
+/** Avertissements de chaque evaluateur, dits par leur nom ; l'ancien champ de l'analyse sert de repli. */
+export function warningsOf(scan:Scan){
+  const explained=evaluationsOf(scan).map(item=>({source:label(EVALUATORS,item.evaluator_id), texts:item.warnings??[], total:item.warning_count}))
+    .filter(item=>item.texts.length);
+  if(!explained.length)return [...new Set(scan.warnings??[])].map(text=>({source:'', text}));
+  const shown=explained.flatMap(item=>item.texts.map(text=>({source:item.source, text})));
+  const more=explained.filter(item=>item.total>item.texts.length)
+    .map(item=>({source:item.source, text:`+ ${item.total-item.texts.length} autres avertissements`}));
+  return [...shown, ...more];
+}
+
 export function AnalysisDetails({scan}:Readonly<{scan:Scan}>){
-  const warnings=[...new Set(scan.warnings??[])];
+  const warnings=warningsOf(scan);
   return <details className="analysis-details">
     <summary>Détails de l’analyse</summary>
     <p className="muted">Ce que Taxo a exécuté pour produire cette vue : évaluateurs, versions, couverture, relations et avertissements.</p>
     {evaluationsOf(scan).map(summary=><EvaluationPanel key={summary.execution_id} summary={summary}/>)}
-    {warnings.length>0&&<section className="evaluation"><h3>Avertissements</h3><ul>{warnings.map(w=><li key={w}>{w}</li>)}</ul></section>}
+    {warnings.length>0&&<section className="evaluation"><h3>Avertissements</h3><ul>{warnings.map(w=><li key={w.source+w.text}>{w.source&&<strong>{w.source} : </strong>}{w.text}</li>)}</ul></section>}
   </details>;
 }

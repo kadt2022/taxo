@@ -5,7 +5,7 @@ export type SnapshotReference = {repository:string; commit:string; mode:'COMMIT'
 export type EvaluationSummary = {
   execution_id:string; evaluator_id:string; producer_version:string; status:string;
   started_at:string; finished_at:string; duration_seconds:number;
-  fact_count:number; coverage_count:number; warning_count:number;
+  fact_count:number; coverage_count:number; warning_count:number; warnings?:string[];
   relations:Record<string,number>;
   coverage:{coverage_type:string; count:number; subjects:string[]}[];
   snapshot:SnapshotReference;
@@ -72,7 +72,8 @@ export function overviewCards(scan:Scan):Card[]{
 /** Resultat de l'analyse, dit en une phrase ; les avertissements deviennent des points a verifier. */
 export function outcome(scan:Scan){
   const evaluations=evaluationsOf(scan);
-  const points=evaluations.reduce((total,item)=>total+item.warning_count,0)+new Set(scan.warnings??[]).size;
+  // Un avertissement de l'inventaire figure aussi dans scan.warnings : les resumes font foi, l'ancien champ sert de repli.
+  const points=evaluations.length?evaluations.reduce((total,item)=>total+item.warning_count,0):new Set(scan.warnings??[]).size;
   const state=evaluations.some(item=>item.status==='FAILED')?'Analyse terminée, une partie a échoué'
     :evaluations.some(item=>item.status==='PARTIAL')?'Analyse terminée, en partie':'Analyse terminée';
   return points?`${state} · ${count(points)} point${points>1?'s':''} à vérifier`:state;
