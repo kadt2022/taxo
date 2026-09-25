@@ -10,13 +10,12 @@ import re
 import subprocess
 from pathlib import Path
 
-from app.history.domain.commit import ChangedFile, Commit, is_confidential
+from app.history.domain.commit import MAX_COMMITS, ChangedFile, Commit, is_confidential
 from app.history.domain.diff import Blob
 from app.history.domain.errors import (GIT_READ_ERROR, NOT_A_GIT_REPOSITORY, UNKNOWN_COMMIT,
                                        HistoryError)
 
 GIT_TIMEOUT = 60
-MAX_COMMITS = 100
 _COMMIT_ID = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')
 _GIT = ['git', '-c', 'safe.directory=*', '-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false']
 # Chemins toujours litteraux : un nom contenant * ou ? n'est jamais un motif.
@@ -61,8 +60,12 @@ def _commits(raw):
 
 
 class GitHistoryReader:
-    def commits(self, root, limit=10):
-        """Les `limit` derniers commits de HEAD, du plus recent au plus ancien ; vide sans commit."""
+    def commits(self, root, limit):
+        """Les `limit` derniers commits de HEAD, du plus recent au plus ancien ; vide sans commit.
+
+        `limit` est toujours demande explicitement : aucune fenetre de commits n'est imposee par defaut.
+        MAX_COMMITS borne le cout d'une requete, ce n'est pas une valeur par defaut.
+        """
         root = _repository(root)
         if not 1 <= limit <= MAX_COMMITS:
             raise ValueError(f'Nombre de commits attendu entre 1 et {MAX_COMMITS}.')
