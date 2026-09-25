@@ -9,6 +9,7 @@ import {ProjectNav, ProjectOverview, technologiesOf, type Scan} from './overview
 import {AnalysisDetails} from './details';
 import {EVALUATORS, label} from './vocabulary';
 import {AskTaxo} from './query';
+import {apiUrl} from './api';
 import {openStream} from './sse';
 import {AnalysisProgress, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
 import {ask as askMinia, askButton, MiniaProgress, questionInit, startMinia, type MiniaLive} from './minia-live';
@@ -105,7 +106,7 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
 }
 
 async function request<T>(path:string, init?:RequestInit):Promise<T> {
-  const response = await fetch('/api'+path, init);
+  const response = await fetch(apiUrl(path), init);
   if (!response.ok) {
     const body = await response.json().catch(()=>null);
     throw new Error(typeof body?.detail === 'string' ? body.detail : `La requête a échoué (${response.status}).`);

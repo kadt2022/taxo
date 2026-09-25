@@ -1,5 +1,6 @@
 // Flux d'evenements serveur (TAXO-UX-02), lus avec fetch : le meme lecteur sert au GET d'une analyse et au
 // POST d'une question a Minia (EventSource ne sait pas envoyer de corps).
+import {apiUrl} from './api';
 export type ServerEvent<T=unknown> = {id?:string; type:string; data:T};
 
 /** Decoupe un texte SSE en evenements complets ; rend aussi le reste, encore incomplet. */
@@ -36,7 +37,7 @@ export async function* readEvents(body:ReadableStream<Uint8Array>):AsyncGenerato
 
 /** Ouvre un flux ; une reponse en erreur leve son message, comme les autres appels du portail. */
 export async function openStream(url:string, init?:RequestInit, fetcher:typeof fetch=fetch){
-  const response=await fetcher(url, init);
+  const response=await fetcher(apiUrl(url), init);
   if(!response.ok||!response.body){
     const body=await response.json().catch(()=>null);
     throw new Error(typeof body?.detail==='string'?body.detail:`La requête a échoué (${response.status}).`);
