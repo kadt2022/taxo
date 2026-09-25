@@ -107,7 +107,7 @@ const ICONS:Record<string,string>={
   security:'M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z'};
 
 export function CardIcon({id}:Readonly<{id:string}>){
-  return <svg className="card-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={ICONS[id]??ICONS.project}/></svg>;
+  return <svg className="card-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={ICONS[id]??ICONS.project}/></svg>;
 }
 
 const BADGES:Record<CardState,string|null>={known:null, partial:'En partie', failed:'Échec', unknown:'Non analysé'};
