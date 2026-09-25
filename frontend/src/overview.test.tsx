@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {CardIcon, evaluationsOf, outcomeState, shortList, outcome, overviewCards, ProjectNav, ProjectOverview, sections, type EvaluationSummary, type Scan} from './overview';
+import {CardIcon, panelKey, evaluationsOf, outcomeState, shortList, outcome, overviewCards, ProjectNav, ProjectOverview, sections, type EvaluationSummary, type Scan} from './overview';
 import {AnalysisDetails, EvaluationPanel, warningsOf} from './details';
 import {label, reference, RELATIONS} from './vocabulary';
 
@@ -139,5 +139,12 @@ describe('vocabulaire', ()=>{
     expect(reference('technology:react')).toBe('technologie react');
     expect(reference('inconnu:x')).toBe('inconnu:x');
     expect(reference('texte libre')).toBe('texte libre');
+  });
+});
+
+describe('panelKey', ()=>{
+  it('donne une clé distincte à chaque panneau d’un même projet', ()=>{
+    expect(panelKey('ask','p1')).not.toBe(panelKey('history','p1'));
+    expect(panelKey('ask','p1')).not.toBe(panelKey('ask','p2'));
   });
 });
