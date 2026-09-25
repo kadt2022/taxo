@@ -27,6 +27,11 @@ Les données PostgreSQL sont conservées dans un volume Docker. Les migrations A
 
 ## Développement sans Docker
 
+Le plus simple sous Windows : double-cliquer sur `taxo-console.bat` à la racine du dépôt. Il prépare
+l'environnement Python et la base SQLite, installe le portail au premier lancement, démarre l'API
+(port 8000) et le portail (port 5173), puis ouvre la console d'administration. Les dépôts lisibles se
+règlent dans la ligne `TAXO_ALLOWED_ROOTS` en tête du fichier. Étapes détaillées :
+
 Python 3.12+ et Node.js 22.12+ sont nécessaires. Dans un premier terminal PowerShell :
 
 ```powershell
