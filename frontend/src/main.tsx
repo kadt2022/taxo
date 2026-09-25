@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import './style.css';
 import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
+import {MiniaView, type MiniaAnswer} from './minia';
 
 type Project = {id:string; name:string; path:string};
 type SnapshotReference = {repository:string; commit:string; mode:'COMMIT'|'WORKING_TREE'; dirty?:boolean; content_fingerprint?:string};
@@ -74,24 +75,24 @@ const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DEL
 
 function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
-  const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [error,setError]=useState(''), [busy,setBusy]=useState(false);
+  const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [minia,setMinia]=useState<MiniaAnswer|null>(null), [question,setQuestion]=useState(''), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const base=`/projects/${projectId}/history/commits`;
   // Seule la derniere demande peut modifier l'ecran : une reponse arrivee trop tard est ignoree.
   const latest=useRef(0);
   useEffect(()=>{
     let active=true;
-    setCommits([]);setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setError('');
+    setCommits([]);setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);setError('');
     request<Commit[]>(`${base}?limit=10`).then(c=>{if(active)setCommits(c);}).catch(e=>{if(active)setError(e.message);});
     return ()=>{active=false;};
   },[base]);
-  async function load<T>(path:string, apply:(value:T)=>void){
+  async function load<T>(path:string, apply:(value:T)=>void, init?:RequestInit){
     const token=++latest.current;
     setBusy(true);setError('');
-    try{const value=await request<T>(path);if(token===latest.current)apply(value);}
+    try{const value=await request<T>(path,init);if(token===latest.current)apply(value);}
     catch(e){if(token===latest.current)setError((e as Error).message);}
     finally{if(token===latest.current)setBusy(false);}
   }
-  function open(sha:string){setImpact(null);setFileDiff(null);setLinks(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
+  function open(sha:string){setImpact(null);setFileDiff(null);setLinks(null);setMinia(null);return load<CommitDetail>(`${base}/${sha}`,setDetail);}
   function compare(sha:string,path:string,parent:string|null){
     const query=new URLSearchParams({path});if(parent)query.set('parent',parent);
     setLinks(null);
@@ -99,6 +100,10 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
   }
   function relate(diff:FileDiff){
     return load<DiffFacts>(diffFactsPath(base,diff),setLinks);
+  }
+  function ask(event:FormEvent, sha:string, parent:string|null){
+    event.preventDefault();
+    return load<MiniaAnswer>(`${base}/${sha}/ask`,setMinia,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,parent})});
   }
   function understand(sha:string){return load<Impact>(`${base}/${sha}/impact`,setImpact);}
   const date=(value:string)=>new Date(value).toLocaleString('fr-CA');
@@ -125,6 +130,12 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
         <button className="secondary relate" disabled={busy} onClick={()=>relate(fileDiff)}>Relier ce diff aux faits Taxo</button>
       </>}
       <button className="primary" disabled={busy} onClick={()=>understand(detail.commit.sha)}>{busy?'Analyse en cours…':'Ce que Taxo comprend de ce commit'}</button>
+      <form className="ask-minia" onSubmit={e=>ask(e,detail.commit.sha,detail.parent)}>
+        <label htmlFor="minia-question">Demander à Minia</label>
+        <textarea id="minia-question" rows={2} maxLength={1000} value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Que change ce commit, et est-ce risqué ?"/>
+        <button className="secondary" disabled={busy||!question.trim()}>{busy?'Minia réfléchit…':'Demander à Minia'}</button>
+      </form>
+      {minia&&minia.commit===detail.commit.sha&&<MiniaView answer={minia}/>}
     </section>}
     {impact&&impact.commit.sha===detail?.commit.sha&&<section className="impact" aria-label="Impact compris par Taxo">
       {impact.evaluations.map(e=><div key={e.evaluator_id}>

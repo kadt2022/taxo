@@ -16,9 +16,22 @@ from app.hypotheses.infrastructure.model_store import ModelStore
 from app.history.application.queries import ProjectHistory
 from app.history.infrastructure.git_history import GitHistoryReader
 from app.history.api.router import create_router as history_router
+from app.minia.application.ask import AskMinia
+from app.minia.infrastructure.ollama import OllamaModel
+from app.minia.api.router import create_router as minia_router
 from . import settings
 
-def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None):
+_FROM_SETTINGS = object()
+
+
+def minia_model(options):
+    """Adaptateur du modele de Minia ; None si aucun modele n'est configure."""
+    if options['provider'] != 'ollama':
+        raise ValueError(f"MINIA_PROVIDER inconnu : {options['provider']} (seul « ollama » est disponible).")
+    return OllamaModel(options['model'], options['url']) if options['model'] else None
+
+
+def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None, minia=_FROM_SETTINGS):
     engine = create_engine(settings.database_url(database_url))
     paths = LocalProjectPaths(settings.allowed_roots(allowed_roots))
     projects = SqlAlchemyProjectRepository(engine)
@@ -40,4 +53,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     api.include_router(projects_router(projects, paths))
     api.include_router(scans_router(projects, scans, run))
     api.include_router(history_router(history))
+    # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ADR 0004, regle 14).
+    model = minia_model(settings.minia()) if minia is _FROM_SETTINGS else minia
+    api.include_router(minia_router(AskMinia(history, model)))
     return api
