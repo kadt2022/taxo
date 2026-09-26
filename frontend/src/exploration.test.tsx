@@ -82,7 +82,8 @@ describe('réponse en exploration', ()=>{
     expect(html).toContain('verdict verdict-confirmed');
     expect(html).toContain('verdict verdict-refuted');
     expect(html).toContain('verdict verdict-not-proven');
-    expect(html).toContain('verdict verdict-none');
+    expect(html).not.toContain('verdict verdict-none');
+    expect(html).toContain('Minia : « Mal formée. »');
     expect(html).toContain('commit cccccccccccc modifie src/app.txt (MODIFIED)');
     expect(html).toContain('<span class="evidence">commit cccccccccccc (git.log)</span>');
     expect(html).toContain('Il ajusterait l’application.');
@@ -133,5 +134,21 @@ describe('frontière preuve / texte libre (MINIA-11)', ()=>{
   it('ne laisse dans la colonne de Taxo que ce que Taxo constate', ()=>{
     expect(orange).toContain('Non analysé par Taxo : file:A.');
     expect(orange).not.toContain('Le risque exact');
+  });
+});
+
+describe('affirmation non vérifiable (MINIA-11)', ()=>{
+  it('reste un texte de Minia, jamais reformulée par Taxo en vert', ()=>{
+    const unchecked:Statement={type:'claim', text:'Ce commit désactive la sécurité.', verdict:null,
+      claim:{subject:`commit:${'d'.repeat(40)}`, relation:'INVENTED', object:'file:A.java'},
+      error:{code:'INVALID_ARGUMENT', message:'Relation hors du vocabulaire : INVENTED.'}};
+    const html=renderToStaticMarkup(<Statements statements={[unchecked]}/>);
+    const green=html.slice(html.indexOf('minia-block fact'), html.indexOf('minia-block interpretation'));
+    const blue=html.slice(html.indexOf('minia-block interpretation'), html.indexOf('minia-block unknown'));
+    expect(green).toContain('Minia n’a fait aucune affirmation à vérifier.');
+    expect(green).not.toContain('d'.repeat(12));
+    expect(green).not.toContain('Non vérifiable');
+    expect(blue).toContain('Minia : « Ce commit désactive la sécurité. »');
+    expect(blue).toContain('Non vérifiable : Relation hors du vocabulaire : INVENTED.');
   });
 });

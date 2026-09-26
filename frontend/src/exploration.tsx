@@ -77,11 +77,15 @@ export function Trajectory({steps}:Readonly<{steps:TrajectoryStep[]}>){
  *   ce qu'elle dit ne pas savoir.
  * - Jaune : seulement ce que Taxo constate lui-meme (`limits`). */
 export function Statements({statements, limits=[]}:Readonly<{statements:Statement[]; limits?:string[]}>){
-  const claims=statements.filter((item):item is Extract<Statement,{type:'claim'}>=>item.type==='claim');
+  const all=statements.filter((item):item is Extract<Statement,{type:'claim'}>=>item.type==='claim');
+  // Seule une affirmation a laquelle Taxo a rendu un verdict entre en vert ; une affirmation qu'il n'a pas pu
+  // verifier (mal formee, au-dela de la limite) reste un texte de Minia, sans reformulation par Taxo.
+  const claims=all.filter(item=>item.verdict!==null);
+  const unchecked=all.filter(item=>item.verdict===null);
   const interpretations=statements.filter(item=>item.type==='interpretation');
   const worded=claims.filter(item=>item.text.trim());
   const unknowns=statements.filter(item=>item.type==='unknown');
-  const said=interpretations.length+worded.length+unknowns.length;
+  const said=interpretations.length+worded.length+unchecked.length+unknowns.length;
   return <div className="minia-blocks">
     <article className="minia-block fact">
       <h3>Affirmations vérifiées par Taxo</h3>
@@ -105,6 +109,8 @@ export function Statements({statements, limits=[]}:Readonly<{statements:Statemen
         {interpretations.map((item,index)=><li key={`i${index}`}>{item.text}</li>)}
         {worded.map((item,index)=><li key={`c${index}`}>Minia : « {item.text} » <span className="muted">(sa formulation ;
           Taxo n’a vérifié que : {claimSentence(item.claim)})</span></li>)}
+        {unchecked.map((item,index)=><li key={`n${index}`}>Minia : « {item.text||'(affirmation sans texte)'} » <span className="muted">
+          ({verdictText(item)})</span></li>)}
         {unknowns.map((item,index)=><li key={`u${index}`}><em>Minia dit ne pas savoir :</em> {item.text}</li>)}
       </ul>:<p className="muted">Minia ne propose aucune interprétation.</p>}
     </article>
