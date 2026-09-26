@@ -23,6 +23,7 @@ from app.minia.application.ask import AskMinia
 from app.projection.application.query import ProjectQuery
 from app.projection.api.router import create_router as query_router
 from app.minia.infrastructure.claude import ClaudeModel
+from app.minia.infrastructure.gemini import GeminiModel
 from app.minia.infrastructure.ollama import OllamaModel
 from app.minia.api.router import create_router as minia_router
 from . import settings
@@ -30,18 +31,20 @@ from . import settings
 _FROM_SETTINGS = object()
 
 
-PROVIDERS = ('ollama', 'claude')
+PROVIDERS = ('ollama', 'claude', 'gemini')
 
 
 def minia_models(options):
     """Modeles de Minia par fournisseur configure ; vide si aucun."""
     if options['provider'] not in PROVIDERS:
-        raise ValueError(f"MINIA_PROVIDER inconnu : {options['provider']} (ollama ou claude).")
+        raise ValueError(f"MINIA_PROVIDER inconnu : {options['provider']} (ollama, claude ou gemini).")
     models = {}
     if options['model']:
         models['ollama'] = OllamaModel(options['model'], options['url'], num_ctx=options.get('num_ctx', 16384))
     if options.get('claude_model'):
         models['claude'] = ClaudeModel(options['claude_model'])
+    if options.get('gemini_model'):
+        models['gemini'] = GeminiModel(options['gemini_model'], options.get('gemini_tier', 'free'))
     return models
 
 

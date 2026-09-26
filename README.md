@@ -272,6 +272,22 @@ du diff n'est pas cochée par défaut avec Claude. La réponse de Claude est con
 (`cited`, `answer`, `unknown`) ; une réponse déclinée ou coupée est signalée, jamais affichée à moitié.
 Sans `ANTHROPIC_API_KEY`, Taxo démarre et Minia Claude le dit à la première question.
 
+### Minia Gemini (TAXO-MINIA-06)
+
+Troisième fournisseur de Minia, même travail que les deux autres. L'API Gemini a un niveau gratuit, ce qui
+permet de tester un gros modèle distant sans acheter de crédits.
+
+```powershell
+setx GEMINI_API_KEY "..."                       # clé créée dans Google AI Studio (jamais dans le dépôt)
+$env:MINIA_GEMINI_MODEL = 'gemini-2.5-flash'    # nom exact affiché dans AI Studio
+$env:MINIA_GEMINI_TIER  = 'free'                # défaut ; 'paid' si la clé est facturée
+```
+
+Au niveau gratuit, Google peut utiliser les données envoyées pour améliorer ses produits : le portail
+l'indique (« niveau gratuit ») et le déconseille pour du code privé ; le diff reste décoché par défaut. La
+clé passe dans un en-tête, jamais dans l'URL. Une réponse bloquée, déclinée ou coupée est signalée, un
+quota atteint aussi.
+
 ### Clochette (SmolLM2-135M, expérimental, ADR 0006)
 
 Clochette est installée par l'étape `python -m app.hypotheses fetch` de la procédure ci-dessus : elle

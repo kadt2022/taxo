@@ -280,18 +280,18 @@ def test_the_ollama_url_must_be_http(url):
 
 def test_settings_choose_the_provider(monkeypatch):
     for name in ('MINIA_PROVIDER', 'MINIA_OLLAMA_URL', 'MINIA_OLLAMA_MODEL', 'MINIA_OLLAMA_NUM_CTX',
-                 'MINIA_CLAUDE_MODEL'):
+                 'MINIA_CLAUDE_MODEL', 'MINIA_GEMINI_MODEL', 'MINIA_GEMINI_TIER'):
         monkeypatch.delenv(name, raising=False)
     assert settings.minia() == {'provider': 'ollama', 'url': 'http://127.0.0.1:11434', 'model': '', 'num_ctx': 16384,
-                                'claude_model': ''}
+                                'claude_model': '', 'gemini_model': '', 'gemini_tier': 'free'}
     assert minia_model(settings.minia()) is None, 'sans modele, Minia reste desactivee'
     monkeypatch.setenv('MINIA_OLLAMA_MODEL', ' qwen2.5:3b ')
     model = minia_model(settings.minia())
     assert (model.provider, model.model_name, model.url) == ('ollama', 'qwen2.5:3b', 'http://127.0.0.1:11434')
     monkeypatch.setenv('MINIA_OLLAMA_NUM_CTX', '32768')
     assert minia_model(settings.minia()).num_ctx == 32768
-    with pytest.raises(ValueError, match='ollama ou claude'):
-        minia_model(settings.minia(provider='gemini'))
+    with pytest.raises(ValueError, match='ollama, claude ou gemini'):
+        minia_model(settings.minia(provider='mistral'))
     monkeypatch.setenv('MINIA_CLAUDE_MODEL', 'claude-opus-5')
     models = minia_models(settings.minia())
     assert list(models) == ['ollama', 'claude'] and models['claude'].remote and not models['ollama'].remote

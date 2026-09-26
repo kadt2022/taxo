@@ -167,8 +167,8 @@ def test_each_question_chooses_its_provider(both):
     client, url, ollama, remote = both
     status = client.get('/api/minia/status').json()
     assert status['provider'] == 'ollama' and not status['remote'], 'le premier fournisseur sert par defaut'
-    assert status['providers'] == [{'provider': 'ollama', 'model': 'ollama-1', 'remote': False},
-                                   {'provider': 'claude', 'model': 'claude-1', 'remote': True}]
+    assert status['providers'] == [{'provider': 'ollama', 'model': 'ollama-1', 'remote': False, 'data_use': False},
+                                   {'provider': 'claude', 'model': 'claude-1', 'remote': True, 'data_use': False}]
     by_default = client.post(url, json={'question': 'Que change ce commit ?'}).json()
     chosen = client.post(url, json={'question': 'Que change ce commit ?', 'provider': 'claude'}).json()
     assert by_default['answer'] == 'Réponse de ollama.' and by_default['model']['provider'] == 'ollama'

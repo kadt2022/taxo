@@ -9,7 +9,7 @@ type GitFile = {status:string; path:string; old_path:string|null};
 export type GitCommit = {sha:string; parent:string|null; author:string; authored_at:string; subject:string; files:GitFile[]};
 type NotSent = {path:string; reason:string};
 export type SourceContext = {status:'NOT_REQUESTED'|'DISABLED'}|{status:'SENT'; files_sent:string[]; files_not_sent:NotSent[]; lines_sent:number; bytes_sent:number};
-export type MiniaProvider = {provider:string; model:string; remote:boolean};
+export type MiniaProvider = {provider:string; model:string; remote:boolean; data_use?:boolean};
 /** Le modele qui a repondu ; `fallback_from` quand un autre modele a repris la demande (repli). */
 export type AnswerModel = {configured?:boolean; provider:string|null; model:string|null; fallback_from?:string};
 
@@ -17,7 +17,7 @@ export type AnswerModel = {configured?:boolean; provider:string|null; model:stri
 export const modelLabel=(model:AnswerModel)=>model.model
   ?` · ${model.provider} ${model.model}${model.fallback_from?` (repli de ${model.fallback_from})`:''}`:'';
 export type MiniaStatus = {configured:boolean; provider:string|null; model:string|null; source_context:'off'|'diff'; remote:boolean;
-  providers?:MiniaProvider[]};
+  data_use?:boolean; providers?:MiniaProvider[]};
 export type MiniaAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'; question:string; commit:string; parent:string|null;
   project:{id:string; name:string}; git:GitCommit; files_not_sent:number; source_context?:SourceContext;
   model:AnswerModel; facts:CitedFact[]; answer:string; unknown:string;
@@ -71,14 +71,16 @@ export function withProvider(status:MiniaStatus|null, provider:string):MiniaStat
   return status&&chosen?{...status, ...chosen}:status;
 }
 
-const PROVIDERS:Record<string,string>={ollama:'Ollama', claude:'Claude'};
+const PROVIDERS:Record<string,string>={ollama:'Ollama', claude:'Claude', gemini:'Gemini'};
 export const providerName=(provider:string)=>PROVIDERS[provider]??provider;
-export const providerLabel=(item:MiniaProvider)=>`${providerName(item.provider)} · ${item.model} (${item.remote?'distant':'local'})`;
+export const providerLabel=(item:MiniaProvider)=>`${providerName(item.provider)} · ${item.model} (${item.remote?'distant':'local'}${item.data_use?', niveau gratuit':''})`;
 
 /** Avertissement d'un fournisseur distant : la question et le contexte transmis quittent la machine. */
 export function remoteNote(status:MiniaStatus|null){
   if(!status?.configured||!status.remote||!status.provider)return '';
-  return `Minia ${providerName(status.provider)} est un service distant : la question et les faits Taxo transmis (chemins, messages de commit, auteurs) quittent la machine de Taxo.`;
+  const note=`Minia ${providerName(status.provider)} est un service distant : la question et les faits Taxo transmis (chemins, messages de commit, auteurs) quittent la machine de Taxo.`;
+  // Niveau gratuit : le service peut en outre utiliser ces donnees pour ameliorer ses modeles.
+  return status.data_use?`${note} Au niveau gratuit, le fournisseur peut aussi s’en servir pour améliorer ses modèles : à éviter pour du code privé.`:note;
 }
 
 /** Choix du fournisseur de Minia pour la demande, quand plusieurs sont configures. */
