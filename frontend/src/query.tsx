@@ -4,7 +4,7 @@ import {useState, type FormEvent} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
 import {ask as askMinia, askButton, MiniaProgress, type MiniaLive} from './minia-live';
-import {MiniaChoice, type MiniaStatus} from './minia';
+import {MiniaChoice, modelLabel, type AnswerModel, type MiniaStatus} from './minia';
 import {openStream, type ServerEvent} from './sse';
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
@@ -14,7 +14,7 @@ export type GitFact = {subject:string; relation:string; object:string; qualifier
 export type Selection = {status:string; request:Request; analysis:{id:string; created_at:string};
   total_commits:number|null; commits:SelectedCommit[]; facts:GitFact[]; not_interpreted:string[]};
 export type SelectionAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'|'NEEDS_SELECTION'; question:string; request:Request;
-  model:{provider:string|null; model:string|null}; commits:SelectedCommit[]; facts:(GitFact&{ref:string})[];
+  model:AnswerModel; commits:SelectedCommit[]; facts:(GitFact&{ref:string})[];
   answer:string; unknown:string; not_interpreted:string[]; facts_not_sent:number; rejected_citations:string[]};
 type Run = <T>(path:string, init?:RequestInit)=>Promise<T>;
 
@@ -70,7 +70,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:''].filter(Boolean);
   return <section className="minia" aria-label="Réponse de Minia">
-    <p className="eyebrow">MINIA{answer.model.model?` · ${answer.model.provider} ${answer.model.model}`:''} · {describe(answer.request)}</p>
+    <p className="eyebrow">MINIA{modelLabel(answer.model)} · {describe(answer.request)}</p>
     <p className="minia-question">{answer.question}</p>
     <div className="minia-blocks">
       <article className="minia-block fact">

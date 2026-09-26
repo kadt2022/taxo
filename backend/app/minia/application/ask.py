@@ -106,8 +106,12 @@ class AskMinia:
         return None if capacity is None else max(capacity(system), 0)
 
     @staticmethod
-    def _model_view(model):
-        return {'configured': True, 'provider': model.provider, 'model': model.model_name}
+    def _model_view(model, served=None):
+        """Fournisseur et modele qui ont repondu ; apres un repli, le modele demande est dit aussi."""
+        view = {'configured': True, 'provider': model.provider, 'model': served or model.model_name}
+        if served and served != model.model_name:
+            view['fallback_from'] = model.model_name
+        return view
 
     @staticmethod
     def _checked(question):
@@ -164,10 +168,10 @@ class AskMinia:
         if brief.empty:
             yield 'minia.completed', {**result, 'status': NOTHING_KNOWN, 'facts': [], 'answer': '', 'unknown': _NOTHING}
             return
-        raw = yield from self._interpret(model, with_diff(SYSTEM) if brief.diff else SYSTEM, brief,
-                                         len(sent.get('files_sent', ())))
+        raw, served = yield from self._interpret(model, with_diff(SYSTEM) if brief.diff else SYSTEM, brief,
+                                                 len(sent.get('files_sent', ())))
         answer = parse(raw, brief.refs)
-        yield 'minia.completed', {**result, 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
+        yield 'minia.completed', {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [_change(ref, brief.refs[ref]) for ref in answer['cited']],
                                   'rejected_citations': answer['rejected']}
 
@@ -198,29 +202,37 @@ class AskMinia:
         brief = briefing.selection(question, projection, (project['id'], project['name']),
                                    self._capacity(model, SYSTEM_SELECTION))
         yield _stage('context', 'done', 'Préparation du contexte')
-        raw = yield from self._interpret(model, SYSTEM_SELECTION, brief)
+        raw, served = yield from self._interpret(model, SYSTEM_SELECTION, brief)
         answer = parse(raw, brief.refs)
-        yield 'minia.completed', {**result, 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
+        yield 'minia.completed', {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
                                   'facts_not_sent': brief.truncated, 'rejected_citations': answer['rejected']}
 
     @staticmethod
     def _interpret(model, system, brief, diff_files=0):
-        """Texte brut du modele ; diffuse le texte provisoire de la reponse si le fournisseur le permet."""
+        """Texte brut du modele et, si le fournisseur le dit, le modele qui a repondu ; diffuse le texte
+        provisoire de la reponse si le fournisseur le permet."""
         label = f'Minia interprète {len(brief.refs)} fait{"s" if len(brief.refs) > 1 else ""} Taxo'
         if diff_files:
             label += f' et le diff de {diff_files} fichier{"s" if diff_files > 1 else ""}'
         yield _stage('interpretation', 'running', label, len(brief.refs))
         stream = getattr(model, 'stream', None)
+        served = None
         if stream is None:
             raw = model.complete(system, brief.text)
         else:
-            chunks, extractor = [], AnswerStream()
-            for chunk in stream(system, brief.text):
+            chunks, extractor, pieces = [], AnswerStream(), stream(system, brief.text)
+            while True:
+                try:
+                    chunk = next(pieces)
+                except StopIteration as end:
+                    # Un fournisseur peut rendre, en fin de flux, le modele qui a reellement repondu (repli).
+                    served = end.value
+                    break
                 chunks.append(chunk)
                 text = extractor.feed(chunk)
                 if text:
                     yield 'minia.delta', {'text': text}
             raw = ''.join(chunks)
         yield _stage('interpretation', 'done', label, len(brief.refs))
-        return raw
+        return raw, served

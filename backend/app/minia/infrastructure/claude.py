@@ -76,14 +76,19 @@ class ClaudeModel:
         return ''.join(block.text for block in message.content if block.type == 'text')
 
     def stream(self, system, user):
-        """Morceaux de la reponse, au fur et a mesure que Claude les produit."""
+        """Morceaux de la reponse, au fur et a mesure que Claude les produit.
+
+        Rend enfin le modele qui a reellement repondu : apres un repli cote serveur, ce n'est pas celui demande.
+        """
         request = self._request(system, user)
         try:
             with self._messages().stream(**request) as stream:
                 yield from stream.text_stream
-                _accepted(stream.get_final_message())
+                message = stream.get_final_message()
         except anthropic.AnthropicError as exc:
             raise _failure(exc, self.model_name) from exc
+        _accepted(message)
+        return getattr(message, 'model', None) or self.model_name
 
 
 def _accepted(message):

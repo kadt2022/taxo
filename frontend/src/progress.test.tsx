@@ -162,8 +162,11 @@ describe('Minia en direct', ()=>{
     expect(html).toContain('en cours d’écriture');
     const done=reduceMinia(live!, event('minia.completed', {answer:'x'}));
     expect(done.result).toEqual({answer:'x'});
-    const failed=reduceMinia(startMinia(), event('minia.failed', {message:'Ollama a répondu 500.'}));
-    expect(renderToStaticMarkup(<MiniaProgress live={failed}/>)).toContain('Ollama a répondu 500.');
+    const failed=reduceMinia(live!, event('minia.failed', {message:'Claude a décliné cette demande.'}));
+    expect(failed.text).toBe('');
+    const html2=renderToStaticMarkup(<MiniaProgress live={failed}/>);
+    expect(html2).toContain('Claude a décliné cette demande.');
+    expect(html2).not.toContain('en cours d’écriture');
     expect(stageText({stage:'facts', state:'done', label:'Sélection', count:1})).toBe('Sélection : 1 fait');
   });
   it('change le bouton pendant que Minia travaille', ()=>{

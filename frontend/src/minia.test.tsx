@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {gaps, gitFile, MiniaChoice, MiniaView, providerLabel, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
+import {gaps, gitFile, MiniaChoice, MiniaView, modelLabel, providerLabel, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
   parent:'a'.repeat(40), project:{id:'p-1', name:'Takibo-IAM'}, files_not_sent:0,
@@ -162,5 +162,13 @@ describe('choix du fournisseur (TAXO-MINIA-05)', ()=>{
     expect(html).toContain('remote-note');
     const single={...status, providers:[status.providers![0]]};
     expect(renderToStaticMarkup(<MiniaChoice id="p" status={single} value="" onChange={noop}/>)).toBe('');
+  });
+});
+
+describe('modèle qui a répondu', ()=>{
+  it('dit quand un autre modèle a repris la demande', ()=>{
+    expect(modelLabel({provider:'claude', model:'claude-opus-4-8', fallback_from:'claude-opus-5'})).toBe(' · claude claude-opus-4-8 (repli de claude-opus-5)');
+    expect(modelLabel({provider:'ollama', model:'qwen2.5:3b'})).toBe(' · ollama qwen2.5:3b');
+    expect(modelLabel({provider:null, model:null})).toBe('');
   });
 });

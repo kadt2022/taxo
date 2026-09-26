@@ -13,14 +13,14 @@ from app.minia.domain.errors import MiniaError
 from app.minia.infrastructure.claude import ANSWER_SCHEMA, ClaudeModel
 
 
-def text_message(text, stop_reason='end_turn'):
+def text_message(text, stop_reason='end_turn', model='claude-opus-5'):
     return SimpleNamespace(content=[SimpleNamespace(type='thinking', thinking=''), SimpleNamespace(type='text', text=text)],
-                           stop_reason=stop_reason)
+                           stop_reason=stop_reason, model=model)
 
 
 class FakeStream:
-    def __init__(self, chunks, stop_reason='end_turn'):
-        self.text_stream, self.stop_reason = iter(chunks), stop_reason
+    def __init__(self, chunks, stop_reason='end_turn', served='claude-opus-5'):
+        self.text_stream, self.stop_reason, self.served = iter(chunks), stop_reason, served
 
     def __enter__(self):
         return self
@@ -29,12 +29,13 @@ class FakeStream:
         return False
 
     def get_final_message(self):
-        return text_message('', self.stop_reason)
+        return text_message('', self.stop_reason, self.served)
 
 
 class FakeMessages:
-    def __init__(self, reply=None, chunks=(), error=None, stop_reason='end_turn'):
+    def __init__(self, reply=None, chunks=(), error=None, stop_reason='end_turn', served='claude-opus-5'):
         self.reply, self.chunks, self.error, self.stop_reason, self.calls = reply, chunks, error, stop_reason, []
+        self.served = served
 
     def create(self, **request):
         self.calls.append(request)
@@ -46,7 +47,7 @@ class FakeMessages:
         self.calls.append(request)
         if self.error:
             raise self.error
-        return FakeStream(self.chunks, self.stop_reason)
+        return FakeStream(self.chunks, self.stop_reason, self.served)
 
 
 def claude(messages, model='claude-opus-5', **options):
@@ -64,9 +65,21 @@ def test_claude_is_asked_for_the_answer_object_and_nothing_else():
     assert 'fallbacks' not in (claude(FakeMessages(reply='{}'), model='claude-haiku-4-5')._request('s', 'u'))
 
 
-def test_claude_streams_its_answer():
+def _drain(pieces):
+    chunks = []
+    while True:
+        try:
+            chunks.append(next(pieces))
+        except StopIteration as end:
+            return ''.join(chunks), end.value
+
+
+def test_claude_streams_its_answer_and_names_the_model_that_answered():
     messages = FakeMessages(chunks=['{"cited": [], "answer": "Le ', 'commit restreindrait"', ', "unknown": ""}'])
-    assert ''.join(claude(messages).stream('s', 'u')) == '{"cited": [], "answer": "Le commit restreindrait", "unknown": ""}'
+    assert _drain(claude(messages).stream('s', 'u')) == (
+        '{"cited": [], "answer": "Le commit restreindrait", "unknown": ""}', 'claude-opus-5')
+    fallback = FakeMessages(chunks=['{}'], served='claude-opus-4-8')
+    assert _drain(claude(fallback).stream('s', 'u'))[1] == 'claude-opus-4-8', 'apres un repli, le modele qui a repondu'
 
 
 @pytest.mark.parametrize('stop_reason, expected', [('refusal', 'décliné'), ('max_tokens', 'coupée')])
@@ -118,12 +131,21 @@ def test_missing_credentials_are_reported_at_use_not_at_startup(monkeypatch):
 
 
 class Named:
-    def __init__(self, provider, remote):
+    def __init__(self, provider, remote, served=None):
         self.provider, self.model_name, self.remote, self.calls = provider, f'{provider}-1', remote, []
+        self.served = served
 
     def complete(self, system, user):
         self.calls.append(user)
         return json.dumps({'cited': [], 'answer': f'Réponse de {self.provider}.', 'unknown': ''})
+
+
+class Replacing(Named):
+    """Fournisseur dont la reponse vient d'un autre modele que celui demande (repli cote serveur)."""
+
+    def stream(self, system, user):
+        yield self.complete(system, user)
+        return self.served
 
 
 @pytest.fixture(name='both')
@@ -159,3 +181,19 @@ def test_an_unconfigured_provider_is_refused(both):
     client, url, _, _ = both
     response = client.post(url, json={'question': 'Que change ce commit ?', 'provider': 'gemini'})
     assert response.status_code == 422 and 'MINIA_UNKNOWN_PROVIDER' in response.json()['detail']
+
+
+def test_an_answer_from_a_fallback_model_is_attributed_to_it(make_repo, git, tmp_path):
+    repo = make_repo({'README.md': 'a\n'}, 'repli')
+    (repo / 'package.json').write_text(json.dumps({'dependencies': {'react': '19'}}))
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'ajoute React')
+    sha = git(repo, 'rev-parse', 'HEAD')
+    app = create_app(f'sqlite:///{tmp_path / "repli.db"}', [repo], minia=Replacing('claude', True, 'claude-opus-4-8'))
+    Base.metadata.create_all(app.state.engine)
+    with TestClient(app) as client:
+        project = client.post('/api/projects', json={'name': 'Repli', 'path': str(repo)}).json()
+        result = client.post(f'/api/projects/{project["id"]}/history/commits/{sha}/ask',
+                             json={'question': 'Que change ce commit ?'}).json()
+    assert result['model'] == {'configured': True, 'provider': 'claude', 'model': 'claude-opus-4-8',
+                               'fallback_from': 'claude-1'}
