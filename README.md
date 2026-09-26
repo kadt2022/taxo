@@ -303,6 +303,11 @@ message, c'est-à-dire les consignes de Minia. Minia ajuste son message à la fe
 sont pas transmis et la réponse le dit ; le diff prend la place laissée par les faits de Taxo. Une
 demande qui ne tiendrait toujours pas est refusée (`MINIA_CONTEXT_TOO_LARGE`) plutôt que tronquée.
 Augmenter `MINIA_OLLAMA_NUM_CTX` donne plus de place, au prix de mémoire.
+
+Un modèle local peut être lent : `MINIA_OLLAMA_TIMEOUT_SECONDS` (900 s par défaut) est le temps laissé à
+Ollama pour répondre à **un tour** ; la connexion, elle, doit aboutir en 10 s. Un délai dépassé est dit comme
+tel (« Ollama n'a pas répondu dans les 900 s »), distinct d'un Ollama injoignable, et n'entraîne pas de repli
+en mode paquet : le modèle y serait aussi lent. En exploration, une question peut compter plusieurs tours.
 API : `GET /api/minia/status` et `POST …/commits/{sha}/ask` avec `{"question": "…", "parent": null}`.
 Le modèle est derrière l'interface `MiniaModel` : un adaptateur Claude pourra s'ajouter sans toucher au
 reste (`MINIA_PROVIDER=claude`, pas encore disponible).

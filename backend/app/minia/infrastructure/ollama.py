@@ -20,6 +20,11 @@ DEFAULT_NUM_CTX = 16384
 # quelle que soit sa langue. S'y ajoutent le gabarit de conversation et une part reservee a la reponse.
 TEMPLATE_TOKENS = 64
 ANSWER_TOKENS = 1024
+# Temps laisse a Ollama pour repondre a un tour (MINIA_OLLAMA_TIMEOUT_SECONDS) : un modele local sur une
+# machine modeste peut mettre plusieurs minutes. La connexion, elle, doit etre immediate : un Ollama eteint
+# est signale tout de suite.
+DEFAULT_TIMEOUT_SECONDS = 900.0
+CONNECT_TIMEOUT_SECONDS = 10.0
 
 
 def _loopback(host):
@@ -39,15 +44,19 @@ class OllamaModel:
     # rend un JSON invalide ou tourne en rond fait basculer Taxo en mode paquet.
     explores = True
 
-    def __init__(self, model_name, url=DEFAULT_URL, timeout=300.0, transport=None, num_ctx=DEFAULT_NUM_CTX):
+    def __init__(self, model_name, url=DEFAULT_URL, timeout=DEFAULT_TIMEOUT_SECONDS, transport=None,
+                 num_ctx=DEFAULT_NUM_CTX):
         parts = urlsplit(url)
         if parts.scheme not in {'http', 'https'} or not parts.hostname:
             raise ValueError(f'MINIA_OLLAMA_URL invalide : {url}')
         if num_ctx < 2 * ANSWER_TOKENS:
             raise ValueError(f'MINIA_OLLAMA_NUM_CTX trop petit : {num_ctx} (minimum {2 * ANSWER_TOKENS}).')
-        self.model_name, self.url, self.num_ctx = model_name, url.rstrip('/'), num_ctx
+        if timeout <= 0:
+            raise ValueError(f'MINIA_OLLAMA_TIMEOUT_SECONDS invalide : {timeout} (secondes, plus que 0).')
+        self.model_name, self.url, self.num_ctx, self.timeout = model_name, url.rstrip('/'), num_ctx, timeout
         self.remote = not _loopback(parts.hostname)
-        self._client = httpx.Client(timeout=timeout, transport=transport)
+        self._client = httpx.Client(timeout=httpx.Timeout(timeout, connect=min(CONNECT_TIMEOUT_SECONDS, timeout)),
+                                    transport=transport)
 
     def capacity(self, system):
         """Octets disponibles pour le message de l'utilisateur avec ces consignes : Minia y ajuste son contexte."""
@@ -77,6 +86,11 @@ class OllamaModel:
             raise MiniaError(UNAVAILABLE, f'Ollama a répondu {response.status_code}.')
 
     def _unreachable(self, exc):
+        """Panne du fournisseur, dite en clair : un delai depasse n'est pas un Ollama injoignable."""
+        if isinstance(exc, httpx.TimeoutException) and not isinstance(exc, httpx.ConnectTimeout):
+            return MiniaError(UNAVAILABLE, f'Ollama n’a pas répondu dans les {self.timeout:g} s : le modèle est '
+                              'peut-être trop lent pour cette machine. Augmenter MINIA_OLLAMA_TIMEOUT_SECONDS, '
+                              'réduire MINIA_OLLAMA_NUM_CTX ou choisir un modèle plus léger.')
         return MiniaError(UNAVAILABLE, f'Ollama est injoignable à {self.url} : lancer « ollama serve ».')
 
     def complete(self, system, user, schema=None):

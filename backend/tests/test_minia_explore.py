@@ -411,3 +411,17 @@ def test_the_opening_answers_leave_room_for_the_advertised_operations(make_repo,
     assert result['trajectory'][1]['not_sent'], 'ce qui ne tient pas est compte, jamais tronque'
     capacity = model.capacity(exploration.SYSTEM)
     assert len(bodies[0]['messages'][1]['content'].encode('utf-8')) <= capacity
+
+
+def test_a_slow_provider_is_a_failure_not_a_fallback(repo, tmp_path):
+    repo, sha = repo
+
+    def handler(request):
+        raise httpx.ReadTimeout('lent', request=request)
+
+    model = OllamaModel('qwen2.5-coder:7b', 'http://127.0.0.1:11434', transport=httpx.MockTransport(handler))
+    events = ask_commit(repo, tmp_path, model, sha)
+    failed = [data for kind, data in events if kind == 'minia.failed']
+    assert failed and 'n’a pas répondu dans les 900 s' in failed[0]['message']
+    assert not [data for kind, data in events if kind == 'minia.completed'], \
+        'un delai depasse n est pas un echec du protocole : pas de repli en paquet, aussi lent'

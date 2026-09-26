@@ -43,7 +43,8 @@ def minia_models(options):
         raise ValueError(f"MINIA_PROVIDER inconnu : {options['provider']} (ollama, claude, gemini ou mistral).")
     models = {}
     if options['model']:
-        models['ollama'] = OllamaModel(options['model'], options['url'], num_ctx=options.get('num_ctx', 16384))
+        models['ollama'] = OllamaModel(options['model'], options['url'], num_ctx=options.get('num_ctx', 16384),
+                                       timeout=options.get('timeout', 900.0))
     if options.get('claude_model'):
         models['claude'] = ClaudeModel(options['claude_model'])
     if options.get('gemini_model'):
