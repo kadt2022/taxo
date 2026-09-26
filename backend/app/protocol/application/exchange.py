@@ -43,16 +43,18 @@ ACTIVATED = ('diff_facts',)
 OPERATIONS = V1 + ACTIVATED
 RESERVED = ('find_endpoint', 'trace_access_control', 'find_callers', 'find_callees', 'find_dependencies',
             'find_configuration', 'get_source')
+# Ce que `describe` dit des arguments de chaque operation.
+_COMMIT_ARGUMENT = {'commit': 'identifiant, 7 caracteres ou plus'}
+_CLAIM_ARGUMENTS = {'subject': 'reference', 'relation': 'relation', 'object': 'reference ou valeur'}
 _ARGUMENTS = {
     'describe': {},
-    'find_facts': {'subject': 'reference', 'relation': 'relation', 'object': 'reference ou valeur',
-                   'nature': '|'.join(NATURES)},
+    'find_facts': {**_CLAIM_ARGUMENTS, 'nature': '|'.join(NATURES)},
     'get_evidence': {'fact': 'F…'},
     'get_coverage': {'scope': 'reference (facultatif)'},
-    'get_commit': {'commit': 'identifiant, 7 caracteres ou plus'},
-    'get_diff': {'commit': 'identifiant, 7 caracteres ou plus', 'path': 'chemin d’un fichier touche'},
-    'verify_claim': {'subject': 'reference', 'relation': 'relation', 'object': 'reference ou valeur'},
-    'diff_facts': {'commit': 'identifiant, 7 caracteres ou plus'},
+    'get_commit': _COMMIT_ARGUMENT,
+    'get_diff': {**_COMMIT_ARGUMENT, 'path': 'chemin d’un fichier touche'},
+    'verify_claim': _CLAIM_ARGUMENTS,
+    'diff_facts': _COMMIT_ARGUMENT,
 }
 _LOCATION = ('path', 'line_start', 'line_end', 'symbol', 'method', 'object')
 _COMMIT = re.compile(r'[0-9a-f]{7,64}')
