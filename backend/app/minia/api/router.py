@@ -9,7 +9,7 @@ from app.minia.domain.errors import MiniaError
 
 _ERRORS = {
     404: {'description': 'Projet, commit ou parent introuvable.'},
-    422: {'description': 'Question vide ou trop longue.'},
+    422: {'description': 'Question vide ou trop longue, ou fournisseur non configuré.'},
     502: {'description': 'Réponse de Minia illisible.'},
     503: {'description': 'Minia non configurée, ou modèle injoignable.'},
 }
@@ -20,10 +20,13 @@ class Question(BaseModel):
     parent: str | None = None
     # Accord de la demande pour joindre le diff du commit ; sans effet si MINIA_SOURCE_CONTEXT vaut off.
     source_context: bool = False
+    # Fournisseur choisi pour cette demande (ollama, claude...) ; celui par defaut sinon.
+    provider: str | None = None
 
 
 class ProjectQuestion(BaseModel):
     question: str
+    provider: str | None = None
 
 
 def _stream(events):
@@ -48,20 +51,21 @@ def create_router(minia):
 
     @router.post('/api/projects/{project_id}/history/commits/{sha}/ask', responses=_ERRORS)
     def ask(project_id: str, sha: str, body: Question):
-        return minia.about_commit(project_id, sha, body.question, body.parent, body.source_context)
+        return minia.about_commit(project_id, sha, body.question, body.parent, body.source_context, body.provider)
 
     @router.post('/api/projects/{project_id}/history/commits/{sha}/ask/stream', responses=_ERRORS)
     def ask_stream(project_id: str, sha: str, body: Question):
-        return _stream(minia.about_commit_events(project_id, sha, body.question, body.parent, body.source_context))
+        return _stream(minia.about_commit_events(project_id, sha, body.question, body.parent, body.source_context,
+                                                body.provider))
 
     @router.post('/api/projects/{project_id}/ask/stream', responses={
         **_ERRORS, 409: {'description': 'Aucune analyse globale pour ce projet.'}})
     def ask_project_stream(project_id: str, body: ProjectQuestion):
-        return _stream(minia.about_project_events(project_id, body.question))
+        return _stream(minia.about_project_events(project_id, body.question, body.provider))
 
     @router.post('/api/projects/{project_id}/ask', responses={
         **_ERRORS, 409: {'description': 'Aucune analyse globale pour ce projet.'}})
     def ask_project(project_id: str, body: ProjectQuestion):
-        return minia.about_project(project_id, body.question)
+        return minia.about_project(project_id, body.question, body.provider)
 
     return router

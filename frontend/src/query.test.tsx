@@ -89,6 +89,7 @@ group('actions', ()=>{
   it('construit la requête et la question', ()=>{
     expect(queryPath('/projects/p', '3 derniers commits')).toBe('/projects/p/query?q=3+derniers+commits');
     expect(JSON.parse(askInit('Pourquoi ?').body as string)).toEqual({question:'Pourquoi ?'});
+    expect(JSON.parse(askInit('Pourquoi ?', 'claude').body as string)).toEqual({question:'Pourquoi ?', provider:'claude'});
   });
   it('sélectionne, puis fait expliquer la sélection au fil de l’eau', async ()=>{
     const run=vi.fn().mockResolvedValueOnce(selection);

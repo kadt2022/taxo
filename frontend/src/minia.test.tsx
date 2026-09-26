@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {gaps, gitFile, MiniaView, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
+import {gaps, gitFile, MiniaChoice, MiniaView, providerLabel, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
   parent:'a'.repeat(40), project:{id:'p-1', name:'Takibo-IAM'}, files_not_sent:0,
@@ -135,5 +135,32 @@ describe('contexte de diff (TAXO-MINIA-02)', ()=>{
     expect(html).toContain('Autoriser Minia à lire le diff de ce commit');
     expect(html).toContain('class="warning"');
     expect(renderToStaticMarkup(<SourceConsent status={status} checked onChange={noop}/>)).not.toContain('warning');
+  });
+});
+
+describe('choix du fournisseur (TAXO-MINIA-05)', ()=>{
+  const status:MiniaStatus={configured:true, provider:'ollama', model:'qwen2.5:3b', source_context:'diff', remote:false,
+    providers:[{provider:'ollama', model:'qwen2.5:3b', remote:false}, {provider:'claude', model:'claude-opus-5', remote:true}]};
+  it('voit Minia depuis le fournisseur choisi', ()=>{
+    expect(withProvider(status,'claude')).toMatchObject({provider:'claude', model:'claude-opus-5', remote:true, source_context:'diff'});
+    expect(withProvider(status,'')).toBe(status);
+    expect(withProvider(null,'claude')).toBeNull();
+    expect(sourceConsent(withProvider(status,'claude'))).toMatchObject({checked:false});
+    expect(sourceConsent(withProvider(status,'ollama'))).toMatchObject({checked:true});
+  });
+  it('dit quand un fournisseur est distant', ()=>{
+    expect(providerLabel(status.providers![1])).toBe('Claude · claude-opus-5 (distant)');
+    expect(providerLabel({provider:'autre', model:'m', remote:false})).toBe('autre · m (local)');
+    expect(remoteNote(withProvider(status,'claude'))).toContain('Minia Claude est un service distant');
+    expect(remoteNote(status)).toBe('');
+    expect(remoteNote(null)).toBe('');
+  });
+  it('propose le choix seulement s’il y en a un', ()=>{
+    const noop=()=>undefined;
+    const html=renderToStaticMarkup(<MiniaChoice id="p" status={status} value="claude" onChange={noop}/>);
+    expect(html).toContain('<option value="claude" selected="">Claude · claude-opus-5 (distant)</option>');
+    expect(html).toContain('remote-note');
+    const single={...status, providers:[status.providers![0]]};
+    expect(renderToStaticMarkup(<MiniaChoice id="p" status={single} value="" onChange={noop}/>)).toBe('');
   });
 });
