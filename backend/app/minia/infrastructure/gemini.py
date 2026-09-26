@@ -107,11 +107,13 @@ class GeminiModel:
                         raise MiniaError(UNAVAILABLE, 'Réponse de Gemini illisible.') from exc
                     text, finish = _text(last, finish)
                     served = last.get('modelVersion') or served
+                    # Le morceau qui porte un refus ou une coupure n'est jamais diffuse. Les morceaux deja
+                    # diffuses ne sont qu'un brouillon provisoire, que le portail efface a l'echec.
+                    _accepted(last, finish)
                     if text:
                         yield text
         except httpx.HTTPError as exc:
             raise _unreachable() from exc
-        _accepted(last, finish)
         return served or self.model_name
 
 

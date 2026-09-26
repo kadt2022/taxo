@@ -138,3 +138,12 @@ def test_the_free_tier_is_said_to_share_data(monkeypatch):
     assert list(models) == ['gemini'] and models['gemini'].data_use
     monkeypatch.setenv('MINIA_GEMINI_TIER', 'paid')
     assert not minia_models(settings.minia())['gemini'].data_use
+
+
+def test_the_chunk_carrying_a_refusal_is_never_streamed():
+    lines = [f'data: {json.dumps(reply("début ", finish=None))}', f'data: {json.dumps(reply("suite refusée", finish="SAFETY"))}']
+    pieces, seen = gemini(lambda request: httpx.Response(200, text='\n\n'.join(lines) + '\n\n')).stream('s', 'u'), []
+    with pytest.raises(MiniaError, match='décliné'):
+        for piece in pieces:
+            seen.append(piece)
+    assert seen == ['début '], 'seul le brouillon deja produit est passe ; le portail l efface a l echec'
