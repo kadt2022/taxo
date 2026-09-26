@@ -14,7 +14,7 @@ la reponse definitive, citations validees, n'est rendue qu'a la fin.
 """
 from app.minia.domain import briefing, exploration, source_context
 from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, AnswerStream, parse, with_diff
-from app.minia.domain.errors import INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
+from app.minia.domain.errors import CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
 from app.minia.domain.model import MiniaModel
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.projects.application.queries import require_project
@@ -24,6 +24,11 @@ MAX_QUESTION = 1000
 # choisies par Minia, puis au plus 10 affirmations verifiees ; l'echange en permet 20.
 MAX_CALLS = 8
 MAX_CLAIMS = 10
+# Budget d'un echange d'exploration : 64 Ko au plus, et jamais plus que la place du modele, moins une marge
+# pour la question, la liste des operations et l'enveloppe de chaque tour.
+EXCHANGE_BYTES = 64_000
+EXCHANGE_MARGIN = 4096
+_EXPLORATION_FAILURES = frozenset({INVALID_ANSWER, CONTEXT_TOO_LARGE})
 EXPLORATION, PACKET = 'exploration', 'paquet'
 ANSWERED, NOTHING_KNOWN, NEEDS_SELECTION = 'ANSWERED', 'TAXO_KNOWS_NOTHING', 'NEEDS_SELECTION'
 _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
@@ -133,6 +138,12 @@ class AskMinia:
                              f'(disponibles : {", ".join(self.models)}).')
         return self.models[name]
 
+    @classmethod
+    def _exchange_bytes(cls, model):
+        """Budget d'un echange d'exploration pour ce modele."""
+        capacity = cls._capacity(model, exploration.SYSTEM)
+        return EXCHANGE_BYTES if capacity is None else max(min(EXCHANGE_BYTES, capacity - EXCHANGE_MARGIN), 1)
+
     @staticmethod
     def _capacity(model, system):
         """Place disponible (octets) pour le message, si le fournisseur la connait ; None sinon."""
@@ -170,7 +181,8 @@ class AskMinia:
         if self.taxo_query is not None and getattr(model, 'explores', False):
             try:
                 # Le diff n'est lisible dans l'echange que si le reglage et la demande l'autorisent (ADR 0008).
-                exchange = self.taxo_query.open(project_id, diff_consent=source and self.source == source_context.DIFF)
+                exchange = self.taxo_query.open(project_id, diff_consent=source and self.source == source_context.DIFF,
+                                            max_bytes=self._exchange_bytes(model))
             except QueryError as exc:
                 if exc.code != NO_ANALYSIS:
                     raise
@@ -255,7 +267,7 @@ class AskMinia:
         model = self._model(provider)
         projection = self.query(project_id, question)
         if self.taxo_query is not None and getattr(model, 'explores', False):
-            exchange = self.taxo_query.open(project_id)
+            exchange = self.taxo_query.open(project_id, max_bytes=self._exchange_bytes(model))
 
             def packet(reason, trajectory):
                 return self._project_steps(model, question, projection, fallback=reason, trajectory=trajectory)
@@ -298,9 +310,10 @@ class AskMinia:
                 yield 'minia.operation', trajectory[-1]
                 yield _stage('exploration', 'running', label, len(trajectory))
         except MiniaError as exc:
-            if exc.code != INVALID_ANSWER:
+            if exc.code not in _EXPLORATION_FAILURES:
                 raise
-            # L'exploration a echoue (format invalide, boucle sans progres) : Taxo bascule en mode paquet.
+            # L'exploration a echoue (format invalide, boucle sans progres, fenetre du modele depassee) : Taxo
+            # bascule en mode paquet, qui ajuste son contexte a la place disponible.
             yield _stage('exploration', 'done', label, len(trajectory))
             yield from packet(str(exc), trajectory)
             return

@@ -141,10 +141,13 @@ def test_the_key_comes_from_the_environment_and_its_absence_is_said(monkeypatch)
     assert model._headers()['Authorization'] == 'Bearer depuis-env'
 
 
-def test_a_request_that_would_not_fit_is_refused_before_calling_mistral():
-    model = mistral(lambda request: pytest.fail('Mistral ne doit pas etre appele'), max_input_bytes=100)
-    with pytest.raises(MiniaError, match='place réservée'):
-        model.complete('consignes', 'x' * 200)
+def test_the_window_of_the_model_bounds_the_request_with_the_answer_reserved():
+    model = mistral(lambda request: pytest.fail('Mistral ne doit pas etre appele'), num_ctx=16384)
+    assert model.capacity('consignes') == 16384 - 64 - 8192 - len('consignes')
+    with pytest.raises(MiniaError, match='place réservée.*MINIA_MISTRAL_NUM_CTX'):
+        model.complete('consignes', 'x' * 9000)
+    with pytest.raises(ValueError, match='MINIA_MISTRAL_NUM_CTX'):
+        MistralModel('m', num_ctx=8192)
 
 
 def test_the_free_tier_is_said_to_share_data(monkeypatch):
@@ -155,5 +158,7 @@ def test_the_free_tier_is_said_to_share_data(monkeypatch):
     for name in ('MINIA_OLLAMA_MODEL', 'MINIA_CLAUDE_MODEL', 'MINIA_GEMINI_MODEL', 'MINIA_MISTRAL_TIER', 'MINIA_PROVIDER'):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv('MINIA_MISTRAL_MODEL', 'mistral-small-latest')
+    monkeypatch.setenv('MINIA_MISTRAL_NUM_CTX', '131072')
     models = minia_models(settings.minia())
     assert list(models) == ['mistral'] and models['mistral'].data_use and models['mistral'].provider == 'mistral'
+    assert models['mistral'].num_ctx == 131072

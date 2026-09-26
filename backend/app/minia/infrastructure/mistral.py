@@ -21,8 +21,10 @@ from app.minia.infrastructure.retrying import RETRIES
 
 API_URL = 'https://api.mistral.ai/v1/chat/completions'
 MAX_OUTPUT_TOKENS = 8192
-# Comme pour Claude et Gemini : Minia s'en tient a ses propres limites, bien en deca de la fenetre du modele.
-MAX_INPUT_BYTES = 400_000
+# Fenetre de contexte du modele, en tokens (MINIA_MISTRAL_NUM_CTX) : elle varie d'un modele a l'autre ; par
+# defaut, une valeur prudente que les modeles courants depassent. La reponse y a sa place reservee.
+DEFAULT_NUM_CTX = 32768
+TEMPLATE_TOKENS = 64
 FREE, PAID = 'free', 'paid'
 
 ANSWER_SCHEMA = {
@@ -47,18 +49,21 @@ class MistralModel:
     explores = True
 
     def __init__(self, model_name, tier=FREE, api_key=None, transport=None, timeout=300.0,
-                 max_input_bytes=MAX_INPUT_BYTES, sleep=time.sleep):
+                 num_ctx=DEFAULT_NUM_CTX, sleep=time.sleep):
         if tier not in (FREE, PAID):
             raise ValueError(f'MINIA_MISTRAL_TIER invalide : {tier} (free ou paid).')
-        self.model_name, self.max_input_bytes = model_name, max_input_bytes
+        if num_ctx < 2 * MAX_OUTPUT_TOKENS:
+            raise ValueError(f'MINIA_MISTRAL_NUM_CTX trop petit : {num_ctx} (minimum {2 * MAX_OUTPUT_TOKENS}).')
+        self.model_name, self.num_ctx = model_name, num_ctx
         # Au niveau gratuit, les donnees envoyees peuvent servir a Mistral ; au niveau payant, non.
         self.data_use = tier == FREE
         self._key, self._sleep = api_key, sleep
         self._client = httpx.Client(timeout=timeout, transport=transport)
 
     def capacity(self, system):
-        """Octets disponibles pour le message de l'utilisateur avec ces consignes."""
-        return self.max_input_bytes - len(system.encode('utf-8'))
+        """Octets disponibles pour le message de l'utilisateur avec ces consignes. Borne sure, comme pour
+        Ollama : un texte ne compte jamais plus de tokens que d'octets UTF-8 ; la reponse garde sa place."""
+        return self.num_ctx - TEMPLATE_TOKENS - MAX_OUTPUT_TOKENS - len(system.encode('utf-8'))
 
     def _headers(self):
         key = self._key or os.getenv('MISTRAL_API_KEY', '').strip()
@@ -70,7 +75,8 @@ class MistralModel:
         size = len(user.encode('utf-8'))
         if size > self.capacity(system):
             raise MiniaError(CONTEXT_TOO_LARGE, f'La demande dépasse la place réservée à Minia Mistral ({size} '
-                             f'octets pour {max(self.capacity(system), 0)} disponibles) : réduire la sélection.')
+                             f'octets pour {max(self.capacity(system), 0)} disponibles) : réduire la sélection ou augmenter '
+                             'MINIA_MISTRAL_NUM_CTX.')
         return {'model': self.model_name, 'temperature': 0, 'max_tokens': MAX_OUTPUT_TOKENS, 'stream': stream,
                 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}],
                 'response_format': {'type': 'json_schema', 'json_schema': {

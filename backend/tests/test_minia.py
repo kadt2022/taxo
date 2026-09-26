@@ -285,7 +285,7 @@ def test_settings_choose_the_provider(monkeypatch):
         monkeypatch.delenv(name, raising=False)
     assert settings.minia() == {'provider': 'ollama', 'url': 'http://127.0.0.1:11434', 'model': '', 'num_ctx': 16384,
                                 'claude_model': '', 'gemini_model': '', 'gemini_tier': 'free', 'mistral_model': '',
-                                'mistral_tier': 'free'}
+                                'mistral_tier': 'free', 'mistral_num_ctx': 32768}
     assert minia_model(settings.minia()) is None, 'sans modele, Minia reste desactivee'
     monkeypatch.setenv('MINIA_OLLAMA_MODEL', ' qwen2.5:3b ')
     model = minia_model(settings.minia())

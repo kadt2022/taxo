@@ -369,7 +369,12 @@ Mistral (La Plateforme) a un niveau gratuit pour tester.
 setx MISTRAL_API_KEY "..."                          # clé créée sur console.mistral.ai (jamais dans le dépôt)
 $env:MINIA_MISTRAL_MODEL = 'mistral-small-latest'   # nom exact d'un modèle ouvert à ce compte
 $env:MINIA_MISTRAL_TIER  = 'free'                   # défaut ; 'paid' si la clé est facturée
+$env:MINIA_MISTRAL_NUM_CTX = '32768'                # fenêtre du modèle en tokens (défaut prudent)
 ```
+
+La place donnée à Minia se déduit de la fenêtre : fenêtre moins la réponse (8 192 tokens) et les consignes,
+avec la même borne sûre que pour Ollama (jamais plus de tokens que d'octets). En exploration, le budget de
+l'échange suit cette place ; si une demande dépasse quand même, Taxo revient au mode paquet, qui s'ajuste.
 
 Les modèles ouverts au compte se listent avec `GET https://api.mistral.ai/v1/models` (en-tête
 `Authorization: Bearer <clé>`). Au niveau gratuit, Mistral peut utiliser les données envoyées pour

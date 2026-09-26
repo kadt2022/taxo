@@ -49,7 +49,8 @@ def minia_models(options):
     if options.get('gemini_model'):
         models['gemini'] = GeminiModel(options['gemini_model'], options.get('gemini_tier', 'free'))
     if options.get('mistral_model'):
-        models['mistral'] = MistralModel(options['mistral_model'], options.get('mistral_tier', 'free'))
+        models['mistral'] = MistralModel(options['mistral_model'], options.get('mistral_tier', 'free'),
+                                         num_ctx=options.get('mistral_num_ctx', 32768))
     return models
 
 
