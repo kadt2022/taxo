@@ -13,6 +13,7 @@ ANSWER = '{"cited": [], "answer": "Le commit restreindrait les origines.", "unkn
 
 
 def gemini(handler, **options):
+    options.setdefault('sleep', lambda seconds: None)
     return GeminiModel('gemini-test', api_key='cle-test', transport=httpx.MockTransport(handler), **options)
 
 
@@ -82,7 +83,8 @@ def test_a_blocked_or_cut_answer_is_not_shown(payload, expected):
 @pytest.mark.parametrize('status, body, expected', [
     (400, {'error': {'message': 'API key not valid.', 'status': 'INVALID_ARGUMENT'}}, 'GEMINI_API_KEY'),
     (403, {'error': {'status': 'PERMISSION_DENIED'}}, 'GEMINI_API_KEY'),
-    (404, {'error': {'message': 'not found'}}, 'MINIA_GEMINI_MODEL'),
+    (404, {'error': {'message': 'not found'}}, 'non accessible avec cette clé.*MINIA_GEMINI_MODEL.*not found'),
+    (404, {}, 'Google AI Studio\\.$'),
     (429, {'error': {'status': 'RESOURCE_EXHAUSTED'}}, 'Quota'),
     (400, {'error': {'message': 'schema invalide'}}, 'schema invalide'),
     (500, {}, 'répondu 500'),
@@ -147,3 +149,42 @@ def test_the_chunk_carrying_a_refusal_is_never_streamed():
         for piece in pieces:
             seen.append(piece)
     assert seen == ['début '], 'seul le brouillon deja produit est passe ; le portail l efface a l echec'
+
+
+@pytest.mark.parametrize('call', [lambda model: model.complete('s', 'u'), lambda model: ''.join(model.stream('s', 'u'))])
+def test_a_passing_overload_is_retried_before_anything_is_shown(call):
+    statuses, waits = [503, 502], []
+
+    def handler(request):
+        if statuses:
+            return httpx.Response(statuses.pop(0), json={'error': {'message': 'The model is overloaded.'}})
+        if request.url.path.endswith(':streamGenerateContent'):
+            return httpx.Response(200, text=f'data: {json.dumps(reply(ANSWER))}\n\n')
+        return httpx.Response(200, json=reply(ANSWER))
+
+    assert call(gemini(handler, sleep=waits.append)) == ANSWER
+    assert waits == [1.5, 3.0], 'attente croissante entre les tentatives'
+
+
+def test_a_lasting_overload_is_said_plainly_with_google_s_words():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(503, json={'error': {'message': 'The model is overloaded.', 'status': 'UNAVAILABLE'}})
+
+    with pytest.raises(MiniaError, match='surchargé.*The model is overloaded') as raised:
+        gemini(handler).complete('s', 'u')
+    assert len(calls) == 3 and raised.value.code == 'MINIA_UNAVAILABLE'
+
+
+def test_a_refusal_is_never_retried():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(429, json={'error': {'status': 'RESOURCE_EXHAUSTED'}})
+
+    with pytest.raises(MiniaError, match='Quota'):
+        gemini(handler).complete('s', 'u')
+    assert len(calls) == 1, 'un quota atteint ne se resout pas en reessayant tout de suite'

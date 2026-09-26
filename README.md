@@ -279,7 +279,7 @@ permet de tester un gros modèle distant sans acheter de crédits.
 
 ```powershell
 setx GEMINI_API_KEY "..."                       # clé créée dans Google AI Studio (jamais dans le dépôt)
-$env:MINIA_GEMINI_MODEL = 'gemini-2.5-flash'    # nom exact affiché dans AI Studio
+$env:MINIA_GEMINI_MODEL = 'gemini-3.8-flash'    # nom exact d'un modèle ouvert à ce projet (AI Studio)
 $env:MINIA_GEMINI_TIER  = 'free'                # défaut ; 'paid' si la clé est facturée
 ```
 
