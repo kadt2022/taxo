@@ -36,6 +36,8 @@ ANSWER_SCHEMA = {
 class ClaudeModel:
     provider = 'claude'
     remote = True
+    # Sait mener l'exploration de MINIA-09 : demander les operations de Taxo une par une (ADR 0009).
+    explores = True
 
     def __init__(self, model_name=DEFAULT_MODEL, client=None, max_input_bytes=MAX_INPUT_BYTES):
         self.model_name, self.max_input_bytes = model_name, max_input_bytes
@@ -54,20 +56,21 @@ class ClaudeModel:
         """Octets disponibles pour le message de l'utilisateur avec ces consignes."""
         return self.max_input_bytes - len(system.encode('utf-8'))
 
-    def _request(self, system, user):
+    def _request(self, system, user, schema=None):
         size = len(user.encode('utf-8'))
         if size > self.capacity(system):
             raise MiniaError(CONTEXT_TOO_LARGE, f'La demande dépasse la place réservée à Minia Claude ({size} '
                              f'octets pour {max(self.capacity(system), 0)} disponibles) : réduire la sélection.')
         request = {'model': self.model_name, 'max_tokens': MAX_TOKENS, 'system': system,
                    'messages': [{'role': 'user', 'content': user}],
-                   'output_config': {'format': {'type': 'json_schema', 'schema': ANSWER_SCHEMA}}}
+                   'output_config': {'format': {'type': 'json_schema', 'schema': schema or ANSWER_SCHEMA}}}
         if self.model_name in _FALLBACK_MODELS:
             request.update(betas=[_FALLBACK_BETA], fallbacks='default')
         return request
 
-    def complete(self, system, user):
-        request = self._request(system, user)
+    def complete(self, system, user, schema=None):
+        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia."""
+        request = self._request(system, user, schema)
         try:
             message = self._messages().create(**request)
         except anthropic.AnthropicError as exc:

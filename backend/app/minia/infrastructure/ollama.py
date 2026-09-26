@@ -49,7 +49,7 @@ class OllamaModel:
         """Octets disponibles pour le message de l'utilisateur avec ces consignes : Minia y ajuste son contexte."""
         return self.num_ctx - TEMPLATE_TOKENS - ANSWER_TOKENS - len(system.encode('utf-8'))
 
-    def _body(self, system, user, stream):
+    def _body(self, system, user, stream, schema=None):
         """Requete a Ollama, avec une fenetre de contexte explicite.
 
         Sans `num_ctx`, Ollama garde sa fenetre par defaut (2 048 ou 4 096 tokens) et tronque en silence le
@@ -62,7 +62,7 @@ class OllamaModel:
             raise MiniaError(CONTEXT_TOO_LARGE, f'La demande dépasse la fenêtre de Minia ({size} octets pour '
                              f'{max(self.capacity(system), 0)} disponibles) : réduire la sélection ou augmenter '
                              'MINIA_OLLAMA_NUM_CTX.')
-        return {'model': self.model_name, 'stream': stream, 'format': 'json',
+        return {'model': self.model_name, 'stream': stream, 'format': schema or 'json',
                 'options': {'temperature': 0, 'num_ctx': self.num_ctx},
                 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}]}
 
@@ -75,9 +75,9 @@ class OllamaModel:
     def _unreachable(self, exc):
         return MiniaError(UNAVAILABLE, f'Ollama est injoignable à {self.url} : lancer « ollama serve ».')
 
-    def complete(self, system, user):
+    def complete(self, system, user, schema=None):
         try:
-            response = self._client.post(f'{self.url}/api/chat', json=self._body(system, user, False))
+            response = self._client.post(f'{self.url}/api/chat', json=self._body(system, user, False, schema))
         except httpx.HTTPError as exc:
             raise self._unreachable(exc) from exc
         self._check(response)

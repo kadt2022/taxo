@@ -232,6 +232,29 @@ POST /api/projects/{id}/taxo-query
 - Les opérations réservées (`find_endpoint`, `find_callers`, `get_source`…) répondent `NOT_AVAILABLE` tant
   qu'aucun analyseur ne les nourrit.
 
+### Minia interroge Taxo (TAXO-MINIA-09, ADR 0009)
+
+Dans « Interroger Taxo », Minia Claude et Minia Gemini ne reçoivent plus un paquet de faits fixe : elles
+**interrogent Taxo**, une opération du protocole à la fois (`describe`, `find_facts`, `get_commit`…), et
+décident de la suivante d'après les résultats. Taxo fixe les garde-fous : une description, au plus 8
+opérations choisies par Minia, puis au plus 10 affirmations vérifiées, dans le budget de l'échange.
+
+Minia conclut par des **énoncés typés**, et rien d'autre n'est affiché :
+
+| Énoncé | Affichage |
+| --- | --- |
+| `claim` : une phrase et son affirmation structurée (sujet, relation, objet) | toujours avec le verdict de Taxo : confirmée (avec le fait et ses preuves), contredite (avec ce qui la contredit), non prouvée (avec la raison), ou non vérifiable (affirmation mal formée) |
+| `interpretation` : un raisonnement, une hypothèse | « non vérifié » |
+| `unknown` : ce qui manque pour conclure | dans « Ce que Taxo ne sait pas » |
+
+La **trajectoire** est visible en direct puis sous la réponse : chaque opération, ses arguments, son issue,
+sa taille et ce qui n'a pas été transmis. Une opération refusée (`NO_CONSENT`, `OUT_OF_SCOPE`…) est rendue
+à Minia comme un résultat, jamais comme une instruction.
+
+Si l'exploration échoue (réponse illisible, opération répétée, limite atteinte), Taxo **bascule en mode
+paquet** : le fonctionnement précédent, qui reste celui de Minia Ollama. La réponse le dit. La question
+sur un commit (avec le diff) garde le mode paquet ; elle passera à l'exploration dans un récit suivant.
+
 ### Minia : demander ce que signifie un commit (TAXO-MINIA-01)
 
 Dans la fiche d'un commit, « Demander à Minia » pose une question en langage courant. Minia répond à

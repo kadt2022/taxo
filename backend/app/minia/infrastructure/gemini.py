@@ -40,9 +40,30 @@ _CUT = {'MAX_TOKENS'}
 _DECLINED = {'SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'LANGUAGE', 'OTHER'}
 
 
+def gemini_schema(schema):
+    """Un JSON Schema dans la forme que l'API Gemini attend (types en majuscules, sans additionalProperties)."""
+    if isinstance(schema, list):
+        return [gemini_schema(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    converted = {}
+    for key, value in schema.items():
+        if key == 'additionalProperties':
+            continue
+        if key == 'type':
+            converted[key] = value.upper()
+        elif key in ('properties',):
+            converted[key] = {name: gemini_schema(item) for name, item in value.items()}
+        else:
+            converted[key] = gemini_schema(value)
+    return converted
+
+
 class GeminiModel:
     provider = 'gemini'
     remote = True
+    # Sait mener l'exploration de MINIA-09 : demander les operations de Taxo une par une (ADR 0009).
+    explores = True
 
     def __init__(self, model_name, tier=FREE, api_key=None, transport=None, timeout=300.0,
                  max_input_bytes=MAX_INPUT_BYTES, sleep=time.sleep):
@@ -64,7 +85,7 @@ class GeminiModel:
             raise MiniaError(UNAVAILABLE, 'Minia Gemini n’a pas de clé : définir GEMINI_API_KEY.')
         return {'x-goog-api-key': key, 'Content-Type': 'application/json'}
 
-    def _body(self, system, user):
+    def _body(self, system, user, schema=None):
         size = len(user.encode('utf-8'))
         if size > self.capacity(system):
             raise MiniaError(CONTEXT_TOO_LARGE, f'La demande dépasse la place réservée à Minia Gemini ({size} '
@@ -72,7 +93,8 @@ class GeminiModel:
         return {'systemInstruction': {'parts': [{'text': system}]},
                 'contents': [{'role': 'user', 'parts': [{'text': user}]}],
                 'generationConfig': {'temperature': 0, 'maxOutputTokens': MAX_OUTPUT_TOKENS,
-                                     'responseMimeType': 'application/json', 'responseSchema': ANSWER_SCHEMA}}
+                                     'responseMimeType': 'application/json',
+                                     'responseSchema': gemini_schema(schema) if schema else ANSWER_SCHEMA}}
 
     def _url(self, method):
         return f'{API_URL}/models/{self.model_name}:{method}'
@@ -99,8 +121,9 @@ class GeminiModel:
                 continue
             _check(response, self.model_name)
 
-    def complete(self, system, user):
-        body, headers = self._body(system, user), self._headers()
+    def complete(self, system, user, schema=None):
+        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia."""
+        body, headers = self._body(system, user, schema), self._headers()
         response = self._open(self._url('generateContent'), body, headers, stream=False)
         try:
             part = response.json()
