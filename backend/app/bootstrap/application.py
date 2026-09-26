@@ -26,6 +26,7 @@ from app.protocol.application.exchange import TaxoQuery
 from app.protocol.api.router import create_router as protocol_router
 from app.minia.infrastructure.claude import ClaudeModel
 from app.minia.infrastructure.gemini import GeminiModel
+from app.minia.infrastructure.mistral import MistralModel
 from app.minia.infrastructure.ollama import OllamaModel
 from app.minia.api.router import create_router as minia_router
 from . import settings
@@ -33,13 +34,13 @@ from . import settings
 _FROM_SETTINGS = object()
 
 
-PROVIDERS = ('ollama', 'claude', 'gemini')
+PROVIDERS = ('ollama', 'claude', 'gemini', 'mistral')
 
 
 def minia_models(options):
     """Modeles de Minia par fournisseur configure ; vide si aucun."""
     if options['provider'] not in PROVIDERS:
-        raise ValueError(f"MINIA_PROVIDER inconnu : {options['provider']} (ollama, claude ou gemini).")
+        raise ValueError(f"MINIA_PROVIDER inconnu : {options['provider']} (ollama, claude, gemini ou mistral).")
     models = {}
     if options['model']:
         models['ollama'] = OllamaModel(options['model'], options['url'], num_ctx=options.get('num_ctx', 16384))
@@ -47,6 +48,9 @@ def minia_models(options):
         models['claude'] = ClaudeModel(options['claude_model'])
     if options.get('gemini_model'):
         models['gemini'] = GeminiModel(options['gemini_model'], options.get('gemini_tier', 'free'))
+    if options.get('mistral_model'):
+        models['mistral'] = MistralModel(options['mistral_model'], options.get('mistral_tier', 'free'),
+                                         num_ctx=options.get('mistral_num_ctx', 32768))
     return models
 
 

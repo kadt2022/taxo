@@ -10,7 +10,7 @@ from app.bootstrap.database import Base
 from app.main import create_app
 from app.minia.application.ask import MAX_CALLS, MAX_CLAIMS
 from app.minia.domain import exploration
-from app.minia.domain.errors import MiniaError
+from app.minia.domain.errors import CONTEXT_TOO_LARGE, MiniaError
 from app.minia.infrastructure.claude import ClaudeModel
 from app.minia.infrastructure.gemini import GeminiModel, gemini_schema
 from app.minia.infrastructure.ollama import OllamaModel
@@ -299,3 +299,36 @@ def test_without_a_global_analysis_the_commit_question_keeps_its_packet(repo, tm
     result = completed(ask_commit(repo, tmp_path, model, sha, scan=False))
     assert result['mode'] == 'paquet', 'le paquet compare les instantanes sans analyse globale'
     assert 'analyse globale' in result['fallback'] and result['trajectory'] == []
+
+
+class NarrowModel(ScriptedModel):
+    """Un fournisseur a petite fenetre : l'exploration s'y ajuste, et un depassement renvoie au paquet."""
+
+    def __init__(self, *replies, room=30_000):
+        super().__init__(*replies)
+        self.room = room
+
+    def capacity(self, system):
+        return self.room - len(system.encode('utf-8'))
+
+    def complete(self, system, user, schema=None):
+        if len(user.encode('utf-8')) > self.capacity(system):
+            self.calls.append((system, user, schema))
+            raise MiniaError(CONTEXT_TOO_LARGE, 'trop grand')
+        return super().complete(system, user, schema)
+
+
+def test_the_exchange_budget_follows_the_window_of_the_model(repo, tmp_path):
+    repo, _ = repo
+    model = NarrowModel(answer(statement('unknown', 'Rien.')))
+    result = completed(run(repo, tmp_path, model))
+    capacity = model.capacity(exploration.SYSTEM)
+    assert result['budget']['max_bytes'] == max(capacity - 4096, 16_240) < 64_000
+
+
+def test_a_window_overflow_during_exploration_falls_back_to_the_packet(repo, tmp_path):
+    repo, _ = repo
+    packet = json.dumps({'cited': [], 'answer': 'Paquet.', 'unknown': ''})
+    model = NarrowModel(packet, room=len(exploration.SYSTEM.encode('utf-8')) + 1000)
+    result = completed(run(repo, tmp_path, model, 'Résume le dernier commit'))
+    assert result['mode'] == 'paquet' and result['fallback'] == 'trop grand'

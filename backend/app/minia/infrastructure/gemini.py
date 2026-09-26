@@ -15,16 +15,14 @@ import time
 import httpx
 
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
+from app.minia.infrastructure import retrying
+from app.minia.infrastructure.retrying import RETRIES
 
 API_URL = 'https://generativelanguage.googleapis.com/v1beta'
 MAX_OUTPUT_TOKENS = 8192
 # Comme pour Claude : la fenetre de Gemini est bien plus grande, Minia s'en tient a ses propres limites.
 MAX_INPUT_BYTES = 400_000
 FREE, PAID = 'free', 'paid'
-# Erreurs passageres (surcharge, passerelle) : reessayees avant tout texte, avec une attente croissante.
-TRANSIENT = frozenset({500, 502, 503, 504})
-RETRIES = 2
-BACKOFF_SECONDS = 1.5
 
 ANSWER_SCHEMA = {
     'type': 'OBJECT',
@@ -100,26 +98,9 @@ class GeminiModel:
         return f'{API_URL}/models/{self.model_name}:{method}'
 
     def _open(self, url, body, headers, stream):
-        """Reponse 200 de l'API. Une erreur passagere (surcharge 503, reseau...) est reessayee : rien n'a
-        encore ete diffuse, reessayer ne change pas ce que voit l'utilisateur."""
-        for attempt in range(RETRIES + 1):
-            last_try = attempt == RETRIES
-            try:
-                response = self._client.send(self._client.build_request('POST', url, json=body, headers=headers),
-                                             stream=stream)
-            except httpx.HTTPError as exc:
-                if last_try:
-                    raise _unreachable() from exc
-                self._sleep(BACKOFF_SECONDS * 2 ** attempt)
-                continue
-            if response.status_code == 200:
-                return response
-            response.read()
-            response.close()
-            if response.status_code in TRANSIENT and not last_try:
-                self._sleep(BACKOFF_SECONDS * 2 ** attempt)
-                continue
-            _check(response, self.model_name)
+        """Reponse 200 de l'API ; une erreur passagere (surcharge 503, reseau...) est reessayee."""
+        return retrying.send(self._client, url, body, headers, stream, self._sleep,
+                             lambda response: _check(response, self.model_name), _unreachable)
 
     def complete(self, system, user, schema=None):
         """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia."""
