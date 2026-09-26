@@ -354,6 +354,19 @@ du diff n'est pas cochée par défaut avec Claude. La réponse de Claude est con
 (`cited`, `answer`, `unknown`) ; une réponse déclinée ou coupée est signalée, jamais affichée à moitié.
 Sans `ANTHROPIC_API_KEY`, Taxo démarre et Minia Claude le dit à la première question.
 
+### Arrêter Minia (TAXO-UX-03)
+
+Tant que Minia travaille, le panneau propose **Arrêter**. L'arrêt :
+
+- coupe le flux dans le navigateur et prévient le serveur (`POST /api/minia/requests/{id}/cancel`, l'identifiant
+  arrivant avec le premier événement `minia.started`) ; une déconnexion du navigateur arrête aussi la demande ;
+- empêche tout nouveau tour : Taxo vérifie l'arrêt avant chaque opération, avant chaque tour du modèle, pendant
+  l'attente du modèle et entre deux vérifications d'affirmation ;
+- **coupe l'appel au fournisseur en cours** : avec un jeton d'arrêt, chaque adaptateur (Ollama, Claude, Gemini,
+  Mistral) passe par son flux et ferme la connexion à l'arrêt ; Ollama cesse alors de générer ;
+- garde la trajectoire déjà parcourue, affiche « Analyse arrêtée par l'utilisateur » (pas une erreur), et ne produit
+  aucune réponse finale ; rien n'est conservé.
+
 ### Minia Gemini (TAXO-MINIA-06)
 
 Troisième fournisseur de Minia, même travail que les deux autres. L'API Gemini a un niveau gratuit, ce qui

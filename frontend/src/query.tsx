@@ -1,9 +1,9 @@
 // Interroger Taxo (TAXO-QUERY-01) : la requete choisit parmi les faits deja produits par l'analyse globale ;
 // Minia n'explique que cette selection. Les faits affiches sont ceux de Taxo, avec leur provenance.
-import {useState, type FormEvent} from 'react';
+import {useRef, useState, type FormEvent} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
-import {ask as askMinia, askButton, MiniaProgress, type MiniaLive} from './minia-live';
+import {ask as askMinia, askButton, createStop, MiniaProgress, type MiniaLive, type MiniaStop} from './minia-live';
 import {MiniaChoice, modelLabel, type AnswerModel, type MiniaStatus} from './minia';
 import {openStream, type ServerEvent} from './sse';
 import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
@@ -127,19 +127,26 @@ type PanelSetters = {setBusy:(value:boolean)=>void; setError:(value:string)=>voi
   setResult:(value:Selection)=>void; setLive:(change:(live:Live|null)=>Live|null)=>void};
 
 /** Les deux actions du panneau : selectionner des faits, ou demander a Minia d'expliquer la selection. */
-export function actions(base:string, text:string, request:Run, set:PanelSetters, stream:Stream=openStream, provider=''){
+/** Les deux actions du panneau. `control` garde le moyen d'arreter la demande a Minia en cours (TAXO-UX-03). */
+export function actions(base:string, text:string, request:Run, set:PanelSetters, stream:Stream=openStream, provider='',
+  control:{current:MiniaStop|null}={current:null}){
   const common={setBusy:set.setBusy, setError:set.setError};
   return {
     select:()=>track(()=>request<Selection>(queryPath(base,text)), {...common, setValue:(value:Selection)=>{set.setResult(value);set.setLive(()=>null);}}),
-    explain:()=>track(()=>askMinia<SelectionAnswer>(()=>stream(`/api${base}/ask/stream`,askInit(text,provider)), change=>set.setLive(live=>change(live as Live))),
-      {...common, setValue:()=>undefined}),
+    explain:()=>{
+      const run=createStop();
+      control.current=run;
+      return track(()=>askMinia<SelectionAnswer>(()=>stream(`/api${base}/ask/stream`,{...askInit(text,provider), signal:run.signal}),
+        change=>set.setLive(live=>change(live as Live))), {...common, setValue:()=>undefined});
+    },
   };
 }
 
 export function AskTaxo({base, request, stream, minia=null}:Readonly<{base:string; request:Run; stream?:Stream; minia?:MiniaStatus|null}>){
   const [text,setText]=useState(''), [busy,setBusy]=useState(false), [error,setError]=useState('');
   const [result,setResult]=useState<Selection|null>(null), [live,setLive]=useState<Live|null>(null), [provider,setProvider]=useState('');
-  const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setLive},stream,provider);
+  const control=useRef<MiniaStop|null>(null);
+  const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setLive},stream,provider,control);
   return <section className="results ask-taxo" aria-label="Interroger Taxo">
     <div className="section-heading"><div><h2>Interroger Taxo</h2><p>Taxo sélectionne parmi les faits de la dernière analyse globale : « les 3 derniers commits », « le commit 5b9022b », « depuis 2026-09-01 ».</p></div></div>
     <form onSubmit={submitWith(select)}>
@@ -150,6 +157,6 @@ export function AskTaxo({base, request, stream, minia=null}:Readonly<{base:strin
         <button type="button" className="secondary" disabled={busy||!text.trim()} onClick={explain}>{askButton(busy&&live!==null&&!live.result,'Demander à Minia')}</button></div>
     </form>
     {error&&<div role="alert" className="error">{error}</div>}
-    {live?.result?<SelectionAnswerView answer={live.result}/>:live?<MiniaProgress live={live}/>:result&&<SelectionView result={result}/>}
+    {live?.result?<SelectionAnswerView answer={live.result}/>:live?<MiniaProgress live={live} onStop={()=>control.current?.stop(live.requestId)}/>:result&&<SelectionView result={result}/>}
   </section>;
 }

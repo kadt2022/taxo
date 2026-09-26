@@ -14,6 +14,7 @@ import time
 
 import httpx
 
+from app.minia.domain.cancellation import check
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
 from app.minia.infrastructure import retrying
 from app.minia.infrastructure.retrying import RETRIES
@@ -102,8 +103,11 @@ class GeminiModel:
         return retrying.send(self._client, url, body, headers, stream, self._sleep,
                              lambda response: _check(response, self.model_name), _unreachable)
 
-    def complete(self, system, user, schema=None):
-        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia."""
+    def complete(self, system, user, schema=None, cancel=None):
+        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia. Avec
+        un jeton d'arret, la reponse passe par le flux, que l'arret coupe (TAXO-UX-03)."""
+        if cancel is not None:
+            return ''.join(self.stream(system, user, schema, cancel))
         body, headers = self._body(system, user, schema), self._headers()
         response = self._open(self._url('generateContent'), body, headers, stream=False)
         try:
@@ -114,14 +118,16 @@ class GeminiModel:
         _accepted(part, finish)
         return text
 
-    def stream(self, system, user):
+    def stream(self, system, user, schema=None, cancel=None):
         """Morceaux de la reponse, au fur et a mesure que Gemini les produit ; rend enfin le modele qui a
         repondu (version exacte, quand l'API la donne)."""
-        body, headers = self._body(system, user), self._headers()
+        body, headers = self._body(system, user, schema), self._headers()
         served, finish, last = None, None, {}
         response = self._open(self._url('streamGenerateContent') + '?alt=sse', body, headers, stream=True)
+        forget = cancel.on_cancel(response.close) if cancel is not None else (lambda: None)
         try:
             for line in response.iter_lines():
+                check(cancel)
                 if not line.startswith('data:'):
                     continue
                 try:
@@ -135,9 +141,11 @@ class GeminiModel:
                 _accepted(last, finish)
                 if text:
                     yield text
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.StreamError) as exc:
+            check(cancel)
             raise _unreachable() from exc
         finally:
+            forget()
             response.close()
         return served or self.model_name
 

@@ -10,6 +10,7 @@ ou un profil `ant auth login`), jamais du code.
 """
 import anthropic
 
+from app.minia.domain.cancellation import check
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
 
 DEFAULT_MODEL = 'claude-opus-5'
@@ -68,8 +69,11 @@ class ClaudeModel:
             request.update(betas=[_FALLBACK_BETA], fallbacks='default')
         return request
 
-    def complete(self, system, user, schema=None):
-        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia."""
+    def complete(self, system, user, schema=None, cancel=None):
+        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia. Avec
+        un jeton d'arret, la reponse passe par le flux, que l'arret ferme (TAXO-UX-03)."""
+        if cancel is not None:
+            return ''.join(self.stream(system, user, schema, cancel))
         request = self._request(system, user, schema)
         try:
             message = self._messages().create(**request)
@@ -78,17 +82,26 @@ class ClaudeModel:
         _accepted(message)
         return ''.join(block.text for block in message.content if block.type == 'text')
 
-    def stream(self, system, user):
-        """Morceaux de la reponse, au fur et a mesure que Claude les produit.
+    def stream(self, system, user, schema=None, cancel=None):
+        """Morceaux de la reponse, au fur et a mesure que Claude les produit. Arreter la demande ferme le flux.
 
         Rend enfin le modele qui a reellement repondu : apres un repli cote serveur, ce n'est pas celui demande.
         """
-        request = self._request(system, user)
+        request = self._request(system, user, schema)
         try:
             with self._messages().stream(**request) as stream:
-                yield from stream.text_stream
-                message = stream.get_final_message()
+                close = getattr(stream, 'close', None)
+                forget = cancel.on_cancel(close) if cancel is not None and close else (lambda: None)
+                try:
+                    for text in stream.text_stream:
+                        check(cancel)
+                        yield text
+                    check(cancel)
+                    message = stream.get_final_message()
+                finally:
+                    forget()
         except anthropic.AnthropicError as exc:
+            check(cancel)
             raise _failure(exc, self.model_name) from exc
         _accepted(message)
         return getattr(message, 'model', None) or self.model_name

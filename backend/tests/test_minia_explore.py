@@ -457,6 +457,7 @@ def test_a_slow_turn_keeps_the_stream_alive(repo, tmp_path, monkeypatch):
     from app.minia.application import ask
     repo, sha = repo
     monkeypatch.setattr(ask, 'HEARTBEAT_SECONDS', 0.05)
+    monkeypatch.setattr(ask, 'CANCEL_POLL_SECONDS', 0.01)
 
     class Slow(ScriptedModel):
         def complete(self, system, user, schema=None):

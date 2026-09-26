@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from app.minia.domain.cancellation import check
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
 
 DEFAULT_URL = 'http://127.0.0.1:11434'
@@ -93,7 +94,11 @@ class OllamaModel:
                               'réduire MINIA_OLLAMA_NUM_CTX ou choisir un modèle plus léger.')
         return MiniaError(UNAVAILABLE, f'Ollama est injoignable à {self.url} : lancer « ollama serve ».')
 
-    def complete(self, system, user, schema=None):
+    def complete(self, system, user, schema=None, cancel=None):
+        """Texte de la reponse. Avec un jeton d'arret, la reponse passe par le flux : l'arreter ferme la
+        connexion, et Ollama cesse de generer (TAXO-UX-03)."""
+        if cancel is not None:
+            return ''.join(self.stream(system, user, schema, cancel))
         try:
             response = self._client.post(f'{self.url}/api/chat', json=self._body(system, user, False, schema))
         except httpx.HTTPError as exc:
@@ -104,22 +109,30 @@ class OllamaModel:
         except (ValueError, KeyError, TypeError) as exc:
             raise MiniaError(UNAVAILABLE, 'Réponse d’Ollama illisible.') from exc
 
-    def stream(self, system, user):
-        """Morceaux de la reponse, au fur et a mesure qu'Ollama les produit (une ligne JSON par morceau)."""
+    def stream(self, system, user, schema=None, cancel=None):
+        """Morceaux de la reponse, au fur et a mesure qu'Ollama les produit (une ligne JSON par morceau).
+        Arreter la demande ferme la connexion : Ollama cesse de generer."""
         try:
-            with self._client.stream('POST', f'{self.url}/api/chat', json=self._body(system, user, True)) as response:
-                self._check(response)
-                for line in response.iter_lines():
-                    if not line.strip():
-                        continue
-                    try:
-                        part = json.loads(line)
-                        chunk = part.get('message', {}).get('content', '')
-                    except (ValueError, AttributeError) as exc:
-                        raise MiniaError(UNAVAILABLE, 'Réponse d’Ollama illisible.') from exc
-                    if chunk:
-                        yield chunk
-                    if part.get('done'):
-                        return
-        except httpx.HTTPError as exc:
+            with self._client.stream('POST', f'{self.url}/api/chat',
+                                     json=self._body(system, user, True, schema)) as response:
+                forget = cancel.on_cancel(response.close) if cancel is not None else (lambda: None)
+                try:
+                    self._check(response)
+                    for line in response.iter_lines():
+                        check(cancel)
+                        if not line.strip():
+                            continue
+                        try:
+                            part = json.loads(line)
+                            chunk = part.get('message', {}).get('content', '')
+                        except (ValueError, AttributeError) as exc:
+                            raise MiniaError(UNAVAILABLE, 'Réponse d’Ollama illisible.') from exc
+                        if chunk:
+                            yield chunk
+                        if part.get('done'):
+                            return
+                finally:
+                    forget()
+        except (httpx.HTTPError, httpx.StreamError) as exc:
+            check(cancel)
             raise self._unreachable(exc) from exc
