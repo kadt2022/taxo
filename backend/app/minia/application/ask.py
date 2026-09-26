@@ -27,6 +27,8 @@ EXPLORATION, PACKET = 'exploration', 'paquet'
 ANSWERED, NOTHING_KNOWN, NEEDS_SELECTION = 'ANSWERED', 'TAXO_KNOWS_NOTHING', 'NEEDS_SELECTION'
 _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
 _DISABLED = {'status': 'DISABLED'}
+# En exploration, le diff n'est pas joint d'avance : Minia le demande fichier par fichier (get_diff).
+_ON_DEMAND = {'status': 'ON_DEMAND'}
 _NOTHING = ("Taxo n'a vu changer aucun fait dans ce commit, parmi ceux que ses évaluateurs savent produire. "
             "Minia ne peut rien affirmer au-delà.")
 _SELECT = ("Minia répond sur une sélection de l'historique : précisez un nombre de derniers commits "
@@ -52,6 +54,11 @@ def _change(ref, change):
     return {'ref': ref, **{key: change[key] for key in (
         'evaluator_id', 'change', 'kind', 'subject', 'relation', 'before', 'after', 'status',
         'evidence_before', 'evidence_after')}}
+
+
+def _packet(fallback, trajectory):
+    """Le mode paquet ; en repli d'une exploration, la raison et le chemin deja parcouru."""
+    return {'mode': PACKET, **({'fallback': fallback, 'trajectory': trajectory} if fallback else {})}
 
 
 def _step(operation, arguments, response):
@@ -159,7 +166,34 @@ class AskMinia:
         model = self._model(provider)
         project = require_project(self.projects, project_id)
         commit, base, files = self.history.detail(project_id, sha, parent)
+        if self.taxo_query is not None and getattr(model, 'explores', False):
+            # Le diff n'est lisible dans l'echange que si le reglage et la demande l'autorisent (ADR 0008).
+            exchange = self.taxo_query.open(project_id, diff_consent=source and self.source == source_context.DIFF)
+            return self._explore_commit(model, question, project, commit, base, files, source, exchange)
         return self._commit_steps(model, question, project, commit, base, files, source)
+
+    def _explore_commit(self, model, question, project, commit, base, files, source, exchange):
+        """Question sur un commit, en exploration (MINIA-09b) : Taxo commence par ce que Git sait du commit ;
+        Minia demande ensuite ses faits changes (`diff_facts`), son diff si l'accord est donne, etc."""
+        def packet(reason, trajectory):
+            return self._commit_steps(model, question, project, commit, base, files, source,
+                                      fallback=reason, trajectory=trajectory)
+
+        if commit.parents and base != commit.parents[0]:
+            # Le protocole compare un commit a son premier parent : l'autre cote d'une fusion reste au paquet.
+            yield from packet('comparaison avec un autre parent que le premier', [])
+            return
+        allowed = self.source == source_context.DIFF
+        sent = _ON_DEMAND if source and allowed else _DISABLED if source else _NOT_REQUESTED
+        context = {'commit': f'commit:{commit.sha}', 'parent': f'commit:{base}' if base else None,
+                   'diff_readable': exchange.diff_consent}
+        result = {'question': question, 'commit': commit.sha, 'parent': base, 'model': self._model_view(model),
+                  'source_context': sent, 'project': {'id': project.id, 'name': project.name},
+                  'git': briefing.commit_view(commit, base, files), 'files_not_sent': 0, 'not_interpreted': [],
+                  'failures': [], 'facts_not_sent': 0, 'rejected_citations': [], 'facts': [], 'answer': '',
+                  'unknown': ''}
+        yield from self._explore(model, question, exchange, [('get_commit', {'commit': commit.sha})], context,
+                                 result, packet)
 
     def _diff(self, project, commit, base, budget):
         yield _stage('source', 'running', 'Lecture du diff du commit')
@@ -170,7 +204,8 @@ class AskMinia:
         yield _stage('source', 'done', 'Lecture du diff du commit', len(context.files))
         return context
 
-    def _commit_steps(self, model, question, project, commit, base, files, source=False):
+    def _commit_steps(self, model, question, project, commit, base, files, source=False, fallback=None,
+                      trajectory=None):
         yield _stage('facts', 'running', 'Sélection des faits pertinents')
         _, _, evaluations = self.history.impact(project.id, commit.sha, base)
         diff, sent = None, _NOT_REQUESTED
@@ -185,8 +220,8 @@ class AskMinia:
             sent = diff.summary()
         yield _stage('facts', 'done', 'Sélection des faits pertinents', len(brief.refs))
         yield _stage('context', 'done', 'Préparation du contexte')
-        result = {'question': question, 'commit': commit.sha, 'parent': base, 'model': self._model_view(model),
-                  'source_context': sent,
+        result = {**_packet(fallback, trajectory), 'question': question, 'commit': commit.sha, 'parent': base,
+                  'model': self._model_view(model), 'source_context': sent,
                   'project': {'id': project.id, 'name': project.name},
                   'git': briefing.commit_view(commit, base, files), 'files_not_sent': brief.files_truncated,
                   'not_interpreted': list(brief.not_interpreted), 'failures': list(brief.failures),
@@ -212,23 +247,36 @@ class AskMinia:
         projection = self.query(project_id, question)
         if self.taxo_query is not None and getattr(model, 'explores', False):
             exchange = self.taxo_query.open(project_id)
-            return self._explore_steps(model, question, projection, exchange)
+
+            def packet(reason, trajectory):
+                return self._project_steps(model, question, projection, fallback=reason, trajectory=trajectory)
+            return self._explore(model, question, exchange, [], None,
+                                 self._project_result(model, question, projection), packet)
         return self._project_steps(model, question, projection)
 
-    def _explore_steps(self, model, question, projection, exchange):
-        """Mode exploration : Minia demande les operations, Taxo repond et verifie ses affirmations."""
+    def _explore(self, model, question, exchange, seeds, context, result, packet):
+        """Mode exploration : Taxo ouvre avec `describe` et les operations de depart (`seeds`), Minia demande
+        les suivantes, puis Taxo verifie ses affirmations. `packet(raison, trajectoire)` rend le repli."""
         label = 'Minia interroge Taxo'
         yield _stage('exploration', 'running', label, 0)
-        trajectory, seen = [], set()
-        described = exchange.call({'operation': 'describe'})
-        trajectory.append(_step('describe', {}, described))
-        yield 'minia.operation', trajectory[-1]
-        operations = [item for item in described.get('items', []) if item.get('kind') == 'operation']
-        exchanged = [{'operation': 'describe', 'arguments': {}, 'response': described}]
+        trajectory, exchanged, seen = [], [], set()
+        for operation, arguments in (('describe', {}), *seeds):
+            response = exchange.call({'operation': operation, 'arguments': arguments})
+            exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
+            trajectory.append(_step(operation, arguments, response))
+            yield 'minia.operation', trajectory[-1]
+            if response['outcome'] != 'OK':
+                # Sans ce point de depart (par exemple un commit absent de la derniere analyse), l'exploration
+                # n'a rien sur quoi s'appuyer : Taxo repond en mode paquet.
+                yield _stage('exploration', 'done', label, len(trajectory))
+                yield from packet(f'{operation} : {response["error"]["message"]}', trajectory)
+                return
+        operations = [item for item in exchanged[0]['response'].get('items', []) if item.get('kind') == 'operation']
+        opening = len(trajectory)
         try:
             while True:
-                calls = len(trajectory) - 1
-                text = exploration.message(question, operations, exchanged, MAX_CALLS - calls)
+                calls = len(trajectory) - opening
+                text = exploration.message(question, operations, exchanged, MAX_CALLS - calls, context)
                 step = exploration.parse_step(model.complete(exploration.SYSTEM, text, exploration.STEP_SCHEMA))
                 if isinstance(step, exploration.Answer):
                     break
@@ -239,19 +287,18 @@ class AskMinia:
                 exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
                 trajectory.append(_step(step.operation, step.arguments, response))
                 yield 'minia.operation', trajectory[-1]
-                yield _stage('exploration', 'running', label, len(trajectory) - 1)
+                yield _stage('exploration', 'running', label, len(trajectory))
         except MiniaError as exc:
             if exc.code != INVALID_ANSWER:
                 raise
             # L'exploration a echoue (format invalide, boucle sans progres) : Taxo bascule en mode paquet.
-            yield _stage('exploration', 'done', label, len(trajectory) - 1)
-            yield from self._project_steps(model, question, projection, fallback=str(exc), trajectory=trajectory)
+            yield _stage('exploration', 'done', label, len(trajectory))
+            yield from packet(str(exc), trajectory)
             return
-        yield _stage('exploration', 'done', label, len(trajectory) - 1)
+        yield _stage('exploration', 'done', label, len(trajectory))
         statements = yield from self._verified(step.statements, exchange, trajectory)
         yield 'minia.completed', {
-            **self._project_result(model, question, projection), 'status': ANSWERED, 'mode': EXPLORATION,
-            'statements': statements, 'trajectory': trajectory,
+            **result, 'status': ANSWERED, 'mode': EXPLORATION, 'statements': statements, 'trajectory': trajectory,
             'budget': {'max_bytes': exchange.budget, 'used': exchange.used}}
 
     @staticmethod
@@ -292,8 +339,7 @@ class AskMinia:
 
     def _project_steps(self, model, question, projection, fallback=None, trajectory=None):
         yield _stage('facts', 'done', 'Sélection des faits pertinents', len(projection['facts']))
-        mode = {'mode': PACKET, **({'fallback': fallback, 'trajectory': trajectory} if fallback else {})}
-        result = {**mode, 'question': question, 'model': self._model_view(model), 'project': projection['project'],
+        result = {**_packet(fallback, trajectory), 'question': question, 'model': self._model_view(model), 'project': projection['project'],
                   'analysis': projection['analysis'], 'request': projection['request'],
                   'selection': projection['status'], 'commits': projection['commits'],
                   'total_commits': projection['total_commits'], 'not_interpreted': projection['not_interpreted'],

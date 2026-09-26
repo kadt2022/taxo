@@ -2,13 +2,14 @@
 // toujours separes. Les faits affiches sont ceux de Taxo, jamais du texte du modele.
 import {CHANGE_LABELS, type FactChange} from './diff';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
+import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
 
 type Evidence = {path:string; line_start?:number; line_end?:number};
 export type CitedFact = FactChange & {ref:string; evaluator_id:string; evidence_before:Evidence[]; evidence_after:Evidence[]};
 type GitFile = {status:string; path:string; old_path:string|null};
 export type GitCommit = {sha:string; parent:string|null; author:string; authored_at:string; subject:string; files:GitFile[]};
 type NotSent = {path:string; reason:string};
-export type SourceContext = {status:'NOT_REQUESTED'|'DISABLED'}|{status:'SENT'; files_sent:string[]; files_not_sent:NotSent[]; lines_sent:number; bytes_sent:number};
+export type SourceContext = {status:'NOT_REQUESTED'|'DISABLED'|'ON_DEMAND'}|{status:'SENT'; files_sent:string[]; files_not_sent:NotSent[]; lines_sent:number; bytes_sent:number};
 export type MiniaProvider = {provider:string; model:string; remote:boolean; data_use?:boolean};
 /** Le modele qui a repondu ; `fallback_from` quand un autre modele a repris la demande (repli). */
 export type AnswerModel = {configured?:boolean; provider:string|null; model:string|null; fallback_from?:string};
@@ -21,7 +22,9 @@ export type MiniaStatus = {configured:boolean; provider:string|null; model:strin
 export type MiniaAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'; question:string; commit:string; parent:string|null;
   project:{id:string; name:string}; git:GitCommit; files_not_sent:number; source_context?:SourceContext;
   model:AnswerModel; facts:CitedFact[]; answer:string; unknown:string;
-  not_interpreted:string[]; failures:string[]; facts_not_sent:number; rejected_citations:string[]};
+  not_interpreted:string[]; failures:string[]; facts_not_sent:number; rejected_citations:string[];
+  // MINIA-09b : en exploration, des enonces types et la trajectoire ; en repli, le paquet dit pourquoi.
+  mode?:'exploration'|'paquet'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string};
 
 /** Localisation d'une preuve : chemin, puis lignes quand elles sont connues. */
 export function place(evidence:Evidence){
@@ -59,6 +62,7 @@ const files=(count:number)=>`${count} fichier${count>1?'s':''}`;
 /** Ce que Minia a lu du diff (TAXO-MINIA-02) : fichiers transmis, et chaque fichier non transmis avec sa raison. */
 export function sourceSummary(context:SourceContext|undefined){
   if(context?.status==='DISABLED')return ['Le diff n’a pas été transmis à Minia : MINIA_SOURCE_CONTEXT vaut off.'];
+  if(context?.status==='ON_DEMAND')return ['Minia pouvait lire le diff de ce commit, fichier par fichier, sur demande à Taxo.'];
   if(context?.status!=='SENT')return [];
   const notSent=context.files_not_sent;
   const reasons=notSent.map(item=>`${item.path} (${REASONS[item.reason]??item.reason})`).join(', ');
@@ -113,6 +117,7 @@ export function SourceConsent({status, checked, onChange}:Readonly<{status:Minia
 /** Tout ce qui limite la reponse : le texte de Minia, puis les limites que Taxo connait lui-meme. */
 export function gaps(answer:MiniaAnswer){
   const items=answer.unknown?[answer.unknown]:[];
+  if(answer.fallback)items.push(`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir du paquet du commit.`);
   if(answer.not_interpreted.length)items.push(`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`);
   if(answer.failures.length)items.push(`Analyses en échec : ${answer.failures.join(' ; ')}.`);
   items.push(...sourceSummary(answer.source_context));
@@ -122,19 +127,33 @@ export function gaps(answer:MiniaAnswer){
   return items;
 }
 
+/** Ce que Git sait du commit : identifiant, auteur, date, message et fichiers (sans contenu). */
+export function CommitFacts({git}:Readonly<{git:GitCommit}>){
+  return <dl className="minia-commit">
+    <div><dt>Commit</dt><dd><code>{git.sha.slice(0,12)}</code> · {git.author} · {new Date(git.authored_at).toLocaleString('fr-CA')}</dd></div>
+    <div><dt>Message</dt><dd>{git.subject}</dd></div>
+    <div><dt>Fichiers</dt><dd>{git.files.length?<ul>{git.files.map(f=><li key={f.path}>{gitFile(f)}</li>)}</ul>:'aucun'}</dd></div>
+  </dl>;
+}
+
 export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
   const limits=gaps(answer), diff=answer.source_context?.status==='SENT';
+  if(answer.mode==='exploration'&&answer.statements)return <section className="minia" aria-label="Réponse de Minia">
+    <p className="eyebrow">MINIA{modelLabel(answer.model)} · exploration</p>
+    <p className="minia-question">{answer.question}</p>
+    <CommitFacts git={answer.git}/>
+    <Statements statements={answer.statements}/>
+    {limits.length>0&&<ul className="muted">{limits.map(item=><li key={item}>{item}</li>)}</ul>}
+    <Trajectory steps={answer.trajectory??[]}/>
+    <footer>Minia a interrogé Taxo opération par opération à partir de ce que Git sait du commit ; Taxo a vérifié chacune de ses affirmations. Le diff n’est lu que sur double accord, jamais le reste du dépôt, et la réponse n’est jamais enregistrée comme un fait.</footer>
+  </section>;
   return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)}</p>
     <p className="minia-question">{answer.question}</p>
     <div className="minia-blocks">
       <article className="minia-block fact">
         <h3>Ce que Taxo sait</h3>
-        <dl className="minia-commit">
-          <div><dt>Commit</dt><dd><code>{answer.git.sha.slice(0,12)}</code> · {answer.git.author} · {new Date(answer.git.authored_at).toLocaleString('fr-CA')}</dd></div>
-          <div><dt>Message</dt><dd>{answer.git.subject}</dd></div>
-          <div><dt>Fichiers</dt><dd>{answer.git.files.length?<ul>{answer.git.files.map(f=><li key={f.path}>{gitFile(f)}</li>)}</ul>:'aucun'}</dd></div>
-        </dl>
+        <CommitFacts git={answer.git}/>
         {answer.facts.length?<ul>{answer.facts.map(f=><li key={f.ref}>
           <strong>{CHANGE_LABELS[f.change]}</strong> {sentence(f,answer.project)}
           <details className="proof"><summary>Preuve</summary>
@@ -155,6 +174,7 @@ export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
         {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée.</p>}
       </article>
     </div>
+    <Trajectory steps={answer.trajectory??[]}/>
     <footer>{diff?'Minia a reçu ce que Git sait du commit, les faits de Taxo, leurs preuves, la couverture et les blocs modifiés du diff, jamais le reste du dépôt.'
       :'Minia ne lit ni le dépôt ni le code : elle ne reçoit que ce que Git sait du commit (sans contenu), les faits de Taxo, leurs preuves et la couverture.'} Sa réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;

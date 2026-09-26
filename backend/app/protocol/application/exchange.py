@@ -36,8 +36,12 @@ MAX_ARGUMENT_LENGTH = 1000
 
 NATURES = ('ASSERTION', 'ABSENCE', 'COVERAGE')
 V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'get_diff', 'verify_claim')
+# Operations reservees de l'ADR 0009 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
+# commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01).
+ACTIVATED = ('diff_facts',)
+OPERATIONS = V1 + ACTIVATED
 RESERVED = ('find_endpoint', 'trace_access_control', 'find_callers', 'find_callees', 'find_dependencies',
-            'find_configuration', 'diff_facts', 'get_source')
+            'find_configuration', 'get_source')
 _ARGUMENTS = {
     'describe': {},
     'find_facts': {'subject': 'reference', 'relation': 'relation', 'object': 'reference ou valeur',
@@ -47,7 +51,9 @@ _ARGUMENTS = {
     'get_commit': {'commit': 'identifiant, 7 caracteres ou plus'},
     'get_diff': {'commit': 'identifiant, 7 caracteres ou plus', 'path': 'chemin d’un fichier touche'},
     'verify_claim': {'subject': 'reference', 'relation': 'relation', 'object': 'reference ou valeur'},
+    'diff_facts': {'commit': 'identifiant, 7 caracteres ou plus'},
 }
+_LOCATION = ('path', 'line_start', 'line_end', 'symbol', 'method', 'object')
 _COMMIT = re.compile(r'[0-9a-f]{7,64}')
 # Syntaxe reservee type:cle : une valeur qui la prend est toujours lue comme une reference (ADR 0002).
 _REFERENCE_SYNTAX = re.compile(r'[a-z][a-z0-9-]*:')
@@ -213,10 +219,10 @@ class Exchange:
     def available(self):
         operations = ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'verify_claim']
         if self._history_available():
-            operations.append('get_commit')
+            operations += ['get_commit', 'diff_facts']
             if self.diff_allowed:
                 operations.append('get_diff')
-        return [name for name in V1 if name in operations]
+        return [name for name in OPERATIONS if name in operations]
 
     def _response(self, operation, coverage, max_bytes, **fields):
         response = Response(operation, self.snapshot, coverage, max_bytes, **fields)
@@ -259,7 +265,7 @@ class Exchange:
         self.calls += 1
         operation = request.get('operation') if isinstance(request, dict) else None
         # Seul un nom d'operation du protocole est renvoye : jamais une valeur arbitraire de l'appelant.
-        operation = operation if operation in V1 or operation in RESERVED else None
+        operation = operation if operation in OPERATIONS or operation in RESERVED else None
         name = request.get('operation') if isinstance(request, dict) else None
         try:
             if not isinstance(request, dict) or request.get('protocol', PROTOCOL) != PROTOCOL:
@@ -403,6 +409,25 @@ class Exchange:
                 break
         return response
 
+    def diff_facts(self, arguments, max_bytes):
+        """Les faits que le commit introduit, modifie ou retire, selon les evaluateurs de contenu compares
+        entre son premier parent et lui. Ce sont des changements, pas des faits de l'analyse : ils n'ont pas
+        de reference `F…`, et leurs preuves sont des localisations."""
+        _no_other(arguments, ('commit',))
+        reference, _ = self._commit(arguments)
+        _, base, evaluations = self.service.history.impact(self.project_id, reference.split(':', 1)[1])
+        coverage = [{'subject': self.repository, 'type': 'ANALYSED' if item['comparable'] else 'NOT_INTERPRETED',
+                     'scope': None, 'producer': item['evaluator_id'],
+                     'not_interpreted': item['not_interpreted_after']} for item in evaluations]
+        changes = [_change(change, item['evaluator_id']) for item in evaluations for change in item['changes']]
+        response = self._response('diff_facts', coverage or self._envelope_coverage(), max_bytes,
+                                  commit=reference, parent=f'commit:{base}' if base else None, count=len(changes))
+        for index, change in enumerate(changes):
+            if not response.add('items', change):
+                response.skip('items', len(changes) - index - 1)
+                break
+        return response
+
     def verify_claim(self, arguments, max_bytes):
         _no_other(arguments, ('subject', 'relation', 'object'))
         subject = _reference(arguments, 'subject', required=True)
@@ -423,6 +448,15 @@ class Exchange:
                                   max_bytes, claim=claim, verdict=verdict.verdict, reason=verdict.reason)
         self._add_facts(response, list(verdict.facts), evidence=True)
         return response
+
+
+def _change(change, producer):
+    """Un changement de fait, compact : ce qui change, avant, apres, et ou sont les preuves."""
+    located = [{key: proof[key] for key in _LOCATION if key in proof}
+               for proof in change['evidence_before'] + change['evidence_after']]
+    return {'kind': 'change', 'change': change['change'], 'nature': change['kind'], 'subject': change['subject'],
+            'relation': change['relation'], 'before': change['before'], 'after': change['after'],
+            'status': change['status'], 'producer': producer, 'evidence': located}
 
 
 def _side(rows, side):

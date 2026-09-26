@@ -66,7 +66,8 @@ def test_describe_offers_only_what_taxo_can_serve(taxo):
     described = result['responses'][0]
     assert described['protocol'] == 'taxo-query/1' and described['outcome'] == 'OK'
     operations = [item['operation'] for item in described['items'] if item['kind'] == 'operation']
-    assert operations == ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'verify_claim']
+    assert operations == ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'verify_claim',
+                          'diff_facts']
     assert 'get_diff' not in operations, 'sans MINIA_SOURCE_CONTEXT=diff, le diff n est pas propose'
     analyzers = {item['analyzer'] for item in described['items'] if item['kind'] == 'analyzer'}
     assert analyzers == {'taxo.inventory', 'taxo.git'}
@@ -259,6 +260,25 @@ def test_a_claim_object_must_have_the_type_the_relation_admits(taxo, relation, t
     client, url, (_, _, second) = taxo
     refused = one(client, url, 'verify_claim', subject=f'commit:{second}', relation=relation, object=target)
     assert refused['error']['code'] == 'INVALID_ARGUMENT', 'jamais un verdict sur une affirmation mal formee'
+
+
+def test_diff_facts_gives_what_a_commit_changes_according_to_taxo(make_repo, git, tmp_path):
+    repo = make_repo({'README.md': 'Taxo\n'}, 'impact')
+    (repo / 'main.py').write_text('print(1)\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'ajoute main.py')
+    sha, parent = git(repo, 'rev-parse', 'HEAD'), git(repo, 'rev-parse', 'HEAD~1')
+    client, url = client_for(repo, tmp_path)
+    with client:
+        changed = one(client, url, 'diff_facts', commit=sha[:9])
+        assert (changed['outcome'], changed['commit'], changed['parent']) == ('OK', f'commit:{sha}', f'commit:{parent}')
+        written = next(item for item in changed['items'] if item['relation'] == 'WRITTEN_IN')
+        assert (written['kind'], written['change'], written['subject'], written['after']) == (
+            'change', 'INTRODUCED', 'file:main.py', 'language:Python')
+        assert written['producer'] == 'taxo.inventory' and written['evidence'][0]['path'] == 'main.py'
+        assert 'ref' not in written, 'un changement n est pas un fait de l analyse'
+        assert changed['coverage'][0]['producer'] == 'taxo.inventory'
+        assert one(client, url, 'diff_facts', commit='abcdef1')['error']['code'] == 'OUT_OF_SCOPE'
 
 
 def test_reserved_and_unknown_operations_are_said(taxo):

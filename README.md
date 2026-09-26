@@ -229,8 +229,11 @@ POST /api/projects/{id}/taxo-query
   `NOT_ANALYSED`. La réfutation par un fait `ABSENCE` attend le premier analyseur qui en produit.
 - **`get_diff`** n'est proposé que si `MINIA_SOURCE_CONTEXT=diff`, et ne répond qu'avec
   `"consent": {"diff": true}` ; les refus de l'historique (`.env`, binaires, fichiers trop gros…) restent.
-- Les opérations réservées (`find_endpoint`, `find_callers`, `get_source`…) répondent `NOT_AVAILABLE` tant
-  qu'aucun analyseur ne les nourrit.
+- `diff_facts` (réservée par l'ADR, activée par TAXO-MINIA-09b) rend les faits qu'un commit introduit, modifie
+  ou retire, d'après l'impact (comparaison avec le premier parent). Ce sont des changements, sans référence
+  `F…`, avec la localisation de leurs preuves.
+- Les autres opérations réservées (`find_endpoint`, `find_callers`, `get_source`…) répondent `NOT_AVAILABLE`
+  tant qu'aucun analyseur ne les nourrit.
 
 ### Minia interroge Taxo (TAXO-MINIA-09, ADR 0009)
 
@@ -252,8 +255,14 @@ sa taille et ce qui n'a pas été transmis. Une opération refusée (`NO_CONSENT
 à Minia comme un résultat, jamais comme une instruction.
 
 Si l'exploration échoue (réponse illisible, opération répétée, limite atteinte), Taxo **bascule en mode
-paquet** : le fonctionnement précédent, qui reste celui de Minia Ollama. La réponse le dit. La question
-sur un commit (avec le diff) garde le mode paquet ; elle passera à l'exploration dans un récit suivant.
+paquet** : le fonctionnement précédent, qui reste celui de Minia Ollama. La réponse le dit.
+
+**Question sur un commit (TAXO-MINIA-09b).** Taxo ouvre l'échange par ce que Git sait du commit
+(`get_commit`) ; Minia demande ensuite ce qu'il change selon Taxo (`diff_facts`) et, seulement si le réglage
+`MINIA_SOURCE_CONTEXT=diff` et la case de la demande l'autorisent, le diff d'un fichier (`get_diff`). Le diff
+n'est plus joint d'avance : Minia le lit fichier par fichier, sur demande. Le mode paquet reste utilisé
+quand le commit n'appartient pas à la dernière analyse globale, ou pour l'autre côté d'une fusion
+(comparaison avec un autre parent que le premier).
 
 ### Minia : demander ce que signifie un commit (TAXO-MINIA-01)
 

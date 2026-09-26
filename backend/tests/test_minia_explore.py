@@ -211,3 +211,82 @@ def test_the_gemini_schema_has_uppercase_types_and_no_additional_properties():
     item = converted['properties']['statements']['items']
     assert item['type'] == 'OBJECT' and item['properties']['type']['enum'] == ['claim', 'interpretation', 'unknown']
     assert 'additionalProperties' not in item
+
+
+def ask_commit(repo, tmp_path, model, sha=None, source=False, setting='diff', after_scan=None, parent=None,
+               question='Que change ce commit ?'):
+    app = create_app(f'sqlite:///{tmp_path / "commit.db"}', [repo], minia=model, source_context=setting)
+    Base.metadata.create_all(app.state.engine)
+    with TestClient(app) as client:
+        project = client.post('/api/projects', json={'name': 'Exploration', 'path': str(repo)}).json()
+        client.post(f'/api/projects/{project["id"]}/scans')
+        if after_scan:
+            sha = after_scan()
+        body = {'question': question, 'source_context': source, **({'parent': parent} if parent else {})}
+        stream = client.post(f'/api/projects/{project["id"]}/history/commits/{sha}/ask/stream', json=body)
+        return [(block.split('\n')[0][len('event: '):], json.loads(block.split('\n')[1][len('data: '):]))
+                for block in stream.text.strip().split('\n\n')]
+
+
+def test_a_commit_question_starts_from_what_git_knows_then_minia_explores(repo, tmp_path):
+    repo, sha = repo
+    model = ScriptedModel(
+        call('diff_facts', commit=sha), call('get_diff', commit=sha, path='src/app.txt'),
+        answer(statement('claim', 'Le commit modifie src/app.txt.', f'commit:{sha}', 'CHANGES', 'file:src/app.txt'),
+               statement('interpretation', 'Le contenu passerait de « un » à « deux ».')))
+    result = completed(ask_commit(repo, tmp_path, model, sha, source=True))
+    assert (result['mode'], result['commit'], result['source_context']) == ('exploration', sha, {'status': 'ON_DEMAND'})
+    assert result['git']['sha'] == sha and result['git']['files'][0]['path'] == 'src/app.txt'
+    operations = [step['operation'] for step in result['trajectory']]
+    assert operations == ['describe', 'get_commit', 'diff_facts', 'get_diff', 'verify_claim']
+    assert result['trajectory'][3]['outcome'] == 'OK', 'le diff est lisible sur double accord'
+    assert result['statements'][0]['verdict'] == 'CONFIRMED'
+    first = json.loads(model.calls[0][1])
+    assert first['context'] == {'commit': f'commit:{sha}', 'parent': first['context']['parent'], 'diff_readable': True}
+    assert [step['operation'] for step in first['trajectory']] == ['describe', 'get_commit']
+    diff = json.loads(model.calls[2][1])['trajectory'][3]['response']
+    assert diff['items'][0]['after'] == 'deux', 'Minia lit le bloc modifie, et rien d autre'
+
+
+@pytest.mark.parametrize('source, setting', [(False, 'diff'), (True, 'off')])
+def test_without_both_consents_the_diff_stays_closed(repo, tmp_path, source, setting):
+    repo, sha = repo
+    model = ScriptedModel(call('get_diff', commit=sha, path='src/app.txt'), answer(statement('unknown', 'Pas de diff.')))
+    result = completed(ask_commit(repo, tmp_path, model, sha, source=source, setting=setting))
+    assert result['trajectory'][2]['error']['code'] == 'NO_CONSENT'
+    assert json.loads(model.calls[0][1])['context']['diff_readable'] is False
+
+
+def test_a_commit_absent_from_the_last_analysis_falls_back_to_its_packet(repo, tmp_path, git):
+    repo, _ = repo
+
+    def newer_commit():
+        (repo / 'src/new.txt').write_text('nouveau\n')
+        git(repo, 'add', '-A')
+        git(repo, 'commit', '-qm', 'après l analyse')
+        return git(repo, 'rev-parse', 'HEAD')
+
+    packet = json.dumps({'cited': [], 'answer': 'Un fichier aurait été ajouté.', 'unknown': ''})
+    model = ScriptedModel(packet)
+    result = completed(ask_commit(repo, tmp_path, model, after_scan=newer_commit))
+    assert (result['mode'], result['answer']) == ('paquet', 'Un fichier aurait été ajouté.')
+    assert result['fallback'].startswith('get_commit') and result['trajectory'][1]['error']['code'] == 'OUT_OF_SCOPE'
+    assert len(model.calls) == 1 and model.calls[0][2] is None, 'Minia n est interrogee qu une fois, en paquet'
+
+
+def test_the_other_side_of_a_merge_stays_in_the_packet(make_repo, git, tmp_path):
+    repo = make_repo({'a.txt': 'a\n'}, 'fusion')
+    main = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')
+    git(repo, 'checkout', '-qb', 'side')
+    (repo / 'b.txt').write_text('b\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'side')
+    git(repo, 'checkout', '-q', main)
+    (repo / 'c.txt').write_text('c\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'main')
+    git(repo, 'merge', '-q', '--no-ff', 'side', '-m', 'fusion')
+    merge, second = git(repo, 'rev-parse', 'HEAD'), git(repo, 'rev-parse', 'HEAD^2')
+    model = ScriptedModel(json.dumps({'cited': [], 'answer': 'Fusion de side.', 'unknown': ''}))
+    result = completed(ask_commit(repo, tmp_path, model, merge, parent=second))
+    assert result['mode'] == 'paquet' and 'autre parent' in result['fallback'] and result['trajectory'] == []
