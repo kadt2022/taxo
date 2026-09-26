@@ -29,6 +29,10 @@ MAX_CLAIMS = 10
 EXCHANGE_BYTES = 64_000
 EXCHANGE_MARGIN = 4096
 _EXPLORATION_FAILURES = frozenset({INVALID_ANSWER, CONTEXT_TOO_LARGE})
+# Chaque reponse de Taxo est bornee a la place qui reste dans la fenetre du modele au tour suivant (moins
+# l'enveloppe du tour) ; sous ROOM_TO_CONTINUE octets, Minia doit conclure avec ce qu'elle a.
+TURN_MARGIN = 512
+ROOM_TO_CONTINUE = 1024
 EXPLORATION, PACKET = 'exploration', 'paquet'
 ANSWERED, NOTHING_KNOWN, NEEDS_SELECTION = 'ANSWERED', 'TAXO_KNOWS_NOTHING', 'NEEDS_SELECTION'
 _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
@@ -280,9 +284,22 @@ class AskMinia:
         les suivantes, puis Taxo verifie ses affirmations. `packet(raison, trajectoire)` rend le repli."""
         label = 'Minia interroge Taxo'
         yield _stage('exploration', 'running', label, 0)
+        capacity = self._capacity(model, exploration.SYSTEM)
+
+        def room(operations, exchanged, calls_left):
+            """Octets qu'une reponse de Taxo peut encore occuper sans depasser la fenetre du modele."""
+            if capacity is None:
+                return None
+            text = exploration.message(question, operations, exchanged, calls_left, context)
+            return capacity - len(text.encode('utf-8')) - TURN_MARGIN
+
+        def bounded(operation, arguments, space):
+            request = {'operation': operation, 'arguments': arguments}
+            return request if space is None else {**request, 'max_bytes': max(space, 1)}
+
         trajectory, exchanged, seen = [], [], set()
         for operation, arguments in (('describe', {}), *seeds):
-            response = exchange.call({'operation': operation, 'arguments': arguments})
+            response = exchange.call(bounded(operation, arguments, room([], exchanged, MAX_CALLS)))
             exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
             trajectory.append(_step(operation, arguments, response))
             yield 'minia.operation', trajectory[-1]
@@ -296,15 +313,18 @@ class AskMinia:
         opening = len(trajectory)
         try:
             while True:
-                calls = len(trajectory) - opening
-                text = exploration.message(question, operations, exchanged, MAX_CALLS - calls, context)
+                calls_left = MAX_CALLS - (len(trajectory) - opening)
+                space = room(operations, exchanged, calls_left)
+                if space is not None and space < ROOM_TO_CONTINUE:
+                    calls_left = 0  # la fenetre est presque pleine : Minia conclut avec ce qu'elle a
+                text = exploration.message(question, operations, exchanged, calls_left, context)
                 step = exploration.parse_step(model.complete(exploration.SYSTEM, text, exploration.STEP_SCHEMA))
                 if isinstance(step, exploration.Answer):
                     break
-                if calls >= MAX_CALLS or step.key in seen:
+                if calls_left <= 0 or step.key in seen:
                     raise MiniaError(INVALID_ANSWER, 'Minia ne progressait plus (opération répétée ou limite atteinte).')
                 seen.add(step.key)
-                response = exchange.call({'operation': step.operation, 'arguments': step.arguments})
+                response = exchange.call(bounded(step.operation, step.arguments, space))
                 exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
                 trajectory.append(_step(step.operation, step.arguments, response))
                 yield 'minia.operation', trajectory[-1]

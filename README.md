@@ -237,8 +237,8 @@ POST /api/projects/{id}/taxo-query
 
 ### Minia interroge Taxo (TAXO-MINIA-09, ADR 0009)
 
-Dans « Interroger Taxo », Minia Claude et Minia Gemini ne reçoivent plus un paquet de faits fixe : elles
-**interrogent Taxo**, une opération du protocole à la fois (`describe`, `find_facts`, `get_commit`…), et
+Dans « Interroger Taxo », Minia ne reçoit plus un paquet de faits fixe, quel que soit le fournisseur (Ollama,
+Claude, Gemini, Mistral) : elle **interroge Taxo**, une opération du protocole à la fois (`describe`, `find_facts`, `get_commit`…), et
 décident de la suivante d'après les résultats. Taxo fixe les garde-fous : une description, au plus 8
 opérations choisies par Minia, puis au plus 10 affirmations vérifiées, dans le budget de l'échange.
 
@@ -254,8 +254,13 @@ La **trajectoire** est visible en direct puis sous la réponse : chaque opérati
 sa taille et ce qui n'a pas été transmis. Une opération refusée (`NO_CONSENT`, `OUT_OF_SCOPE`…) est rendue
 à Minia comme un résultat, jamais comme une instruction.
 
-Si l'exploration échoue (réponse illisible, opération répétée, limite atteinte), Taxo **bascule en mode
-paquet** : le fonctionnement précédent, qui reste celui de Minia Ollama. La réponse le dit.
+Chaque réponse de Taxo est bornée à la place qui reste dans la fenêtre du modèle au tour suivant ; quand
+cette place devient trop petite, Minia doit conclure avec ce qu'elle a. C'est ce qui permet à un modèle local
+à petite fenêtre (Ollama, `MINIA_OLLAMA_NUM_CTX=16384`) de suivre le même protocole que les fournisseurs
+distants (TAXO-MINIA-09c) : mêmes opérations, mêmes vérifications, mêmes garde-fous.
+
+Si l'exploration échoue (réponse illisible, opération répétée, limite atteinte, fenêtre dépassée), Taxo
+**bascule en mode paquet** : le fonctionnement précédent. La réponse le dit.
 
 **Question sur un commit (TAXO-MINIA-09b).** Taxo ouvre l'échange par ce que Git sait du commit
 (`get_commit`) ; Minia demande ensuite ce qu'il change selon Taxo (`diff_facts`) et, seulement si le réglage

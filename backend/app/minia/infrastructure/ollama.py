@@ -34,6 +34,10 @@ def _loopback(host):
 
 class OllamaModel:
     provider = 'ollama'
+    # Mene l'exploration de MINIA-09 comme les autres fournisseurs (MINIA-09c) : chaque tour est contraint par
+    # le schema JSON (`format`), et chaque reponse de Taxo tient dans la fenetre `num_ctx`. Un petit modele qui
+    # rend un JSON invalide ou tourne en rond fait basculer Taxo en mode paquet.
+    explores = True
 
     def __init__(self, model_name, url=DEFAULT_URL, timeout=300.0, transport=None, num_ctx=DEFAULT_NUM_CTX):
         parts = urlsplit(url)
