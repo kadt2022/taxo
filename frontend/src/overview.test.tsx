@@ -56,7 +56,8 @@ describe('carte API (TAXO-04)', ()=>{
   });
   it('dit une absence analysée, une analyse partielle ou en échec, sans rien deviner', ()=>{
     expect(card(spring({}),'api')).toMatchObject({value:'Aucune route Spring', state:'known'});
-    expect(card(spring({}),'api').detail).toContain('Aucun contrôleur Spring MVC');
+    expect(card(spring({}),'api').detail).toBe('Aucune route Spring MVC trouvée dans les sources Java (tests exclus).');
+    expect(card(spring({}),'api').detail).not.toContain('contrôleur');
     expect(card(spring({status:'PARTIAL', relations:{HANDLED_BY:1}}),'api')).toMatchObject({value:'1 route Spring relevée', state:'partial'});
     expect(card(spring({status:'PARTIAL'}),'api').detail).toContain('Rien n’est deviné');
     expect(card(spring({status:'FAILED'}),'api')).toMatchObject({value:'Non analysé', state:'failed'});

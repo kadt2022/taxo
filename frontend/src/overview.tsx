@@ -56,7 +56,7 @@ function api(spring:EvaluationSummary|undefined):Omit<Card,'id'|'title'>{
   if(spring.status==='PARTIAL')return {value, state:'partial',
     detail:'Certaines routes n’ont pas pu être interprétées : voir les points à vérifier. Rien n’est deviné.'};
   return {value, state:'known', detail:routes?'Contrôleurs Spring MVC, chaque route prouvée à la ligne (tests exclus).'
-    :'Aucun contrôleur Spring MVC dans les sources Java (tests exclus).'};
+    :'Aucune route Spring MVC trouvée dans les sources Java (tests exclus).'};
 }
 
 function source(scan:Scan){
