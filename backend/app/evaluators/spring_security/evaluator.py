@@ -33,6 +33,7 @@ METHOD_SECURITY = {'PreAuthorize', 'PostAuthorize', 'PreFilter', 'PostFilter', '
                    'DenyAll', 'PermitAll'}
 # Supertypes d'un mecanisme maison : filtre de servlet, gestionnaire d'autorisation.
 CUSTOM = {'OncePerRequestFilter', 'GenericFilterBean', 'Filter', 'AuthorizationManager'}
+ROLE_ACTIONS = ('hasRole', 'hasAnyRole', 'hasAuthority', 'hasAnyAuthority')
 DATA_GAP = 'les rôles et autorités des utilisateurs sont des données, hors du code'
 
 
@@ -133,21 +134,11 @@ class _Run:
 
     def _endpoint(self, endpoint):
         """Rattache l'endpoint a sa regle gagnante, ou dit pourquoi il ne le peut pas."""
-        repository = f'repository:{self.snapshot.repository}'
-        for path, patterns, line in self.ignored:
-            if patterns is None or max(rules.match(pattern, endpoint.route) for pattern in patterns) != rules.NONE:
-                self._gap(endpoint.reference, f'file:{path}', f'exclusion web.ignoring() ligne {line} non écartée')
-                return
-        candidates = [(item, item.applies(endpoint.route)) for item in self.configurations]
-        candidates = [(item, applies) for item, applies in candidates if applies != rules.NONE]
-        if len(candidates) != 1 or candidates[0][1] != rules.ALL:
-            if len(candidates) == 1:
-                self._gap(endpoint.reference, f'file:{candidates[0][0].path}',
-                          'périmètre de la chaîne de filtres non établi pour cette route')
-            else:
-                self._gap(endpoint.reference, repository, f'{len(candidates)} chaînes de filtres candidates')
+        if self._ignored(endpoint):
             return
-        configuration = candidates[0][0]
+        configuration = self._configuration(endpoint)
+        if configuration is None:
+            return
         scope = f'file:{configuration.path}'
         if not configuration.readable:
             self._gap(endpoint.reference, scope, 'configuration non interprétée')
@@ -165,6 +156,28 @@ class _Run:
             self._conclude(endpoint, configuration, checked, rule)
             return
         self._gap(endpoint.reference, scope, 'aucune règle ne capture la route')
+
+    def _ignored(self, endpoint):
+        """Vrai si une exclusion `web.ignoring()` peut viser la route : elle est alors declaree, pas conclue."""
+        for path, patterns, line in self.ignored:
+            if patterns is None or max(rules.match(pattern, endpoint.route) for pattern in patterns) != rules.NONE:
+                self._gap(endpoint.reference, f'file:{path}', f'exclusion web.ignoring() ligne {line} non écartée')
+                return True
+        return False
+
+    def _configuration(self, endpoint):
+        """La seule chaine de filtres qui traite toute requete de la route, ou None (et la raison declaree)."""
+        candidates = [(item, item.applies(endpoint.route)) for item in self.configurations]
+        candidates = [(item, applies) for item, applies in candidates if applies != rules.NONE]
+        if len(candidates) == 1 and candidates[0][1] == rules.ALL:
+            return candidates[0][0]
+        if len(candidates) == 1:
+            self._gap(endpoint.reference, f'file:{candidates[0][0].path}',
+                      'périmètre de la chaîne de filtres non établi pour cette route')
+        else:
+            self._gap(endpoint.reference, f'repository:{self.snapshot.repository}',
+                      f'{len(candidates)} chaînes de filtres candidates')
+        return None
 
     def _conclude(self, endpoint, configuration, checked, winner):
         prefix = f'{winner.verb} ' if winner.verb else ''
@@ -186,9 +199,7 @@ class _Run:
         if winner.permits:
             return
         target = winner.target or f'policy-rule:{winner.expression}'
-        gaps = ([f'la décision de {winner.target} n’est pas lue'] if winner.target else
-                [DATA_GAP] if winner.action in ('hasRole', 'hasAnyRole', 'hasAuthority', 'hasAnyAuthority') else
-                ['l’expression d’autorisation n’est pas évaluée'] if winner.action == 'access' else [])
+        gaps = _protection_gaps(winner)
         self._add(_inference(
             endpoint.reference, 'PROTECTED_BY', target, evidence, chain,
             premises=[f'MATCHED_BY : {endpoint.reference} -> {pattern}',
@@ -201,6 +212,17 @@ class _Run:
         return {'repository': self.snapshot.repository, 'commit': self.snapshot.commit, 'path': path,
                 'line_start': line_start, 'line_end': line_end, 'method': method,
                 'content_hash': content_hash(data, line_start, line_end)}
+
+
+def _protection_gaps(winner):
+    """Ce que la protection deduite ne dit pas : la decision d'un gestionnaire, les roles effectifs."""
+    if winner.target:
+        return [f'la décision de {winner.target} n’est pas lue']
+    if winner.action in ROLE_ACTIONS:
+        return [DATA_GAP]
+    if winner.action == 'access':
+        return ['l’expression d’autorisation n’est pas évaluée']
+    return []
 
 
 def _assertion(subject, relation, target, evidence, chain):

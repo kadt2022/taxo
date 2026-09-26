@@ -98,10 +98,12 @@ def test_the_winning_rule_is_the_first_that_captures_every_request_of_the_route(
     output = evaluate(files())
     matched = facts(output, 'MATCHED_BY')
     users = matched['endpoint:GET /api/v1/orgs/{orgCode}/users']
-    assert users['status'] == 'INFERRED' and users['object'] == 'route-pattern:/api/v1/**'
+    assert users['status'] == 'INFERRED'
+    assert users['object'] == 'route-pattern:/api/v1/**'
     # La regle /api/orgs/** ne capture pas /api/v1/orgs/... : elle est un contre-exemple, jamais la raison.
     checked = users['derivation']['counter_examples_checked']
-    assert any('/api/orgs/**' in item for item in checked) and any('POST /api/v1/auth/login' in item for item in checked)
+    assert any('/api/orgs/**' in item for item in checked)
+    assert any('POST /api/v1/auth/login' in item for item in checked)
     assert users['derivation']['rule'] == 'spring-security.first-matching-pattern'
     assert matched['endpoint:POST /api/v1/auth/login']['object'] == 'route-pattern:POST /api/v1/auth/login'
     assert matched['endpoint:GET /health']['object'] == 'route-pattern:/**'
@@ -132,15 +134,18 @@ def test_each_readable_rule_is_an_observed_fact_with_its_line():
     assert chains == {'symbol:java:com.example.security.SecurityConfig#chain'}, 'chaque regle dit sa chaine de filtres'
     evidence = facts(output, 'AUTHORIZED_BY')['route-pattern:/api/orgs/**']['evidence'][0]
     lines = config(RULES).splitlines()
-    assert '"/api/orgs/**"' in lines[evidence['line_start'] - 1] and 'hasRole' in lines[evidence['line_end'] - 1]
+    assert '"/api/orgs/**"' in lines[evidence['line_start'] - 1]
+    assert 'hasRole' in lines[evidence['line_end'] - 1]
 
 
 def test_a_rule_that_captures_only_part_of_the_route_forbids_any_conclusion():
     output = evaluate(files())
     # POST /api/v1/auth/login est public, mais pas GET : la route ANY n'a pas une seule regle.
     step = 'endpoint:ANY /api/v1/auth/{step}'
-    assert step not in facts(output, 'MATCHED_BY') and step not in facts(output, 'PROTECTED_BY')
-    assert step in gaps(output) and output.status == EvaluationStatus.PARTIAL
+    assert step not in facts(output, 'MATCHED_BY')
+    assert step not in facts(output, 'PROTECTED_BY')
+    assert step in gaps(output)
+    assert output.status == EvaluationStatus.PARTIAL
     special = controller('MeController', '/users', '''
     @GetMapping("/{id}")
     public String one() { return ""; }
@@ -167,7 +172,8 @@ def test_an_expression_is_read_only_if_it_can_only_restrict():
     for permissive in ('"true"', '"hasRole(\'ADMIN\') or true"', '"permitAll"', 'new Custom()', 'unknownManager'):
         output = evaluate(files(f'''                .requestMatchers("/api/**").access({permissive})
                 .anyRequest().authenticated()'''))
-        assert users not in facts(output, 'PROTECTED_BY') and users in gaps(output), permissive
+        assert users not in facts(output, 'PROTECTED_BY'), permissive
+        assert users in gaps(output), permissive
     output = evaluate(files('''                .requestMatchers("/api/**").access("hasRole('ADMIN') and isAuthenticated()")
                 .anyRequest().authenticated()'''))
     assert facts(output, 'PROTECTED_BY')[users]['object'] == \
@@ -180,7 +186,8 @@ def test_only_spring_http_security_chains_are_security_configurations():
     assert output.facts == (), 'une API maison au meme nom n est pas Spring Security'
     unknown = config(RULES).replace('return http.csrf', 'return this.http().csrf')
     output = evaluate(files(None, **{'security/SecurityConfig.java': unknown}))
-    assert not facts(output, 'PROTECTED_BY') and 'endpoint:GET /health' in gaps(output), \
+    assert not facts(output, 'PROTECTED_BY')
+    assert 'endpoint:GET /health' in gaps(output), \
         'un receveur de type inconnu est peut-etre HttpSecurity : aucune conclusion'
 
 
@@ -229,7 +236,8 @@ public class WebConfig {
 }
 '''
     output = evaluate(files(**{'security/WebConfig.java': ignoring}))
-    assert 'endpoint:GET /health' in gaps(output) and 'endpoint:GET /health' not in facts(output, 'PROTECTED_BY')
+    assert 'endpoint:GET /health' in gaps(output)
+    assert 'endpoint:GET /health' not in facts(output, 'PROTECTED_BY')
     assert 'endpoint:GET /api/v1/orgs/{orgCode}/users' in facts(output, 'PROTECTED_BY')
 
 
@@ -273,11 +281,12 @@ public class LegacyConfig extends WebSecurityConfigurerAdapter {{
 def test_without_security_configuration_nothing_is_asserted_and_it_is_said():
     sources = {path: text for path, text in files(None).items() if not path.endswith('PolicyManager.java')}
     output = evaluate(sources)
-    assert output.facts == () and output.status == EvaluationStatus.SUCCESS
+    assert output.facts == ()
+    assert output.status == EvaluationStatus.SUCCESS
     assert any('authorizeHttpRequests' in warning for warning in output.warnings)
     assert [item['coverage_type'] for item in output.coverage] == ['ANALYSED']
     empty = evaluate({'README.md': '# rien'})
-    assert empty.facts == () and empty.status == EvaluationStatus.SUCCESS and empty.warnings == ()
+    assert (empty.facts, empty.status, empty.warnings) == ((), EvaluationStatus.SUCCESS, ())
 
 
 def test_every_fact_satisfies_the_contract():
@@ -296,4 +305,5 @@ def test_pattern_matching_has_three_outcomes():
     assert rules.match('/files/*.json', '/files/{name}') == rules.SOME
     assert rules.match('/files/**', '/files/{*path}') == rules.ALL
     assert rules.match('/files/x', '/files/{*path}') == rules.SOME
-    assert not rules.readable_pattern('/api/{id:\\d+}') and not rules.readable_pattern('api/**')
+    assert not rules.readable_pattern('/api/{id:\\d+}')
+    assert not rules.readable_pattern('api/**')

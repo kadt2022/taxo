@@ -89,7 +89,7 @@ class Analysis:
         """Faits HANDLED_BY etablis, avec le type et la methode qui traitent chaque endpoint."""
         for (subject, handler), fact in self.run.facts.items():
             qualified, _, method = handler.removeprefix('symbol:java:').rpartition('#')
-            java_file, java_type, names = self.run.types[qualified]
+            java_file, java_type, _ = self.run.types[qualified]
             yield Endpoint(subject, handler, fact, java_file.path, java_type,
                            tuple(item for item in java_type.methods if item.name == method))
 

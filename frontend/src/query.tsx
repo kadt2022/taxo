@@ -52,7 +52,7 @@ export function factLine(fact:GitFact){
   const detail=[q.subject?`« ${q.subject} »`:null, q.authored_at??null, q.name??null, q.change??null,
     q.old_path?`depuis ${q.old_path}`:null].filter(Boolean).join(', ');
   const said=[reference(fact.subject), label(VERBS,fact.relation), fact.object?reference(fact.object):null].filter(Boolean).join(' ');
-  return `${said}${detail?` (${detail})`:''}`;
+  return detail?`${said} (${detail})`:said;
 }
 
 const short=(sha:string)=>sha.slice(0,12);

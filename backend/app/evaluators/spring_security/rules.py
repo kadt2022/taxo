@@ -125,32 +125,32 @@ class Configuration:
 def configurations(java_file):
     """Configurations d'autorisation du fichier, et les motifs exclus de la securite (`ignoring()`)."""
     chains = java_file.chains({*AUTHORIZE, *SCOPE, 'requestMatchers', IGNORING})
+    inner = _lambda_chains(chains)
     groups, ignored = {}, []
-    inner = set()
     for chain in chains:
-        for call in chain.calls:
-            for argument in call.arguments:
-                if argument.function is not None:
-                    inner.update(argument.function.chains)
-    for chain in chains:
-        if chain in inner and IGNORING not in chain.names:
-            continue
         if IGNORING in chain.names:
             ignored.append(_ignoring(chain))
             continue
-        receiver = _receiver(chain, java_file)
+        receiver = OTHER if chain in inner else _receiver(chain, java_file)
         if receiver != OTHER:
             groups.setdefault((chain.owner, chain.method), []).append((chain, receiver))
-    found = []
-    for (owner, method), group in groups.items():
-        if not any(set(AUTHORIZE) & set(chain.names) for chain, _ in group):
-            continue
-        configuration = _configuration(java_file.path, owner, method, [chain for chain, _ in group])
-        if configuration.readable and any(receiver == UNKNOWN for _, receiver in group):
-            # Un receveur de type inconnu est peut-etre HttpSecurity : la configuration est vue, pas lue.
-            configuration = replace(configuration, rules=(), reason='receveur dont le type n’est pas établi')
-        found.append(configuration)
+    found = [_checked(java_file.path, owner, method, group) for (owner, method), group in groups.items()
+             if any(set(AUTHORIZE) & set(chain.names) for chain, _ in group)]
     return found, ignored
+
+
+def _lambda_chains(chains):
+    """Chaines ecrites dans le corps d'une lambda passee en argument : elles appartiennent a leur appel."""
+    return {inner for chain in chains for call in chain.calls for argument in call.arguments
+            if argument.function is not None for inner in argument.function.chains}
+
+
+def _checked(path, owner, method, group):
+    configuration = _configuration(path, owner, method, [chain for chain, _ in group])
+    if configuration.readable and any(receiver == UNKNOWN for _, receiver in group):
+        # Un receveur de type inconnu est peut-etre HttpSecurity : la configuration est vue, pas lue.
+        return replace(configuration, rules=(), reason='receveur dont le type n’est pas établi')
+    return configuration
 
 
 def _receiver(chain, java_file):
@@ -189,15 +189,24 @@ def _scope(chains, authorizing):
     for chain in chains:
         limit = next((index for item, index in authorizing if item is chain), len(chain.calls))
         for call in chain.calls[:limit]:
-            if call.name == 'requestMatchers' or (call.name in SCOPE and call.name != 'securityMatcher'):
-                # `securityMatchers(...)`, `requestMatchers()` de Spring Security 5, matchers d'objets : non lus.
+            found = _scope_patterns(call)
+            if found is None:
                 return None
-            if call.name == 'securityMatcher':
-                found = [patterns_of(argument) for argument in call.arguments]
-                if not found or None in found:
-                    return None
-                patterns += [pattern for group in found for pattern in group]
+            patterns += found
     return tuple(patterns)
+
+
+def _scope_patterns(call):
+    """Motifs de perimetre que l'appel declare ; () s'il n'en declare pas, None s'il n'est pas lu."""
+    if call.name == 'securityMatcher':
+        found = [patterns_of(argument) for argument in call.arguments]
+        if not found or None in found:
+            return None
+        return [pattern for group in found for pattern in group]
+    if call.name == 'requestMatchers' or call.name in SCOPE:
+        # `securityMatchers(...)`, `requestMatchers()` de Spring Security 5, matchers d'objets : non lus.
+        return None
+    return []
 
 
 def _ignoring(chain):
