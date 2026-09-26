@@ -3,7 +3,9 @@ produit aucune reponse finale ; la trajectoire deja parcourue reste visible."""
 import json
 import threading
 import time
+from types import SimpleNamespace
 
+import anthropic
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +14,9 @@ from app.bootstrap.database import Base
 from app.main import create_app
 from app.minia.domain.cancellation import STOPPED, Cancellation
 from app.minia.domain.errors import CANCELLED, MiniaError
+from app.minia.infrastructure.claude import ClaudeModel
+from app.minia.infrastructure.gemini import GeminiModel
+from app.minia.infrastructure.mistral import MistralModel
 from app.minia.infrastructure.ollama import OllamaModel
 from app.protocol.application.exchange import Exchange
 from tests.test_minia_explore import ScriptedModel, answer, call, statement
@@ -199,3 +204,78 @@ def test_the_ollama_call_is_really_closed_when_stopped():
     assert stopped.value.code == CANCELLED
     assert seen[0]['stream'] is True and seen[0]['format'] == {'type': 'object'}, 'avec un jeton, le tour passe par le flux'
     assert body.closed, 'la connexion est fermee : Ollama cesse de generer'
+
+
+def remote_models(handler, waits):
+    transport = httpx.MockTransport(handler)
+    return [MistralModel('mistral-test', api_key='cle-test', transport=transport, sleep=waits.append),
+            GeminiModel('gemini-test', api_key='cle-test', transport=transport, sleep=waits.append)]
+
+
+@pytest.mark.parametrize('index', [0, 1], ids=['mistral', 'gemini'])
+def test_a_stop_during_the_retry_backoff_sends_nothing_more(index):
+    cancel, seen, waits = Cancellation(), [], []
+
+    def handler(request):
+        seen.append(request)
+        cancel.cancel()
+        return httpx.Response(503, json={'message': 'overloaded'})
+
+    with pytest.raises(MiniaError) as stopped:
+        remote_models(handler, waits)[index].complete('s', 'u', cancel=cancel)
+    assert stopped.value.code == CANCELLED
+    assert len(seen) == 1, 'aucune nouvelle tentative apres l arret'
+    assert waits == [], 'l attente entre deux tentatives est celle du jeton, que l arret interrompt'
+
+
+@pytest.mark.parametrize('index', [0, 1], ids=['mistral', 'gemini'])
+def test_the_dedicated_client_of_a_call_is_closed_when_stopped_before_the_answer(index):
+    cancel, seen, clients = Cancellation(), [], []
+
+    def handler(request):
+        seen.append(request)
+        cancel.cancel()
+        assert clients[-1].is_closed, 'l arret ferme le client de l appel avant meme la reponse'
+        raise httpx.ConnectError('coupe', request=request)
+
+    model = remote_models(handler, [])[index]
+    make = model._new_client
+
+    def tracked():
+        clients.append(make())
+        return clients[-1]
+
+    model._new_client = tracked
+    with pytest.raises(MiniaError) as stopped:
+        model.complete('s', 'u', cancel=cancel)
+    assert stopped.value.code == CANCELLED and len(seen) == 1 and len(clients) == 1
+    assert not model._client.is_closed, 'le client partage reste utilisable pour les autres demandes'
+
+
+def test_a_stopped_claude_call_closes_its_own_client(monkeypatch):
+    cancel, closed = Cancellation(), []
+
+    class Stream:
+        def __enter__(self):
+            cancel.cancel()
+            return self
+
+        def __exit__(self, *error):
+            return False
+
+        @property
+        def text_stream(self):
+            raise anthropic.APIConnectionError(request=httpx.Request('POST', 'https://api.anthropic.com'))
+
+    class Client:
+        def __init__(self):
+            self.beta = SimpleNamespace(messages=SimpleNamespace(stream=lambda **request: Stream()))
+
+        def close(self):
+            closed.append(self)
+
+    monkeypatch.setattr(anthropic, 'Anthropic', Client)
+    with pytest.raises(MiniaError) as stopped:
+        ClaudeModel('claude-test').complete('s', 'u', cancel=cancel)
+    assert stopped.value.code == CANCELLED
+    assert len(closed) >= 1, 'le client de l appel est ferme par l arret'

@@ -13,6 +13,7 @@ import httpx
 
 from app.minia.domain.cancellation import check
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
+from app.minia.infrastructure.calls import client_for
 
 DEFAULT_URL = 'http://127.0.0.1:11434'
 DEFAULT_NUM_CTX = 16384
@@ -56,8 +57,10 @@ class OllamaModel:
             raise ValueError(f'MINIA_OLLAMA_TIMEOUT_SECONDS invalide : {timeout} (secondes, plus que 0).')
         self.model_name, self.url, self.num_ctx, self.timeout = model_name, url.rstrip('/'), num_ctx, timeout
         self.remote = not _loopback(parts.hostname)
-        self._client = httpx.Client(timeout=httpx.Timeout(timeout, connect=min(CONNECT_TIMEOUT_SECONDS, timeout)),
-                                    transport=transport)
+        limits = httpx.Timeout(timeout, connect=min(CONNECT_TIMEOUT_SECONDS, timeout))
+        self._client = httpx.Client(timeout=limits, transport=transport)
+        # Un appel qu'on peut arreter a son propre client : l'arret le ferme, meme avant la reponse (TAXO-UX-03).
+        self._new_client = lambda: httpx.Client(timeout=limits, transport=transport)
 
     def capacity(self, system):
         """Octets disponibles pour le message de l'utilisateur avec ces consignes : Minia y ajuste son contexte."""
@@ -112,27 +115,28 @@ class OllamaModel:
     def stream(self, system, user, schema=None, cancel=None):
         """Morceaux de la reponse, au fur et a mesure qu'Ollama les produit (une ligne JSON par morceau).
         Arreter la demande ferme la connexion : Ollama cesse de generer."""
+        body = self._body(system, user, True, schema)
+        with client_for(self._client, self._new_client, cancel) as client:
+            return (yield from self._read(client, body, cancel))
+
+    def _read(self, client, body, cancel):
         try:
-            with self._client.stream('POST', f'{self.url}/api/chat',
-                                     json=self._body(system, user, True, schema)) as response:
-                forget = cancel.on_cancel(response.close) if cancel is not None else (lambda: None)
-                try:
-                    self._check(response)
-                    for line in response.iter_lines():
-                        check(cancel)
-                        if not line.strip():
-                            continue
-                        try:
-                            part = json.loads(line)
-                            chunk = part.get('message', {}).get('content', '')
-                        except (ValueError, AttributeError) as exc:
-                            raise MiniaError(UNAVAILABLE, 'Réponse d’Ollama illisible.') from exc
-                        if chunk:
-                            yield chunk
-                        if part.get('done'):
-                            return
-                finally:
-                    forget()
+            check(cancel)
+            with client.stream('POST', f'{self.url}/api/chat', json=body) as response:
+                self._check(response)
+                for line in response.iter_lines():
+                    check(cancel)
+                    if not line.strip():
+                        continue
+                    try:
+                        part = json.loads(line)
+                        chunk = part.get('message', {}).get('content', '')
+                    except (ValueError, AttributeError) as exc:
+                        raise MiniaError(UNAVAILABLE, 'Réponse d’Ollama illisible.') from exc
+                    if chunk:
+                        yield chunk
+                    if part.get('done'):
+                        return
         except (httpx.HTTPError, httpx.StreamError) as exc:
             check(cancel)
             raise self._unreachable(exc) from exc

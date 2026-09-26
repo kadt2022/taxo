@@ -41,10 +41,17 @@ export async function cancelMinia(requestId:string, fetcher:typeof fetch=fetch){
 /** Le moyen d'arreter une demande : couper le flux (AbortController) et prevenir le serveur. */
 export function createStop(fetcher:typeof fetch=fetch){
   const controller=new AbortController();
-  return {signal:controller.signal, stop:(requestId?:string)=>{
-    if(requestId)void cancelMinia(requestId, fetcher);
-    controller.abort();
-  }};
+  // L'identifiant de la demande en cours, connu des son debut ; oublie a sa fin : arreter une demande finie
+  // ne previent plus le serveur.
+  let current:string|undefined;
+  return {signal:controller.signal,
+    started:(requestId?:string)=>{current=requestId;},
+    done:()=>{current=undefined;},
+    stop:(requestId:string|undefined=current)=>{
+      if(requestId)void cancelMinia(requestId, fetcher);
+      current=undefined;
+      controller.abort();
+    }};
 }
 export type MiniaStop = ReturnType<typeof createStop>;
 
@@ -58,14 +65,20 @@ export function stageText(stage:Stage){
 }
 
 /** Suit une question a Minia jusqu'a sa reponse (ou son echec). */
-export async function ask<T>(open:()=>Promise<AsyncIterable<ServerEvent>>, update:(change:(live:MiniaLive<T>)=>MiniaLive<T>)=>void){
+export async function ask<T>(open:()=>Promise<AsyncIterable<ServerEvent>>, update:(change:(live:MiniaLive<T>)=>MiniaLive<T>)=>void,
+  control?:MiniaStop){
   update(()=>startMinia<T>());
   try{
-    for await(const event of await open())update(live=>reduceMinia(live, event));
+    for await(const event of await open()){
+      if(event.type==='minia.started')control?.started((event.data as {request_id?:string}).request_id);
+      update(live=>reduceMinia(live, event));
+    }
   }catch(e){
     // L'utilisateur a arrete la demande : ce n'est pas une erreur a afficher.
     if((e as Error).name==='AbortError'){update(stoppedMinia);return;}
     throw e;
+  }finally{
+    control?.done();
   }
 }
 

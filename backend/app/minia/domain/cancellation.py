@@ -49,6 +49,10 @@ class Cancellation:
             if callback in self._callbacks:
                 self._callbacks.remove(callback)
 
+    def wait(self, seconds):
+        """Attend `seconds`, ou moins si la demande est arretee entre-temps ; rend True si elle l'est."""
+        return self._event.wait(seconds)
+
     def check(self):
         """Leve MiniaError(CANCELLED) si la demande a ete arretee."""
         if self._event.is_set():

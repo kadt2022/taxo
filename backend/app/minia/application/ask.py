@@ -19,9 +19,9 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.minia.domain import briefing, exploration, source_context
-from app.minia.domain.cancellation import check
+from app.minia.domain.cancellation import STOPPED, check
 from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, AnswerStream, parse, with_diff
-from app.minia.domain.errors import CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
+from app.minia.domain.errors import CANCELLED, CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
 from app.minia.domain.model import MiniaModel
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.projects.application.queries import require_project
@@ -129,6 +129,11 @@ def _guarded(events, cancel):
                     cancel.check()
                 yield item
                 cancel.check()
+        except Exception as exc:
+            # Couper un appel en cours (client ferme) peut lever n'importe ou : apres l'arret, c'est l'arret.
+            if cancel.cancelled and getattr(exc, 'code', None) != CANCELLED:
+                raise MiniaError(CANCELLED, STOPPED) from exc
+            raise
         finally:
             events.close()
     return run()

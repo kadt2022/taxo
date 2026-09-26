@@ -58,3 +58,25 @@ describe('arrêter Minia (TAXO-UX-03)', ()=>{
     expect(stream.mock.calls[0][1].signal).toBe(control.current?.signal);
   });
 });
+
+describe('arrêter à la sortie du panneau (TAXO-UX-03)', ()=>{
+  it('retient la demande en cours pour l’arrêter sans identifiant, et oublie une demande finie', async ()=>{
+    const fetcher=vi.fn().mockResolvedValue(new Response(null, {status:202}));
+    const run=createStop(fetcher);
+    let release=()=>undefined as void;
+    const held=new Promise<void>(resolve=>{release=resolve;});
+    const flow=ask(()=>Promise.resolve((async function*(){
+      yield event('minia.started', {request_id:'r9'});
+      await held;
+    })()), ()=>undefined, run);
+    await new Promise(resolve=>setTimeout(resolve, 0));
+    run.stop();
+    expect(String(fetcher.mock.calls[0][0])).toContain('/api/minia/requests/r9/cancel');
+    release();
+    await flow;
+    const done=createStop(fetcher);
+    await ask(()=>Promise.resolve((async function*(){yield event('minia.started', {request_id:'r10'});})()), ()=>undefined, done);
+    done.stop();
+    expect(fetcher.mock.calls.length).toBe(1);
+  });
+});
