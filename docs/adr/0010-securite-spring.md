@@ -38,7 +38,14 @@ multiples.
    - aucune règle ne capture la route ;
    - plusieurs chaînes de filtres sont candidates ou le périmètre `securityMatcher` n'est pas lu ;
    - `web.ignoring()` peut viser la route ;
-   - `access("…")` contient une expression permissive (`permitAll`, `anonymous`).
+   - `access("…")` n'est pas une expression qui ne peut que restreindre (SpEL non évalué : `or`,
+     `true`, `permitAll`, appel de bean), ou `access(…)` un gestionnaire ni du dépôt ni restrictif de
+     Spring ;
+   - l'analyse des endpoints n'a pas établi certaines routes (ses zones non interprétées sont reprises).
+
+   Seule une chaîne dont le receveur est une variable de type `HttpSecurity` de Spring (nom qualifié ou
+   import) est une configuration : une API maison aux mêmes noms de méthode ne l'est pas, et un receveur
+   de type inconnu donne une configuration vue mais non lue.
 
    Sont aussi déclarés `NOT_INTERPRETED` :
    - la sécurité de méthode (`@PreAuthorize`…) ;

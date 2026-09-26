@@ -225,7 +225,13 @@ pas, et déclare l'endpoint non interprété, quand :
   `/users/me` devant `/users/{id}`) ;
 - plusieurs chaînes de filtres peuvent traiter la route (par profil ou propriété), ou le périmètre
   `securityMatcher` n'est pas lu ;
-- la route est visée par `web.ignoring()`.
+- la route est visée par `web.ignoring()` ;
+- l'analyse des endpoints elle-même n'a pas établi certaines routes.
+
+Seule une chaîne dont le receveur est le `HttpSecurity` de Spring est une configuration de sécurité ; un
+receveur de type inconnu est vu, pas lu. Une expression `access("…")` n'est lue que si elle ne peut que
+restreindre (`hasRole('X') and isAuthenticated()`), et `access(manager)` que si le gestionnaire est dans
+les sources : la décision qu'il prend reste une limite connue.
 
 La sécurité de méthode (`@PreAuthorize`, `@Secured`, `@RolesAllowed`…) et les mécanismes maison
 (filtres, `AuthorizationManager`) sont déclarés non interprétés : la protection réelle peut s'y

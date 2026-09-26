@@ -14,7 +14,11 @@ public class PolicyManager implements AuthorizationManager<RequestAuthorizationC
 '''
 
 
-def config(body, imports='import org.springframework.http.HttpMethod;\n', extra=''):
+SPRING = ('import org.springframework.http.HttpMethod;\n'
+          'import org.springframework.security.config.annotation.web.builders.HttpSecurity;\n')
+
+
+def config(body, imports=SPRING, extra=''):
     return f'''package com.example.security;
 
 {imports}
@@ -158,15 +162,42 @@ def test_an_unread_rule_blocks_every_conclusion_after_it_but_not_before():
     assert not any('Unknown' in fact['subject'] for fact in output.facts), 'un motif non lu n est pas invente'
 
 
-def test_a_permissive_spel_expression_is_never_read_as_a_protection():
-    output = evaluate(files('''                .requestMatchers("/api/**").access("permitAll or hasRole('X')")
+def test_an_expression_is_read_only_if_it_can_only_restrict():
+    users = 'endpoint:GET /api/v1/orgs/{orgCode}/users'
+    for permissive in ('"true"', '"hasRole(\'ADMIN\') or true"', '"permitAll"', 'new Custom()', 'unknownManager'):
+        output = evaluate(files(f'''                .requestMatchers("/api/**").access({permissive})
                 .anyRequest().authenticated()'''))
-    assert not facts(output, 'PROTECTED_BY').get('endpoint:GET /api/v1/orgs/{orgCode}/users')
-    assert 'endpoint:GET /api/v1/orgs/{orgCode}/users' in gaps(output)
+        assert users not in facts(output, 'PROTECTED_BY') and users in gaps(output), permissive
+    output = evaluate(files('''                .requestMatchers("/api/**").access("hasRole('ADMIN') and isAuthenticated()")
+                .anyRequest().authenticated()'''))
+    assert facts(output, 'PROTECTED_BY')[users]['object'] == \
+        '''policy-rule:access("hasRole('ADMIN') and isAuthenticated()")'''
+
+
+def test_only_spring_http_security_chains_are_security_configurations():
+    home_made = config(RULES, imports='import com.example.dsl.HttpSecurity;\n')
+    output = evaluate(files(None, **{'security/SecurityConfig.java': home_made}))
+    assert output.facts == (), 'une API maison au meme nom n est pas Spring Security'
+    unknown = config(RULES).replace('return http.csrf', 'return this.http().csrf')
+    output = evaluate(files(None, **{'security/SecurityConfig.java': unknown}))
+    assert not facts(output, 'PROTECTED_BY') and 'endpoint:GET /health' in gaps(output), \
+        'un receveur de type inconnu est peut-etre HttpSecurity : aucune conclusion'
+
+
+def test_routes_the_endpoint_analysis_could_not_establish_stay_not_interpreted():
+    broken = controller('BrokenController', None, '''
+    @GetMapping(Unknown.PATH)
+    public String hidden() { return ""; }
+''')
+    output = evaluate(files(**{'web/BrokenController.java': broken}))
+    assert 'symbol:java:com.example.web.BrokenController#hidden' in gaps(output)
+    assert output.status == EvaluationStatus.PARTIAL
 
 
 def test_several_candidate_filter_chains_forbid_a_conclusion_unless_their_scope_separates_them():
     second = '''package com.example.security;
+
+import org.springframework.security.config.annotation.web.builders.*;
 
 @Configuration
 public class ApiSecurity {
@@ -216,6 +247,8 @@ def test_method_security_and_home_made_mechanisms_are_declared_not_interpreted()
 
 def test_the_spring_security_5_chain_is_read_up_to_and():
     legacy = f'''package com.example.security;
+
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 
 @Configuration
 public class LegacyConfig extends WebSecurityConfigurerAdapter {{

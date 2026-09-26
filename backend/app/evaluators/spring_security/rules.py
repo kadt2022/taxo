@@ -9,7 +9,7 @@ La correspondance d'une route a un motif a trois issues : toutes les requetes de
 (ALL), aucune (NONE), ou certaines seulement, ou on ne sait pas (SOME). Seul ALL permet de conclure.
 """
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 AUTHORIZE = ('authorizeHttpRequests', 'authorizeRequests')
 # Regles d'une configuration : un matcher, puis une action.
@@ -31,13 +31,23 @@ OTHER_DISPATCHES = {'FORWARD', 'ERROR', 'INCLUDE'}
 HTTP_METHODS = {'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'TRACE'}
 _VARIABLE = re.compile(r'\{[A-Za-z_]\w*}')
 _ENDPOINT_VARIABLE = re.compile(r'\{[A-Za-z_]\w*(?::.*)?}')
-_PERMISSIVE_SPEL = re.compile(r'permitAll|anonymous|isAnonymous', re.IGNORECASE)
 # Emplacements de `PathRequest.toStaticResources().atCommonLocations()` (Spring Boot, StaticResourceLocation).
 STATIC_RESOURCES = ('/css/**', '/js/**', '/images/**', '/webjars/**', '/favicon.*', '/*/icon-*')
 _STATIC_WRITTEN = re.compile(r'(?:org\.springframework\.boot\.autoconfigure\.security\.servlet\.)?'
                              r'PathRequest\.toStaticResources\(\)\s*\.\s*atCommonLocations\(\)')
 
 NONE, SOME, ALL = 0, 1, 2
+HTTP_SECURITY = 'org.springframework.security.config.annotation.web.builders.HttpSecurity'
+HTTP, OTHER, UNKNOWN = 'http', 'other', 'unknown'
+# Expression SpEL qu'une lecture sure admet : une seule restriction, ou plusieurs jointes par `and`. Tout le
+# reste (`or`, `true`, `permitAll`, une methode d'un bean...) peut tout permettre : la regle n'est pas lue.
+_SPEL_ATOM = (r"(?:hasRole|hasAnyRole|hasAuthority|hasAnyAuthority|hasIpAddress)\(\s*'[^'()]+'"
+              r"(?:\s*,\s*'[^'()]+')*\s*\)|isAuthenticated\(\)|isFullyAuthenticated\(\)|denyAll")
+_RESTRICTIVE_SPEL = re.compile(rf'\s*(?:{_SPEL_ATOM})(?:\s+and\s+(?:{_SPEL_ATOM}))*\s*')
+# `access(...)` avec un gestionnaire de Spring qui ne peut que restreindre.
+_MANAGER = re.compile(r"(?:AuthorityAuthorizationManager\.)?(?:hasRole|hasAnyRole|hasAuthority|hasAnyAuthority)"
+                      r'\(\s*"[^"()]+"(?:\s*,\s*"[^"()]+")*\s*\)|AuthenticatedAuthorizationManager\.'
+                      r'(?:authenticated|fullyAuthenticated)\(\)')
 
 
 @dataclass(frozen=True)
@@ -127,11 +137,35 @@ def configurations(java_file):
             continue
         if IGNORING in chain.names:
             ignored.append(_ignoring(chain))
-        else:
-            groups.setdefault((chain.owner, chain.method), []).append(chain)
-    found = [_configuration(java_file.path, owner, method, group)
-             for (owner, method), group in groups.items() if any(set(AUTHORIZE) & set(item.names) for item in group)]
+            continue
+        receiver = _receiver(chain, java_file)
+        if receiver != OTHER:
+            groups.setdefault((chain.owner, chain.method), []).append((chain, receiver))
+    found = []
+    for (owner, method), group in groups.items():
+        if not any(set(AUTHORIZE) & set(chain.names) for chain, _ in group):
+            continue
+        configuration = _configuration(java_file.path, owner, method, [chain for chain, _ in group])
+        if configuration.readable and any(receiver == UNKNOWN for _, receiver in group):
+            # Un receveur de type inconnu est peut-etre HttpSecurity : la configuration est vue, pas lue.
+            configuration = replace(configuration, rules=(), reason='receveur dont le type n’est pas établi')
+        found.append(configuration)
     return found, ignored
+
+
+def _receiver(chain, java_file):
+    """HTTP si le receveur de la chaine est une variable de type HttpSecurity (celui de Spring, par son nom
+    qualifie ou son import), OTHER s'il est d'un autre type, UNKNOWN si son type n'est pas etabli."""
+    if chain.declared is None:
+        return UNKNOWN
+    written, qualified = chain.declared
+    if written == HTTP_SECURITY:
+        return HTTP
+    imports = {name for name, static in java_file.imports if not static}
+    spring = HTTP_SECURITY in imports or f'{HTTP_SECURITY.rpartition(".")[0]}.*' in imports
+    if written == 'HttpSecurity' and qualified is None and spring:
+        return HTTP
+    return OTHER
 
 
 def _configuration(path, owner, method, chains):
@@ -282,14 +316,17 @@ def _action(call):
         return None, 'access sans argument unique'
     argument = call.arguments[0]
     if argument.value.text is not None:
-        # Expression SpEL (Spring Security 5) : elle peut elle-meme tout permettre.
-        if _PERMISSIVE_SPEL.search(argument.value.text):
-            return None, f'access({argument.value.written}) peut tout permettre'
+        # Expression SpEL (Spring Security 5) : non evaluee, elle n'est lue que si elle ne peut que restreindre.
+        if not _RESTRICTIVE_SPEL.fullmatch(argument.value.text):
+            return None, f'access({argument.value.written}) : expression non évaluée'
         return expression, None
     declared = argument.declared
     if declared is not None and declared[1] is not None:
+        # Gestionnaire du depot : la regle lui delegue la decision, qui n'est pas lue (lacune connue).
         return expression, f'symbol:java:{declared[1]}'
-    return expression, None
+    if _MANAGER.fullmatch(argument.value.written):
+        return expression, None
+    return None, f'access({argument.value.written}) : gestionnaire non interprété'
 
 
 def patterns_of(argument):

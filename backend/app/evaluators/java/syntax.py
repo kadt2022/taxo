@@ -104,6 +104,8 @@ class Chain:
     method: str | None
     receiver: str
     calls: tuple
+    # Type declare du receveur s'il est une variable : (type ecrit, nom qualifie ou None) ; None sinon.
+    declared: tuple | None = None
 
     @property
     def names(self):
@@ -217,7 +219,8 @@ class _Reader:
                 break
             node = receiver
         receiver = _text(node) if node.type != 'method_invocation' else ''
-        return Chain(owner, method, receiver, tuple(reversed(calls)))
+        declared = self._declared(node, owner) if node.type == 'identifier' else None
+        return Chain(owner, method, receiver, tuple(reversed(calls)), declared)
 
     def _enclosing(self, node):
         """Type qualifie et methode qui portent `node`."""

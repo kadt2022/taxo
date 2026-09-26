@@ -71,6 +71,9 @@ class _Run:
                 self.ignored += [(java_file.path, patterns, line) for patterns, line in ignored]
 
     def evaluate(self):
+        for subject, (path, message) in self.analysis.run.gaps.items():
+            # Une route que l'analyse des endpoints n'a pas etablie n'a pas de regle : ce n'est pas une absence.
+            self._gap(subject, f'file:{path}', f'routes non établies par l’analyse des endpoints ({message})')
         for java_file in self.analysis.parsed:
             self._custom(java_file)
         for configuration in self.configurations:
