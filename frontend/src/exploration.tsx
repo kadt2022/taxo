@@ -106,12 +106,12 @@ export function Statements({statements, limits=[]}:Readonly<{statements:Statemen
     <article className="minia-block interpretation">
       <h3>Ce que Minia en déduit <span className="badge">non vérifié</span></h3>
       {said?<ul>
-        {interpretations.map((item,index)=><li key={`i${index}`}>{item.text}</li>)}
-        {worded.map((item,index)=><li key={`c${index}`}>Minia : « {item.text} » <span className="muted">(sa formulation ;
+        {interpretations.map(item=><li key={`i:${item.text}`}>{item.text}</li>)}
+        {worded.map(item=><li key={`c:${item.text}:${claimText(item.claim)}`}>Minia : « {item.text} » <span className="muted">(sa formulation ;
           Taxo n’a vérifié que : {claimSentence(item.claim)})</span></li>)}
-        {unchecked.map((item,index)=><li key={`n${index}`}>Minia : « {item.text||'(affirmation sans texte)'} » <span className="muted">
+        {unchecked.map(item=><li key={`n:${item.text}:${claimText(item.claim)}`}>Minia : « {item.text||'(affirmation sans texte)'} » <span className="muted">
           ({verdictText(item)})</span></li>)}
-        {unknowns.map((item,index)=><li key={`u${index}`}><em>Minia dit ne pas savoir :</em> {item.text}</li>)}
+        {unknowns.map(item=><li key={`u:${item.text}`}><em>Minia dit ne pas savoir :</em> {item.text}</li>)}
       </ul>:<p className="muted">Minia ne propose aucune interprétation.</p>}
     </article>
     <article className="minia-block unknown">
