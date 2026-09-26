@@ -22,6 +22,8 @@ from app.history.api.router import create_router as history_router
 from app.minia.application.ask import AskMinia
 from app.projection.application.query import ProjectQuery
 from app.projection.api.router import create_router as query_router
+from app.protocol.application.exchange import TaxoQuery
+from app.protocol.api.router import create_router as protocol_router
 from app.minia.infrastructure.claude import ClaudeModel
 from app.minia.infrastructure.gemini import GeminiModel
 from app.minia.infrastructure.ollama import OllamaModel
@@ -85,12 +87,16 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     # La requete selectionne parmi les faits conserves ; elle ne relit jamais le depot (TAXO-QUERY-01).
     query = ProjectQuery(projects, scans, facts)
     api.include_router(query_router(query))
+    # Protocole Taxo (ADR 0009) : operations en lecture seule sur la derniere analyse ; le diff reste soumis
+    # au meme double consentement que pour Minia (ADR 0008).
+    source = settings.minia_source_context(source_context)
+    api.state.taxo_query = TaxoQuery(projects, scans, facts, history, registry.all(), source)
+    api.include_router(protocol_router(api.state.taxo_query))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ADR 0004, regle 14).
     # Plusieurs fournisseurs peuvent servir Minia (Ollama local, Claude distant) : chaque demande choisit.
     options = settings.minia()
     models = minia_models(options) if minia is _FROM_SETTINGS else minia
     default = options['provider'] if minia is _FROM_SETTINGS and options['provider'] in models else None
     # Le diff d'un commit ne lui est joint que si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise (ADR 0008).
-    source = settings.minia_source_context(source_context)
     api.include_router(minia_router(AskMinia(history, models, projects, query, source, default)))
     return api
