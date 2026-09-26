@@ -19,7 +19,8 @@ export type Card = {id:string; title:string; value:string; detail:string; state:
 
 // Carte -> evaluateur qui la nourrit : pendant une nouvelle analyse, une carte reste marquee tant que
 // son evaluateur n'a pas termine.
-export const CARD_SOURCES:Record<string,string>={technologies:'taxo.inventory', project:'taxo.inventory', history:'taxo.git'};
+export const CARD_SOURCES:Record<string,string>={technologies:'taxo.inventory', project:'taxo.inventory', history:'taxo.git',
+  api:'taxo.spring-api'};
 
 /** Toutes les executions de l'analyse ; une analyse ancienne n'a que le resume de l'inventaire. */
 export function evaluationsOf(scan:Scan):EvaluationSummary[]{
@@ -46,6 +47,18 @@ function history(git:EvaluationSummary|undefined):Omit<Card,'id'|'title'>{
   return {value:commits, state:'known', detail:'Historique Git disponible : consultez-le dans la section Historique.'};
 }
 
+/** Les routes relevees par l'evaluateur Spring API (TAXO-04) : une route est un endpoint et la methode qui le traite. */
+function api(spring:EvaluationSummary|undefined):Omit<Card,'id'|'title'>{
+  if(!spring)return {value:'Non analysé', state:'unknown', detail:'Cette analyse n’a pas cherché les routes : relancez l’analyse globale.'};
+  if(spring.status==='FAILED')return {value:'Non analysé', state:'failed', detail:'La recherche des routes a échoué : voir les détails de l’analyse.'};
+  const routes=spring.relations.HANDLED_BY??0;
+  const value=routes?`${count(routes)} route${routes>1?'s':''} Spring relevée${routes>1?'s':''}`:'Aucune route Spring';
+  if(spring.status==='PARTIAL')return {value, state:'partial',
+    detail:'Certaines routes n’ont pas pu être interprétées : voir les points à vérifier. Rien n’est deviné.'};
+  return {value, state:'known', detail:routes?'Contrôleurs Spring MVC, chaque route prouvée à la ligne (tests exclus).'
+    :'Aucun contrôleur Spring MVC dans les sources Java (tests exclus).'};
+}
+
 function source(scan:Scan){
   const snapshot=scan.snapshot??scan.evaluation_summary?.snapshot;
   if(!snapshot)return 'Fichiers du dossier analysé.';
@@ -59,6 +72,7 @@ export function overviewCards(scan:Scan):Card[]{
   const evaluations=evaluationsOf(scan);
   const inventory=evaluations.find(item=>item.evaluator_id==='taxo.inventory');
   const git=evaluations.find(item=>item.evaluator_id==='taxo.git');
+  const spring=evaluations.find(item=>item.evaluator_id==='taxo.spring-api');
   const technologies=technologiesOf(scan);
   return [
     {id:'technologies', title:'Technologies', state:'known',
@@ -68,7 +82,7 @@ export function overviewCards(scan:Scan):Card[]{
       value:`${count(scan.files_count??0)} fichiers analysés`, detail:source(scan)},
     {id:'history', title:'Historique', ...history(git)},
     {id:'architecture', title:'Architecture', ...NOT_YET('les modules du projet')},
-    {id:'api', title:'API', ...NOT_YET('les routes exposées')},
+    {id:'api', title:'API', ...api(spring)},
     {id:'security', title:'Sécurité', ...NOT_YET('les règles de sécurité')},
   ];
 }
