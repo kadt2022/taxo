@@ -13,6 +13,8 @@ une specification OpenAPI, par exemple) ou d'un type porteur de mappings, un fic
 couvertures NOT_INTERPRETED, jamais un endpoint invente ni une absence affirmee. Les sources de test (`src/test`) sont hors du perimetre, et le disent.
 """
 
+from itertools import product
+
 from app.evaluations.domain.evaluator import EvaluationOutput
 from app.evaluations.domain.progress import silent
 from app.evaluations.domain.status import EvaluationStatus
@@ -53,124 +55,154 @@ class SpringApiEvaluator:
 
     def evaluate(self, snapshot, progress=silent):
         repository = f'repository:{snapshot.repository}'
-        sources, excluded = self._select(snapshot)
-        warnings, gaps, read_errors = [], {}, []
-        contents = self._read(snapshot, sources, warnings, read_errors, progress)
-        parsed = _parse_all(contents)
+        sources, excluded = _select(snapshot)
+        warnings, read_errors = [], []
+        contents = _read(snapshot, sources, warnings, read_errors, progress)
+        run = _Run(snapshot, contents, _parse_all(contents))
+        run.evaluate()
+        endpoints = len({subject for subject, _ in run.facts})
+        progress('endpoints', 'Endpoints relevés', endpoints)
+        # Une zone non interpretee a pour perimetre le fichier qui la porte.
+        warnings += [message for _, message in run.gaps.values()]
+        scope = {'include': [repository], 'exclude': sorted(excluded)}
+        coverage = [{**_coverage(repository, 'ANALYSED', repository), 'scope': scope}]
+        coverage += [_coverage(subject, 'NOT_INTERPRETED', f'file:{path}')
+                     for subject, (path, _) in sorted(run.gaps.items())]
+        coverage += [_coverage(subject, 'READ_ERROR', subject) for subject in read_errors]
+        status = EvaluationStatus.PARTIAL if run.gaps or read_errors else EvaluationStatus.SUCCESS
+        legacy = {'java_files': len(contents), 'endpoints': endpoints}
+        return EvaluationOutput(tuple(run.facts.values()), tuple(coverage), status, tuple(warnings), legacy)
+
+
+def _select(snapshot):
+    """Sources Java du perimetre, et les dossiers exclus (sorties de build, sources de test)."""
+    sources, excluded = [], set()
+    for file in snapshot.iter_files():
+        if not file.path.endswith('.java') or not is_path(file.path):
+            continue
+        outside = _outside_scope(file.path.split('/'))
+        if outside:
+            excluded.add(f'directory:{outside}')
+        else:
+            sources.append(file)
+    return sources, excluded
+
+
+def _outside_scope(parts):
+    """Le dossier qui met ce chemin hors du perimetre, ou None."""
+    for index, part in enumerate(parts[:-1]):
+        if part in IGNORED:
+            return '/'.join(parts[:index + 1])
+        if tuple(parts[index:index + 2]) == TEST_SOURCES and index + 2 < len(parts):
+            return '/'.join(parts[:index + 2])
+    return None
+
+
+def _read(snapshot, sources, warnings, read_errors, progress):
+    readable = [file for file in sources if file.size <= MAX_SOURCE_BYTES]
+    for file in sources:
+        if file.size > MAX_SOURCE_BYTES:
+            warnings.append(f'Fichier Java trop volumineux, non lu : {file.path}')
+            read_errors.append(f'file:{file.path}')
+    contents, count = {}, 0
+    try:
+        for count, (path, data) in enumerate(snapshot.read_many(file.path for file in readable), 1):
+            if count % PROGRESS_EVERY == 0 or count == len(readable):
+                progress('reading', 'Fichiers Java lus', count, len(readable))
+            if _utf8(data):
+                contents[path] = data
+            else:
+                warnings.append(f'Fichier Java non UTF-8, non lu : {path}')
+                read_errors.append(f'file:{path}')
+    except SnapshotError as exc:
+        remaining = [f'file:{file.path}' for file in readable[count:]]
+        read_errors += remaining
+        warnings.append(f'Erreur de lecture : {remaining[0] if remaining else "dépôt"} : {exc}')
+    return contents
+
+
+def _utf8(data):
+    try:
+        data.decode('utf-8')
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+class _Run:
+    """Une evaluation : les types lus, les faits etablis, les zones non interpretees (sujet -> (fichier, raison))."""
+
+    def __init__(self, snapshot, contents, parsed):
+        self.snapshot, self.contents = snapshot, contents
+        self.facts, self.gaps = {}, {}
         by_package = {}
         for java_file in parsed:
             by_package.setdefault(java_file.package, set()).update(item.qualified_name for item in java_file.types)
-        types = {}
-        for java_file in parsed:
-            names = _Names(java_file, by_package)
-            for java_type in java_file.types:
-                types[java_type.qualified_name] = (java_file, java_type, names)
-        facts = {}
+        self.types = {}
         for java_file in parsed:
             if java_file.has_errors:
-                gaps[f'file:{java_file.path}'] = (java_file.path, f'Fichier Java lu en partie (erreur de syntaxe) : '
-                                                                  f'{java_file.path}')
-        for java_file, java_type, names in types.values():
-            self._type_facts(snapshot, java_file.path, contents[java_file.path], java_type, names, types, facts, gaps)
-        progress('endpoints', 'Endpoints relevés', len({fact['subject'] for fact in facts.values()}))
-        # Une zone non interpretee a pour perimetre le fichier qui la porte.
-        warnings += [message for _, message in gaps.values()]
-        scope = {'include': [repository], 'exclude': sorted(excluded)}
-        coverage = [{**_coverage(repository, 'ANALYSED', repository), 'scope': scope}]
-        coverage += [_coverage(subject, 'NOT_INTERPRETED', f'file:{gaps[subject][0]}') for subject in sorted(gaps)]
-        coverage += [_coverage(subject, 'READ_ERROR', subject) for subject in read_errors]
-        status = EvaluationStatus.PARTIAL if gaps or read_errors else EvaluationStatus.SUCCESS
-        legacy = {'java_files': len(contents), 'endpoints': len({fact['subject'] for fact in facts.values()})}
-        return EvaluationOutput(tuple(facts.values()), tuple(coverage), status, tuple(warnings), legacy)
+                self.gaps[f'file:{java_file.path}'] = (
+                    java_file.path, f'Fichier Java lu en partie (erreur de syntaxe) : {java_file.path}')
+            names = _Names(java_file, by_package)
+            for java_type in java_file.types:
+                self.types[java_type.qualified_name] = (java_file, java_type, names)
 
-    @staticmethod
-    def _select(snapshot):
-        sources, excluded = [], set()
-        for file in snapshot.iter_files():
-            if not file.path.endswith('.java') or not is_path(file.path):
-                continue
-            parts = file.path.split('/')
-            ignored_at = next((index for index, part in enumerate(parts[:-1]) if part in IGNORED), None)
-            if ignored_at is not None:
-                excluded.add(f"directory:{'/'.join(parts[:ignored_at + 1])}")
-                continue
-            tests_at = next((index for index in range(len(parts) - 2) if tuple(parts[index:index + 2]) == TEST_SOURCES), None)
-            if tests_at is not None:
-                excluded.add(f"directory:{'/'.join(parts[:tests_at + 2])}")
-                continue
-            sources.append(file)
-        return sources, excluded
+    def evaluate(self):
+        for java_file, java_type, names in self.types.values():
+            self._type_facts(java_file.path, java_type, names)
 
-    @staticmethod
-    def _read(snapshot, sources, warnings, read_errors, progress):
-        readable = [file for file in sources if file.size <= MAX_SOURCE_BYTES]
-        for file in sources:
-            if file.size > MAX_SOURCE_BYTES:
-                warnings.append(f'Fichier Java trop volumineux, non lu : {file.path}')
-                read_errors.append(f'file:{file.path}')
-        contents, count = {}, 0
-        try:
-            for count, (path, data) in enumerate(snapshot.read_many(file.path for file in readable), 1):
-                if count % PROGRESS_EVERY == 0 or count == len(readable):
-                    progress('reading', 'Fichiers Java lus', count, len(readable))
-                try:
-                    data.decode('utf-8')
-                except UnicodeDecodeError:
-                    warnings.append(f'Fichier Java non UTF-8, non lu : {path}')
-                    read_errors.append(f'file:{path}')
-                    continue
-                contents[path] = data
-        except SnapshotError as exc:
-            remaining = [f'file:{file.path}' for file in readable[count:]]
-            read_errors += remaining
-            warnings.append(f'Erreur de lecture : {remaining[0] if remaining else "dépôt"} : {exc}')
-        return contents
+    def _gap(self, subject, path, message):
+        self.gaps[subject] = (path, message)
 
-    def _type_facts(self, snapshot, path, data, java_type, names, types, facts, gaps):
+    def _type_facts(self, path, java_type, names):
         symbol = f'symbol:java:{java_type.qualified_name}'
         own = [method for method in java_type.methods if names.mappings(method.annotations)]
         type_mapping = next(iter(names.mappings(java_type.annotations)), None)
-        controller = any(names.spring(item) in CONTROLLERS for item in java_type.annotations)
-        if not controller:
+        if not any(names.spring(item) in CONTROLLERS for item in java_type.annotations):
             if own or type_mapping is not None:
                 # Interface, classe de base ou controleur declare autrement : ses routes existent peut-etre,
                 # mais par un chemin (heritage, configuration) que cette version ne suit pas.
-                gaps[symbol] = (path, f'Mappings hors d’un contrôleur non interprétés : {java_type.qualified_name}')
+                self._gap(symbol, path, f'Mappings hors d’un contrôleur non interprétés : {java_type.qualified_name}')
             return
-        absent, carrying, prefixed = _ancestors(java_type, types)
-        if absent or carrying:
-            # Les mappings herites (d'une interface generee au build, absente des sources, ou d'un type qui porte
-            # des mappings) ne sont pas suivis : les routes de ce controleur sont incompletes.
-            reasons = ([f'absent des sources : {", ".join(absent)}'] if absent else []) + (
-                [f'porteur de mappings : {", ".join(carrying)}'] if carrying else [])
-            gaps[symbol] = (path, f'Routes héritées non interprétées ({" ; ".join(reasons)}) : '
-                                  f'{java_type.qualified_name}')
-            if type_mapping is None and (absent or prefixed):
-                # Sans mapping propre, le controleur herite peut-etre du prefixe d'un ancetre : aucun chemin sur.
-                return
+        if not self._inheritance_known(path, symbol, java_type, type_mapping):
+            return
         try:
-            base_paths = _paths(type_mapping) if type_mapping is not None else ['']
-            base_verbs = _verbs(type_mapping) if type_mapping is not None else []
+            base = (_paths(type_mapping), _verbs(type_mapping)) if type_mapping is not None else ([''], [])
         except _NotInterpreted as exc:
-            gaps[symbol] = (path, f'Mapping du contrôleur non résolu ({exc}) : {java_type.qualified_name}')
+            self._gap(symbol, path, f'Mapping du contrôleur non résolu ({exc}) : {java_type.qualified_name}')
             return
         for method in own:
-            handler = f'{symbol}#{method.name}'
             for annotation in names.mappings(method.annotations):
-                kind = names.spring(annotation)
-                try:
-                    verbs = [VERBS[kind]] if kind in VERBS else _verbs(annotation) or base_verbs or [ANY]
-                    paths = _paths(annotation)
-                except _NotInterpreted as exc:
-                    gaps[handler] = (path, f'Mapping non résolu ({exc}) : {java_type.qualified_name}#{method.name}')
-                    continue
-                evidence = [_evidence(snapshot, path, data, item, handler)
-                            for item in (type_mapping, annotation) if item is not None]
-                for base in base_paths:
-                    for tail in paths:
-                        for verb in verbs:
-                            subject = f'endpoint:{verb} {_join(base, tail)}'
-                            facts.setdefault((subject, handler), _assertion(subject, handler, evidence))
+                self._method_facts(path, java_type, method, annotation, names.spring(annotation), type_mapping, base)
+
+    def _inheritance_known(self, path, symbol, java_type, type_mapping):
+        """Declare les routes heritees non suivies ; faux si aucun chemin du controleur n'est sur."""
+        absent, carrying, prefixed = _ancestors(java_type, self.types)
+        if not (absent or carrying):
+            return True
+        # Les mappings herites (d'une interface generee au build, absente des sources, ou d'un type qui porte des
+        # mappings) ne sont pas suivis : les routes de ce controleur sont incompletes.
+        reasons = ([f'absent des sources : {", ".join(absent)}'] if absent else []) + (
+            [f'porteur de mappings : {", ".join(carrying)}'] if carrying else [])
+        self._gap(symbol, path, f'Routes héritées non interprétées ({" ; ".join(reasons)}) : {java_type.qualified_name}')
+        # Sans mapping propre, le controleur herite peut-etre du prefixe d'un ancetre : aucun chemin sur.
+        return type_mapping is not None or not (absent or prefixed)
+
+    def _method_facts(self, path, java_type, method, annotation, kind, type_mapping, base):
+        handler = f'symbol:java:{java_type.qualified_name}#{method.name}'
+        base_paths, base_verbs = base
+        try:
+            verbs = [VERBS[kind]] if kind in VERBS else _verbs(annotation) or base_verbs or [ANY]
+            paths = _paths(annotation)
+        except _NotInterpreted as exc:
+            self._gap(handler, path, f'Mapping non résolu ({exc}) : {java_type.qualified_name}#{method.name}')
+            return
+        data = self.contents[path]
+        evidence = [_evidence(self.snapshot, path, data, item, handler)
+                    for item in (type_mapping, annotation) if item is not None]
+        for prefix, tail, verb in product(base_paths, paths, verbs):
+            subject = f'endpoint:{verb} {_join(prefix, tail)}'
+            self.facts.setdefault((subject, handler), _assertion(subject, handler, evidence))
 
 
 def _parse_all(contents):

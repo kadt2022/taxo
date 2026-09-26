@@ -135,30 +135,33 @@ class _Reader:
         self._pending[qualified] = (node, name)
         self.known[qualified] = self._constants(body, qualified)
         types.append(qualified)
-        for child in body.named_children if body is not None else ():
+        for child in _members(body):
             if child.type in _TYPES:
                 self.collect(child, qualified, types)
-            elif child.type == 'enum_body_declarations':
-                for inner in child.named_children:
-                    if inner.type in _TYPES:
-                        self.collect(inner, qualified, types)
 
     def complete(self, qualified):
         node, name = self._pending[qualified]
-        body = node.child_by_field_name('body')
+        return JavaType(name, qualified, _TYPES[node.type], *_lines(node), self._annotations(node, qualified),
+                        self._methods(node, qualified), self.known[qualified], self._supertypes(node, qualified))
+
+    def _methods(self, node, owner):
+        """Methodes et constructeurs annotes du type."""
         methods = []
-        for member in _members(body):
-            if member.type in ('method_declaration', 'constructor_declaration'):
-                annotations = self._annotations(member, qualified)
-                if annotations:
-                    methods.append(Method(_text(member.child_by_field_name('name')), *_lines(member), annotations))
+        for member in _members(node.child_by_field_name('body')):
+            if member.type not in ('method_declaration', 'constructor_declaration'):
+                continue
+            annotations = self._annotations(member, owner)
+            if annotations:
+                methods.append(Method(_text(member.child_by_field_name('name')), *_lines(member), annotations))
+        return tuple(methods)
+
+    def _supertypes(self, node, owner):
         supertypes = []
         for kind in ('superclass', 'interfaces', 'extends_interfaces'):
             clause = node.child_by_field_name(kind) or _first(node, (kind,))
             if clause is not None:
-                supertypes += [(_text(item), self._type(_text(item), qualified)) for item in _type_names(clause)]
-        return JavaType(name, qualified, _TYPES[node.type], *_lines(node), self._annotations(node, qualified),
-                        tuple(methods), self.known[qualified], tuple(supertypes))
+                supertypes += [(_text(item), self._type(_text(item), owner)) for item in _type_names(clause)]
+        return tuple(supertypes)
 
     def _constants(self, body, qualified):
         """Constantes chaines `static final` du type, dans l'ordre : une constante peut citer les precedentes."""
@@ -166,39 +169,31 @@ class _Reader:
         self.known[qualified] = found
         interface = body is not None and body.type == 'interface_body'
         for member in _members(body):
-            if member.type not in ('field_declaration', 'constant_declaration'):
+            if not _string_constant(member, interface):
                 continue
-            modifiers = _text(_first(member, ('modifiers',)))
-            constant = member.type == 'constant_declaration' or interface or (
-                'static' in modifiers.split() and 'final' in modifiers.split())
-            if not constant or _text(member.child_by_field_name('type')) not in ('String', 'java.lang.String'):
-                continue
-            for declarator in member.named_children:
-                if declarator.type != 'variable_declarator':
-                    continue
-                value = declarator.child_by_field_name('value')
-                if value is not None:
-                    resolved = self._value(value, qualified)
-                    if resolved.resolved:
-                        found[_text(declarator.child_by_field_name('name'))] = resolved.text
+            for name, value in _initialized(member):
+                resolved = self._value(value, qualified)
+                if resolved.resolved:
+                    found[name] = resolved.text
         return found
 
     def _annotations(self, node, owner):
         modifiers = _first(node, ('modifiers',))
-        found = []
-        for child in modifiers.named_children if modifiers is not None else ():
-            if child.type not in ('annotation', 'marker_annotation'):
-                continue
-            arguments = {}
-            listing = child.child_by_field_name('arguments')
-            for argument in listing.named_children if listing is not None else ():
-                if argument.type == 'element_value_pair':
-                    key = _text(argument.child_by_field_name('key'))
-                    arguments[key] = self._values(argument.child_by_field_name('value'), owner)
-                elif argument.type != 'comment':
-                    arguments['value'] = self._values(argument, owner)
-            found.append(Annotation(_text(child.child_by_field_name('name')), *_lines(child), arguments))
-        return tuple(found)
+        children = modifiers.named_children if modifiers is not None else ()
+        return tuple(Annotation(_text(child.child_by_field_name('name')), *_lines(child),
+                                self._arguments(child.child_by_field_name('arguments'), owner))
+                     for child in children if child.type in ('annotation', 'marker_annotation'))
+
+    def _arguments(self, listing, owner):
+        """Arguments d'une annotation par nom ; l'argument sans nom est `value`."""
+        arguments = {}
+        for argument in listing.named_children if listing is not None else ():
+            if argument.type == 'element_value_pair':
+                arguments[_text(argument.child_by_field_name('key'))] = self._values(
+                    argument.child_by_field_name('value'), owner)
+            elif argument.type != 'comment':
+                arguments['value'] = self._values(argument, owner)
+        return arguments
 
     def _values(self, node, owner):
         if node.type == 'element_value_array_initializer':
@@ -206,44 +201,45 @@ class _Reader:
         return [self._value(node, owner)]
 
     def _value(self, node, owner, depth=0):
-        written = _text(node)
-        unresolved = Value(None, written)
-        if depth > MAX_PARTS:
-            return unresolved
-        if node.type == 'string_literal':
-            return _literal(node) or unresolved
-        if node.type == 'parenthesized_expression':
-            inner = node.named_children[0] if node.named_children else None
-            value = self._value(inner, owner, depth + 1) if inner is not None else unresolved
-            return Value(value.text, written)
-        if node.type == 'binary_expression' and _text(node.child_by_field_name('operator')) == '+':
-            left = self._value(node.child_by_field_name('left'), owner, depth + 1)
-            right = self._value(node.child_by_field_name('right'), owner, depth + 1)
-            return Value(left.text + right.text, written) if left.resolved and right.resolved else unresolved
-        if node.type == 'identifier':
-            value = self._constant(owner, written)
-            return Value(value, written) if value is not None else unresolved
-        if node.type == 'field_access':
-            target = _text(node.child_by_field_name('object'))
-            name = _text(node.child_by_field_name('field'))
-            owner_type = self._type(target, owner)
-            if owner_type is not None and name in self.known.get(owner_type, {}):
-                return Value(self.known[owner_type][name], written)
-        return unresolved
+        text = self._resolve(node, owner, depth + 1) if depth <= MAX_PARTS else None
+        return Value(text, _text(node))
+
+    def _resolve(self, node, owner, depth):
+        """Texte de l'expression `node` si elle est ecrite dans le code (chaine, concatenation, constante)."""
+        kind = node.type
+        if kind == 'string_literal':
+            literal = _literal(node)
+            return literal.text if literal else None
+        if kind == 'identifier':
+            return self._constant(owner, _text(node))
+        if kind == 'field_access':
+            holder = self._type(_text(node.child_by_field_name('object')), owner)
+            return self.known.get(holder, {}).get(_text(node.child_by_field_name('field')))
+        if kind == 'parenthesized_expression' and node.named_children:
+            return self._value(node.named_children[0], owner, depth).text
+        if kind == 'binary_expression' and _text(node.child_by_field_name('operator')) == '+':
+            left = self._value(node.child_by_field_name('left'), owner, depth)
+            right = self._value(node.child_by_field_name('right'), owner, depth)
+            return left.text + right.text if left.resolved and right.resolved else None
+        return None
+
+    def _scopes(self, owner):
+        """Le type `owner`, puis ses types englobants, jusqu'au paquetage exclu."""
+        scope = owner
+        while scope:
+            yield scope
+            scope = scope.rpartition('.')[0] if scope != self.package else ''
 
     def _constant(self, owner, name):
         """Constante `name` vue depuis le type `owner` : le type et ses types englobants, puis les imports statiques."""
-        scope = owner
-        while scope:
+        for scope in self._scopes(owner):
             if name in self.known.get(scope, {}):
                 return self.known[scope][name]
-            scope = scope.rpartition('.')[0] if scope != self.package else ''
-        for imported, static in self.imports:
-            if static and imported.rsplit('.', 1)[-1] == name:
-                return self.known.get(imported.rpartition('.')[0], {}).get(name)
-            if static and imported.endswith('.*'):
-                value = self.known.get(imported[:-2], {}).get(name)
-                if value is not None:
+        for imported in (entry for entry, static in self.imports if static):
+            holder, _, member = imported.rpartition('.')
+            if member in (name, '*'):
+                value = self.known.get(holder, {}).get(name)
+                if value is not None or member == name:
                     return value
         return None
 
@@ -252,20 +248,30 @@ class _Reader:
         if written in self.known:
             return written
         head, _, rest = written.partition('.')
-        candidates = []
-        scope = owner
-        while scope:
-            candidates.append(f'{scope}.{head}')
-            scope = scope.rpartition('.')[0] if scope != self.package else ''
-        candidates += [imported for imported, static in self.imports if not static and imported.rsplit('.', 1)[-1] == head]
+        plain = [name for name, static in self.imports if not static]
+        candidates = [f'{scope}.{head}' for scope in self._scopes(owner)]
+        candidates += [name for name in plain if name.rsplit('.', 1)[-1] == head]
         candidates.append(f'{self.package}.{head}' if self.package else head)
-        candidates += [f'{imported[:-2]}.{head}' for imported, static in self.imports
-                       if not static and imported.endswith('.*')]
-        for candidate in candidates:
-            full = f'{candidate}.{rest}' if rest else candidate
-            if full in self.known:
-                return full
-        return None
+        candidates += [f'{name[:-2]}.{head}' for name in plain if name.endswith('.*')]
+        full = (f'{candidate}.{rest}' if rest else candidate for candidate in candidates)
+        return next((name for name in full if name in self.known), None)
+
+
+def _string_constant(member, interface):
+    """Un champ `static final String` (implicite dans une interface) ?"""
+    if member.type not in ('field_declaration', 'constant_declaration'):
+        return False
+    words = _text(_first(member, ('modifiers',))).split()
+    constant = member.type == 'constant_declaration' or interface or ('static' in words and 'final' in words)
+    return constant and _text(member.child_by_field_name('type')) in ('String', 'java.lang.String')
+
+
+def _initialized(member):
+    """(nom, valeur) de chaque variable initialisee du champ."""
+    for declarator in member.named_children:
+        value = declarator.child_by_field_name('value') if declarator.type == 'variable_declarator' else None
+        if value is not None:
+            yield _text(declarator.child_by_field_name('name')), value
 
 
 def _members(body):
