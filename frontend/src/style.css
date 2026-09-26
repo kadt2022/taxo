@@ -294,6 +294,11 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
 .progress-title{display:flex;align-items:center;gap:10px;font-weight:650;margin:0 0 12px;color:var(--text)}
 .progress-running .progress-title::before,.minia-progress .progress-title::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--brand-3);animation:taxo-pulse 1.2s ease-in-out infinite}
 .progress-failed{border-color:#efc4bb}
+.minia-progress .progress-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
+.minia-progress .progress-heading .progress-title{margin:0}
+.minia-progress .stop{padding:4px 14px;font-size:13px}
+.minia-progress.stopped .progress-title::before{animation:none;background:var(--warn)}
+.step-stopped .step-mark{background:var(--warn-soft);color:var(--warn)}
 .progress ol,.minia-progress ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .step{display:grid;grid-template-columns:22px minmax(0,1fr);column-gap:8px;font-size:14px;line-height:1.5}
 .step-mark{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;font-size:12px;font-weight:700;background:var(--surface-3);color:var(--muted)}

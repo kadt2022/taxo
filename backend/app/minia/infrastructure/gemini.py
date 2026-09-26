@@ -14,8 +14,10 @@ import time
 
 import httpx
 
+from app.minia.domain.cancellation import check
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
 from app.minia.infrastructure import retrying
+from app.minia.infrastructure.calls import client_for
 from app.minia.infrastructure.retrying import RETRIES
 
 API_URL = 'https://generativelanguage.googleapis.com/v1beta'
@@ -72,6 +74,7 @@ class GeminiModel:
         self.data_use = tier == FREE
         self._key, self._sleep = api_key, sleep
         self._client = httpx.Client(timeout=timeout, transport=transport)
+        self._new_client = lambda: httpx.Client(timeout=timeout, transport=transport)
 
     def capacity(self, system):
         """Octets disponibles pour le message de l'utilisateur avec ces consignes."""
@@ -97,13 +100,16 @@ class GeminiModel:
     def _url(self, method):
         return f'{API_URL}/models/{self.model_name}:{method}'
 
-    def _open(self, url, body, headers, stream):
+    def _open(self, url, body, headers, stream, client=None, cancel=None):
         """Reponse 200 de l'API ; une erreur passagere (surcharge 503, reseau...) est reessayee."""
-        return retrying.send(self._client, url, body, headers, stream, self._sleep,
-                             lambda response: _check(response, self.model_name), _unreachable)
+        return retrying.send(client or self._client, url, body, headers, stream, self._sleep,
+                             lambda response: _check(response, self.model_name), _unreachable, cancel)
 
-    def complete(self, system, user, schema=None):
-        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia."""
+    def complete(self, system, user, schema=None, cancel=None):
+        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia. Avec
+        un jeton d'arret, la reponse passe par le flux, que l'arret coupe (TAXO-UX-03)."""
+        if cancel is not None:
+            return ''.join(self.stream(system, user, schema, cancel))
         body, headers = self._body(system, user, schema), self._headers()
         response = self._open(self._url('generateContent'), body, headers, stream=False)
         try:
@@ -114,14 +120,19 @@ class GeminiModel:
         _accepted(part, finish)
         return text
 
-    def stream(self, system, user):
+    def stream(self, system, user, schema=None, cancel=None):
         """Morceaux de la reponse, au fur et a mesure que Gemini les produit ; rend enfin le modele qui a
         repondu (version exacte, quand l'API la donne)."""
-        body, headers = self._body(system, user), self._headers()
+        body, headers = self._body(system, user, schema), self._headers()
+        with client_for(self._client, self._new_client, cancel) as client:
+            return (yield from self._read(client, body, headers, cancel))
+
+    def _read(self, client, body, headers, cancel):
         served, finish, last = None, None, {}
-        response = self._open(self._url('streamGenerateContent') + '?alt=sse', body, headers, stream=True)
+        response = self._open(self._url('streamGenerateContent') + '?alt=sse', body, headers, True, client, cancel)
         try:
             for line in response.iter_lines():
+                check(cancel)
                 if not line.startswith('data:'):
                     continue
                 try:
@@ -135,7 +146,8 @@ class GeminiModel:
                 _accepted(last, finish)
                 if text:
                     yield text
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.StreamError) as exc:
+            check(cancel)
             raise _unreachable() from exc
         finally:
             response.close()

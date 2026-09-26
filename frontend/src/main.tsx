@@ -12,7 +12,7 @@ import {AskTaxo} from './query';
 import {apiUrl} from './api';
 import {openStream} from './sse';
 import {AnalysisProgress, Working, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
-import {ask as askMinia, askButton, MiniaProgress, questionInit, startMinia, type MiniaLive} from './minia-live';
+import {ask as askMinia, askButton, createStop, MiniaProgress, questionInit, startMinia, type MiniaLive, type MiniaStop} from './minia-live';
 
 type Project = {id:string; name:string; path:string};
 type Commit = {sha:string; parents:string[]; author:string; authored_at:string; subject:string};
@@ -32,6 +32,10 @@ function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:Minia
   useEffect(()=>{setSource(sourceConsent(chosen)?.checked??false);},[chosen?.provider,chosen?.source_context]);
   // Seule la derniere demande peut modifier l'ecran : une reponse arrivee trop tard est ignoree.
   const latest=useRef(0);
+  // Le moyen d'arreter la demande a Minia en cours (TAXO-UX-03).
+  const stopper=useRef<MiniaStop|null>(null);
+  // Changer de projet ou quitter le panneau arrete la demande a Minia en cours.
+  useEffect(()=>()=>{stopper.current?.stop();stopper.current=null;},[base]);
   // Changer de projet efface la consultation : l'historique ne s'affiche que sur demande explicite.
   useEffect(()=>{
     setCommits([]);setConsulted(false);setDetail(null);setImpact(null);setFileDiff(null);setLinks(null);setLive(null);setError('');
@@ -59,8 +63,11 @@ function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:Minia
   async function ask(event:FormEvent, sha:string, parent:string|null){
     event.preventDefault();
     const token=++latest.current;
+    stopper.current?.stop();
+    const run=createStop();
+    stopper.current=run;
     setBusy(true);setError('');setLive(null);
-    try{await askMinia<MiniaAnswer>(()=>openStream(`/api${base}/${sha}/ask/stream`,questionInit({question,parent,source_context:source&&sourceConsent(chosen)!==null,provider:provider||undefined})),change=>{if(token===latest.current)setLive(l=>change(l??startMinia()));});}
+    try{await askMinia<MiniaAnswer>(()=>openStream(`/api${base}/${sha}/ask/stream`,{...questionInit({question,parent,source_context:source&&sourceConsent(chosen)!==null,provider:provider||undefined}), signal:run.signal}),change=>{if(token===latest.current)setLive(l=>change(l??startMinia()));},run);}
     catch(e){if(token===latest.current)setError((e as Error).message);}
     finally{if(token===latest.current)setBusy(false);}
   }
@@ -97,7 +104,7 @@ function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:Minia
         <SourceConsent status={chosen} checked={source} onChange={setSource}/>
         <button type="submit" className="secondary" disabled={busy||!question.trim()}>{askButton(busy&&live!==null&&!live.result,'Demander à Minia')}</button>
       </form>
-      {live?.result?.commit===detail.commit.sha?<MiniaView answer={live.result}/>:live&&!live.result&&<MiniaProgress live={live}/>}
+      {live?.result?.commit===detail.commit.sha?<MiniaView answer={live.result}/>:live&&!live.result&&<MiniaProgress live={live} onStop={()=>stopper.current?.stop()}/>}
     </section>}
     {impact&&impact.commit.sha===detail?.commit.sha&&<section className="impact" aria-label="Impact compris par Taxo">
       {impact.evaluations.map(e=><div key={e.evaluator_id}>

@@ -11,7 +11,9 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from app.minia.domain.cancellation import check
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
+from app.minia.infrastructure.calls import client_for
 
 DEFAULT_URL = 'http://127.0.0.1:11434'
 DEFAULT_NUM_CTX = 16384
@@ -55,8 +57,10 @@ class OllamaModel:
             raise ValueError(f'MINIA_OLLAMA_TIMEOUT_SECONDS invalide : {timeout} (secondes, plus que 0).')
         self.model_name, self.url, self.num_ctx, self.timeout = model_name, url.rstrip('/'), num_ctx, timeout
         self.remote = not _loopback(parts.hostname)
-        self._client = httpx.Client(timeout=httpx.Timeout(timeout, connect=min(CONNECT_TIMEOUT_SECONDS, timeout)),
-                                    transport=transport)
+        limits = httpx.Timeout(timeout, connect=min(CONNECT_TIMEOUT_SECONDS, timeout))
+        self._client = httpx.Client(timeout=limits, transport=transport)
+        # Un appel qu'on peut arreter a son propre client : l'arret le ferme, meme avant la reponse (TAXO-UX-03).
+        self._new_client = lambda: httpx.Client(timeout=limits, transport=transport)
 
     def capacity(self, system):
         """Octets disponibles pour le message de l'utilisateur avec ces consignes : Minia y ajuste son contexte."""
@@ -93,7 +97,11 @@ class OllamaModel:
                               'réduire MINIA_OLLAMA_NUM_CTX ou choisir un modèle plus léger.')
         return MiniaError(UNAVAILABLE, f'Ollama est injoignable à {self.url} : lancer « ollama serve ».')
 
-    def complete(self, system, user, schema=None):
+    def complete(self, system, user, schema=None, cancel=None):
+        """Texte de la reponse. Avec un jeton d'arret, la reponse passe par le flux : l'arreter ferme la
+        connexion, et Ollama cesse de generer (TAXO-UX-03)."""
+        if cancel is not None:
+            return ''.join(self.stream(system, user, schema, cancel))
         try:
             response = self._client.post(f'{self.url}/api/chat', json=self._body(system, user, False, schema))
         except httpx.HTTPError as exc:
@@ -104,12 +112,20 @@ class OllamaModel:
         except (ValueError, KeyError, TypeError) as exc:
             raise MiniaError(UNAVAILABLE, 'Réponse d’Ollama illisible.') from exc
 
-    def stream(self, system, user):
-        """Morceaux de la reponse, au fur et a mesure qu'Ollama les produit (une ligne JSON par morceau)."""
+    def stream(self, system, user, schema=None, cancel=None):
+        """Morceaux de la reponse, au fur et a mesure qu'Ollama les produit (une ligne JSON par morceau).
+        Arreter la demande ferme la connexion : Ollama cesse de generer."""
+        body = self._body(system, user, True, schema)
+        with client_for(self._client, self._new_client, cancel) as client:
+            return (yield from self._read(client, body, cancel))
+
+    def _read(self, client, body, cancel):
         try:
-            with self._client.stream('POST', f'{self.url}/api/chat', json=self._body(system, user, True)) as response:
+            check(cancel)
+            with client.stream('POST', f'{self.url}/api/chat', json=body) as response:
                 self._check(response)
                 for line in response.iter_lines():
+                    check(cancel)
                     if not line.strip():
                         continue
                     try:
@@ -121,5 +137,6 @@ class OllamaModel:
                         yield chunk
                     if part.get('done'):
                         return
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.StreamError) as exc:
+            check(cancel)
             raise self._unreachable(exc) from exc

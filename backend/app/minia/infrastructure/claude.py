@@ -8,8 +8,12 @@ La reponse est contrainte par un schema JSON (sortie structuree) : le modele ren
 {cited, answer, unknown} attendu par Taxo. Les identifiants viennent de l'environnement (ANTHROPIC_API_KEY
 ou un profil `ant auth login`), jamais du code.
 """
-import anthropic
+from contextlib import contextmanager
 
+import anthropic
+import httpx
+
+from app.minia.domain.cancellation import check
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
 
 DEFAULT_MODEL = 'claude-opus-5'
@@ -41,16 +45,28 @@ class ClaudeModel:
 
     def __init__(self, model_name=DEFAULT_MODEL, client=None, max_input_bytes=MAX_INPUT_BYTES):
         self.model_name, self.max_input_bytes = model_name, max_input_bytes
-        self._client = client
+        self._client, self._injected = client, client is not None
 
     def _messages(self):
         # Client cree a la premiere demande : sans identifiants, Taxo demarre quand meme et le dit a l'usage.
         if self._client is None:
-            try:
-                self._client = anthropic.Anthropic()
-            except anthropic.AnthropicError as exc:
-                raise _not_configured() from exc
+            self._client = _new_client()
         return self._client.beta.messages
+
+    @contextmanager
+    def _messages_for(self, cancel):
+        """Messages pour un appel. Un appel qu'on peut arreter a son propre client : l'arret le ferme, meme
+        pendant la connexion ou entre deux reprises du SDK (TAXO-UX-03)."""
+        if cancel is None or self._injected:
+            yield self._messages()
+            return
+        client = _new_client()
+        forget = cancel.on_cancel(client.close)
+        try:
+            yield client.beta.messages
+        finally:
+            forget()
+            client.close()
 
     def capacity(self, system):
         """Octets disponibles pour le message de l'utilisateur avec ces consignes."""
@@ -68,8 +84,11 @@ class ClaudeModel:
             request.update(betas=[_FALLBACK_BETA], fallbacks='default')
         return request
 
-    def complete(self, system, user, schema=None):
-        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia."""
+    def complete(self, system, user, schema=None, cancel=None):
+        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia. Avec
+        un jeton d'arret, la reponse passe par le flux, que l'arret ferme (TAXO-UX-03)."""
+        if cancel is not None:
+            return ''.join(self.stream(system, user, schema, cancel))
         request = self._request(system, user, schema)
         try:
             message = self._messages().create(**request)
@@ -78,20 +97,36 @@ class ClaudeModel:
         _accepted(message)
         return ''.join(block.text for block in message.content if block.type == 'text')
 
-    def stream(self, system, user):
-        """Morceaux de la reponse, au fur et a mesure que Claude les produit.
+    def stream(self, system, user, schema=None, cancel=None):
+        """Morceaux de la reponse, au fur et a mesure que Claude les produit. Arreter la demande ferme le flux.
 
         Rend enfin le modele qui a reellement repondu : apres un repli cote serveur, ce n'est pas celui demande.
         """
-        request = self._request(system, user)
+        request = self._request(system, user, schema)
         try:
-            with self._messages().stream(**request) as stream:
-                yield from stream.text_stream
-                message = stream.get_final_message()
-        except anthropic.AnthropicError as exc:
+            with self._messages_for(cancel) as messages, messages.stream(**request) as stream:
+                close = getattr(stream, 'close', None)
+                forget = cancel.on_cancel(close) if cancel is not None and close else (lambda: None)
+                try:
+                    for text in stream.text_stream:
+                        check(cancel)
+                        yield text
+                    check(cancel)
+                    message = stream.get_final_message()
+                finally:
+                    forget()
+        except (anthropic.AnthropicError, httpx.HTTPError) as exc:
+            check(cancel)
             raise _failure(exc, self.model_name) from exc
         _accepted(message)
         return getattr(message, 'model', None) or self.model_name
+
+
+def _new_client():
+    try:
+        return anthropic.Anthropic()
+    except anthropic.AnthropicError as exc:
+        raise _not_configured() from exc
 
 
 def _accepted(message):

@@ -1,4 +1,6 @@
 fastapi>=0.115,<1
+# Arret d'une demande a Minia : le thread qui attend le modele est abandonne (abandon_on_cancel, anyio 4.1).
+anyio>=4.1,<5
 uvicorn>=0.34,<1
 SQLAlchemy>=2.0,<3
 psycopg[binary]>=3.2,<4

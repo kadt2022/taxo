@@ -15,8 +15,10 @@ import time
 
 import httpx
 
+from app.minia.domain.cancellation import check
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
 from app.minia.infrastructure import retrying
+from app.minia.infrastructure.calls import client_for
 from app.minia.infrastructure.retrying import RETRIES
 
 API_URL = 'https://api.mistral.ai/v1/chat/completions'
@@ -59,6 +61,8 @@ class MistralModel:
         self.data_use = tier == FREE
         self._key, self._sleep = api_key, sleep
         self._client = httpx.Client(timeout=timeout, transport=transport)
+        # Un appel qu'on peut arreter a son propre client : l'arret le ferme, meme avant la reponse (TAXO-UX-03).
+        self._new_client = lambda: httpx.Client(timeout=timeout, transport=transport)
 
     def capacity(self, system):
         """Octets disponibles pour le message de l'utilisateur avec ces consignes. Borne sure, comme pour
@@ -82,12 +86,15 @@ class MistralModel:
                 'response_format': {'type': 'json_schema', 'json_schema': {
                     'name': 'minia', 'schema': schema or ANSWER_SCHEMA, 'strict': True}}}
 
-    def _open(self, body, stream):
-        return retrying.send(self._client, API_URL, body, self._headers(), stream, self._sleep,
-                             lambda response: _check(response, self.model_name), _unreachable)
+    def _open(self, body, stream, client=None, cancel=None):
+        return retrying.send(client or self._client, API_URL, body, self._headers(), stream, self._sleep,
+                             lambda response: _check(response, self.model_name), _unreachable, cancel)
 
-    def complete(self, system, user, schema=None):
-        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia."""
+    def complete(self, system, user, schema=None, cancel=None):
+        """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia. Avec
+        un jeton d'arret, la reponse passe par le flux, que l'arret coupe (TAXO-UX-03)."""
+        if cancel is not None:
+            return ''.join(self.stream(system, user, schema, cancel))
         response = self._open(self._body(system, user, False, schema), stream=False)
         try:
             data = response.json()
@@ -97,13 +104,19 @@ class MistralModel:
         _accepted(choice.get('finish_reason'))
         return _content((choice.get('message') or {}).get('content'))
 
-    def stream(self, system, user):
+    def stream(self, system, user, schema=None, cancel=None):
         """Morceaux de la reponse, au fur et a mesure que Mistral les produit ; rend enfin le modele qui a
         repondu, quand l'API le dit."""
-        response = self._open(self._body(system, user, True), stream=True)
+        body = self._body(system, user, True, schema)
+        with client_for(self._client, self._new_client, cancel) as client:
+            return (yield from self._read(client, body, cancel))
+
+    def _read(self, client, body, cancel):
+        response = self._open(body, True, client, cancel)
         served = None
         try:
             for line in response.iter_lines():
+                check(cancel)
                 if not line.startswith('data:'):
                     continue
                 payload = line[5:].strip()
@@ -121,7 +134,8 @@ class MistralModel:
                 text = _content((choice.get('delta') or {}).get('content'))
                 if text:
                     yield text
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.StreamError) as exc:
+            check(cancel)
             raise _unreachable() from exc
         finally:
             response.close()

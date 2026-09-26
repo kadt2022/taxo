@@ -12,12 +12,16 @@ Chaque demande se deroule en etapes reelles (TAXO-UX-02) : selection des faits, 
 interpretation. Quand le fournisseur sait diffuser sa reponse, le texte provisoire arrive au fil de l'eau ;
 la reponse definitive, citations validees, n'est rendue qu'a la fin.
 """
+import inspect
+import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.minia.domain import briefing, exploration, source_context
+from app.minia.domain.cancellation import STOPPED, check
 from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, AnswerStream, parse, with_diff
-from app.minia.domain.errors import CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
+from app.minia.domain.errors import CANCELLED, CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
 from app.minia.domain.model import MiniaModel
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.projects.application.queries import require_project
@@ -40,6 +44,8 @@ ROOM_TO_CONTINUE = 1024
 # regulierement : aucun proxy ne coupe le flux, et seul le delai du fournisseur decide de l'abandon.
 HEARTBEAT = 'minia.heartbeat'
 HEARTBEAT_SECONDS = 15.0
+# Frequence a laquelle l'attente du modele regarde si la demande a ete arretee (TAXO-UX-03).
+CANCEL_POLL_SECONDS = 0.25
 EXPLORATION, PACKET = 'exploration', 'paquet'
 ANSWERED, NOTHING_KNOWN, NEEDS_SELECTION = 'ANSWERED', 'TAXO_KNOWS_NOTHING', 'NEEDS_SELECTION'
 _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
@@ -73,21 +79,64 @@ def _change(ref, change):
         'evidence_before', 'evidence_after')}}
 
 
-def _waiting(call):
-    """Rend le resultat de `call()`, en signalant l'attente tous les HEARTBEAT_SECONDS."""
+def _waiting(call, cancel=None):
+    """Rend le resultat de `call()`, en signalant l'attente tous les HEARTBEAT_SECONDS. Une demande arretee
+    n'attend plus : l'appel en cours est coupe par le fournisseur, qui s'est inscrit sur le jeton."""
     pool = ThreadPoolExecutor(max_workers=1)
     try:
         future = pool.submit(call)
-        waited = 0.0
+        waited = since_heartbeat = 0.0
         while True:
+            check(cancel)
             try:
-                return future.result(timeout=HEARTBEAT_SECONDS)
+                return future.result(timeout=CANCEL_POLL_SECONDS)
             except StillWaiting:
-                waited += HEARTBEAT_SECONDS
-                yield HEARTBEAT, {'waited_seconds': waited}
+                waited += CANCEL_POLL_SECONDS
+                since_heartbeat += CANCEL_POLL_SECONDS
+                if since_heartbeat >= HEARTBEAT_SECONDS:
+                    since_heartbeat = 0.0
+                    yield HEARTBEAT, {'waited_seconds': waited}
     finally:
         # Si le flux est abandonne, le tour en cours s'acheve seul : on ne l'attend pas.
         pool.shutdown(wait=False)
+
+
+def _accepts(method, name):
+    try:
+        return name in inspect.signature(method).parameters
+    except (TypeError, ValueError):
+        return False
+
+
+def _complete(model, system, user, schema=None, cancel=None):
+    """Un tour du modele ; le jeton d'arret lui est confie s'il sait couper son appel."""
+    options = {'schema': schema} if schema is not None else {}
+    if cancel is not None and _accepts(model.complete, 'cancel'):
+        options['cancel'] = cancel
+    return model.complete(system, user, **options)
+
+
+def _guarded(events, cancel):
+    """Les etapes d'une demande, jusqu'a son arret. Ce qui a deja ete fait reste visible (la trajectoire) ;
+    apres l'arret, aucune etape ne commence et aucune reponse finale ne part."""
+    if cancel is None:
+        return events
+
+    def run():
+        try:
+            for item in events:
+                if item[0] == 'minia.completed':
+                    cancel.check()
+                yield item
+                cancel.check()
+        except Exception as exc:
+            # Couper un appel en cours (client ferme) peut lever n'importe ou : apres l'arret, c'est l'arret.
+            if cancel.cancelled and getattr(exc, 'code', None) != CANCELLED:
+                raise MiniaError(CANCELLED, STOPPED) from exc
+            raise
+        finally:
+            events.close()
+    return run()
 
 
 def _packet(fallback, trajectory):
@@ -143,6 +192,28 @@ class AskMinia:
         if default is not None and default not in self.models:
             raise ValueError(f'MINIA_PROVIDER : « {default} » n’est pas configuré ({", ".join(self.models) or "aucun"}).')
         self.default = default or next(iter(self.models), None)
+        # Demandes en cours, arretables par leur identifiant (TAXO-UX-03) : rien d'autre n'en est garde.
+        self._running, self._running_lock = {}, threading.Lock()
+
+    def register(self, cancel):
+        """Inscrit une demande en cours ; rend l'identifiant qui permet de l'arreter."""
+        request_id = uuid.uuid4().hex
+        with self._running_lock:
+            self._running[request_id] = cancel
+        return request_id
+
+    def release(self, request_id):
+        with self._running_lock:
+            self._running.pop(request_id, None)
+
+    def stop(self, request_id):
+        """Arrete la demande en cours ; False si elle est inconnue ou deja terminee."""
+        with self._running_lock:
+            cancel = self._running.get(request_id)
+        if cancel is None:
+            return False
+        cancel.cancel()
+        return True
 
     def status(self):
         """Etat de Minia : fournisseur par defaut, fournisseurs disponibles ; `remote` dit si ce qu'elle recoit
@@ -196,12 +267,16 @@ class AskMinia:
     def about_commit(self, project_id, sha, question, parent=None, source=False, provider=None):
         return _final(self.about_commit_events(project_id, sha, question, parent, source, provider))
 
-    def about_commit_events(self, project_id, sha, question, parent=None, source=False, provider=None):
+    def about_commit_events(self, project_id, sha, question, parent=None, source=False, provider=None, cancel=None):
         """Valide la demande tout de suite (question, fournisseur, projet, commit), puis rend ses etapes.
 
         `source` : la demande autorise Minia a lire le diff ; il n'est joint que si le reglage le permet.
         `provider` : le fournisseur choisi pour cette demande ; celui par defaut sinon.
+        `cancel` : le jeton d'arret de la demande (TAXO-UX-03).
         """
+        return _guarded(self._commit_events(project_id, sha, question, parent, source, provider, cancel), cancel)
+
+    def _commit_events(self, project_id, sha, question, parent, source, provider, cancel):
         question = self._checked(question)
         model = self._model(provider)
         project = require_project(self.projects, project_id)
@@ -217,16 +292,16 @@ class AskMinia:
                 # Sans analyse globale, le protocole n'a rien a interroger : le paquet du commit, lui, compare
                 # directement les instantanes.
                 return self._commit_steps(model, question, project, commit, base, files, source,
-                                          fallback=str(exc), trajectory=[])
-            return self._explore_commit(model, question, project, commit, base, files, source, exchange)
-        return self._commit_steps(model, question, project, commit, base, files, source)
+                                          fallback=str(exc), trajectory=[], cancel=cancel)
+            return self._explore_commit(model, question, project, commit, base, files, source, exchange, cancel)
+        return self._commit_steps(model, question, project, commit, base, files, source, cancel=cancel)
 
-    def _explore_commit(self, model, question, project, commit, base, files, source, exchange):
+    def _explore_commit(self, model, question, project, commit, base, files, source, exchange, cancel=None):
         """Question sur un commit, en exploration (MINIA-09b) : Taxo commence par ce que Git sait du commit ;
         Minia demande ensuite ses faits changes (`diff_facts`), son diff si l'accord est donne, etc."""
         def packet(reason, trajectory):
             return self._commit_steps(model, question, project, commit, base, files, source,
-                                      fallback=reason, trajectory=trajectory)
+                                      fallback=reason, trajectory=trajectory, cancel=cancel)
 
         if commit.parents and base != commit.parents[0]:
             # Le protocole compare un commit a son premier parent : l'autre cote d'une fusion reste au paquet.
@@ -242,7 +317,7 @@ class AskMinia:
                   'failures': [], 'facts_not_sent': 0, 'rejected_citations': [], 'facts': [], 'answer': '',
                   'unknown': ''}
         yield from self._explore(model, question, exchange, [('get_commit', {'commit': commit.sha})], context,
-                                 result, packet)
+                                 result, packet, cancel)
 
     def _diff(self, project, commit, base, budget):
         yield _stage('source', 'running', 'Lecture du diff du commit')
@@ -254,7 +329,7 @@ class AskMinia:
         return context
 
     def _commit_steps(self, model, question, project, commit, base, files, source=False, fallback=None,
-                      trajectory=None):
+                      trajectory=None, cancel=None):
         yield _stage('facts', 'running', 'Sélection des faits pertinents')
         _, _, evaluations = self.history.impact(project.id, commit.sha, base)
         diff, sent = None, _NOT_REQUESTED
@@ -279,7 +354,7 @@ class AskMinia:
             yield 'minia.completed', {**result, 'status': NOTHING_KNOWN, 'facts': [], 'answer': '', 'unknown': _NOTHING}
             return
         raw, served = yield from self._interpret(model, with_diff(SYSTEM) if brief.diff else SYSTEM, brief,
-                                                 len(sent.get('files_sent', ())))
+                                                 len(sent.get('files_sent', ())), cancel)
         answer = parse(raw, brief.refs)
         yield 'minia.completed', {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [_change(ref, brief.refs[ref]) for ref in answer['cited']],
@@ -288,9 +363,12 @@ class AskMinia:
     def about_project(self, project_id, question, provider=None):
         return _final(self.about_project_events(project_id, question, provider))
 
-    def about_project_events(self, project_id, question, provider=None):
+    def about_project_events(self, project_id, question, provider=None, cancel=None):
         """Question sur le projet. Un fournisseur qui sait explorer interroge Taxo operation par operation
         (MINIA-09) ; sinon, ou en repli, la requete selectionne et Minia n'explique que la selection."""
+        return _guarded(self._project_events(project_id, question, provider, cancel), cancel)
+
+    def _project_events(self, project_id, question, provider, cancel):
         question = self._checked(question)
         model = self._model(provider)
         projection = self.query(project_id, question)
@@ -298,12 +376,13 @@ class AskMinia:
             exchange = self.taxo_query.open(project_id, max_bytes=self._exchange_bytes(model))
 
             def packet(reason, trajectory):
-                return self._project_steps(model, question, projection, fallback=reason, trajectory=trajectory)
+                return self._project_steps(model, question, projection, fallback=reason, trajectory=trajectory,
+                                           cancel=cancel)
             return self._explore(model, question, exchange, [], None,
-                                 self._project_result(model, question, projection), packet)
-        return self._project_steps(model, question, projection)
+                                 self._project_result(model, question, projection), packet, cancel)
+        return self._project_steps(model, question, projection, cancel=cancel)
 
-    def _explore(self, model, question, exchange, seeds, context, result, packet):
+    def _explore(self, model, question, exchange, seeds, context, result, packet, cancel=None):
         """Mode exploration : Taxo ouvre avec `describe` et les operations de depart (`seeds`), Minia demande
         les suivantes, puis Taxo verifie ses affirmations. `packet(raison, trajectoire)` rend le repli."""
         label = 'Minia interroge Taxo'
@@ -329,6 +408,7 @@ class AskMinia:
                 # operations que Minia choisira. Pour `describe`, encore la moitie : la liste des operations qu'on
                 # en tire, envoyee avec elle, n'est jamais plus grande qu'elle.
                 space //= 4 if operation == 'describe' else 2
+            check(cancel)
             response = exchange.call(bounded(operation, arguments, space))
             exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
             trajectory.append(_step(operation, arguments, response))
@@ -349,7 +429,9 @@ class AskMinia:
                 if space is not None and space < ROOM_TO_CONTINUE:
                     calls_left = 0  # la fenetre est presque pleine : Minia conclut avec ce qu'elle a
                 text = exploration.message(question, operations, exchanged, calls_left, context)
-                raw = yield from _waiting(lambda: model.complete(exploration.SYSTEM, text, exploration.STEP_SCHEMA))
+                check(cancel)
+                raw = yield from _waiting(
+                    lambda: _complete(model, exploration.SYSTEM, text, exploration.STEP_SCHEMA, cancel), cancel)
                 step = exploration.parse_step(raw)
                 if isinstance(step, exploration.Answer):
                     break
@@ -357,6 +439,7 @@ class AskMinia:
                 if calls_left <= 0 or step.key in seen:
                     raise MiniaError(INVALID_ANSWER, 'Minia ne progressait plus (opération répétée ou limite atteinte).')
                 seen.add(step.key)
+                check(cancel)
                 response = exchange.call(bounded(step.operation, step.arguments, space))
                 exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response,
                                   **({'ignored_arguments': ignored} if ignored else {})})
@@ -373,13 +456,14 @@ class AskMinia:
             yield from packet(str(exc), trajectory)
             return
         yield _stage('exploration', 'done', label, len(trajectory))
-        statements = yield from self._verified(step.statements, exchange, trajectory)
+        statements = yield from self._verified(step.statements, exchange, trajectory, cancel)
+        check(cancel)
         yield 'minia.completed', {
             **result, 'status': ANSWERED, 'mode': EXPLORATION, 'statements': statements, 'trajectory': trajectory,
             'budget': {'max_bytes': exchange.budget, 'used': exchange.used}}
 
     @staticmethod
-    def _verified(statements, exchange, trajectory):
+    def _verified(statements, exchange, trajectory, cancel=None):
         """Chaque affirmation de Minia est verifiee par Taxo avant l'affichage ; au-dela de MAX_CLAIMS,
         elle est montree comme non verifiee, jamais comme etablie."""
         claims = sum(1 for item in statements if item['type'] == exploration.CLAIM)
@@ -395,6 +479,7 @@ class AskMinia:
                 continue
             checked += 1
             arguments = {name: value for name, value in statement['claim'].items() if value}
+            check(cancel)
             response = exchange.call({'operation': 'verify_claim', 'arguments': arguments})
             trajectory.append(_step('verify_claim', arguments, response))
             yield 'minia.operation', trajectory[-1]
@@ -414,7 +499,7 @@ class AskMinia:
                 'not_interpreted': [], 'facts_not_sent': 0, 'rejected_citations': [], 'facts': [],
                 'answer': '', 'unknown': ''}
 
-    def _project_steps(self, model, question, projection, fallback=None, trajectory=None):
+    def _project_steps(self, model, question, projection, fallback=None, trajectory=None, cancel=None):
         yield _stage('facts', 'done', 'Sélection des faits pertinents', len(projection['facts']))
         result = {**_packet(fallback, trajectory), 'question': question, 'model': self._model_view(model), 'project': projection['project'],
                   'analysis': projection['analysis'], 'request': projection['request'],
@@ -431,14 +516,14 @@ class AskMinia:
         brief = briefing.selection(question, projection, (project['id'], project['name']),
                                    self._capacity(model, SYSTEM_SELECTION))
         yield _stage('context', 'done', 'Préparation du contexte')
-        raw, served = yield from self._interpret(model, SYSTEM_SELECTION, brief)
+        raw, served = yield from self._interpret(model, SYSTEM_SELECTION, brief, cancel=cancel)
         answer = parse(raw, brief.refs)
         yield 'minia.completed', {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
                                   'facts_not_sent': brief.truncated, 'rejected_citations': answer['rejected']}
 
     @staticmethod
-    def _interpret(model, system, brief, diff_files=0):
+    def _interpret(model, system, brief, diff_files=0, cancel=None):
         """Texte brut du modele et, si le fournisseur le dit, le modele qui a repondu ; diffuse le texte
         provisoire de la reponse si le fournisseur le permet."""
         label = f'Minia interprète {len(brief.refs)} fait{"s" if len(brief.refs) > 1 else ""} Taxo'
@@ -447,11 +532,14 @@ class AskMinia:
         yield _stage('interpretation', 'running', label, len(brief.refs))
         stream = getattr(model, 'stream', None)
         served = None
+        check(cancel)
         if stream is None:
-            raw = model.complete(system, brief.text)
+            raw = yield from _waiting(lambda: _complete(model, system, brief.text, cancel=cancel), cancel)
         else:
-            chunks, extractor, pieces = [], AnswerStream(), stream(system, brief.text)
+            options = {'cancel': cancel} if cancel is not None and _accepts(stream, 'cancel') else {}
+            chunks, extractor, pieces = [], AnswerStream(), stream(system, brief.text, **options)
             while True:
+                check(cancel)
                 try:
                     chunk = next(pieces)
                 except StopIteration as end:
