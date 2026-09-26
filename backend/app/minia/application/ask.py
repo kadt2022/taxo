@@ -96,8 +96,8 @@ class AskMinia:
     def _diff(self, project, commit, base, budget):
         yield _stage('source', 'running', 'Lecture du diff du commit')
         files, read = self.history.diffs(project.id, commit.sha, base)
-        # Le diff n'occupe jamais plus de la moitie de la place : les faits de Taxo gardent la leur.
-        limit = source_context.MAX_DIFF_BYTES if budget is None else min(source_context.MAX_DIFF_BYTES, budget // 2)
+        # Le diff peut viser toute la place : le briefing lui retire ensuite ce qu'occupent les faits de Taxo.
+        limit = source_context.MAX_DIFF_BYTES if budget is None else min(source_context.MAX_DIFF_BYTES, budget)
         context = source_context.build(files, read, max_bytes=limit)
         yield _stage('source', 'done', 'Lecture du diff du commit', len(context.files))
         return context

@@ -8,6 +8,7 @@ jamais les fichiers entiers ni le reste du depot. Le contenu est lu par `Project
 un fichier confidentiel, binaire, trop gros, un lien ou un sous-module n'est jamais lu. Au-dela des
 limites, un fichier n'est pas transmis ; il est nomme, avec sa raison, pour que la reponse le dise.
 """
+import re
 from dataclasses import dataclass, field
 
 OFF, DIFF = 'off', 'diff'
@@ -24,6 +25,17 @@ _GENERATED = frozenset({
     'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb', 'poetry.lock',
     'pipfile.lock', 'uv.lock', 'cargo.lock', 'go.sum', 'composer.lock', 'gemfile.lock', 'gradle.lockfile'})
 _GENERATED_SUFFIXES = ('.min.js', '.min.css', '.map', '.snap')
+
+
+# Un fichier de test explique moins le risque d'un commit que le code qu'il teste : il passe apres.
+_TEST_DIRECTORIES = frozenset({'test', 'tests', '__tests__', 'spec', 'specs', 'testing'})
+_TEST_NAME = re.compile(r'test_.*\.py|.*_test\.[^.]+|.*(Test|Tests|IT)\.(java|kt|scala|groovy)|.*\.(test|spec)\.[^.]+')
+
+
+def is_test(path):
+    *directories, name = path.split('/')
+    in_test_directory = bool(_TEST_DIRECTORIES.intersection(part.lower() for part in directories))
+    return in_test_directory or bool(_TEST_NAME.fullmatch(name))
 
 
 def generated(path):
@@ -78,10 +90,11 @@ def _weight(diff, entry):
 def build(files, read, max_files=MAX_DIFF_FILES, max_lines=MAX_DIFF_LINES, max_bytes=MAX_DIFF_BYTES):
     """Contexte de diff d'un commit : `files` sont ses fichiers, `read(fichier)` rend le diff de l'un d'eux.
 
+    Le code passe avant les tests : quand la place manque, ce sont les tests qui ne sont pas transmis.
     Aucun contenu n'est lu pour un fichier genere, ni une fois le nombre de fichiers atteint.
     """
     context = DiffContext()
-    for changed in files:
+    for changed in sorted(files, key=lambda item: is_test(item.path)):
         if generated(changed.path):
             context.not_sent.append({'path': changed.path, 'reason': GENERATED})
             continue

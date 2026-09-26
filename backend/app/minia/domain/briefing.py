@@ -88,8 +88,8 @@ def build(question, commit, parent, evaluations, files=(), project=None, diff=No
 
     `project` est un couple (identifiant, nom) : `repository:<identifiant>` devient `repository:<nom>`.
     `diff` est le contexte de diff (source_context.DiffContext) quand il a ete autorise. `max_bytes` est la
-    place disponible dans la fenetre du modele : les faits, puis les fichiers du diff, qui n'y tiennent pas
-    ne sont pas transmis, et le message le dit.
+    place disponible dans la fenetre du modele : les fichiers du diff cedent d'abord la place aux faits,
+    puis les faits qui n'y tiennent toujours pas ne sont pas transmis ; le message le dit.
     """
     repository, name = (f'repository:{project[0]}', project[1]) if project else (None, None)
     changes = [{**change, 'evaluator_id': evaluation['evaluator_id']}
@@ -118,11 +118,13 @@ def build(question, commit, parent, evaluations, files=(), project=None, diff=No
             payload['diff_not_sent'] = diff.not_sent
         return _compact(payload)
 
-    count = _fitting(render, min(len(changes), MAX_FACTS), max_bytes)
-    # Meme sans aucun fait, le diff peut deborder (echappements JSON) : ses derniers fichiers cedent la place.
-    while (max_bytes is not None and diff is not None and diff.files and count == 0
-           and len(render(0).encode('utf-8')) > max_bytes):
+    # Taxo etablit, le diff documente : les faits passent d'abord, le diff prend la place qui reste et
+    # cede fichier par fichier (les tests, ranges en dernier, avant le code).
+    wanted = min(len(changes), MAX_FACTS)
+    while (max_bytes is not None and diff is not None and diff.files
+           and len(render(wanted).encode('utf-8')) > max_bytes):
         diff.drop_last()
+    count = _fitting(render, wanted, max_bytes)
     refs = {f'F{index}': change for index, change in enumerate(changes[:count], 1)}
     return Briefing(render(count), refs, len(changes) - count,
                     max(len(files) - MAX_FILES, 0), not_interpreted, failures, bool(diff and diff.files))
