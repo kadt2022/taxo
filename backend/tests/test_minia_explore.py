@@ -331,4 +331,83 @@ def test_a_window_overflow_during_exploration_falls_back_to_the_packet(repo, tmp
     packet = json.dumps({'cited': [], 'answer': 'Paquet.', 'unknown': ''})
     model = NarrowModel(packet, room=len(exploration.SYSTEM.encode('utf-8')) + 1000)
     result = completed(run(repo, tmp_path, model, 'Résume le dernier commit'))
-    assert result['mode'] == 'paquet' and result['fallback'] == 'trop grand'
+    assert result['mode'] == 'paquet' and result['fallback'].startswith('describe : ')
+    assert result['trajectory'][0]['error']['code'] == 'BUDGET_EXHAUSTED', 'rien ne tient : Taxo le dit'
+
+
+def ollama_scripted(*replies, num_ctx=16384):
+    """Le vrai adaptateur Ollama, devant une API Ollama simulee qui rend les tours prevus."""
+    pending, bodies = list(replies), []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={'message': {'role': 'assistant', 'content': pending.pop(0)}})
+
+    model = OllamaModel('qwen2.5-coder:7b', 'http://127.0.0.1:11434', transport=httpx.MockTransport(handler),
+                        num_ctx=num_ctx)
+    return model, bodies
+
+
+def test_ollama_follows_the_same_protocol_as_the_remote_providers(repo, tmp_path):
+    repo, sha = repo
+    model, bodies = ollama_scripted(
+        call('diff_facts', commit=sha), call('get_diff', commit=sha, path='src/app.txt'),
+        answer(statement('claim', 'Le commit modifie src/app.txt.', f'commit:{sha}', 'CHANGES', 'file:src/app.txt'),
+               statement('interpretation', 'Le contenu passerait de « un » à « deux ».')))
+    assert model.explores and not model.remote
+    result = completed(ask_commit(repo, tmp_path, model, sha, source=True))
+    assert (result['mode'], result['model']['provider']) == ('exploration', 'ollama')
+    assert [step['operation'] for step in result['trajectory']] == [
+        'describe', 'get_commit', 'diff_facts', 'get_diff', 'verify_claim']
+    assert result['statements'][0]['verdict'] == 'CONFIRMED'
+    assert all(body['format'] == exploration.STEP_SCHEMA for body in bodies), 'chaque tour contraint par le schema'
+    assert all(body['options']['num_ctx'] == 16384 for body in bodies)
+    capacity = model.capacity(exploration.SYSTEM)
+    assert all(len(body['messages'][1]['content'].encode('utf-8')) <= capacity for body in bodies), \
+        'chaque tour tient dans la fenetre du modele'
+
+
+def test_a_small_window_bounds_each_answer_of_taxo(repo, tmp_path):
+    repo, sha = repo
+    model, bodies = ollama_scripted(call('find_facts', relation='CHANGES'), answer(statement('unknown', 'Rien de plus.')),
+                                    num_ctx=12288)
+    result = completed(ask_commit(repo, tmp_path, model, sha))
+    assert result['mode'] == 'exploration'
+    capacity = model.capacity(exploration.SYSTEM)
+    assert all(len(body['messages'][1]['content'].encode('utf-8')) <= capacity for body in bodies)
+
+
+def test_a_full_window_makes_minia_conclude(repo, tmp_path, monkeypatch):
+    from app.minia.application import ask
+    repo, sha = repo
+    monkeypatch.setattr(ask, 'ROOM_TO_CONTINUE', 10 ** 6)
+    model, bodies = ollama_scripted(answer(statement('unknown', 'Je conclus.')))
+    result = completed(ask_commit(repo, tmp_path, model, sha))
+    assert result['mode'] == 'exploration'
+    sent = json.loads(bodies[0]['messages'][1]['content'])
+    assert sent['calls_left'] == 0 and 'instruction' in sent, 'plus de place : Minia doit conclure'
+
+
+def test_a_small_model_that_keeps_calling_on_a_full_window_falls_back(repo, tmp_path, monkeypatch):
+    from app.minia.application import ask
+    repo, sha = repo
+    monkeypatch.setattr(ask, 'ROOM_TO_CONTINUE', 10 ** 6)
+    packet = json.dumps({'cited': [], 'answer': 'Paquet.', 'unknown': ''})
+    model, _ = ollama_scripted(call('diff_facts', commit=sha), packet)
+    result = completed(ask_commit(repo, tmp_path, model, sha))
+    assert result['mode'] == 'paquet' and 'progressait plus' in result['fallback']
+
+
+def test_the_opening_answers_leave_room_for_the_advertised_operations(make_repo, git, tmp_path):
+    repo = make_repo({'README.md': 'Taxo\n'}, 'grand-commit')
+    for index in range(80):
+        (repo / f'dossier-au-nom-assez-long-{index:03d}.txt').write_text(f'{index}\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'beaucoup de fichiers')
+    sha = git(repo, 'rev-parse', 'HEAD')
+    model, bodies = ollama_scripted(answer(statement('unknown', 'Trop de fichiers pour tout voir.')), num_ctx=12288)
+    result = completed(ask_commit(repo, tmp_path, model, sha, question='Que change ce commit ? ' * 40))
+    assert result['mode'] == 'exploration', 'le premier tour tient malgre un gros commit et une longue question'
+    assert result['trajectory'][1]['not_sent'], 'ce qui ne tient pas est compte, jamais tronque'
+    capacity = model.capacity(exploration.SYSTEM)
+    assert len(bodies[0]['messages'][1]['content'].encode('utf-8')) <= capacity
