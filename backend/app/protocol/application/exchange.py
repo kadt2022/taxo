@@ -15,6 +15,7 @@ import re
 from app.facts import is_path, is_reference
 from app.facts.domain.fact import RELATIONS
 from app.history.domain.errors import UNKNOWN_COMMIT, UNKNOWN_PATH, HistoryError
+from app.history.domain.disclosure import GENERATED, LIMIT, MAX_DIFF_BYTES, MAX_DIFF_FILES, MAX_DIFF_LINES, generated
 from app.projects.application.queries import require_project
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INTERNAL, INVALID_ARGUMENT, MAX_ERROR_BYTES,
@@ -169,6 +170,8 @@ class Exchange:
         self.diff_allowed = service.source_context == 'diff'
         self.diff_consent = bool(diff_consent) and self.diff_allowed
         self.budget, self.used, self.calls = budget, 0, 0
+        # Ce que l'echange a deja transmis du diff : les limites de l'ADR 0008 valent pour tout l'echange.
+        self.diff_files = self.diff_lines = self.diff_bytes = 0
         self.refs = References()
         evaluations = scan.result.get('evaluations', [])
         reference = next((item['snapshot'] for item in evaluations if item.get('snapshot')), {})
@@ -395,6 +398,12 @@ class Exchange:
             raise OperationError(INVALID_ARGUMENT, 'path : chemin relatif du dépôt, séparateurs /.')
         if not self._query(subject=reference, relation='CHANGES', object=f'file:{path}'):
             raise OperationError(OUT_OF_SCOPE, 'Ce fichier n’est pas touché par ce commit.')
+        if generated(path):
+            # Fichier produit par un outil (ADR 0008) : son contenu n'est pas lu.
+            response = self._response('get_diff', self._envelope_coverage(_HISTORY), max_bytes, commit=reference,
+                                      path=path)
+            response.not_sent({'what': 'diff', 'reason': GENERATED})
+            return response
         diff = self.service.history.diff(self.project_id, reference.split(':', 1)[1], path)
         fields = {'commit': reference, 'path': path, 'status': diff['status']}
         if diff['old_path']:
@@ -403,9 +412,18 @@ class Exchange:
         if not diff['displayable']:
             response.not_sent({'what': 'diff', 'reason': diff['reason']})
             return response
-        for index, hunk in enumerate(diff['hunks']):
-            if not response.add('items', _hunk(hunk)):
-                response.skip('items', len(diff['hunks']) - index - 1)
+        hunks = [_hunk(hunk) for hunk in diff['hunks']]
+        lines = sum(len(hunk['rows']) for hunk in diff['hunks'])
+        size = sum(len(hunk[side].encode('utf-8')) for hunk in hunks for side in ('before', 'after'))
+        if (self.diff_files >= MAX_DIFF_FILES or self.diff_lines + lines > MAX_DIFF_LINES
+                or self.diff_bytes + size > MAX_DIFF_BYTES):
+            # Au-dela des limites de l'echange, un fichier n'est pas tronque : il n'est pas transmis.
+            response.not_sent({'what': 'diff', 'reason': LIMIT})
+            return response
+        self.diff_files, self.diff_lines, self.diff_bytes = self.diff_files + 1, self.diff_lines + lines, self.diff_bytes + size
+        for index, hunk in enumerate(hunks):
+            if not response.add('items', hunk):
+                response.skip('items', len(hunks) - index - 1)
                 break
         return response
 

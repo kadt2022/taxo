@@ -16,6 +16,7 @@ from app.minia.domain import briefing, exploration, source_context
 from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, AnswerStream, parse, with_diff
 from app.minia.domain.errors import INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
 from app.minia.domain.model import MiniaModel
+from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.projects.application.queries import require_project
 
 MAX_QUESTION = 1000
@@ -167,8 +168,16 @@ class AskMinia:
         project = require_project(self.projects, project_id)
         commit, base, files = self.history.detail(project_id, sha, parent)
         if self.taxo_query is not None and getattr(model, 'explores', False):
-            # Le diff n'est lisible dans l'echange que si le reglage et la demande l'autorisent (ADR 0008).
-            exchange = self.taxo_query.open(project_id, diff_consent=source and self.source == source_context.DIFF)
+            try:
+                # Le diff n'est lisible dans l'echange que si le reglage et la demande l'autorisent (ADR 0008).
+                exchange = self.taxo_query.open(project_id, diff_consent=source and self.source == source_context.DIFF)
+            except QueryError as exc:
+                if exc.code != NO_ANALYSIS:
+                    raise
+                # Sans analyse globale, le protocole n'a rien a interroger : le paquet du commit, lui, compare
+                # directement les instantanes.
+                return self._commit_steps(model, question, project, commit, base, files, source,
+                                          fallback=str(exc), trajectory=[])
             return self._explore_commit(model, question, project, commit, base, files, source, exchange)
         return self._commit_steps(model, question, project, commit, base, files, source)
 

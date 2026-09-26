@@ -214,12 +214,13 @@ def test_the_gemini_schema_has_uppercase_types_and_no_additional_properties():
 
 
 def ask_commit(repo, tmp_path, model, sha=None, source=False, setting='diff', after_scan=None, parent=None,
-               question='Que change ce commit ?'):
+               question='Que change ce commit ?', scan=True):
     app = create_app(f'sqlite:///{tmp_path / "commit.db"}', [repo], minia=model, source_context=setting)
     Base.metadata.create_all(app.state.engine)
     with TestClient(app) as client:
         project = client.post('/api/projects', json={'name': 'Exploration', 'path': str(repo)}).json()
-        client.post(f'/api/projects/{project["id"]}/scans')
+        if scan:
+            client.post(f'/api/projects/{project["id"]}/scans')
         if after_scan:
             sha = after_scan()
         body = {'question': question, 'source_context': source, **({'parent': parent} if parent else {})}
@@ -290,3 +291,11 @@ def test_the_other_side_of_a_merge_stays_in_the_packet(make_repo, git, tmp_path)
     model = ScriptedModel(json.dumps({'cited': [], 'answer': 'Fusion de side.', 'unknown': ''}))
     result = completed(ask_commit(repo, tmp_path, model, merge, parent=second))
     assert result['mode'] == 'paquet' and 'autre parent' in result['fallback'] and result['trajectory'] == []
+
+
+def test_without_a_global_analysis_the_commit_question_keeps_its_packet(repo, tmp_path):
+    repo, sha = repo
+    model = ScriptedModel(json.dumps({'cited': [], 'answer': 'Un fichier aurait changé.', 'unknown': ''}))
+    result = completed(ask_commit(repo, tmp_path, model, sha, scan=False))
+    assert result['mode'] == 'paquet', 'le paquet compare les instantanes sans analyse globale'
+    assert 'analyse globale' in result['fallback'] and result['trajectory'] == []

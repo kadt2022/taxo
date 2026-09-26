@@ -171,6 +171,27 @@ def test_the_diff_needs_both_the_setting_and_the_exchange_consent(repo, tmp_path
         assert untouched['error']['code'] == 'OUT_OF_SCOPE'
 
 
+def test_the_diff_keeps_the_limits_of_adr_0008_across_the_exchange(make_repo, git, tmp_path, monkeypatch):
+    from app.protocol.application import exchange as module
+    repo = make_repo({'a.txt': 'a\n', 'b.txt': 'b\n', 'package-lock.json': '{}\n'}, 'limites')
+    for name in ('a.txt', 'b.txt', 'package-lock.json'):
+        (repo / name).write_text('change\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'trois fichiers')
+    sha = git(repo, 'rev-parse', 'HEAD')
+    client, url = client_for(repo, tmp_path, source_context='diff')
+    monkeypatch.setattr(module, 'MAX_DIFF_LINES', 1)
+    with client:
+        result = exchange(client, url, ('get_diff', {'commit': sha, 'path': 'package-lock.json'}),
+                          ('get_diff', {'commit': sha, 'path': 'a.txt'}), ('get_diff', {'commit': sha, 'path': 'b.txt'}),
+                          consent={'diff': True})
+    lock, first, second = result['responses']
+    assert lock['not_sent'] == [{'what': 'diff', 'reason': 'GENERATED'}] and lock['items'] == []
+    assert first['items'] and first['not_sent'] == []
+    assert second['items'] == [] and second['not_sent'] == [{'what': 'diff', 'reason': 'LIMIT'}], \
+        'au-dela des limites de l echange, un fichier n est pas transmis, jamais tronque'
+
+
 def test_verify_claim_confirms_with_the_fact_and_its_evidence(taxo):
     client, url, (_, _, second) = taxo
     verdict = one(client, url, 'verify_claim', subject=f'commit:{second}', relation='CHANGES',
