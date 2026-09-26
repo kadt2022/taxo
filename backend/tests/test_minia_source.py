@@ -185,7 +185,7 @@ class SizedModel(FakeModel):
         return self.room
 
 
-def test_the_diff_takes_at_most_half_of_the_window(ask):
+def test_the_diff_takes_the_room_left_by_taxo_facts(ask):
     model = SizedModel({'cited': [], 'answer': 'ok', 'unknown': ''}, room=100_000)
     _, post = ask(model, 'diff')
     assert post(source_context=True)['source_context']['files_sent'] == ['src/Cors.java']
@@ -194,6 +194,40 @@ def test_the_diff_takes_at_most_half_of_the_window(ask):
     result = post(source_context=True)
     assert result['source_context']['files_sent'] == []
     assert {'path': 'src/Cors.java', 'reason': 'LIMIT'} in result['source_context']['files_not_sent']
+
+
+def test_code_is_sent_before_its_tests():
+    code = _diff('src/main/java/CorsAllowedOrigins.java', rows=8)
+    test = _diff('src/test/java/CorsAllowedOriginsTest.java', rows=2)
+    diffs = {item['path']: item for item in (code, test)}
+    files = [_file(test['path']), _file(code['path'])]
+    context = source_context.build(files, lambda changed: diffs[changed.path], max_lines=9)
+    assert [item['path'] for item in context.files] == [code['path']], 'le code qui porte le changement d abord'
+    assert context.not_sent == [{'path': test['path'], 'reason': 'LIMIT'}]
+
+
+@pytest.mark.parametrize('path, test', [
+    ('takibo-iam-boot/src/test/java/com/x/CorsAllowedOriginsTest.java', True), ('tests/test_x.py', True),
+    ('web/a.spec.ts', True), ('pkg/x_test.go', True), ('src/UserServiceIT.java', True), ('__tests__/a.js', True),
+    ('src/main/java/Cors.java', False), ('a/Contest.java', False), ('app/latest.py', False),
+    ('Attestation.java', False)])
+def test_test_files_are_recognised_by_their_place_or_name(path, test):
+    assert source_context.is_test(path) is test
+
+
+def test_taxo_facts_keep_their_place_and_the_diff_gives_way():
+    class Commit:
+        sha, author, authored_at, subject = 'c' * 40, 'Pi', '2026-09-25T00:00:00Z', 'sujet'
+
+    change = {'change': 'INTRODUCED', 'kind': 'ASSERTION', 'subject': 's', 'relation': 'R', 'before': None,
+              'after': 'o', 'status': 'OBSERVED', 'evidence_before': [], 'evidence_after': []}
+    evaluation = {'evaluator_id': 'e', 'changes': [change] * 3, 'not_interpreted_before': [],
+                  'not_interpreted_after': [], 'failures': []}
+    facts_only = len(briefing.build('q', Commit(), None, [evaluation], diff=source_context.DiffContext()).text)
+    context = source_context.build([_file('a')], lambda changed: _diff('a', text='x' * 300))
+    brief = briefing.build('q', Commit(), None, [evaluation], diff=context, max_bytes=facts_only + 100)
+    assert len(brief.refs) == 3 and brief.truncated == 0, 'les faits de Taxo passent avant le diff'
+    assert context.files == [] and context.not_sent == [{'path': 'a', 'reason': 'LIMIT'}] and not brief.diff
 
 
 def test_a_diff_that_overflows_once_escaped_gives_way_file_by_file():
