@@ -11,9 +11,15 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from app.minia.domain.errors import UNAVAILABLE, MiniaError
+from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
 
 DEFAULT_URL = 'http://127.0.0.1:11434'
+DEFAULT_NUM_CTX = 16384
+# Borne sure, sans tokeniseur : les modeles servis (Qwen, Llama...) utilisent un BPE au niveau de l'octet,
+# ou chaque token porte au moins un octet ; un texte ne compte donc jamais plus de tokens que d'octets UTF-8,
+# quelle que soit sa langue. S'y ajoutent le gabarit de conversation et une part reservee a la reponse.
+TEMPLATE_TOKENS = 64
+ANSWER_TOKENS = 1024
 
 
 def _loopback(host):
@@ -29,16 +35,35 @@ def _loopback(host):
 class OllamaModel:
     provider = 'ollama'
 
-    def __init__(self, model_name, url=DEFAULT_URL, timeout=300.0, transport=None):
+    def __init__(self, model_name, url=DEFAULT_URL, timeout=300.0, transport=None, num_ctx=DEFAULT_NUM_CTX):
         parts = urlsplit(url)
         if parts.scheme not in {'http', 'https'} or not parts.hostname:
             raise ValueError(f'MINIA_OLLAMA_URL invalide : {url}')
-        self.model_name, self.url = model_name, url.rstrip('/')
+        if num_ctx < 2 * ANSWER_TOKENS:
+            raise ValueError(f'MINIA_OLLAMA_NUM_CTX trop petit : {num_ctx} (minimum {2 * ANSWER_TOKENS}).')
+        self.model_name, self.url, self.num_ctx = model_name, url.rstrip('/'), num_ctx
         self.remote = not _loopback(parts.hostname)
         self._client = httpx.Client(timeout=timeout, transport=transport)
 
+    def capacity(self, system):
+        """Octets disponibles pour le message de l'utilisateur avec ces consignes : Minia y ajuste son contexte."""
+        return self.num_ctx - TEMPLATE_TOKENS - ANSWER_TOKENS - len(system.encode('utf-8'))
+
     def _body(self, system, user, stream):
-        return {'model': self.model_name, 'stream': stream, 'format': 'json', 'options': {'temperature': 0},
+        """Requete a Ollama, avec une fenetre de contexte explicite.
+
+        Sans `num_ctx`, Ollama garde sa fenetre par defaut (2 048 ou 4 096 tokens) et tronque en silence le
+        debut d'un message trop long, c'est-a-dire les consignes : le modele repond alors sans connaitre le
+        format attendu, ni les regles qui lui interdisent de suivre des instructions venues du code. Un
+        message qui pourrait ne pas tenir est refuse plutot que tronque.
+        """
+        size = len(user.encode('utf-8'))
+        if size > self.capacity(system):
+            raise MiniaError(CONTEXT_TOO_LARGE, f'La demande dépasse la fenêtre de Minia ({size} octets pour '
+                             f'{max(self.capacity(system), 0)} disponibles) : réduire la sélection ou augmenter '
+                             'MINIA_OLLAMA_NUM_CTX.')
+        return {'model': self.model_name, 'stream': stream, 'format': 'json',
+                'options': {'temperature': 0, 'num_ctx': self.num_ctx},
                 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}]}
 
     def _check(self, response):

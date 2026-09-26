@@ -218,6 +218,14 @@ $env:MINIA_OLLAMA_MODEL = 'qwen2.5:3b'
 ```
 
 Sans `MINIA_OLLAMA_MODEL`, Minia est désactivée et le reste de Taxo fonctionne normalement.
+
+Minia fixe la fenêtre de contexte d'Ollama (`MINIA_OLLAMA_NUM_CTX`, 16 384 tokens par défaut). Sans ce
+réglage, Ollama garderait sa petite fenêtre par défaut et tronquerait en silence le début d'un long
+message, c'est-à-dire les consignes de Minia. Minia ajuste son message à la fenêtre, avec une borne sûre
+(pas plus de tokens que d'octets UTF-8, quelle que soit la langue) : les faits qui ne tiennent pas ne
+sont pas transmis et la réponse le dit ; le diff n'occupe jamais plus de la moitié de la place. Une
+demande qui ne tiendrait toujours pas est refusée (`MINIA_CONTEXT_TOO_LARGE`) plutôt que tronquée.
+Augmenter `MINIA_OLLAMA_NUM_CTX` donne plus de place, au prix de mémoire.
 API : `GET /api/minia/status` et `POST …/commits/{sha}/ask` avec `{"question": "…", "parent": null}`.
 Le modèle est derrière l'interface `MiniaModel` : un adaptateur Claude pourra s'ajouter sans toucher au
 reste (`MINIA_PROVIDER=claude`, pas encore disponible).
@@ -228,7 +236,7 @@ reste (`MINIA_PROVIDER=claude`, pas encore disponible).
 
 Sur accord explicite, Minia reçoit aussi le diff du commit : seulement les blocs modifiés, lus par
 l'historique avec ses refus (`.env` et fichiers confidentiels, binaires, liens, sous-modules, gros
-fichiers : jamais lus). Limites : 20 fichiers, 1 500 lignes, 100 Ko ; les fichiers générés (verrous de
+fichiers : jamais lus). Limites : 20 fichiers, 1 500 lignes, 32 Ko et au plus la moitié de la fenêtre de Minia ; les fichiers générés (verrous de
 dépendances, fichiers minifiés, snapshots) ne sont pas lus. La réponse dit combien de fichiers ont été
 transmis et pourquoi les autres ne l'ont pas été. Le diff n'est jamais un fait : Minia ne cite que des
 faits de Taxo, et ce qu'elle déduit du diff reste dans « Ce que Minia en déduit », non vérifié. Le code
