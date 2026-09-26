@@ -95,6 +95,7 @@ Toute réponse d'opération partage la même enveloppe :
 {
   "protocol": "taxo-query/1",
   "operation": "find_facts",
+  "outcome": "OK",
   "snapshot": { "analysis": "…", "commit": "…" },
   "items": [ { "ref": "F1", "fact": { "…": "fait canonique ADR 0002" } } ],
   "evidence": [ { "ref": "E1", "fact": "F1", "location": { "path": "…", "line_start": 12 } } ],
@@ -104,6 +105,12 @@ Toute réponse d'opération partage la même enveloppe :
 }
 ```
 
+- **Issue obligatoire** : `outcome` vaut `OK` ou `ERROR`. Une erreur porte `error: {code, message}` et
+  aucun résultat ; les codes sont fermés : `INVALID_ARGUMENT` (argument refusé à la validation),
+  `NO_CONSENT` (consentement requis absent), `NOT_AVAILABLE` (opération que Taxo ne sait pas servir pour ce
+  projet), `OUT_OF_SCOPE` (hors du projet ou de l'instantané), `BUDGET_EXHAUSTED` (plus aucune place dans
+  l'échange), `INTERNAL` (panne de Taxo). `not_sent` ne sert qu'à un résultat `OK` dont une partie n'a pas
+  été transmise ; il ne décrit jamais une erreur.
 - **Références stables dans l'échange** : chaque fait reçoit une référence courte (`F1`…), chaque preuve
   la sienne (`E1`…). Minia ne peut citer que des références reçues pendant l'échange ; toute autre
   citation est écartée et signalée, comme aujourd'hui.
@@ -142,7 +149,7 @@ la nourrir n'est pas proposée.
 | `find_dependencies` | de quoi dépend ce module ou ce symbole ? |
 | `find_configuration` | quelle configuration influence ce comportement, et d'où vient-elle ? |
 | `diff_facts` | quels faits un commit introduit, modifie ou retire ? |
-| `get_source` | le code d'un **symbole** précis (jamais un fichier entier par défaut) |
+| `get_source` | le code d'un **symbole** précis (jamais un fichier entier par défaut), sous son propre consentement (section 9) |
 
 Un analyseur qui produit les relations nécessaires **déclare** les opérations qu'il rend possibles ;
 `describe` les expose alors. Ajouter une opération au protocole est une évolution explicite de cet ADR,
@@ -161,7 +168,7 @@ et rend exactement un verdict :
 | Verdict | Signification | Exige |
 | --- | --- | --- |
 | `CONFIRMED` | un fait établi affirme la même chose | le ou les faits, leur statut (`OBSERVED`, `INFERRED` avec prémisses, `HUMAN_VALIDATED`) et leurs preuves |
-| `REFUTED` | un fait établi contredit l'affirmation | le fait contradictoire et ses preuves ; soit un fait `ABSENCE` couvrant l'affirmation, soit un fait incompatible sur une relation déclarée exclusive par le vocabulaire |
+| `REFUTED` | un fait établi contredit l'affirmation | soit un fait `ABSENCE` couvrant l'affirmation, rendu avec son **motif, son périmètre et sa méthode** (une absence n'a pas de preuve, ADR 0002 section 1 : ces trois champs en tiennent lieu) ; soit un fait incompatible sur une relation déclarée exclusive par le vocabulaire, rendu avec ses preuves |
 | `NOT_PROVEN` | Taxo ne peut ni confirmer ni réfuter | une raison **obligatoire**, ci-dessous |
 
 `NOT_PROVEN` a trois raisons, alignées sur les trois fins de parcours de l'ADR 0002 (section 12) :
@@ -175,9 +182,20 @@ et rend exactement un verdict :
 - **`NOT_PROVEN` n'est jamais `REFUTED`.** « Non trouvé » ne devient « faux » que par un fait `ABSENCE`
   (motif, périmètre, méthode) ou par une relation exclusive.
 - Un verdict `CONFIRMED` sur un fait `INFERRED` montre ses prémisses et la règle appliquée.
-- **Vérification de la réponse finale.** La réponse de Minia liste ses affirmations clés sous forme
-  structurée (`claims`). Taxo les vérifie **toutes** avant l'affichage ; chacune est présentée avec son
-  verdict. Une affirmation `REFUTED` est affichée comme contredite par Taxo, avec la preuve.
+- **La réponse affichée est construite par Taxo, énoncé par énoncé.** Minia ne rend pas un texte libre
+  accompagné d'une liste d'affirmations qu'elle aurait choisies : elle rend une suite d'**énoncés
+  typés**, et rien d'autre n'est affiché.
+
+  | Type d'énoncé | Contenu | Affichage |
+  | --- | --- | --- |
+  | `claim` | une phrase **et** son affirmation structurée (sujet, relation, objet) | toujours avec le verdict de Taxo : confirmée (avec preuves), contredite (avec ce qui la contredit), non prouvée (avec la raison) |
+  | `interpretation` | un raisonnement, une hypothèse, une explication | toujours marquée « non vérifié », jamais présentée comme établie |
+  | `unknown` | ce qui manque pour conclure | dans le bloc des inconnues |
+
+  Taxo vérifie **tous** les énoncés `claim` avant l'affichage. Un texte hors de ces énoncés n'est pas
+  affiché. La garantie est donc déterministe : **aucune phrase ne peut apparaître comme établie sans
+  verdict de Taxo**. Une phrase qui affirme un fait sans être déclarée `claim` reste affichée comme
+  interprétation non vérifiée, jamais comme connaissance.
 
 ### 7. Budget de contexte
 
@@ -206,8 +224,9 @@ Garde-fous communs, fixés par Taxo et non par le modèle :
 - à l'épuisement d'une limite, Minia doit conclure avec ce qu'elle a et dire ce qui manque ;
 - si le mode exploration échoue (format invalide, boucle sans progrès), Taxo bascule en mode paquet.
 
-La réponse finale garde le contrat actuel (`cited`, `answer`, `unknown`), enrichi de `claims` (section
-6). Les citations ne peuvent désigner que des références reçues pendant l'échange.
+La réponse finale devient la suite d'énoncés typés de la section 6 (`claim`, `interpretation`,
+`unknown`), à la place du texte libre actuel. Les citations ne peuvent désigner que des références reçues
+pendant l'échange.
 
 ### 9. Sécurité
 
@@ -219,9 +238,15 @@ La réponse finale garde le contrat actuel (`cited`, `answer`, `unknown`), enric
    filtre ou de commande fournie par le dépôt (TAXO-HIST-02).
 3. **Confidentialité.** Les refus existants s'appliquent à toute opération qui touche du contenu :
    `.env` et fichiers confidentiels (nom seul), binaires, liens, sous-modules, fichiers trop gros.
-4. **Consentement pour le code.** `get_diff` et `get_source` exigent le double consentement de l'ADR 0008
-   (réglage du projet et accord de la demande). Avec un fournisseur distant, le portail avertit que le
-   contenu quittera la machine ; avec un niveau gratuit, qu'il peut servir au fournisseur.
+4. **Consentement pour le code, par nature de contenu.** Un consentement ne couvre que ce qu'il nomme.
+   - `get_diff` relève du double consentement de l'ADR 0008 (réglage du projet et accord de la demande),
+     qui ne porte que sur **les blocs modifiés d'un commit**.
+   - `get_source` peut rendre du code **inchangé**, hors de tout diff : il exige son **propre** double
+     consentement (un réglage distinct et un accord explicite de la demande, formulé comme la lecture du
+     code source de symboles du projet). L'accord donné pour le diff ne l'autorise jamais.
+   - Sans le consentement requis, l'opération répond `ERROR` / `NO_CONSENT`, et Minia le dit.
+   - Avec un fournisseur distant, le portail avertit que le contenu quittera la machine ; avec un niveau
+     gratuit, qu'il peut servir au fournisseur.
 5. **Cloisonnement.** Un échange ne voit qu'un projet et un instantané ; aucune opération ne franchit
    cette frontière.
 6. **Validation.** Taxo valide chaque argument ; Minia ne construit jamais de chemin, de requête ou de
