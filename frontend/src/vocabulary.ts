@@ -1,7 +1,7 @@
 // Vocabulaire de presentation (TAXO-UI-01) : le contrat de faits reste la representation interne de Taxo ;
 // ces libelles en sont la lecture humaine. Rien n'est renomme cote backend : un terme inconnu s'affiche tel quel.
 
-export const EVALUATORS:Record<string,string>={'taxo.inventory':'Inventaire du code', 'taxo.git':'Historique Git'};
+export const EVALUATORS:Record<string,string>={'taxo.inventory':'Inventaire du code', 'taxo.git':'Historique Git', 'taxo.spring-api':'Endpoints Spring'};
 
 export const STATUSES:Record<string,string>={SUCCESS:'Terminée', PARTIAL:'Partielle', FAILED:'Échec'};
 

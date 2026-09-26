@@ -124,7 +124,7 @@ def api_fixture(story, tmp_path):
 def test_the_global_analysis_runs_every_evaluator_and_keeps_their_facts(api):
     client, base, sha = api
     analysis = client.post(f'{base}/scans').json()
-    assert {item['evaluator_id'] for item in analysis['evaluations']} == {'taxo.git', 'taxo.inventory'}
+    assert {item['evaluator_id'] for item in analysis['evaluations']} == {'taxo.git', 'taxo.inventory', 'taxo.spring-api'}
     assert analysis['evaluation_summary']['evaluator_id'] == 'taxo.inventory', 'le resume principal reste le code'
     facts = f'{base}/scans/{analysis["id"]}/facts'
     commits = client.get(facts, params={'evaluator': 'taxo.git', 'relation': 'HAS_COMMIT'}).json()
@@ -156,14 +156,14 @@ def test_the_code_analysis_survives_a_failing_git_evaluator(api, monkeypatch):
     analysis = client.post(f'{base}/scans')
     assert analysis.status_code == 201
     statuses = {item['evaluator_id']: item['status'] for item in analysis.json()['evaluations']}
-    assert statuses == {'taxo.git': 'FAILED', 'taxo.inventory': 'SUCCESS'}
+    assert statuses == {'taxo.git': 'FAILED', 'taxo.inventory': 'SUCCESS', 'taxo.spring-api': 'SUCCESS'}
     assert analysis.json()['evaluation_summary']['fact_count'] > 0
 
 
 def test_the_impact_of_a_commit_compares_content_only(api):
     client, base, sha = api
     impact = client.get(f'{base}/history/commits/{sha["moved"]}/impact').json()
-    assert [item['evaluator_id'] for item in impact['evaluations']] == ['taxo.inventory']
+    assert [item['evaluator_id'] for item in impact['evaluations']] == ['taxo.inventory', 'taxo.spring-api']
 
 
 def test_a_third_evaluator_joins_without_touching_the_first_two(story, tmp_path):
