@@ -396,3 +396,18 @@ def test_a_small_model_that_keeps_calling_on_a_full_window_falls_back(repo, tmp_
     model, _ = ollama_scripted(call('diff_facts', commit=sha), packet)
     result = completed(ask_commit(repo, tmp_path, model, sha))
     assert result['mode'] == 'paquet' and 'progressait plus' in result['fallback']
+
+
+def test_the_opening_answers_leave_room_for_the_advertised_operations(make_repo, git, tmp_path):
+    repo = make_repo({'README.md': 'Taxo\n'}, 'grand-commit')
+    for index in range(80):
+        (repo / f'dossier-au-nom-assez-long-{index:03d}.txt').write_text(f'{index}\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'beaucoup de fichiers')
+    sha = git(repo, 'rev-parse', 'HEAD')
+    model, bodies = ollama_scripted(answer(statement('unknown', 'Trop de fichiers pour tout voir.')), num_ctx=12288)
+    result = completed(ask_commit(repo, tmp_path, model, sha, question='Que change ce commit ? ' * 40))
+    assert result['mode'] == 'exploration', 'le premier tour tient malgre un gros commit et une longue question'
+    assert result['trajectory'][1]['not_sent'], 'ce qui ne tient pas est compte, jamais tronque'
+    capacity = model.capacity(exploration.SYSTEM)
+    assert len(bodies[0]['messages'][1]['content'].encode('utf-8')) <= capacity

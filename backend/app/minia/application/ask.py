@@ -297,9 +297,14 @@ class AskMinia:
             request = {'operation': operation, 'arguments': arguments}
             return request if space is None else {**request, 'max_bytes': max(space, 1)}
 
-        trajectory, exchanged, seen = [], [], set()
+        trajectory, exchanged, seen, operations = [], [], set(), []
         for operation, arguments in (('describe', {}), *seeds):
-            response = exchange.call(bounded(operation, arguments, room([], exchanged, MAX_CALLS)))
+            space = room(operations, exchanged, MAX_CALLS)
+            if operation == 'describe' and space is not None:
+                # La liste des operations, tiree de cette reponse et envoyee avec elle, n'est jamais plus grande
+                # qu'elle : la moitie de la place suffit a les faire tenir toutes les deux.
+                space //= 2
+            response = exchange.call(bounded(operation, arguments, space))
             exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
             trajectory.append(_step(operation, arguments, response))
             yield 'minia.operation', trajectory[-1]
@@ -309,7 +314,8 @@ class AskMinia:
                 yield _stage('exploration', 'done', label, len(trajectory))
                 yield from packet(f'{operation} : {response["error"]["message"]}', trajectory)
                 return
-        operations = [item for item in exchanged[0]['response'].get('items', []) if item.get('kind') == 'operation']
+            if operation == 'describe':
+                operations = [item for item in response.get('items', []) if item.get('kind') == 'operation']
         opening = len(trajectory)
         try:
             while True:
