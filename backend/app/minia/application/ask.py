@@ -12,13 +12,18 @@ Chaque demande se deroule en etapes reelles (TAXO-UX-02) : selection des faits, 
 interpretation. Quand le fournisseur sait diffuser sa reponse, le texte provisoire arrive au fil de l'eau ;
 la reponse definitive, citations validees, n'est rendue qu'a la fin.
 """
-from app.minia.domain import briefing, source_context
+from app.minia.domain import briefing, exploration, source_context
 from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, AnswerStream, parse, with_diff
-from app.minia.domain.errors import INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
+from app.minia.domain.errors import INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
 from app.minia.domain.model import MiniaModel
 from app.projects.application.queries import require_project
 
 MAX_QUESTION = 1000
+# Garde-fous de l'exploration (ADR 0009, section 8), fixes par Taxo : une description, au plus 8 operations
+# choisies par Minia, puis au plus 10 affirmations verifiees ; l'echange en permet 20.
+MAX_CALLS = 8
+MAX_CLAIMS = 10
+EXPLORATION, PACKET = 'exploration', 'paquet'
 ANSWERED, NOTHING_KNOWN, NEEDS_SELECTION = 'ANSWERED', 'TAXO_KNOWS_NOTHING', 'NEEDS_SELECTION'
 _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
 _DISABLED = {'status': 'DISABLED'}
@@ -49,6 +54,20 @@ def _change(ref, change):
         'evidence_before', 'evidence_after')}}
 
 
+def _step(operation, arguments, response):
+    """Une etape de la trajectoire, telle que l'humain la voit : l'operation, ses arguments, l'issue, la
+    taille du resultat et ce qui n'a pas ete transmis (ADR 0009, section 10)."""
+    entry = {'operation': operation, 'arguments': arguments, 'outcome': response['outcome'],
+             'bytes': response['bytes']}
+    if response['outcome'] == 'OK':
+        entry.update(items=len(response.get('items', [])), not_sent=response.get('not_sent', []))
+        if 'verdict' in response:
+            entry.update(verdict=response['verdict'], reason=response['reason'])
+    else:
+        entry['error'] = response['error']
+    return entry
+
+
 def _models(models):
     """Modeles par fournisseur ; un modele seul (ou None) est accepte pour garder l'ancien usage."""
     if models is None:
@@ -72,10 +91,13 @@ class AskMinia:
     reponse validee par Taxo. Une reponse n'est jamais un fait.
     """
 
-    def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None):
+    def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None,
+                 taxo_query=None):
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
         self.history, self.projects, self.query = history, projects, query
+        # Protocole Taxo (ADR 0009) : sans lui, Minia recoit toujours un paquet de contexte.
+        self.taxo_query = taxo_query
         self.models, self.source = _models(models), source
         if default is not None and default not in self.models:
             raise ValueError(f'MINIA_PROVIDER : « {default} » n’est pas configuré ({", ".join(self.models) or "aucun"}).')
@@ -183,15 +205,95 @@ class AskMinia:
         return _final(self.about_project_events(project_id, question, provider))
 
     def about_project_events(self, project_id, question, provider=None):
-        """Question sur l'historique du projet : la requete selectionne, Minia n'explique que la selection."""
+        """Question sur le projet. Un fournisseur qui sait explorer interroge Taxo operation par operation
+        (MINIA-09) ; sinon, ou en repli, la requete selectionne et Minia n'explique que la selection."""
         question = self._checked(question)
         model = self._model(provider)
         projection = self.query(project_id, question)
+        if self.taxo_query is not None and getattr(model, 'explores', False):
+            exchange = self.taxo_query.open(project_id)
+            return self._explore_steps(model, question, projection, exchange)
         return self._project_steps(model, question, projection)
 
-    def _project_steps(self, model, question, projection):
+    def _explore_steps(self, model, question, projection, exchange):
+        """Mode exploration : Minia demande les operations, Taxo repond et verifie ses affirmations."""
+        label = 'Minia interroge Taxo'
+        yield _stage('exploration', 'running', label, 0)
+        trajectory, seen = [], set()
+        described = exchange.call({'operation': 'describe'})
+        trajectory.append(_step('describe', {}, described))
+        yield 'minia.operation', trajectory[-1]
+        operations = [item for item in described.get('items', []) if item.get('kind') == 'operation']
+        exchanged = [{'operation': 'describe', 'arguments': {}, 'response': described}]
+        try:
+            while True:
+                calls = len(trajectory) - 1
+                text = exploration.message(question, operations, exchanged, MAX_CALLS - calls)
+                step = exploration.parse_step(model.complete(exploration.SYSTEM, text, exploration.STEP_SCHEMA))
+                if isinstance(step, exploration.Answer):
+                    break
+                if calls >= MAX_CALLS or step.key in seen:
+                    raise MiniaError(INVALID_ANSWER, 'Minia ne progressait plus (opération répétée ou limite atteinte).')
+                seen.add(step.key)
+                response = exchange.call({'operation': step.operation, 'arguments': step.arguments})
+                exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
+                trajectory.append(_step(step.operation, step.arguments, response))
+                yield 'minia.operation', trajectory[-1]
+                yield _stage('exploration', 'running', label, len(trajectory) - 1)
+        except MiniaError as exc:
+            if exc.code != INVALID_ANSWER:
+                raise
+            # L'exploration a echoue (format invalide, boucle sans progres) : Taxo bascule en mode paquet.
+            yield _stage('exploration', 'done', label, len(trajectory) - 1)
+            yield from self._project_steps(model, question, projection, fallback=str(exc), trajectory=trajectory)
+            return
+        yield _stage('exploration', 'done', label, len(trajectory) - 1)
+        statements = yield from self._verified(step.statements, exchange, trajectory)
+        yield 'minia.completed', {
+            **self._project_result(model, question, projection), 'status': ANSWERED, 'mode': EXPLORATION,
+            'statements': statements, 'trajectory': trajectory,
+            'budget': {'max_bytes': exchange.budget, 'used': exchange.used}}
+
+    @staticmethod
+    def _verified(statements, exchange, trajectory):
+        """Chaque affirmation de Minia est verifiee par Taxo avant l'affichage ; au-dela de MAX_CLAIMS,
+        elle est montree comme non verifiee, jamais comme etablie."""
+        claims = sum(1 for item in statements if item['type'] == exploration.CLAIM)
+        yield _stage('verification', 'running', 'Taxo vérifie les affirmations de Minia', claims)
+        verified, checked = [], 0
+        for statement in statements:
+            if statement['type'] != exploration.CLAIM:
+                verified.append(statement)
+                continue
+            if checked >= MAX_CLAIMS:
+                verified.append({**statement, 'verdict': None, 'error': {
+                    'code': 'NOT_VERIFIED', 'message': f'Au-delà de {MAX_CLAIMS} affirmations, Taxo ne vérifie plus.'}})
+                continue
+            checked += 1
+            arguments = {name: value for name, value in statement['claim'].items() if value}
+            response = exchange.call({'operation': 'verify_claim', 'arguments': arguments})
+            trajectory.append(_step('verify_claim', arguments, response))
+            yield 'minia.operation', trajectory[-1]
+            if response['outcome'] != 'OK':
+                verified.append({**statement, 'verdict': None, 'error': response['error']})
+                continue
+            verified.append({**statement, 'claim': response['claim'], 'verdict': response['verdict'],
+                             'reason': response['reason'], 'facts': response['items'],
+                             'evidence': response['evidence'], 'not_sent': response['not_sent']})
+        yield _stage('verification', 'done', 'Taxo vérifie les affirmations de Minia', claims)
+        return verified
+
+    def _project_result(self, model, question, projection):
+        return {'question': question, 'model': self._model_view(model), 'project': projection['project'],
+                'analysis': projection['analysis'], 'request': projection['request'],
+                'selection': projection['status'], 'commits': [], 'total_commits': projection['total_commits'],
+                'not_interpreted': [], 'facts_not_sent': 0, 'rejected_citations': [], 'facts': [],
+                'answer': '', 'unknown': ''}
+
+    def _project_steps(self, model, question, projection, fallback=None, trajectory=None):
         yield _stage('facts', 'done', 'Sélection des faits pertinents', len(projection['facts']))
-        result = {'question': question, 'model': self._model_view(model), 'project': projection['project'],
+        mode = {'mode': PACKET, **({'fallback': fallback, 'trajectory': trajectory} if fallback else {})}
+        result = {**mode, 'question': question, 'model': self._model_view(model), 'project': projection['project'],
                   'analysis': projection['analysis'], 'request': projection['request'],
                   'selection': projection['status'], 'commits': projection['commits'],
                   'total_commits': projection['total_commits'], 'not_interpreted': projection['not_interpreted'],

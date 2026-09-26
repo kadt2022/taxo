@@ -222,6 +222,14 @@ details>summary{list-style:none;cursor:pointer}
 .proof{display:inline;font-size:12px}
 .proof>summary{display:inline;color:var(--brand-3);margin-left:6px;text-decoration:underline dotted}
 .proof[open]{display:block;margin:4px 0 0}
+.verdict{display:inline-block;font-size:11px;font-weight:600;border-radius:var(--r-pill);padding:1px 8px;margin-right:4px;background:var(--surface-3);color:var(--muted)}
+.verdict-confirmed{background:var(--surface);color:var(--ok)}
+.verdict-refuted{background:var(--danger-soft);color:var(--danger)}
+.verdict-not-proven,.verdict-none{background:var(--warn-soft);color:var(--warn)}
+.trajectory{margin:12px 0 0;font-size:13px;color:var(--text-2)}
+.trajectory>summary{cursor:pointer;color:var(--brand-3)}
+.trajectory ol,ol.trajectory{margin:6px 0 0;padding-left:20px;font-variant-numeric:tabular-nums}
+.trajectory li.refused{color:var(--warn)}
 .ask-taxo{margin-top:28px}.ask-taxo form{display:block}.ask-taxo input{margin-bottom:10px}
 .ask-taxo .actions{display:flex;flex-wrap:wrap;gap:8px}.ask-taxo .actions .secondary{width:auto}
 .selection{margin-top:18px}.selection td code{white-space:nowrap}.selected-commits{list-style:none;padding:0;margin:0 0 10px}

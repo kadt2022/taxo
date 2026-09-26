@@ -6,6 +6,7 @@ import {EVALUATORS, VERBS, label, reference} from './vocabulary';
 import {ask as askMinia, askButton, MiniaProgress, type MiniaLive} from './minia-live';
 import {MiniaChoice, modelLabel, type AnswerModel, type MiniaStatus} from './minia';
 import {openStream, type ServerEvent} from './sse';
+import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
 type SelectedCommit = {sha:string; authored_at?:string; subject?:string};
@@ -15,7 +16,9 @@ export type Selection = {status:string; request:Request; analysis:{id:string; cr
   total_commits:number|null; commits:SelectedCommit[]; facts:GitFact[]; not_interpreted:string[]};
 export type SelectionAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'|'NEEDS_SELECTION'; question:string; request:Request;
   model:AnswerModel; commits:SelectedCommit[]; facts:(GitFact&{ref:string})[];
-  answer:string; unknown:string; not_interpreted:string[]; facts_not_sent:number; rejected_citations:string[]};
+  answer:string; unknown:string; not_interpreted:string[]; facts_not_sent:number; rejected_citations:string[];
+  // MINIA-09 : en exploration, la reponse est faite d'enonces types ; en repli, le paquet dit pourquoi.
+  mode?:'exploration'|'paquet'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string};
 type Run = <T>(path:string, init?:RequestInit)=>Promise<T>;
 
 /** La selection demandee, dite en clair. */
@@ -66,7 +69,14 @@ export function SelectionView({result}:Readonly<{result:Selection}>){
 }
 
 export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>){
-  const limits=[answer.unknown, answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
+  if(answer.mode==='exploration'&&answer.statements)return <section className="minia" aria-label="Réponse de Minia">
+    <p className="eyebrow">MINIA{modelLabel(answer.model)} · exploration</p>
+    <p className="minia-question">{answer.question}</p>
+    <Statements statements={answer.statements}/>
+    <Trajectory steps={answer.trajectory??[]}/>
+    <footer>Minia a interrogé Taxo opération par opération ; Taxo a vérifié chacune de ses affirmations. Aucune phrase n’est affichée comme établie sans verdict de Taxo, et la réponse n’est jamais enregistrée comme un fait.</footer>
+  </section>;
+  const limits=[answer.unknown, answer.fallback?`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir d’un paquet de faits.`:'', answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:''].filter(Boolean);
   return <section className="minia" aria-label="Réponse de Minia">
@@ -90,6 +100,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
         {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée.</p>}
       </article>
     </div>
+    <Trajectory steps={answer.trajectory??[]}/>
   </section>;
 }
 

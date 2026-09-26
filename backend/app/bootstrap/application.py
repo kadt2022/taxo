@@ -98,5 +98,6 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     models = minia_models(options) if minia is _FROM_SETTINGS else minia
     default = options['provider'] if minia is _FROM_SETTINGS and options['provider'] in models else None
     # Le diff d'un commit ne lui est joint que si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise (ADR 0008).
-    api.include_router(minia_router(AskMinia(history, models, projects, query, source, default)))
+    api.include_router(minia_router(AskMinia(history, models, projects, query, source, default,
+                                             taxo_query=api.state.taxo_query)))
     return api
