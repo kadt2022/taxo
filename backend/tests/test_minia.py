@@ -280,10 +280,12 @@ def test_the_ollama_url_must_be_http(url):
 
 def test_settings_choose_the_provider(monkeypatch):
     for name in ('MINIA_PROVIDER', 'MINIA_OLLAMA_URL', 'MINIA_OLLAMA_MODEL', 'MINIA_OLLAMA_NUM_CTX',
+                 'MINIA_OLLAMA_TIMEOUT_SECONDS',
                  'MINIA_CLAUDE_MODEL', 'MINIA_GEMINI_MODEL', 'MINIA_GEMINI_TIER', 'MINIA_MISTRAL_MODEL',
                  'MINIA_MISTRAL_TIER'):
         monkeypatch.delenv(name, raising=False)
     assert settings.minia() == {'provider': 'ollama', 'url': 'http://127.0.0.1:11434', 'model': '', 'num_ctx': 16384,
+                                'timeout': 900.0,
                                 'claude_model': '', 'gemini_model': '', 'gemini_tier': 'free', 'mistral_model': '',
                                 'mistral_tier': 'free', 'mistral_num_ctx': 32768}
     assert minia_model(settings.minia()) is None, 'sans modele, Minia reste desactivee'
@@ -327,3 +329,29 @@ def test_facts_that_do_not_fit_are_counted_not_sent():
     assert 0 < len(fitted.refs) < 28 and fitted.truncated == 28 - len(fitted.refs)
     assert json.loads(fitted.text)['facts_not_sent'] == fitted.truncated
     assert briefing.selection('q', projection, max_bytes=10).refs == {}, 'aucun fait plutot qu un fait tronque'
+
+
+@pytest.mark.parametrize('failure, expected', [
+    (httpx.ReadTimeout, 'n’a pas répondu dans les 900 s.*MINIA_OLLAMA_TIMEOUT_SECONDS'),
+    (httpx.ConnectTimeout, 'injoignable'),
+    (httpx.ConnectError, 'injoignable'),
+])
+def test_a_slow_ollama_is_not_called_unreachable(failure, expected):
+    def handler(request):
+        raise failure('panne', request=request)
+
+    model = OllamaModel('qwen2.5-coder:7b', 'http://127.0.0.1:11434', transport=httpx.MockTransport(handler))
+    with pytest.raises(MiniaError, match=expected):
+        model.complete('sys', 'user')
+    with pytest.raises(MiniaError, match=expected):
+        list(model.stream('sys', 'user'))
+
+
+def test_the_ollama_timeout_is_a_setting_with_a_short_connection(monkeypatch):
+    model = OllamaModel('m', 'http://127.0.0.1:11434')
+    assert model.timeout == 900 and model._client.timeout.read == 900 and model._client.timeout.connect == 10
+    with pytest.raises(ValueError, match='MINIA_OLLAMA_TIMEOUT_SECONDS'):
+        OllamaModel('m', timeout=0)
+    monkeypatch.setenv('MINIA_OLLAMA_MODEL', 'qwen2.5-coder:7b')
+    monkeypatch.setenv('MINIA_OLLAMA_TIMEOUT_SECONDS', '1200')
+    assert minia_model(settings.minia()).timeout == 1200

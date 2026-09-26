@@ -52,6 +52,8 @@ describe('trajectoire', ()=>{
     expect(stepText(steps[2])).toContain('→ refusé (NO_CONSENT)');
     expect(stepText(steps[3])).toContain('→ Confirmée par Taxo');
     expect(stepText({operation:'autre', arguments:{}, outcome:'OK', bytes:1, items:1})).toBe('autre → 1 résultat · 1 octets');
+    expect(stepText({operation:'diff_facts', arguments:{commit:'c'}, outcome:'OK', bytes:9, items:2, ignored:['path', 'subject']}))
+      .toBe('diff_facts (commit c) → 2 résultats · 9 octets · ignorés : path, subject');
     expect(renderToStaticMarkup(<Trajectory steps={[]}/>)).toBe('');
     const html=renderToStaticMarkup(<Trajectory steps={steps}/>);
     expect(html).toContain('4 opérations demandées à Taxo');

@@ -64,7 +64,8 @@ Un resultat vide ne veut pas dire faux : "non trouve" n'est jamais "faux".
 
 A chaque tour, rends un seul objet JSON avec tous ses champs (chaine vide ou liste vide s'il n'y a rien) :
 - pour demander une operation : "action": "call", "operation" et ses arguments
-  (subject, relation, object, nature, fact, scope, commit, path) ; "statements" vide ;
+  (subject, relation, object, nature, fact, scope, commit, path) ; "statements" vide. Remplis seulement
+  les arguments que l'operation declare dans "operations" et laisse les autres vides : Taxo les ignore ;
 - pour conclure : "action": "answer" et "statements", la suite de tes enonces ; "operation" vide.
 
 Enonces :
@@ -142,6 +143,18 @@ def parse_step(raw):
     if not isinstance(statements, list) or not statements:
         raise MiniaError(INVALID_ANSWER, 'Minia a conclu sans aucun énoncé.')
     return Answer(tuple(_statement(item) for item in statements[:MAX_STATEMENTS]))
+
+
+def for_operation(step, operations):
+    """Les arguments que l'operation demandee declare (dans `describe`) ; les autres champs du tour sont
+    ignores, et nommes. Le schema d'un tour est a plat et commun a toutes les operations : un modele qui remplit
+    tous ses champs ne doit pas faire refuser une operation par des arguments qu'elle ne lit pas. Ce qui reste
+    est valide par Taxo comme toujours ; rien n'est interprete."""
+    declared = next((item.get('arguments') for item in operations if item.get('operation') == step.operation), None)
+    if not isinstance(declared, dict):
+        return step, []
+    kept = {name: value for name, value in step.arguments.items() if name in declared}
+    return Call(step.operation, kept), sorted(set(step.arguments) - set(kept))
 
 
 def message(question, operations, trajectory, calls_left, context=None):

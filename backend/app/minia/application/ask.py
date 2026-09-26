@@ -12,6 +12,9 @@ Chaque demande se deroule en etapes reelles (TAXO-UX-02) : selection des faits, 
 interpretation. Quand le fournisseur sait diffuser sa reponse, le texte provisoire arrive au fil de l'eau ;
 la reponse definitive, citations validees, n'est rendue qu'a la fin.
 """
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as StillWaiting
+
 from app.minia.domain import briefing, exploration, source_context
 from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, AnswerStream, parse, with_diff
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
@@ -33,6 +36,10 @@ _EXPLORATION_FAILURES = frozenset({INVALID_ANSWER, CONTEXT_TOO_LARGE})
 # l'enveloppe du tour) ; sous ROOM_TO_CONTINUE octets, Minia doit conclure avec ce qu'elle a.
 TURN_MARGIN = 512
 ROOM_TO_CONTINUE = 1024
+# Pendant qu'un tour attend le modele (un modele local peut mettre plusieurs minutes), un signe de vie part
+# regulierement : aucun proxy ne coupe le flux, et seul le delai du fournisseur decide de l'abandon.
+HEARTBEAT = 'minia.heartbeat'
+HEARTBEAT_SECONDS = 15.0
 EXPLORATION, PACKET = 'exploration', 'paquet'
 ANSWERED, NOTHING_KNOWN, NEEDS_SELECTION = 'ANSWERED', 'TAXO_KNOWS_NOTHING', 'NEEDS_SELECTION'
 _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
@@ -64,6 +71,23 @@ def _change(ref, change):
     return {'ref': ref, **{key: change[key] for key in (
         'evaluator_id', 'change', 'kind', 'subject', 'relation', 'before', 'after', 'status',
         'evidence_before', 'evidence_after')}}
+
+
+def _waiting(call):
+    """Rend le resultat de `call()`, en signalant l'attente tous les HEARTBEAT_SECONDS."""
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = pool.submit(call)
+        waited = 0.0
+        while True:
+            try:
+                return future.result(timeout=HEARTBEAT_SECONDS)
+            except StillWaiting:
+                waited += HEARTBEAT_SECONDS
+                yield HEARTBEAT, {'waited_seconds': waited}
+    finally:
+        # Si le flux est abandonne, le tour en cours s'acheve seul : on ne l'attend pas.
+        pool.shutdown(wait=False)
 
 
 def _packet(fallback, trajectory):
@@ -300,10 +324,11 @@ class AskMinia:
         trajectory, exchanged, seen, operations = [], [], set(), []
         for operation, arguments in (('describe', {}), *seeds):
             space = room(operations, exchanged, MAX_CALLS)
-            if operation == 'describe' and space is not None:
-                # La liste des operations, tiree de cette reponse et envoyee avec elle, n'est jamais plus grande
-                # qu'elle : la moitie de la place suffit a les faire tenir toutes les deux.
-                space //= 2
+            if space is not None:
+                # Une operation d'ouverture ne prend que la moitie de la place restante : l'autre moitie reste aux
+                # operations que Minia choisira. Pour `describe`, encore la moitie : la liste des operations qu'on
+                # en tire, envoyee avec elle, n'est jamais plus grande qu'elle.
+                space //= 4 if operation == 'describe' else 2
             response = exchange.call(bounded(operation, arguments, space))
             exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
             trajectory.append(_step(operation, arguments, response))
@@ -324,15 +349,19 @@ class AskMinia:
                 if space is not None and space < ROOM_TO_CONTINUE:
                     calls_left = 0  # la fenetre est presque pleine : Minia conclut avec ce qu'elle a
                 text = exploration.message(question, operations, exchanged, calls_left, context)
-                step = exploration.parse_step(model.complete(exploration.SYSTEM, text, exploration.STEP_SCHEMA))
+                raw = yield from _waiting(lambda: model.complete(exploration.SYSTEM, text, exploration.STEP_SCHEMA))
+                step = exploration.parse_step(raw)
                 if isinstance(step, exploration.Answer):
                     break
+                step, ignored = exploration.for_operation(step, operations)
                 if calls_left <= 0 or step.key in seen:
                     raise MiniaError(INVALID_ANSWER, 'Minia ne progressait plus (opération répétée ou limite atteinte).')
                 seen.add(step.key)
                 response = exchange.call(bounded(step.operation, step.arguments, space))
-                exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
-                trajectory.append(_step(step.operation, step.arguments, response))
+                exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response,
+                                  **({'ignored_arguments': ignored} if ignored else {})})
+                trajectory.append({**_step(step.operation, step.arguments, response),
+                                   **({'ignored': ignored} if ignored else {})})
                 yield 'minia.operation', trajectory[-1]
                 yield _stage('exploration', 'running', label, len(trajectory))
         except MiniaError as exc:

@@ -23,6 +23,7 @@ def minia(provider=None, url=None, model=None, claude_model=None, gemini_model=N
             'url': url or os.getenv('MINIA_OLLAMA_URL', 'http://127.0.0.1:11434'),
             'model': (model if model is not None else os.getenv('MINIA_OLLAMA_MODEL', '')).strip(),
             'num_ctx': int(os.getenv('MINIA_OLLAMA_NUM_CTX', '16384')),
+            'timeout': float(os.getenv('MINIA_OLLAMA_TIMEOUT_SECONDS', '900')),
             'claude_model': (claude_model if claude_model is not None
                              else os.getenv('MINIA_CLAUDE_MODEL', '')).strip(),
             'gemini_model': (gemini_model if gemini_model is not None
