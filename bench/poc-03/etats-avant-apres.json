@@ -1,0 +1,360 @@
+{
+  "apres": {
+    "DELETE /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/groups/{groupCode}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "DELETE /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/roles/{roleCode}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "DELETE /debug/secure/users/{id}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:86"
+    ],
+    "GET /api/admin/users": [
+      "NON CONCLU",
+      ""
+    ],
+    "GET /api/dashboard": [
+      "NON CONCLU",
+      ""
+    ],
+    "GET /api/data/sensitive": [
+      "NON CONCLU",
+      ""
+    ],
+    "GET /api/health": [
+      "PUBLIC",
+      "TestSecurityConfig.java:47"
+    ],
+    "GET /api/profile": [
+      "NON CONCLU",
+      ""
+    ],
+    "GET /api/public/info": [
+      "NON CONCLU",
+      ""
+    ],
+    "GET /api/v1/me/spaces": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/groups": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/groups/{groupCode}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/permissions": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/permissions/{permissionCode}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/roles": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/roles/{roleCode}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/groups": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/roles": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgId}/dashboard/summary": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgId}/spaces": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /api/v1/orgs/{orgId}/spaces/{spaceId}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "GET /debug/secure/context": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:86"
+    ],
+    "GET /debug/secure/deny": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:86"
+    ],
+    "GET /debug/secure/hello": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:86"
+    ],
+    "GET /debug/secure/hello-org-admin": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:86"
+    ],
+    "GET /debug/secure/org-admin": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:86"
+    ],
+    "GET /debug/secure/secret": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:86"
+    ],
+    "GET /debug/secure/user-read": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:86"
+    ],
+    "PATCH /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/admin/users": [
+      "NON CONCLU",
+      ""
+    ],
+    "POST /api/spaces/{spaceId}/users": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:80"
+    ],
+    "POST /api/v1/auth/login": [
+      "PUBLIC",
+      "SecurityConfig.java:74"
+    ],
+    "POST /api/v1/orgs/signup": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/activate": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/deactivate": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/groups": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/lock": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/roles": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/suspend": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/v1/orgs/{orgId}/spaces": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/v1/orgs/{orgId}/spaces/{spaceId}/clients": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ],
+    "POST /api/v1/orgs/{orgId}/spaces/{spaceId}/clients/{id}/rotate-secret": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:85"
+    ]
+  },
+  "avant": {
+    "DELETE /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/groups/{groupCode}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "DELETE /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/roles/{roleCode}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "DELETE /debug/secure/users/{id}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:71"
+    ],
+    "GET /api/admin/users": [
+      "NON CONCLU",
+      ""
+    ],
+    "GET /api/dashboard": [
+      "NON CONCLU",
+      ""
+    ],
+    "GET /api/data/sensitive": [
+      "NON CONCLU",
+      ""
+    ],
+    "GET /api/health": [
+      "PUBLIC",
+      "TestSecurityConfig.java:47"
+    ],
+    "GET /api/profile": [
+      "NON CONCLU",
+      ""
+    ],
+    "GET /api/public/info": [
+      "NON CONCLU",
+      ""
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/groups": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/groups/{groupCode}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/permissions": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/permissions/{permissionCode}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/roles": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/roles/{roleCode}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/groups": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/roles": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgId}/spaces": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /api/v1/orgs/{orgId}/spaces/{spaceId}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "GET /debug/secure/context": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:71"
+    ],
+    "GET /debug/secure/deny": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:71"
+    ],
+    "GET /debug/secure/hello": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:71"
+    ],
+    "GET /debug/secure/hello-org-admin": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:71"
+    ],
+    "GET /debug/secure/org-admin": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:71"
+    ],
+    "GET /debug/secure/secret": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:71"
+    ],
+    "GET /debug/secure/user-read": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:71"
+    ],
+    "PATCH /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "POST /api/admin/users": [
+      "NON CONCLU",
+      ""
+    ],
+    "POST /api/orgs/{orgId}/spaces/{spaceId}/clients": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:64"
+    ],
+    "POST /api/orgs/{orgId}/spaces/{spaceId}/clients/{id}/rotate-secret": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:64"
+    ],
+    "POST /api/spaces/{spaceId}/users": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:65"
+    ],
+    "POST /api/v1/auth/login": [
+      "PUBLIC",
+      "SecurityConfig.java:59"
+    ],
+    "POST /api/v1/orgs/signup": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/activate": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/deactivate": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/groups": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/lock": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/roles": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "POST /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users/{userId}/suspend": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ],
+    "POST /api/v1/orgs/{orgId}/spaces": [
+      "PROTEGE par PolicyBasedAuthorizationManager",
+      "SecurityConfig.java:70"
+    ]
+  },
+  "base": "8ac9f99633997e825a92efc50ad0e8decab4a3d8",
+  "head": "f18ff9caf16ca850bcd03004112ca169ff0f483a"
+}

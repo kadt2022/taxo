@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-09-19 (réorientation : prouver un fait cher et le mesurer avant 01E)
+Mise à jour : 2026-09-19 (repositionnement : intelligence logicielle, correction des défauts mesurés)
 Références : ADR 0001, ADR 0002, ADR 0004, `EPIC-TAXO-01-fondation-memoire-verifiable.md`
 
 ## MVP
@@ -39,23 +39,37 @@ TAXO-ASK-01        Ask Taxo minimal                        DÉMO PRODUIT
 
 La démo technique est le premier jalon. La démo produit la suit sur la même mémoire.
 
-## NOW : prouver un fait cher, puis mesurer
+## NOW : corriger les défauts mesurés
 
-Réorientation actée le 2026-09-17. L'épique TAXO-01 a livré la forme — contrat, identité,
-instantané, exécution, couverture — mais pas encore la preuve que Taxo établit une connaissance
-qu'une commande shell ne donne pas : sur UAA, l'inventaire demande 30 s là où `git ls-files` répond
-en 1,1 s. Persister des faits dont l'utilité n'est pas mesurée bâtirait sur une intention, ce que le
-[manifeste](../manifeste.md) interdit.
+**Repositionné le 2026-09-19.** Taxo n'est plus présenté comme une mémoire pour agents IA : quatre
+bancs ont réfuté cette thèse, et le [journal](../../bench/JOURNAL-2026-09-19.md) la consigne
+définitivement. Taxo est un **moteur d'intelligence logicielle** : il documente un logiciel — ses
+modules, ses unités déployables, ses dépendances, ses surfaces — et ce qui change entre deux états,
+pour des humains et pour des pages.
 
-| # | Étape | Ce qu'elle tranche |
+Le code est conservé. Ce qui change, c'est ce qu'on en dit, et l'ordre des corrections. La file est
+[DEFAUTS-MESURES.md](DEFAUTS-MESURES.md) ; chaque entrée vient d'une mesure du 2026-09-19 :
+
+| # | Défaut | Pourquoi dans cet ordre |
 | --- | --- | --- |
-| 1 | **[TAXO-POC-01](TAXO-POC-01-verite-de-reference-chaine-autorisation.md)** | une chaîne d'autorisation est-elle produite sur une route réelle, avec preuves, prémisses et limites déclarées comme couvertures ? |
-| 2 | **Benchmark manuel** (§12 du manifeste) | agent seul contre le même agent muni des faits : exactitude, complétude, fausses absences, validité des preuves, stabilité, temps, tokens |
-| 3 | **01E Persistance** | ouverte si — et seulement si — le gain est net |
-| 4 | **MCP-01** | trois outils (`find_facts`, `get_evidence`, `get_coverage`), chaque réponse portant sa couverture |
-| 5 | **HIST-01** | lineage Git : ce qu'il faut recalculer, ce qui peut être réutilisé |
+| **D1** | l'unité déployable est ignorée | quatre questions sur douze en dépendaient, et c'est la première information de la page Architecture |
+| **D2** | le silence du parsing : ce qui n'est pas compris ne produit rien | transforme une lacune en affirmation — l'inventaire annonçait 45 endpoints, il y en a 47 |
+| **D3** | `OUT_OF_SCOPE` déclaré sans avoir cherché | une absence n'est vraie que relativement à ce qui a été inspecté |
+| **D5** | `anyRequest()` non modélisé | six routes sur 45 sans conclusion |
+| **D6** | vocabulaire de l'`ABSENCE` trop catégorique | « ne s'applique pas » n'est pas « monté mais inerte sur ce chemin » |
+| **D7** | les faits bruts ne passent pas à l'échelle | 248 000 tokens contre 2 767 pour la même information |
+| **D4** | le diff se tait sur les vrais changements de protection | à rouvrir **après** D1, D2 et D5, dont il dépend |
 
-01F et 01G reprennent ensuite l'ordre de l'épique. Rien d'autre ne s'ouvre avant la chaîne prouvée.
+Corpus visé, mesuré le 2026-09-19 : 24 dépôts Git, et **7 projets de code sans aucun suivi Git** —
+DOCUMENTUM (534 fichiers), UdeS (798), TKM BUREAU (226), import-massif (192), jeux-video (116),
+Demo (41), CROCHET (22). Majoritairement Gradle/Java, puis Node, un cas .NET.
+
+Deux décisions restent ouvertes, et elles conditionnent la suite : accepter ou non un dossier sans
+dépôt Git — aujourd'hui refusé par `NOT_A_GIT_REPOSITORY`, ce qui exclut ces sept projets — et ce
+que « générique » recouvre exactement, au vu de ce corpus.
+
+Les tables ci-dessous décrivent la trajectoire telle qu'elle était planifiée avant le gel. Elles
+sont conservées comme mémoire du projet, pas comme file d'attente.
 
 État des récits de l'épique :
 
