@@ -184,3 +184,29 @@ describe('niveau gratuit (TAXO-MINIA-06)', ()=>{
     expect(remoteNote({...status, provider:'claude', remote:true, data_use:false})).not.toContain('améliorer');
   });
 });
+
+describe('question sur un commit en exploration (MINIA-09b)', ()=>{
+  const explored:MiniaAnswer={...answer, facts:[], answer:'', unknown:'', mode:'exploration', source_context:{status:'ON_DEMAND'},
+    statements:[{type:'claim', text:'Le commit modifie Security.java.', verdict:'CONFIRMED', reason:null,
+      claim:{subject:'commit:'+'b'.repeat(40), relation:'CHANGES', object:'file:Security.java'}},
+      {type:'interpretation', text:'La route serait désormais protégée.'}],
+    trajectory:[{operation:'describe', arguments:{}, outcome:'OK', bytes:900, items:9, not_sent:[]},
+      {operation:'get_commit', arguments:{commit:'b'.repeat(40)}, outcome:'OK', bytes:1200, items:5, not_sent:[]}]};
+  it('montre ce que Git sait, les affirmations vérifiées et le chemin de Minia', ()=>{
+    const html=renderToStaticMarkup(<MiniaView answer={explored}/>);
+    expect(html).toContain('MINIA · ollama qwen2.5:3b · exploration');
+    expect(html).toContain('Termine SEC-TMS-01');
+    expect(html).toContain('verdict verdict-confirmed');
+    expect(html).toContain('La route serait désormais protégée.');
+    expect(html).toContain('Minia pouvait lire le diff de ce commit, fichier par fichier');
+    expect(html).toContain('2 opérations demandées à Taxo');
+  });
+  it('dit pourquoi Minia est revenue au paquet du commit', ()=>{
+    const packet={...answer, mode:'paquet' as const, fallback:'get_commit : Ce commit n’appartient pas à l’historique de cette analyse.',
+      trajectory:explored.trajectory};
+    expect(gaps(packet)[1]).toBe('Exploration interrompue (get_commit : Ce commit n’appartient pas à l’historique de cette analyse.) : Minia a répondu à partir du paquet du commit.');
+    const html=renderToStaticMarkup(<MiniaView answer={packet}/>);
+    expect(html).toContain('Chemin de Minia');
+    expect(html).toContain('L’équipe aurait restreint l’accès.');
+  });
+});

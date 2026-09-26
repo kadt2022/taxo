@@ -11,20 +11,12 @@ limites, un fichier n'est pas transmis ; il est nomme, avec sa raison, pour que 
 import re
 from dataclasses import dataclass, field
 
+# Limites et fichiers generes : la politique de transmission du diff, commune au protocole (ADR 0008).
+from app.history.domain.disclosure import (GENERATED, LIMIT, MAX_DIFF_BYTES, MAX_DIFF_FILES,
+                                           MAX_DIFF_LINES, generated)
+
 OFF, DIFF = 'off', 'diff'
 MODES = (OFF, DIFF)
-
-MAX_DIFF_FILES = 20
-MAX_DIFF_LINES = 1500
-# 32 Ko, environ 11 000 tokens : le diff tient avec les faits dans la fenetre par defaut de Minia (16 384).
-MAX_DIFF_BYTES = 32 * 1024
-
-LIMIT, GENERATED = 'LIMIT', 'GENERATED'
-# Fichiers produits par un outil : volumineux, sans intention d'auteur a interpreter.
-_GENERATED = frozenset({
-    'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb', 'poetry.lock',
-    'pipfile.lock', 'uv.lock', 'cargo.lock', 'go.sum', 'composer.lock', 'gemfile.lock', 'gradle.lockfile'})
-_GENERATED_SUFFIXES = ('.min.js', '.min.css', '.map', '.snap')
 
 
 # Un fichier de test explique moins le risque d'un commit que le code qu'il teste : il passe apres.
@@ -36,11 +28,6 @@ def is_test(path):
     *directories, name = path.split('/')
     in_test_directory = bool(_TEST_DIRECTORIES.intersection(part.lower() for part in directories))
     return in_test_directory or bool(_TEST_NAME.fullmatch(name))
-
-
-def generated(path):
-    name = path.rsplit('/', 1)[-1].lower()
-    return name in _GENERATED or name.endswith(_GENERATED_SUFFIXES)
 
 
 @dataclass

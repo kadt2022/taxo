@@ -15,6 +15,7 @@ import re
 from app.facts import is_path, is_reference
 from app.facts.domain.fact import RELATIONS
 from app.history.domain.errors import UNKNOWN_COMMIT, UNKNOWN_PATH, HistoryError
+from app.history.domain.disclosure import GENERATED, LIMIT, MAX_DIFF_BYTES, MAX_DIFF_FILES, MAX_DIFF_LINES, generated
 from app.projects.application.queries import require_project
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INTERNAL, INVALID_ARGUMENT, MAX_ERROR_BYTES,
@@ -36,18 +37,26 @@ MAX_ARGUMENT_LENGTH = 1000
 
 NATURES = ('ASSERTION', 'ABSENCE', 'COVERAGE')
 V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'get_diff', 'verify_claim')
+# Operations reservees de l'ADR 0009 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
+# commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01).
+ACTIVATED = ('diff_facts',)
+OPERATIONS = V1 + ACTIVATED
 RESERVED = ('find_endpoint', 'trace_access_control', 'find_callers', 'find_callees', 'find_dependencies',
-            'find_configuration', 'diff_facts', 'get_source')
+            'find_configuration', 'get_source')
+# Ce que `describe` dit des arguments de chaque operation.
+_COMMIT_ARGUMENT = {'commit': 'identifiant, 7 caracteres ou plus'}
+_CLAIM_ARGUMENTS = {'subject': 'reference', 'relation': 'relation', 'object': 'reference ou valeur'}
 _ARGUMENTS = {
     'describe': {},
-    'find_facts': {'subject': 'reference', 'relation': 'relation', 'object': 'reference ou valeur',
-                   'nature': '|'.join(NATURES)},
+    'find_facts': {**_CLAIM_ARGUMENTS, 'nature': '|'.join(NATURES)},
     'get_evidence': {'fact': 'F…'},
     'get_coverage': {'scope': 'reference (facultatif)'},
-    'get_commit': {'commit': 'identifiant, 7 caracteres ou plus'},
-    'get_diff': {'commit': 'identifiant, 7 caracteres ou plus', 'path': 'chemin d’un fichier touche'},
-    'verify_claim': {'subject': 'reference', 'relation': 'relation', 'object': 'reference ou valeur'},
+    'get_commit': _COMMIT_ARGUMENT,
+    'get_diff': {**_COMMIT_ARGUMENT, 'path': 'chemin d’un fichier touche'},
+    'verify_claim': _CLAIM_ARGUMENTS,
+    'diff_facts': _COMMIT_ARGUMENT,
 }
+_LOCATION = ('path', 'line_start', 'line_end', 'symbol', 'method', 'object')
 _COMMIT = re.compile(r'[0-9a-f]{7,64}')
 # Syntaxe reservee type:cle : une valeur qui la prend est toujours lue comme une reference (ADR 0002).
 _REFERENCE_SYNTAX = re.compile(r'[a-z][a-z0-9-]*:')
@@ -163,6 +172,8 @@ class Exchange:
         self.diff_allowed = service.source_context == 'diff'
         self.diff_consent = bool(diff_consent) and self.diff_allowed
         self.budget, self.used, self.calls = budget, 0, 0
+        # Ce que l'echange a deja transmis du diff : les limites de l'ADR 0008 valent pour tout l'echange.
+        self.diff_files = self.diff_lines = self.diff_bytes = 0
         self.refs = References()
         evaluations = scan.result.get('evaluations', [])
         reference = next((item['snapshot'] for item in evaluations if item.get('snapshot')), {})
@@ -213,10 +224,10 @@ class Exchange:
     def available(self):
         operations = ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'verify_claim']
         if self._history_available():
-            operations.append('get_commit')
+            operations += ['get_commit', 'diff_facts']
             if self.diff_allowed:
                 operations.append('get_diff')
-        return [name for name in V1 if name in operations]
+        return [name for name in OPERATIONS if name in operations]
 
     def _response(self, operation, coverage, max_bytes, **fields):
         response = Response(operation, self.snapshot, coverage, max_bytes, **fields)
@@ -259,7 +270,7 @@ class Exchange:
         self.calls += 1
         operation = request.get('operation') if isinstance(request, dict) else None
         # Seul un nom d'operation du protocole est renvoye : jamais une valeur arbitraire de l'appelant.
-        operation = operation if operation in V1 or operation in RESERVED else None
+        operation = operation if operation in OPERATIONS or operation in RESERVED else None
         name = request.get('operation') if isinstance(request, dict) else None
         try:
             if not isinstance(request, dict) or request.get('protocol', PROTOCOL) != PROTOCOL:
@@ -389,6 +400,12 @@ class Exchange:
             raise OperationError(INVALID_ARGUMENT, 'path : chemin relatif du dépôt, séparateurs /.')
         if not self._query(subject=reference, relation='CHANGES', object=f'file:{path}'):
             raise OperationError(OUT_OF_SCOPE, 'Ce fichier n’est pas touché par ce commit.')
+        if generated(path):
+            # Fichier produit par un outil (ADR 0008) : son contenu n'est pas lu.
+            response = self._response('get_diff', self._envelope_coverage(_HISTORY), max_bytes, commit=reference,
+                                      path=path)
+            response.not_sent({'what': 'diff', 'reason': GENERATED})
+            return response
         diff = self.service.history.diff(self.project_id, reference.split(':', 1)[1], path)
         fields = {'commit': reference, 'path': path, 'status': diff['status']}
         if diff['old_path']:
@@ -397,9 +414,37 @@ class Exchange:
         if not diff['displayable']:
             response.not_sent({'what': 'diff', 'reason': diff['reason']})
             return response
-        for index, hunk in enumerate(diff['hunks']):
-            if not response.add('items', _hunk(hunk)):
-                response.skip('items', len(diff['hunks']) - index - 1)
+        hunks = [_hunk(hunk) for hunk in diff['hunks']]
+        lines = sum(len(hunk['rows']) for hunk in diff['hunks'])
+        size = sum(len(hunk[side].encode('utf-8')) for hunk in hunks for side in ('before', 'after'))
+        if (self.diff_files >= MAX_DIFF_FILES or self.diff_lines + lines > MAX_DIFF_LINES
+                or self.diff_bytes + size > MAX_DIFF_BYTES):
+            # Au-dela des limites de l'echange, un fichier n'est pas tronque : il n'est pas transmis.
+            response.not_sent({'what': 'diff', 'reason': LIMIT})
+            return response
+        self.diff_files, self.diff_lines, self.diff_bytes = self.diff_files + 1, self.diff_lines + lines, self.diff_bytes + size
+        for index, hunk in enumerate(hunks):
+            if not response.add('items', hunk):
+                response.skip('items', len(hunks) - index - 1)
+                break
+        return response
+
+    def diff_facts(self, arguments, max_bytes):
+        """Les faits que le commit introduit, modifie ou retire, selon les evaluateurs de contenu compares
+        entre son premier parent et lui. Ce sont des changements, pas des faits de l'analyse : ils n'ont pas
+        de reference `F…`, et leurs preuves sont des localisations."""
+        _no_other(arguments, ('commit',))
+        reference, _ = self._commit(arguments)
+        _, base, evaluations = self.service.history.impact(self.project_id, reference.split(':', 1)[1])
+        coverage = [{'subject': self.repository, 'type': 'ANALYSED' if item['comparable'] else 'NOT_INTERPRETED',
+                     'scope': None, 'producer': item['evaluator_id'],
+                     'not_interpreted': item['not_interpreted_after']} for item in evaluations]
+        changes = [_change(change, item['evaluator_id']) for item in evaluations for change in item['changes']]
+        response = self._response('diff_facts', coverage or self._envelope_coverage(), max_bytes,
+                                  commit=reference, parent=f'commit:{base}' if base else None, count=len(changes))
+        for index, change in enumerate(changes):
+            if not response.add('items', change):
+                response.skip('items', len(changes) - index - 1)
                 break
         return response
 
@@ -423,6 +468,15 @@ class Exchange:
                                   max_bytes, claim=claim, verdict=verdict.verdict, reason=verdict.reason)
         self._add_facts(response, list(verdict.facts), evidence=True)
         return response
+
+
+def _change(change, producer):
+    """Un changement de fait, compact : ce qui change, avant, apres, et ou sont les preuves."""
+    located = [{key: proof[key] for key in _LOCATION if key in proof}
+               for proof in change['evidence_before'] + change['evidence_after']]
+    return {'kind': 'change', 'change': change['change'], 'nature': change['kind'], 'subject': change['subject'],
+            'relation': change['relation'], 'before': change['before'], 'after': change['after'],
+            'status': change['status'], 'producer': producer, 'evidence': located}
 
 
 def _side(rows, side):
