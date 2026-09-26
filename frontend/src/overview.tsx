@@ -52,7 +52,9 @@ function api(spring:EvaluationSummary|undefined):Omit<Card,'id'|'title'>{
   if(!spring)return {value:'Non analysé', state:'unknown', detail:'Cette analyse n’a pas cherché les routes : relancez l’analyse globale.'};
   if(spring.status==='FAILED')return {value:'Non analysé', state:'failed', detail:'La recherche des routes a échoué : voir les détails de l’analyse.'};
   const routes=spring.relations.HANDLED_BY??0;
-  const value=routes?`${count(routes)} route${routes>1?'s':''} Spring relevée${routes>1?'s':''}`:'Aucune route Spring';
+  const plural=routes>1?'s':'';
+  let value='Aucune route Spring';
+  if(routes)value=`${count(routes)} route${plural} Spring relevée${plural}`;
   if(spring.status==='PARTIAL')return {value, state:'partial',
     detail:'Certaines routes n’ont pas pu être interprétées : voir les points à vérifier. Rien n’est deviné.'};
   return {value, state:'known', detail:routes?'Contrôleurs Spring MVC, chaque route prouvée à la ligne (tests exclus).'
