@@ -8,6 +8,7 @@ Premier socle local de la plateforme de documentation logicielle : Python/FastAP
 - Parcourir les fichiers sans exécuter les programmes du dépôt.
 - Détecter Java, Python, JavaScript, TypeScript, SQL, Docker, GitHub Actions, Maven et certaines dépendances déclarées dans `package.json` et `pom.xml`.
 - Conserver chaque analyse et la provenance de chaque détection.
+- Relever les endpoints HTTP d'une application Spring MVC et la méthode qui traite chacun, preuves à la ligne (TAXO-04).
 - Consulter les résultats et les analyses précédentes dans le portail français.
 
 Par défaut, une analyse lit le commit `HEAD` dans Git : seuls les fichiers de ce commit sont analysés, sans aucune lecture du dossier de travail. `?commit=<identifiant complet>` analyse un autre commit. `?mode=working-tree` analyse le dossier de travail (fichiers suivis et non ignorés) en le marquant comme tel, avec une empreinte de contenu et l'indicateur `dirty`. Un dossier qui n'est pas la racine d'un dépôt Git est refusé (`NOT_A_GIT_REPOSITORY`). Taxo n'exécute ni hook, ni filtre, ni fsmonitor du dépôt, et ne lit jamais `.env`. Une dépendance déclarée ne prouve pas qu'elle est utilisée à l'exécution.
@@ -168,6 +169,40 @@ Les faits de chaque évaluateur sont conservés et s'interrogent après l'analys
 `GET /api/projects/{id}/scans/{scan_id}/facts?evaluator=&kind=&subject=&relation=&object=`. Les faits
 Git et ceux du code se rejoignent par la même référence `file:`. L'impact d'un commit et Minia ne
 comparent que les évaluateurs de contenu.
+
+### Endpoints Spring, premier analyseur de code (TAXO-03, TAXO-04, ADR 0003)
+
+Troisième évaluateur de l'analyse, `taxo.spring-api` relève la surface HTTP d'une application Spring
+MVC. Pour chaque méthode d'un `@RestController` ou `@Controller` portant `@GetMapping`, `@PostMapping`,
+`@PutMapping`, `@DeleteMapping`, `@PatchMapping` ou `@RequestMapping`, il produit
+`endpoint:GET /api/v1/orgs/{orgCode}/users` `HANDLED_BY`
+`symbol:java:com.example.api.users.UserController#list`. Chaque fait a deux preuves, à la ligne et avec
+leur empreinte : le mapping du contrôleur et celui de la méthode.
+
+Une annotation ne compte que si elle est celle de Spring (nom qualifié ou import) : un `@GetMapping` maison
+n'est pas un endpoint. L'analyseur Java (`app/evaluators/java`, tree-sitter) lit les sources sans JVM,
+sans Gradle ni Maven, et ne connaît aucun framework. Il résout les chemins écrits dans le code :
+
+- chaînes et concaténations ;
+- constantes `static final String` du type, d'un type englobant, d'un import statique, ou d'un autre
+  type du dépôt, y compris une constante qui en cite une autre ;
+- tableaux de chemins et de verbes ;
+- types imbriqués.
+
+Taxo ne devine jamais. Ce qu'il ne sait pas résoudre est déclaré non interprété, avec le fichier qui le
+porte :
+
+- une constante d'un type absent, une propriété `${…}` ;
+- des mappings portés par une interface ou une classe de base ;
+- un contrôleur qui hérite d'une interface générée au build (OpenAPI), ou d'une classe de base porteuse de
+  mappings (sans mapping propre, son préfixe hérité est inconnu : aucun endpoint n'est affirmé) ;
+- un fichier en erreur de syntaxe.
+
+Ses propres mappings, eux, restent des faits. Les sources de test (`src/test`) et les sorties de build
+sont hors du périmètre, et la couverture le dit.
+
+Les endpoints rejoignent l'impact d'un commit (endpoint introduit, retiré, ou traité par une autre
+méthode), le protocole `taxo-query/1` et Minia, sans changement de ces consommateurs.
 
 ### Interroger Taxo (TAXO-QUERY-01)
 

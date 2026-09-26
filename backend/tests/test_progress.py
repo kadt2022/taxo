@@ -50,11 +50,11 @@ def test_the_analysis_announces_its_real_steps_in_order(api):
     job_id, events = run_analysis(client, base)
     types = [event_type for event_type, _ in events]
     assert types[0] == 'analysis.started' and types[-1] == 'analysis.completed'
-    assert events[0][1]['evaluators'] == ['taxo.inventory', 'taxo.git']
+    assert events[0][1]['evaluators'] == ['taxo.inventory', 'taxo.git', 'taxo.spring-api']
     assert types.index('snapshot.ready') < types.index('evaluator.started')
     started = [data['evaluator'] for event_type, data in events if event_type == 'evaluator.started']
     completed = [data['evaluator'] for event_type, data in events if event_type == 'evaluator.completed']
-    assert started == completed == ['taxo.inventory', 'taxo.git'], 'chaque evaluateur termine avant le suivant'
+    assert started == completed == ['taxo.inventory', 'taxo.git', 'taxo.spring-api'], 'chaque evaluateur termine avant le suivant'
     assert types.index('analysis.consolidating') > types.index('evaluator.completed')
 
 

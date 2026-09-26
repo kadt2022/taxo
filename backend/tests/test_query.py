@@ -153,7 +153,7 @@ def test_analysing_the_project_never_becomes_the_latest_commits(api):
     client.post(f'{base}/scans')
     result = query(client, base, 'Analyse le projet').json()
     assert (result['status'], result['commits'], result['facts']) == ('GLOBAL', [], [])
-    assert {item['evaluator_id'] for item in result['evaluations']} == {'taxo.inventory', 'taxo.git'}
+    assert {item['evaluator_id'] for item in result['evaluations']} == {'taxo.inventory', 'taxo.git', 'taxo.spring-api'}
     assert query(client, base, '0 derniers commits').status_code == 422
 
 
