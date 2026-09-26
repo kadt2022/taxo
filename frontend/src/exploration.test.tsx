@@ -82,7 +82,8 @@ describe('réponse en exploration', ()=>{
     expect(html).toContain('verdict verdict-confirmed');
     expect(html).toContain('verdict verdict-refuted');
     expect(html).toContain('verdict verdict-not-proven');
-    expect(html).toContain('verdict verdict-none');
+    expect(html).not.toContain('verdict verdict-none');
+    expect(html).toContain('Minia : « Mal formée. »');
     expect(html).toContain('commit cccccccccccc modifie src/app.txt (MODIFIED)');
     expect(html).toContain('<span class="evidence">commit cccccccccccc (git.log)</span>');
     expect(html).toContain('Il ajusterait l’application.');
@@ -93,12 +94,61 @@ describe('réponse en exploration', ()=>{
     const html=renderToStaticMarkup(<Statements statements={[]}/>);
     expect(html).toContain('Minia n’a fait aucune affirmation à vérifier.');
     expect(html).toContain('Minia ne propose aucune interprétation.');
-    expect(html).toContain('Aucune limite signalée.');
+    expect(html).toContain('Aucune limite signalée par Taxo.');
   });
   it('dit pourquoi Minia est revenue au paquet', ()=>{
     const html=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, mode:'paquet', statements:undefined,
       answer:'Un commit aurait changé src/app.txt.', fallback:'Minia ne progressait plus', trajectory:steps.slice(0,1)}}/>);
     expect(html).toContain('Exploration interrompue (Minia ne progressait plus)');
     expect(html).toContain('1 opération demandée à Taxo');
+  });
+});
+
+describe('frontière preuve / texte libre (MINIA-11)', ()=>{
+  // Le scénario à interdire : une phrase fausse de Minia, jointe à un triplet vrai.
+  const catastrophe:Statement={type:'claim', text:'Ce commit supprime l’authentification.',
+    claim:{subject:`commit:${'c'.repeat(40)}`, relation:'AUTHORED_BY', object:'person:kadt2022@gmail.com'},
+    verdict:'CONFIRMED', reason:null, facts:[], evidence:[]};
+  const html=renderToStaticMarkup(<Statements statements={[catastrophe, {type:'unknown', text:'Le risque exact n’est pas établi.'}]}
+    limits={['Non analysé par Taxo : file:A.']}/>);
+  const green=html.slice(html.indexOf('minia-block fact'), html.indexOf('minia-block interpretation'));
+  const blue=html.slice(html.indexOf('minia-block interpretation'), html.indexOf('minia-block unknown'));
+  const orange=html.slice(html.indexOf('minia-block unknown'));
+
+  it('ne met jamais une phrase de Minia à côté d’un badge vert', ()=>{
+    expect(green).toContain('Confirmée par Taxo');
+    expect(green).not.toContain('supprime l’authentification');
+    expect(green).toContain(`Commit ${'c'.repeat(12)} a pour auteur kadt2022@gmail.com.`);
+  });
+  it('montre exactement ce que Taxo a vérifié : sujet, relation, objet, verdict', ()=>{
+    for(const value of [`commit:${'c'.repeat(40)}`, 'AUTHORED_BY', 'person:kadt2022@gmail.com', 'CONFIRMED'])
+      expect(green).toContain(`<code>${value}</code>`);
+    expect(green).toContain('Aucune preuve : Taxo n’a établi aucun fait');
+  });
+  it('range tout le texte de Minia dans la colonne non vérifiée', ()=>{
+    expect(blue).toContain('non vérifié');
+    expect(blue).toContain('Minia : « Ce commit supprime l’authentification. »');
+    expect(blue).toContain('Taxo n’a vérifié que : Commit');
+    expect(blue).toContain('Minia dit ne pas savoir :</em> Le risque exact n’est pas établi.');
+  });
+  it('ne laisse dans la colonne de Taxo que ce que Taxo constate', ()=>{
+    expect(orange).toContain('Non analysé par Taxo : file:A.');
+    expect(orange).not.toContain('Le risque exact');
+  });
+});
+
+describe('affirmation non vérifiable (MINIA-11)', ()=>{
+  it('reste un texte de Minia, jamais reformulée par Taxo en vert', ()=>{
+    const unchecked:Statement={type:'claim', text:'Ce commit désactive la sécurité.', verdict:null,
+      claim:{subject:`commit:${'d'.repeat(40)}`, relation:'INVENTED', object:'file:A.java'},
+      error:{code:'INVALID_ARGUMENT', message:'Relation hors du vocabulaire : INVENTED.'}};
+    const html=renderToStaticMarkup(<Statements statements={[unchecked]}/>);
+    const green=html.slice(html.indexOf('minia-block fact'), html.indexOf('minia-block interpretation'));
+    const blue=html.slice(html.indexOf('minia-block interpretation'), html.indexOf('minia-block unknown'));
+    expect(green).toContain('Minia n’a fait aucune affirmation à vérifier.');
+    expect(green).not.toContain('d'.repeat(12));
+    expect(green).not.toContain('Non vérifiable');
+    expect(blue).toContain('Minia : « Ce commit désactive la sécurité. »');
+    expect(blue).toContain('Non vérifiable : Relation hors du vocabulaire : INVENTED.');
   });
 });

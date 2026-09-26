@@ -281,9 +281,20 @@ Minia conclut par des **énoncés typés**, et rien d'autre n'est affiché :
 
 | Énoncé | Affichage |
 | --- | --- |
-| `claim` : une phrase et son affirmation structurée (sujet, relation, objet) | toujours avec le verdict de Taxo : confirmée (avec le fait et ses preuves), contredite (avec ce qui la contredit), non prouvée (avec la raison), ou non vérifiable (affirmation mal formée) |
+| `claim` : une phrase et son affirmation structurée (sujet, relation, objet) | l'**affirmation structurée**, dite par Taxo, avec son verdict : confirmée (avec le fait et ses preuves), contredite (avec ce qui la contredit), non prouvée (avec la raison), ou non vérifiable (affirmation mal formée). La phrase de Minia va dans « non vérifié » |
 | `interpretation` : un raisonnement, une hypothèse | « non vérifié » |
-| `unknown` : ce qui manque pour conclure | dans « Ce que Taxo ne sait pas » |
+| `unknown` : ce que Minia dit ne pas savoir | « non vérifié », précédé de « Minia dit ne pas savoir » |
+
+**Frontière preuve / texte libre (TAXO-MINIA-11).** Un verdict ne couvre que ce que Taxo a vérifié, jamais une
+formulation qui irait au-delà : si Minia écrit « ce commit supprime l'authentification » en joignant
+`AUTHORED_BY`, le badge vert ne porte que « Le commit … a pour auteur … », et sa phrase reste dans la colonne
+non vérifiée. Les trois colonnes se répartissent ainsi :
+
+- **vert** : seulement le texte que Taxo produit à partir de l'affirmation vérifiée ; « Ce que Taxo a vérifié »
+  montre `subject`, `relation`, `object`, le verdict et les preuves ;
+- **bleu** : tout le texte libre de Minia, même quand il accompagne une affirmation confirmée ;
+- **jaune** : seulement les limites que Taxo constate lui-même (zones non analysées, fichiers non transmis,
+  repli en mode paquet…).
 
 La **trajectoire** est visible en direct puis sous la réponse : chaque opération, ses arguments, son issue,
 sa taille et ce qui n'a pas été transmis. Une opération refusée (`NO_CONSENT`, `OUT_OF_SCOPE`…) est rendue

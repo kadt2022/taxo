@@ -76,7 +76,8 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
     <Trajectory steps={answer.trajectory??[]}/>
     <footer>Minia a interrogé Taxo opération par opération ; Taxo a vérifié chacune de ses affirmations. Aucune phrase n’est affichée comme établie sans verdict de Taxo, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
-  const limits=[answer.unknown, answer.fallback?`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir d’un paquet de faits.`:'', answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
+  // Ce que Taxo constate lui-meme ; ce que Minia dit ne pas savoir reste avec son texte, non verifie (MINIA-11).
+  const limits=[answer.fallback?`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir d’un paquet de faits.`:'', answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:''].filter(Boolean);
   return <section className="minia" aria-label="Réponse de Minia">
@@ -94,10 +95,11 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
       <article className="minia-block interpretation">
         <h3>Ce que Minia en déduit <span className="badge">non vérifié</span></h3>
         <p>{answer.answer||'Minia ne propose aucune interprétation.'}</p>
+        {answer.unknown&&<p><em>Minia dit ne pas savoir :</em> {answer.unknown}</p>}
       </article>
       <article className="minia-block unknown">
         <h3>Ce que Taxo ne sait pas</h3>
-        {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée.</p>}
+        {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée par Taxo.</p>}
       </article>
     </div>
     <Trajectory steps={answer.trajectory??[]}/>

@@ -114,9 +114,10 @@ export function SourceConsent({status, checked, onChange}:Readonly<{status:Minia
   </div>;
 }
 
-/** Tout ce qui limite la reponse : le texte de Minia, puis les limites que Taxo connait lui-meme. */
+/** Les limites que Taxo constate lui-meme. Ce que Minia dit ne pas savoir n'y figure pas : c'est son texte,
+ * non verifie, affiche avec le sien (MINIA-11). */
 export function gaps(answer:MiniaAnswer){
-  const items=answer.unknown?[answer.unknown]:[];
+  const items:string[]=[];
   if(answer.fallback)items.push(`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir du paquet du commit.`);
   if(answer.not_interpreted.length)items.push(`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`);
   if(answer.failures.length)items.push(`Analyses en échec : ${answer.failures.join(' ; ')}.`);
@@ -142,8 +143,7 @@ export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · exploration</p>
     <p className="minia-question">{answer.question}</p>
     <CommitFacts git={answer.git}/>
-    <Statements statements={answer.statements}/>
-    {limits.length>0&&<ul className="muted">{limits.map(item=><li key={item}>{item}</li>)}</ul>}
+    <Statements statements={answer.statements} limits={limits}/>
     <Trajectory steps={answer.trajectory??[]}/>
     <footer>Minia a interrogé Taxo opération par opération à partir de ce que Git sait du commit ; Taxo a vérifié chacune de ses affirmations. Le diff n’est lu que sur double accord, jamais le reste du dépôt, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
@@ -168,10 +168,11 @@ export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
         <h3>Ce que Minia en déduit <span className="badge">non vérifié</span></h3>
         {diff&&<p className="muted">À partir des faits de Taxo et du diff du commit.</p>}
         <p>{answer.answer||'Minia ne propose aucune interprétation.'}</p>
+        {answer.unknown&&<p><em>Minia dit ne pas savoir :</em> {answer.unknown}</p>}
       </article>
       <article className="minia-block unknown">
         <h3>Ce que Taxo ne sait pas</h3>
-        {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée.</p>}
+        {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée par Taxo.</p>}
       </article>
     </div>
     <Trajectory steps={answer.trajectory??[]}/>

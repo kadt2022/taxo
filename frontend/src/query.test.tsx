@@ -66,7 +66,7 @@ group('vues', ()=>{
     expect(html).toContain('Ce que Taxo sait');
     expect(html).toContain('<summary>Preuve</summary>');
     expect(html).toContain('Historique Git');
-    expect(html).toContain('Aucune limite signalée.');
+    expect(html).toContain('Aucune limite signalée par Taxo.');
     expect(html).toContain('R1 termine');
     expect(renderToStaticMarkup(<SelectionAnswerView answer={{...answer, not_interpreted:['commit:x']}}/>)).toContain('Non analysé par Taxo : commit:x.');
     const nothing=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, status:'NEEDS_SELECTION', facts:[], answer:'',

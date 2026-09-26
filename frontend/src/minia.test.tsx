@@ -23,13 +23,14 @@ describe('place', ()=>{
 });
 
 describe('gaps', ()=>{
-  it('ajoute aux inconnues de Minia les limites que Taxo connaît', ()=>{
+  it('ne liste que les limites que Taxo constate lui-même, jamais le texte de Minia (MINIA-11)', ()=>{
     const all=gaps({...answer, not_interpreted:['file:A'], failures:['e : boom'], files_not_sent:4, facts_not_sent:3, rejected_citations:['F9']});
-    expect(all).toEqual(['Le motif métier n’est pas connu.', 'Non analysé par Taxo : file:A.',
+    expect(all).toEqual(['Non analysé par Taxo : file:A.',
       'Analyses en échec : e : boom.', '4 fichiers du commit n’ont pas été transmis à Minia (limite de taille).',
       '3 faits n’ont pas été transmis à Minia (limite de taille).',
       'Références inventées par Minia et écartées : F9.']);
-    expect(gaps({...answer, unknown:''})).toEqual([]);
+    expect(gaps(answer)).toEqual([]);
+    expect(gaps(answer)).not.toContain(answer.unknown);
   });
 });
 
@@ -77,7 +78,7 @@ describe('MiniaView', ()=>{
       model:{configured:true, provider:null, model:null}}}/>);
     expect(html).toContain('Aucun fait de Taxo n’appuie cette réponse.');
     expect(html).toContain('Minia ne propose aucune interprétation.');
-    expect(html).toContain('Aucune limite signalée.');
+    expect(html).toContain('Aucune limite signalée par Taxo.');
     expect(html).toContain('>MINIA<');
   });
   it('affiche un fait sans avant ni après', ()=>{
@@ -209,7 +210,7 @@ describe('question sur un commit en exploration (MINIA-09b)', ()=>{
   it('dit pourquoi Minia est revenue au paquet du commit', ()=>{
     const packet={...answer, mode:'paquet' as const, fallback:'get_commit : Ce commit n’appartient pas à l’historique de cette analyse.',
       trajectory:explored.trajectory};
-    expect(gaps(packet)[1]).toBe('Exploration interrompue (get_commit : Ce commit n’appartient pas à l’historique de cette analyse.) : Minia a répondu à partir du paquet du commit.');
+    expect(gaps(packet)[0]).toBe('Exploration interrompue (get_commit : Ce commit n’appartient pas à l’historique de cette analyse.) : Minia a répondu à partir du paquet du commit.');
     const html=renderToStaticMarkup(<MiniaView answer={packet}/>);
     expect(html).toContain('Chemin de Minia');
     expect(html).toContain('L’équipe aurait restreint l’accès.');
