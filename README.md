@@ -192,6 +192,44 @@ globale), ou sans commit correspondant, le modèle n'est pas appelé et Minia le
 
 API : `GET /api/projects/{id}/query?q=…` et `POST /api/projects/{id}/ask` avec `{"question": "…"}`.
 
+### Protocole Taxo, opérations v1 (TAXO-QUERY-02, ADR 0009)
+
+> Minia comprend la question et raisonne. Taxo cherche, relie et prouve. L'humain décide.
+
+Les opérations que Minia, ou tout autre client, peut demander à Taxo sur la dernière analyse d'un projet.
+Elles sont en lecture seule et ne connaissent ni langage, ni framework, ni projet : elles interrogent les
+relations et les références du contrat du fait.
+
+| Opération | Rend |
+| --- | --- |
+| `describe` | les opérations disponibles pour ce projet, les analyseurs et les relations présentes |
+| `find_facts` | les faits qui correspondent à `subject`, `relation`, `object` ou `nature` (au moins un) |
+| `get_evidence` | les preuves d'un fait reçu dans l'échange (`F…`) |
+| `get_coverage` | ce qui a été analysé ou non, éventuellement pour un périmètre (`scope`) |
+| `get_commit` | les faits Git d'un commit, sans contenu |
+| `get_diff` | les blocs modifiés d'un fichier touché par un commit, sur double consentement (ADR 0008) |
+| `verify_claim` | `CONFIRMED`, `REFUTED` ou `NOT_PROVEN` (avec sa raison) pour une affirmation structurée |
+
+```http
+POST /api/projects/{id}/taxo-query
+{"consent": {"diff": false}, "max_bytes": 64000,
+ "requests": [{"operation": "verify_claim",
+               "arguments": {"subject": "commit:…", "relation": "CHANGES", "object": "file:src/app.txt"}}]}
+```
+
+- **Un échange par requête** : jusqu'à 20 opérations partagent l'instantané, le budget (64 000 octets par
+  défaut, 200 000 au plus ; 8 000 par opération par défaut, 32 000 au plus) et les références `F…` / `E…`.
+- **Enveloppe commune** : `outcome` `OK` ou `ERROR` (codes `INVALID_ARGUMENT`, `NO_CONSENT`,
+  `NOT_AVAILABLE`, `OUT_OF_SCOPE`, `BUDGET_EXHAUSTED`, `INTERNAL`), couverture toujours présente, et
+  `not_sent` pour ce qui n'a pas tenu, sans jamais couper un élément au milieu.
+- **Verdicts** : `REFUTED` n'est rendu que sur une relation exclusive (un commit a un auteur, un fichier un
+  langage). « Non trouvé » reste `NOT_PROVEN`, avec `NOT_FOUND_IN_ANALYSED_SCOPE`, `NOT_INTERPRETED` ou
+  `NOT_ANALYSED`. La réfutation par un fait `ABSENCE` attend le premier analyseur qui en produit.
+- **`get_diff`** n'est proposé que si `MINIA_SOURCE_CONTEXT=diff`, et ne répond qu'avec
+  `"consent": {"diff": true}` ; les refus de l'historique (`.env`, binaires, fichiers trop gros…) restent.
+- Les opérations réservées (`find_endpoint`, `find_callers`, `get_source`…) répondent `NOT_AVAILABLE` tant
+  qu'aucun analyseur ne les nourrit.
+
 ### Minia : demander ce que signifie un commit (TAXO-MINIA-01)
 
 Dans la fiche d'un commit, « Demander à Minia » pose une question en langage courant. Minia répond à
