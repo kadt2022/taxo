@@ -27,6 +27,7 @@ describe('overviewCards', ()=>{
   });
   it('ne transforme jamais une absence d’information en résultat', ()=>{
     for(const id of ['architecture','api','security'])expect(card(scan,id)).toMatchObject({value:'Non analysé', state:'unknown'});
+    expect(card(scan,'api').detail).toContain('relancez l’analyse globale');
     expect(card(scan,'security').detail).toContain('Rien n’est affirmé');
     const old:Scan={...scan, evaluations:undefined};
     expect(card(old,'history')).toMatchObject({value:'Non analysé', state:'unknown'});
@@ -43,6 +44,23 @@ describe('overviewCards', ()=>{
     expect(card({...scan, snapshot:{...snapshot, mode:'WORKING_TREE'}},'project').detail).toBe('Dossier de travail au commit aaaaaaaaaaaa.');
     expect(card({id:'x', created_at:'', snapshot:null},'project')).toMatchObject({value:'0 fichiers analysés', detail:'Fichiers du dossier analysé.'});
     expect(evaluationsOf({id:'x', created_at:''})).toEqual([]);
+  });
+});
+
+describe('carte API (TAXO-04)', ()=>{
+  const spring=(extra:Partial<EvaluationSummary>)=>({...scan, evaluations:[inventory, git, summary('taxo.spring-api', extra)]});
+  it('compte les routes relevées par l’évaluateur Spring', ()=>{
+    expect(card(spring({relations:{HANDLED_BY:17}}),'api')).toMatchObject({value:'17 routes Spring relevées', state:'known'});
+    expect(card(spring({relations:{HANDLED_BY:1}}),'api').value).toBe('1 route Spring relevée');
+    expect(card(spring({relations:{HANDLED_BY:17}}),'api').detail).toContain('prouvée à la ligne');
+  });
+  it('dit une absence analysée, une analyse partielle ou en échec, sans rien deviner', ()=>{
+    expect(card(spring({}),'api')).toMatchObject({value:'Aucune route Spring', state:'known'});
+    expect(card(spring({}),'api').detail).toBe('Aucune route Spring MVC trouvée dans les sources Java (tests exclus).');
+    expect(card(spring({}),'api').detail).not.toContain('contrôleur');
+    expect(card(spring({status:'PARTIAL', relations:{HANDLED_BY:1}}),'api')).toMatchObject({value:'1 route Spring relevée', state:'partial'});
+    expect(card(spring({status:'PARTIAL'}),'api').detail).toContain('Rien n’est deviné');
+    expect(card(spring({status:'FAILED'}),'api')).toMatchObject({value:'Non analysé', state:'failed'});
   });
 });
 
