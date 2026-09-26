@@ -82,7 +82,8 @@ def test_a_blocked_or_cut_answer_is_not_shown(payload, expected):
 @pytest.mark.parametrize('status, body, expected', [
     (400, {'error': {'message': 'API key not valid.', 'status': 'INVALID_ARGUMENT'}}, 'GEMINI_API_KEY'),
     (403, {'error': {'status': 'PERMISSION_DENIED'}}, 'GEMINI_API_KEY'),
-    (404, {'error': {'message': 'not found'}}, 'MINIA_GEMINI_MODEL'),
+    (404, {'error': {'message': 'not found'}}, 'non accessible avec cette clé.*MINIA_GEMINI_MODEL.*not found'),
+    (404, {}, 'Google AI Studio\\.$'),
     (429, {'error': {'status': 'RESOURCE_EXHAUSTED'}}, 'Quota'),
     (400, {'error': {'message': 'schema invalide'}}, 'schema invalide'),
     (500, {}, 'répondu 500'),

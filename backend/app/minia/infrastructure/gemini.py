@@ -152,7 +152,11 @@ def _check(response, model_name):
     if 'API_KEY' in said or 'API KEY' in said or response.status_code in (401, 403) or status == 'PERMISSION_DENIED':
         raise MiniaError(UNAVAILABLE, 'Clé Gemini refusée : vérifier GEMINI_API_KEY.')
     if response.status_code == 404:
-        raise MiniaError(UNAVAILABLE, f'Modèle Gemini inconnu : {model_name} (MINIA_GEMINI_MODEL).')
+        # Un 404 ne dit pas que le modele n'existe pas : il peut exister sans etre ouvert a ce projet
+        # (Google reserve parfois d'anciens modeles aux projets qui les utilisaient deja).
+        said = f' Google : « {message} »' if message else ''
+        raise MiniaError(UNAVAILABLE, f'Modèle Gemini introuvable ou non accessible avec cette clé : {model_name} '
+                         f'(MINIA_GEMINI_MODEL). Choisir un modèle listé pour ce projet dans Google AI Studio.{said}')
     if response.status_code == 429:
         raise MiniaError(UNAVAILABLE, 'Quota de l’API Gemini atteint (niveau gratuit limité) : réessayer plus tard.')
     if response.status_code == 400:
