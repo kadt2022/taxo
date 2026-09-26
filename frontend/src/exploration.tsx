@@ -8,10 +8,12 @@ type NotSent = {what:string; count?:number; reason:string};
 export type TrajectoryStep = {operation:string; arguments:Record<string,string>; outcome:'OK'|'ERROR'; bytes:number;
   items?:number; not_sent?:NotSent[]; verdict?:string; reason?:string|null; error?:ProtocolError};
 type Claim = {subject:string; relation:string; object?:string};
+type Location = {path?:string; line_start?:number; line_end?:number; object?:string; method?:string};
+type Proof = {ref:string; fact:string; location:Location};
 export type Statement =
   | {type:'interpretation'|'unknown'; text:string}
   | {type:'claim'; text:string; claim:Claim; verdict:string|null; reason?:string|null; error?:ProtocolError;
-      facts?:{ref:string; fact:GitFact; evidence_count:number}[]};
+      facts?:{ref:string; fact:GitFact; evidence_count:number}[]; evidence?:Proof[]};
 
 const VERDICTS:Record<string,string>={CONFIRMED:'Confirmée par Taxo', REFUTED:'Contredite par Taxo', NOT_PROVEN:'Non prouvée'};
 const REASONS:Record<string,string>={NOT_FOUND_IN_ANALYSED_SCOPE:'Taxo a cherché là où il analyse et n’a rien établi',
@@ -42,6 +44,14 @@ export function stepText(step:TrajectoryStep){
   return `${name}${args?` (${args})`:''} → ${outcome}${cut?`, ${cut} non transmis`:''} · ${step.bytes} octets`;
 }
 
+/** Ou se trouve une preuve : fichier et lignes, ou objet Git ; la methode d'extraction entre parentheses. */
+export function proofText(location:Location){
+  const where=location.path?(location.line_start===undefined?location.path
+    :`${location.path}:${location.line_start}${location.line_end!==undefined&&location.line_end!==location.line_start?`-${location.line_end}`:''}`)
+    :location.object?reference(location.object):'emplacement non précisé';
+  return location.method?`${where} (${location.method})`:where;
+}
+
 const verdictClass=(verdict:string|null)=>`verdict verdict-${(verdict??'none').toLowerCase().replaceAll('_','-')}`;
 
 export function Trajectory({steps}:Readonly<{steps:TrajectoryStep[]}>){
@@ -61,7 +71,9 @@ export function Statements({statements}:Readonly<{statements:Statement[]}>){
       {claims.length?<ul>{claims.map((item,index)=><li key={index}>
         <span className={verdictClass(item.verdict)}>{verdictText(item)}</span> {item.text}
         <details className="proof"><summary>Ce que Taxo a vérifié</summary>{claimText(item.claim)}
-          {item.facts?.length?<ul>{item.facts.map(f=><li key={f.ref}>{factLine(f.fact)} <span className="muted">· {f.evidence_count} preuve{f.evidence_count>1?'s':''}</span></li>)}</ul>:null}
+          {item.facts?.length?<ul>{item.facts.map(f=><li key={f.ref}>{factLine(f.fact)}
+            {(item.evidence??[]).filter(proof=>proof.fact===f.ref).map(proof=><span className="evidence" key={proof.ref}>{proofText(proof.location)}</span>)}
+          </li>)}</ul>:null}
         </details></li>)}</ul>:<p className="muted">Minia n’a fait aucune affirmation à vérifier.</p>}
     </article>
     <article className="minia-block interpretation">

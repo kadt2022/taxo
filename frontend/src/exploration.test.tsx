@@ -1,13 +1,14 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {claimText, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
+import {claimText, proofText, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
 import {MiniaProgress, reduceMinia, stageText, startMinia} from './minia-live';
 import {SelectionAnswerView, type SelectionAnswer} from './query';
 
 const sha='c'.repeat(40);
 const confirmed:Statement={type:'claim', text:'Le commit modifie src/app.txt.', verdict:'CONFIRMED', reason:null,
   claim:{subject:`commit:${sha}`, relation:'CHANGES', object:'file:src/app.txt'},
-  facts:[{ref:'F1', fact:{subject:`commit:${sha}`, relation:'CHANGES', object:'file:src/app.txt', qualifiers:{change:'MODIFIED'}}, evidence_count:1}]};
+  facts:[{ref:'F1', fact:{subject:`commit:${sha}`, relation:'CHANGES', object:'file:src/app.txt', qualifiers:{change:'MODIFIED'}}, evidence_count:1}],
+  evidence:[{ref:'E1', fact:'F1', location:{object:`commit:${sha}`, method:'git.log'}}]};
 const refuted:Statement={type:'claim', text:'Écrit par quelqu’un d’autre.', verdict:'REFUTED', reason:null,
   claim:{subject:`commit:${sha}`, relation:'AUTHORED_BY', object:'person:autre@x'}, facts:[]};
 const unproven:Statement={type:'claim', text:'Protégé par R1.', verdict:'NOT_PROVEN', reason:'NOT_ANALYSED',
@@ -31,6 +32,16 @@ describe('verdicts', ()=>{
   it('écrit l’affirmation vérifiée', ()=>{
     expect(claimText({subject:`commit:${sha}`, relation:'CHANGES', object:'file:src/app.txt'})).toBe('commit cccccccccccc modifie src/app.txt');
     expect(claimText({subject:'route-pattern:/api/**', relation:'PERMITS_ALL'})).toBe('routes /api/** est ouvert à tous');
+  });
+});
+
+describe('preuves', ()=>{
+  it('dit où se trouve chaque preuve', ()=>{
+    expect(proofText({object:`commit:${sha}`, method:'git.log'})).toBe('commit cccccccccccc (git.log)');
+    expect(proofText({path:'pom.xml', line_start:3, line_end:5, method:'maven'})).toBe('pom.xml:3-5 (maven)');
+    expect(proofText({path:'pom.xml', line_start:3, line_end:3})).toBe('pom.xml:3');
+    expect(proofText({path:'package.json'})).toBe('package.json');
+    expect(proofText({})).toBe('emplacement non précisé');
   });
 });
 
@@ -71,6 +82,7 @@ describe('réponse en exploration', ()=>{
     expect(html).toContain('verdict verdict-not-proven');
     expect(html).toContain('verdict verdict-none');
     expect(html).toContain('commit cccccccccccc modifie src/app.txt (MODIFIED)');
+    expect(html).toContain('<span class="evidence">commit cccccccccccc (git.log)</span>');
     expect(html).toContain('Il ajusterait l’application.');
     expect(html).toContain('Taxo ne dit pas pourquoi.');
     expect(html).toContain('Chemin de Minia');
