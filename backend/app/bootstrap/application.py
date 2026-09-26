@@ -90,7 +90,8 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     # Protocole Taxo (ADR 0009) : operations en lecture seule sur la derniere analyse ; le diff reste soumis
     # au meme double consentement que pour Minia (ADR 0008).
     source = settings.minia_source_context(source_context)
-    api.include_router(protocol_router(TaxoQuery(projects, scans, facts, history, registry.all(), source)))
+    api.state.taxo_query = TaxoQuery(projects, scans, facts, history, registry.all(), source)
+    api.include_router(protocol_router(api.state.taxo_query))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ADR 0004, regle 14).
     # Plusieurs fournisseurs peuvent servir Minia (Ollama local, Claude distant) : chaque demande choisit.
     options = settings.minia()

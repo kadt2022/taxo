@@ -42,8 +42,11 @@ class Verdict:
 def contains(scope, reference):
     """Le perimetre `scope` (repository, module, directory, file) englobe-t-il `reference` ?"""
     kind, _, key = scope.partition(':')
-    if kind == 'repository' or scope == reference:
+    if scope == reference:
         return True
+    if kind == 'repository':
+        # Un depot contient ses entites, jamais un autre depot.
+        return not reference.startswith('repository:')
     if kind == 'directory':
         _, _, target = reference.partition(':')
         return reference.split(':', 1)[0] in _SCOPES[2:] and target.startswith(key.rstrip('/') + '/')

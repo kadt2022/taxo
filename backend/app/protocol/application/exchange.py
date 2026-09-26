@@ -17,9 +17,9 @@ from app.facts.domain.fact import RELATIONS
 from app.history.domain.errors import UNKNOWN_COMMIT, UNKNOWN_PATH, HistoryError
 from app.projects.application.queries import require_project
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
-from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INTERNAL, INVALID_ARGUMENT, NO_CONSENT,
-                                          NOT_AVAILABLE, OUT_OF_SCOPE, PROTOCOL, OperationError, Response,
-                                          error)
+from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INTERNAL, INVALID_ARGUMENT, MAX_ERROR_BYTES,
+                                          NO_CONSENT, NOT_AVAILABLE, OUT_OF_SCOPE, PROTOCOL, OperationError,
+                                          Response, error)
 from app.protocol.domain.verdict import Analyzer, contains, judge
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,9 @@ MAX_OPERATION_BYTES = 32_000
 DEFAULT_EXCHANGE_BYTES = 64_000
 MAX_EXCHANGE_BYTES = 200_000
 MAX_OPERATIONS = 20
+# Chaque operation encore possible garde de quoi repondre par un refus : le budget n'est jamais depasse.
+ERROR_RESERVE = MAX_OPERATIONS * MAX_ERROR_BYTES
+MIN_EXCHANGE_BYTES = ERROR_RESERVE + 6_000
 MAX_ARGUMENT_LENGTH = 1000
 
 NATURES = ('ASSERTION', 'ABSENCE', 'COVERAGE')
@@ -46,6 +49,8 @@ _ARGUMENTS = {
     'verify_claim': {'subject': 'reference', 'relation': 'relation', 'object': 'reference ou valeur'},
 }
 _COMMIT = re.compile(r'[0-9a-f]{7,64}')
+# Syntaxe reservee type:cle : une valeur qui la prend est toujours lue comme une reference (ADR 0002).
+_REFERENCE_SYNTAX = re.compile(r'[a-z][a-z0-9-]*:')
 _HISTORY = 'HAS_COMMIT'
 _UNREADABLE = ('NOT_INTERPRETED', 'READ_ERROR')
 
@@ -79,6 +84,17 @@ def _no_other(arguments, allowed):
     unknown = sorted(set(arguments) - set(allowed))
     if unknown:
         raise OperationError(INVALID_ARGUMENT, f'Argument inconnu : {", ".join(unknown)}.')
+
+
+def _claim_object(relation, target):
+    """L'objet d'une affirmation doit etre du type que la relation admet (ADR 0002, vocabulaire v1)."""
+    _, targets, _ = RELATIONS[relation]
+    if bool(targets) != (target is not None):
+        raise OperationError(INVALID_ARGUMENT, f'{relation} {"exige" if targets else "n’a pas"} d’objet.')
+    if target is None or (relation == 'AUTHORIZED_BY' and not _REFERENCE_SYNTAX.match(target)):
+        return
+    if not is_reference(target) or target.split(':', 1)[0] not in targets:
+        raise OperationError(INVALID_ARGUMENT, f'Objet attendu pour {relation} : {", ".join(sorted(targets))}.')
 
 
 def _without_evidence(fact):
@@ -135,7 +151,7 @@ class TaxoQuery:
         analyses = self.scans.list(project_id)
         if not analyses:
             raise QueryError(NO_ANALYSIS, "Aucune analyse globale pour ce projet : lancez-la d'abord.")
-        budget = min(max_bytes or DEFAULT_EXCHANGE_BYTES, MAX_EXCHANGE_BYTES)
+        budget = max(MIN_EXCHANGE_BYTES, min(max_bytes or DEFAULT_EXCHANGE_BYTES, MAX_EXCHANGE_BYTES))
         return Exchange(self, project.id, analyses[0], diff_consent, budget)
 
 
@@ -149,8 +165,9 @@ class Exchange:
         self.budget, self.used, self.calls = budget, 0, 0
         self.refs = References()
         evaluations = scan.result.get('evaluations', [])
-        commit = next((item['snapshot']['commit'] for item in evaluations if item.get('snapshot')), None)
-        self.snapshot = {'analysis': scan.id, 'commit': commit}
+        reference = next((item['snapshot'] for item in evaluations if item.get('snapshot')), {})
+        self.snapshot = {'analysis': scan.id, 'commit': reference.get('commit')}
+        self.repository = f'repository:{reference["repository"]}' if reference.get('repository') else None
         self.evaluations = evaluations
         self._coverage = None
 
@@ -158,6 +175,12 @@ class Exchange:
 
     def _query(self, **filters):
         return self.service.facts.query(self.scan.id, **filters)
+
+    def _own(self, *references):
+        """Un echange ne franchit jamais la frontiere de son projet : un autre depot est hors perimetre."""
+        for value in references:
+            if value and value.startswith('repository:') and value != self.repository:
+                raise OperationError(OUT_OF_SCOPE, 'Ce dépôt n’est pas celui de cet échange.')
 
     @property
     def coverage(self):
@@ -229,22 +252,26 @@ class Exchange:
     # --- Appel ---------------------------------------------------------------------------------------
 
     def call(self, request):
+        """Rend la reponse d'une operation. Au plus MAX_OPERATIONS appels par echange : au-dela, l'echange
+        est clos et l'appel est une erreur de programmation de l'appelant, pas une reponse du protocole."""
+        if self.calls >= MAX_OPERATIONS:
+            raise RuntimeError(f'Échange clos : au plus {MAX_OPERATIONS} opérations.')
+        self.calls += 1
         operation = request.get('operation') if isinstance(request, dict) else None
-        operation = operation if isinstance(operation, str) else None
+        # Seul un nom d'operation du protocole est renvoye : jamais une valeur arbitraire de l'appelant.
+        operation = operation if operation in V1 or operation in RESERVED else None
+        name = request.get('operation') if isinstance(request, dict) else None
         try:
             if not isinstance(request, dict) or request.get('protocol', PROTOCOL) != PROTOCOL:
                 raise OperationError(INVALID_ARGUMENT, f'Protocole attendu : {PROTOCOL}.')
-            self.calls += 1
-            if self.calls > MAX_OPERATIONS:
-                raise OperationError(BUDGET_EXHAUSTED, f'Au plus {MAX_OPERATIONS} opérations par échange.')
             arguments = request.get('arguments') or {}
             if not isinstance(arguments, dict):
                 raise OperationError(INVALID_ARGUMENT, 'Les arguments forment un objet.')
             max_bytes = self._max_bytes(request.get('max_bytes'))
             if operation in RESERVED:
                 raise OperationError(NOT_AVAILABLE, f'{operation} attend un analyseur qui le rende possible.')
-            if operation not in V1:
-                raise OperationError(INVALID_ARGUMENT, f'Opération inconnue : {operation}.')
+            if operation is None:
+                raise OperationError(INVALID_ARGUMENT, f'Opération inconnue : {str(name)[:100]}.')
             if operation not in self.available():
                 if operation == 'get_diff' and self._history_available():
                     raise OperationError(NO_CONSENT, 'La lecture du diff est désactivée pour ce Taxo.')
@@ -264,9 +291,8 @@ class Exchange:
     def _max_bytes(self, requested):
         if requested is not None and (type(requested) is not int or requested < 1):
             raise OperationError(INVALID_ARGUMENT, 'max_bytes doit être un entier positif.')
-        remaining = self.budget - self.used
-        if remaining <= 0:
-            raise OperationError(BUDGET_EXHAUSTED, 'Le budget de l’échange est épuisé.')
+        # Ce qui reste, moins la reserve des refus pour les operations suivantes ; toujours >= MAX_ERROR_BYTES.
+        remaining = self.budget - self.used - (MAX_OPERATIONS - self.calls) * MAX_ERROR_BYTES
         return min(requested or DEFAULT_OPERATION_BYTES, MAX_OPERATION_BYTES, remaining)
 
     # --- Operations ----------------------------------------------------------------------------------
@@ -298,6 +324,7 @@ class Exchange:
             raise OperationError(INVALID_ARGUMENT, f'nature : {", ".join(NATURES)}.')
         if not any((subject, relation, target, nature)):
             raise OperationError(INVALID_ARGUMENT, 'Au moins un de subject, relation, object ou nature.')
+        self._own(subject, target)
         facts = self._query(subject=subject, relation=relation, object=target, kind=nature)
         coverage = self._envelope_coverage(relation, {subject, target} - {None})
         response = self._response('find_facts', coverage, max_bytes, count=len(facts))
@@ -320,6 +347,7 @@ class Exchange:
     def get_coverage(self, arguments, max_bytes):
         _no_other(arguments, ('scope',))
         scope = _reference(arguments, 'scope')
+        self._own(scope)
         facts = [fact for fact in self.coverage if scope is None or contains(scope, fact['subject'])]
         # Ce qui n'a pas ete lu passe avant ce qui l'a ete : c'est la limite de ce que Taxo sait.
         facts.sort(key=lambda fact: fact['coverage_type'] not in _UNREADABLE)
@@ -367,7 +395,7 @@ class Exchange:
             fields['old_path'] = diff['old_path']
         response = self._response('get_diff', self._envelope_coverage(_HISTORY), max_bytes, **fields)
         if not diff['displayable']:
-            response.not_sent({'what': 'diff', 'path': path, 'reason': diff['reason']})
+            response.not_sent({'what': 'diff', 'reason': diff['reason']})
             return response
         for index, hunk in enumerate(diff['hunks']):
             if not response.add('items', _hunk(hunk)):
@@ -380,11 +408,11 @@ class Exchange:
         subject = _reference(arguments, 'subject', required=True)
         relation = _relation(arguments, required=True)
         target = _text(arguments, 'object')
-        sources, targets, _ = RELATIONS[relation]
+        sources, _, _ = RELATIONS[relation]
         if subject.split(':', 1)[0] not in sources:
             raise OperationError(INVALID_ARGUMENT, f'{relation} ne s’applique pas à ce type de sujet.')
-        if bool(targets) != (target is not None):
-            raise OperationError(INVALID_ARGUMENT, f'{relation} {"exige" if targets else "n’a pas"} d’objet.')
+        _claim_object(relation, target)
+        self._own(subject, target)
         claim = {'subject': subject, 'relation': relation}
         if target is not None:
             claim['object'] = target

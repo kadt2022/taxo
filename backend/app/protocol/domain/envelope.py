@@ -25,6 +25,8 @@ BUDGET = 'BUDGET'
 _RESERVED = [{'what': 'evidence', 'count': 10 ** 7, 'reason': BUDGET},
              {'what': 'items', 'count': 10 ** 7, 'reason': BUDGET}]
 _SIZE_PLACEHOLDER = 10 ** 9
+# Taille maximale d'une reponse `ERROR` : l'echange garde toujours de quoi refuser les operations restantes.
+MAX_ERROR_BYTES = 512
 
 
 class OperationError(Exception):
@@ -49,8 +51,13 @@ def _sized(envelope):
 
 
 def error(operation, snapshot, code, message):
-    return _sized({'protocol': PROTOCOL, 'operation': operation, 'outcome': ERROR, 'snapshot': snapshot,
-                   'error': {'code': code, 'message': message}})
+    """Reponse `ERROR`, jamais plus grande que MAX_ERROR_BYTES : le message est raccourci s'il le faut."""
+    while True:
+        envelope = _sized({'protocol': PROTOCOL, 'operation': operation, 'outcome': ERROR, 'snapshot': snapshot,
+                           'error': {'code': code, 'message': message}})
+        if envelope['bytes'] <= MAX_ERROR_BYTES or not message:
+            return envelope
+        message = message[:len(message) * 3 // 4].rstrip() + '…' if len(message) > 1 else ''
 
 
 class Response:
@@ -88,8 +95,13 @@ class Response:
         self.skipped[section] = self.skipped.get(section, 0) + count
 
     def not_sent(self, entry):
-        """Element non transmis pour une autre raison que le budget (contenu refuse, par exemple)."""
+        """Element non transmis pour une autre raison que le budget (contenu refuse, par exemple). Sa mention
+        compte dans le budget comme le reste ; si elle ne tient pas, la reponse ne peut pas etre servie."""
+        cost = size(entry) + 1
+        if self.used + cost > self.max_bytes:
+            raise OperationError(BUDGET_EXHAUSTED, 'Plus assez de place pour dire ce qui n’est pas transmis.')
         self.envelope['not_sent'].append(entry)
+        self.used += cost
 
     def close(self):
         budget = [{'what': section, 'count': count, 'reason': BUDGET}

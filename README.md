@@ -218,7 +218,9 @@ POST /api/projects/{id}/taxo-query
 ```
 
 - **Un échange par requête** : jusqu'à 20 opérations partagent l'instantané, le budget (64 000 octets par
-  défaut, 200 000 au plus ; 8 000 par opération par défaut, 32 000 au plus) et les références `F…` / `E…`.
+  défaut, de 16 240 à 200 000 ; 8 000 par opération par défaut, 32 000 au plus) et les références `F…` / `E…`.
+  Le budget est une limite stricte, refus compris : chaque opération encore possible garde 512 octets pour
+  un refus éventuel.
 - **Enveloppe commune** : `outcome` `OK` ou `ERROR` (codes `INVALID_ARGUMENT`, `NO_CONSENT`,
   `NOT_AVAILABLE`, `OUT_OF_SCOPE`, `BUDGET_EXHAUSTED`, `INTERNAL`), couverture toujours présente, et
   `not_sent` pour ce qui n'a pas tenu, sans jamais couper un élément au milieu.

@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from app.protocol.application.exchange import MAX_EXCHANGE_BYTES, MAX_OPERATIONS
+from app.protocol.application.exchange import MAX_EXCHANGE_BYTES, MAX_OPERATIONS, MIN_EXCHANGE_BYTES
 from app.protocol.domain.envelope import PROTOCOL
 
 _ERRORS = {404: {'description': 'Projet introuvable.'},
@@ -29,7 +29,7 @@ class Operation(BaseModel):
 class ExchangeRequest(BaseModel):
     protocol: str = Field(PROTOCOL, pattern=f'^{PROTOCOL}$')
     consent: Consent = Field(default_factory=Consent)
-    max_bytes: int | None = Field(None, ge=1, le=MAX_EXCHANGE_BYTES)
+    max_bytes: int | None = Field(None, ge=MIN_EXCHANGE_BYTES, le=MAX_EXCHANGE_BYTES)
     requests: list[Operation] = Field(..., min_length=1, max_length=MAX_OPERATIONS)
 
 

@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 
 from app.bootstrap.database import Base
 from app.main import create_app
-from app.protocol.domain.envelope import Response, size
+from app.protocol.application.exchange import MAX_OPERATIONS, MIN_EXCHANGE_BYTES
+from app.protocol.domain.envelope import MAX_ERROR_BYTES, OperationError, Response, error, size
 from app.protocol.domain.verdict import (CONFIRMED, NOT_ANALYSED, NOT_FOUND_IN_ANALYSED_SCOPE,
                                          NOT_INTERPRETED, NOT_PROVEN, REFUTED, Analyzer, contains, judge)
 
@@ -163,8 +164,8 @@ def test_the_diff_needs_both_the_setting_and_the_exchange_consent(repo, tmp_path
         assert diff['outcome'] == 'OK' and diff['status'] == 'MODIFIED'
         assert diff['items'] == [{'before_start': 1, 'after_start': 1, 'before': 'un\ndeux\ntrois',
                                   'after': 'un\nDEUX\ntrois'}]
-        assert secret['items'] == [] and secret['not_sent'] == [{'what': 'diff', 'path': '.env',
-                                                                  'reason': 'CONFIDENTIAL'}]
+        assert secret['items'] == [] and secret['path'] == '.env'
+        assert secret['not_sent'] == [{'what': 'diff', 'reason': 'CONFIDENTIAL'}]
         assert 'SECRET' not in str(result)
         assert untouched['error']['code'] == 'OUT_OF_SCOPE'
 
@@ -216,15 +217,48 @@ def test_nothing_is_cut_in_the_middle_and_the_rest_is_counted(taxo):
     assert tiny['error']['code'] == 'BUDGET_EXHAUSTED', 'la couverture obligatoire ne tient pas'
 
 
-def test_the_exchange_budget_and_operation_count_are_bounded(taxo):
-    client, url, _ = taxo
-    result = exchange(client, url, ('describe', {}), ('describe', {}), max_bytes=1500)
-    first, second = result['responses']
-    assert first['outcome'] == 'OK' and first['bytes'] <= 1500
-    assert second['error']['code'] == 'BUDGET_EXHAUSTED'
-    assert result['budget']['max_bytes'] == 1500
+def test_the_exchange_budget_is_a_hard_limit_even_for_refusals(taxo):
+    client, url, (_, _, second) = taxo
+    requests = [{'operation': 'get_commit', 'arguments': {'commit': second}, 'max_bytes': 32_000}] * 5
+    requests += [{'operation': 'x' * 100, 'arguments': {'y' * 900: 1}}] * 15
+    result = client.post(url, json={'max_bytes': MIN_EXCHANGE_BYTES, 'requests': requests}).json()
+    responses = result['responses']
+    assert result['budget'] == {'max_bytes': MIN_EXCHANGE_BYTES, 'used': sum(item['bytes'] for item in responses)}
+    assert result['budget']['used'] <= MIN_EXCHANGE_BYTES
+    assert all(item['bytes'] <= MAX_ERROR_BYTES for item in responses if item['outcome'] == 'ERROR')
+    assert responses[5]['operation'] is None, 'un nom arbitraire n est jamais renvoye tel quel'
+    too_small = client.post(url, json={'max_bytes': 1500, 'requests': [{'operation': 'describe'}]})
+    assert too_small.status_code == 422
     too_many = client.post(url, json={'requests': [{'operation': 'describe'}] * 21})
     assert too_many.status_code == 422
+
+
+def test_an_exchange_closes_after_its_last_operation(repo, tmp_path):
+    client, _ = client_for(repo[0], tmp_path)
+    with client:
+        project = client.get('/api/projects').json()[0]
+        opened = client.app.state.taxo_query.open(project['id'])
+        for _ in range(MAX_OPERATIONS):
+            opened.call({'operation': 'describe'})
+        with pytest.raises(RuntimeError):
+            opened.call({'operation': 'describe'})
+
+
+def test_another_repository_is_out_of_scope(taxo):
+    client, url, _ = taxo
+    for operation, arguments in (('get_coverage', {'scope': 'repository:ailleurs'}),
+                                 ('find_facts', {'subject': 'repository:ailleurs'}),
+                                 ('verify_claim', {'subject': 'repository:ailleurs', 'relation': 'CONTAINS',
+                                                   'object': 'file:a.txt'})):
+        assert one(client, url, operation, **arguments)['error']['code'] == 'OUT_OF_SCOPE'
+
+
+@pytest.mark.parametrize('relation, target', [('AUTHORED_BY', 'file:x'), ('AUTHORED_BY', 'quelqu’un'),
+                                              ('CHANGES', 'commit:' + '1' * 40)])
+def test_a_claim_object_must_have_the_type_the_relation_admits(taxo, relation, target):
+    client, url, (_, _, second) = taxo
+    refused = one(client, url, 'verify_claim', subject=f'commit:{second}', relation=relation, object=target)
+    assert refused['error']['code'] == 'INVALID_ARGUMENT', 'jamais un verdict sur une affirmation mal formee'
 
 
 def test_reserved_and_unknown_operations_are_said(taxo):
@@ -241,6 +275,7 @@ def test_scopes_contain_what_they_name():
     assert contains('repository:x', 'file:a/b.txt') and contains('directory:a', 'file:a/b.txt')
     assert not contains('directory:a', 'file:ab/c.txt') and not contains('file:a', 'file:a/b')
     assert contains('file:a/b.txt', 'file:a/b.txt')
+    assert contains('repository:x', 'repository:x') and not contains('repository:x', 'repository:y')
 
 
 def coverage(subject, kind, include=('repository:r',), exclude=()):
@@ -269,6 +304,18 @@ def test_a_confirmed_claim_wins_over_a_contradiction():
     other = {**same, 'object': 'language:TypeScript'}
     assert judge(CLAIM, [other, same], [analyzer]).verdict == CONFIRMED
     assert judge(CLAIM, [other], [analyzer]).verdict == REFUTED
+
+
+def test_a_refusal_note_counts_in_the_budget():
+    response = Response('get_diff', {'analysis': 'a', 'commit': None}, [], 300, path='p' * 150)
+    with pytest.raises(OperationError) as refused:
+        response.not_sent({'what': 'diff', 'reason': 'CONFIDENTIAL', 'note': 'n' * 100})
+    assert refused.value.code == 'BUDGET_EXHAUSTED'
+
+
+def test_an_error_never_exceeds_its_bound():
+    refused = error('get_evidence', {'analysis': 'a' * 36, 'commit': 'c' * 64}, 'INVALID_ARGUMENT', 'é' * 5000)
+    assert refused['bytes'] <= MAX_ERROR_BYTES and refused['error']['message'].endswith('…')
 
 
 def test_a_response_never_exceeds_its_budget():
