@@ -61,7 +61,7 @@ def run(repo, tmp_path, model, question='Que change le dernier commit ?'):
         client.post(f'/api/projects/{project["id"]}/scans')
         stream = client.post(f'/api/projects/{project["id"]}/ask/stream', json={'question': question})
         events = [(block.split('\n')[0][len('event: '):], json.loads(block.split('\n')[1][len('data: '):]))
-                  for block in stream.text.strip().split('\n\n')]
+                  for block in stream.text.strip().split('\n\n') if not block.startswith(':')]
     return events
 
 
@@ -226,7 +226,7 @@ def ask_commit(repo, tmp_path, model, sha=None, source=False, setting='diff', af
         body = {'question': question, 'source_context': source, **({'parent': parent} if parent else {})}
         stream = client.post(f'/api/projects/{project["id"]}/history/commits/{sha}/ask/stream', json=body)
         return [(block.split('\n')[0][len('event: '):], json.loads(block.split('\n')[1][len('data: '):]))
-                for block in stream.text.strip().split('\n\n')]
+                for block in stream.text.strip().split('\n\n') if not block.startswith(':')]
 
 
 def test_a_commit_question_starts_from_what_git_knows_then_minia_explores(repo, tmp_path):
@@ -372,7 +372,8 @@ def test_a_small_window_bounds_each_answer_of_taxo(repo, tmp_path):
     model, bodies = ollama_scripted(call('find_facts', relation='CHANGES'), answer(statement('unknown', 'Rien de plus.')),
                                     num_ctx=12288)
     result = completed(ask_commit(repo, tmp_path, model, sha))
-    assert result['mode'] == 'exploration'
+    assert result['mode'] == 'exploration', result.get('fallback')
+    assert result['trajectory'][2]['operation'] == 'find_facts', 'l ouverture laisse de la place a Minia'
     capacity = model.capacity(exploration.SYSTEM)
     assert all(len(body['messages'][1]['content'].encode('utf-8')) <= capacity for body in bodies)
 
@@ -425,3 +426,49 @@ def test_a_slow_provider_is_a_failure_not_a_fallback(repo, tmp_path):
     assert failed and 'n’a pas répondu dans les 900 s' in failed[0]['message']
     assert not [data for kind, data in events if kind == 'minia.completed'], \
         'un delai depasse n est pas un echec du protocole : pas de repli en paquet, aussi lent'
+
+
+def test_a_model_that_fills_every_field_only_passes_what_each_operation_reads(repo, tmp_path):
+    repo, sha = repo
+    everything = {'subject': f'commit:{sha}', 'relation': 'CHANGES', 'object': 'commit:' + '0' * 40,
+                  'nature': 'ASSERTION', 'fact': 'F4', 'scope': 'repository:ailleurs', 'commit': sha,
+                  'path': 'src/app.txt'}
+    model, bodies = ollama_scripted(call('diff_facts', **everything), call('get_diff', **everything),
+                                    answer(statement('unknown', 'Rien de plus.')))
+    result = completed(ask_commit(repo, tmp_path, model, sha, source=True))
+    diff_facts, get_diff = result['trajectory'][2:4]
+    assert (diff_facts['outcome'], diff_facts['arguments']) == ('OK', {'commit': sha})
+    assert diff_facts['ignored'] == ['fact', 'nature', 'object', 'path', 'relation', 'scope', 'subject']
+    assert (get_diff['outcome'], get_diff['arguments']) == ('OK', {'commit': sha, 'path': 'src/app.txt'})
+    told = json.loads(bodies[1]['messages'][1]['content'])['trajectory'][2]
+    assert told['ignored_arguments'] == diff_facts['ignored'], 'Minia sait ce que Taxo n a pas lu'
+
+
+def test_a_declared_argument_stays_validated(repo, tmp_path):
+    repo, sha = repo
+    model, _ = ollama_scripted(call('get_diff', commit=sha, path='../../etc/passwd'),
+                               answer(statement('unknown', 'Refusé.')))
+    result = completed(ask_commit(repo, tmp_path, model, sha, source=True))
+    assert result['trajectory'][2]['error']['code'] == 'INVALID_ARGUMENT', 'rien n est interprete'
+
+
+def test_a_slow_turn_keeps_the_stream_alive(repo, tmp_path, monkeypatch):
+    import time
+    from app.minia.application import ask
+    repo, sha = repo
+    monkeypatch.setattr(ask, 'HEARTBEAT_SECONDS', 0.05)
+
+    class Slow(ScriptedModel):
+        def complete(self, system, user, schema=None):
+            time.sleep(0.2)
+            return super().complete(system, user, schema)
+
+    app = create_app(f'sqlite:///{tmp_path / "lent.db"}', [repo], minia=Slow(answer(statement('unknown', 'Lent.'))))
+    Base.metadata.create_all(app.state.engine)
+    with TestClient(app) as client:
+        project = client.post('/api/projects', json={'name': 'Lent', 'path': str(repo)}).json()
+        client.post(f'/api/projects/{project["id"]}/scans')
+        text = client.post(f'/api/projects/{project["id"]}/history/commits/{sha}/ask/stream',
+                           json={'question': 'Que change ce commit ?'}).text
+    assert ': Minia attend le modèle' in text, 'un signe de vie pendant l attente du modele'
+    assert 'event: minia.heartbeat' not in text and 'event: minia.completed' in text

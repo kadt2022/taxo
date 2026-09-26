@@ -6,7 +6,9 @@ import {reference, VERBS, label} from './vocabulary';
 type ProtocolError = {code:string; message:string};
 type NotSent = {what:string; count?:number; reason:string};
 export type TrajectoryStep = {operation:string; arguments:Record<string,string>; outcome:'OK'|'ERROR'; bytes:number;
-  items?:number; not_sent?:NotSent[]; verdict?:string; reason?:string|null; error?:ProtocolError};
+  items?:number; not_sent?:NotSent[]; verdict?:string; reason?:string|null; error?:ProtocolError;
+  // Champs du tour que l'operation ne lit pas : ignores par Taxo, et dits (MINIA-09c).
+  ignored?:string[]};
 type Claim = {subject:string; relation:string; object?:string};
 type Location = {path?:string; line_start?:number; line_end?:number; object?:string; method?:string};
 type Proof = {ref:string; fact:string; location:Location};
@@ -41,7 +43,8 @@ export function stepText(step:TrajectoryStep){
     :step.verdict?(VERDICTS[step.verdict]??step.verdict)
     :`${step.items??0} résultat${(step.items??0)>1?'s':''}`;
   const cut=(step.not_sent??[]).reduce((total,item)=>total+(item.count??1),0);
-  return `${name}${args?` (${args})`:''} → ${outcome}${cut?`, ${cut} non transmis`:''} · ${step.bytes} octets`;
+  const ignored=step.ignored?.length?` · ignorés : ${step.ignored.join(', ')}`:'';
+  return `${name}${args?` (${args})`:''} → ${outcome}${cut?`, ${cut} non transmis`:''} · ${step.bytes} octets${ignored}`;
 }
 
 /** Ou se trouve une preuve : fichier et lignes, ou objet Git ; la methode d'extraction entre parentheses. */

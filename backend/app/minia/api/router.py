@@ -5,6 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.minia.application.ask import HEARTBEAT
 from app.minia.domain.errors import MiniaError
 
 _ERRORS = {
@@ -34,6 +35,10 @@ def _stream(events):
     def body():
         try:
             for event_type, data in events:
+                if event_type == HEARTBEAT:
+                    # Commentaire SSE : ignore par le portail, il garde la connexion ouverte pendant l'attente.
+                    yield ': Minia attend le modèle\n\n'
+                    continue
                 yield f'event: {event_type}\ndata: {json.dumps(jsonable_encoder(data), ensure_ascii=False)}\n\n'
         except MiniaError as exc:
             failure = json.dumps({'code': exc.code, 'message': str(exc)}, ensure_ascii=False)
