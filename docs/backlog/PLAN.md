@@ -134,6 +134,14 @@ Les 17 récits du document de vision restent la description de ces capacités, p
 
 ## Décisions prises
 
+**2026-09-26 (ADR 0003)**
+
+- L'analyseur Java lit la syntaxe avec tree-sitter, dans le processus Python, au lieu de JavaParser dans
+  une JVM séparée : ni runtime ni build de plus, et une évaluation assez rapide pour être rejouée à
+  chaque comparaison de commits.
+- Première tranche de TAXO-03 et TAXO-04 : endpoints Spring MVC (`HANDLED_BY`), preuves à la ligne,
+  zones non résolues déclarées `NOT_INTERPRETED`. Appels, `DISPATCHES_TO` et 01H restent à venir.
+
 **2026-09-13 (revue de la PR #1)**
 
 - La règle de preuve est formulée par nature : obligatoire pour une `ASSERTION` `OBSERVED`,

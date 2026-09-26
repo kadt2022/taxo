@@ -70,7 +70,7 @@ def test_describe_offers_only_what_taxo_can_serve(taxo):
                           'diff_facts']
     assert 'get_diff' not in operations, 'sans MINIA_SOURCE_CONTEXT=diff, le diff n est pas propose'
     analyzers = {item['analyzer'] for item in described['items'] if item['kind'] == 'analyzer'}
-    assert analyzers == {'taxo.inventory', 'taxo.git'}
+    assert analyzers == {'taxo.inventory', 'taxo.git', 'taxo.spring-api'}
     changes = next(item for item in described['items'] if item.get('relation') == 'CHANGES')
     assert (changes['subject_types'], changes['object_types']) == (['commit'], ['file'])
     assert described['coverage'] and described['snapshot'] == result['snapshot']
@@ -94,10 +94,14 @@ def test_find_facts_gives_short_references_stable_in_the_exchange(taxo):
 
 def test_an_empty_answer_still_says_where_taxo_looked(taxo):
     client, url, _ = taxo
-    found = one(client, url, 'find_facts', relation='HANDLED_BY')
+    found = one(client, url, 'find_facts', relation='CALLS')
     assert (found['outcome'], found['items'], found['count']) == ('OK', [], 0)
     assert found['coverage'] == [{'subject': None, 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
-                                  'relation': 'HANDLED_BY'}]
+                                  'relation': 'CALLS'}]
+    # L'evaluateur Spring a cherche partout : aucun endpoint, et la couverture dit ou il a cherche.
+    endpoints = one(client, url, 'find_facts', relation='HANDLED_BY')
+    assert endpoints['items'] == [] and [(item['type'], item['producer']) for item in endpoints['coverage']] == [
+        ('ANALYSED', 'taxo.spring-api')]
 
 
 @pytest.mark.parametrize('arguments', [{}, {'relation': 'INVENTED'}, {'subject': 'pas une reference'},
@@ -125,8 +129,8 @@ def test_evidence_is_given_only_for_a_fact_received_in_the_exchange(taxo):
 def test_coverage_can_be_asked_for_a_scope(taxo):
     client, url, _ = taxo
     everything = one(client, url, 'get_coverage')
-    assert {item['fact']['produced_by']['producer_id'] for item in everything['items']} == {'taxo.inventory',
-                                                                                          'taxo.git'}
+    assert {item['fact']['produced_by']['producer_id'] for item in everything['items']} == {
+        'taxo.inventory', 'taxo.git', 'taxo.spring-api'}
     narrowed = one(client, url, 'get_coverage', scope='file:src/app.txt')
     assert narrowed['items'] == [] and narrowed['count'] == 0
     assert one(client, url, 'get_coverage', scope='rien')['error']['code'] == 'INVALID_ARGUMENT'
