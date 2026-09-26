@@ -128,9 +128,11 @@ def test_the_facts_satisfy_the_contract():
 
 def test_static_imports_class_level_verbs_and_nested_controllers():
     source = '''package com.example.web;
+import org.springframework.web.bind.annotation.*;
 
 import static com.example.web.Routes.HEALTH;
 import static org.springframework.web.bind.annotation.RequestMethod.GET;
+import org.springframework.stereotype.Controller;
 
 @Controller
 @RequestMapping(value = "/ops/", method = RequestMethod.GET)
@@ -156,11 +158,13 @@ class OpsController {
 
 def test_mappings_outside_a_controller_are_declared_not_guessed():
     api = '''package com.example;
+import org.springframework.web.bind.annotation.*;
 public interface UsersApi {
     @GetMapping("/users") List<User> list();
 }
 '''
     base = '''package com.example;
+import org.springframework.web.bind.annotation.*;
 @RequestMapping("/base")
 public abstract class BaseController {
     @GetMapping("/info") public String info() { return ""; }
@@ -175,6 +179,7 @@ public abstract class BaseController {
 
 def test_routes_inherited_from_a_generated_or_mapped_type_are_declared():
     generated = '''package com.example.web;
+import org.springframework.web.bind.annotation.*;
 import com.example.generated.PetsApi;
 @RestController
 @RequestMapping("api")
@@ -183,8 +188,9 @@ class PetController implements PetsApi {
     @GetMapping("/pets/count") public int count() { return 0; }
 }
 '''
-    api = 'package com.example.web;\npublic interface OwnersApi { @GetMapping("/owners") List<Owner> list(); }\n'
+    api = 'package com.example.web;\nimport org.springframework.web.bind.annotation.*;\npublic interface OwnersApi { @GetMapping("/owners") List<Owner> list(); }\n'
     owner = '''package com.example.web;
+import org.springframework.web.bind.annotation.*;
 @RestController
 class OwnerController implements OwnersApi, Serializable {
     public List<Owner> list() { return null; }
@@ -203,6 +209,7 @@ class OwnerController implements OwnersApi, Serializable {
 
 def test_an_unresolved_controller_mapping_declares_the_whole_controller():
     source = '''package com.example;
+import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping(Somewhere.ROOT)
 class Orders { @GetMapping("/orders") void list() {} }
@@ -212,7 +219,7 @@ class Orders { @GetMapping("/orders") void list() {} }
 
 
 def test_test_sources_and_build_outputs_are_outside_the_scope():
-    controller = 'package t;\n@RestController\nclass T { @GetMapping("/t") void t() {} }\n'
+    controller = 'package t;\nimport org.springframework.web.bind.annotation.*;\n@RestController\nclass T { @GetMapping("/t") void t() {} }\n'
     output = evaluate({'app/src/test/java/T.java': controller, 'app/build/generated/T.java': controller})
     assert output.facts == ()
     analysed = next(item for item in output.coverage if item['coverage_type'] == 'ANALYSED')
@@ -221,7 +228,7 @@ def test_test_sources_and_build_outputs_are_outside_the_scope():
 
 
 def test_a_broken_or_unreadable_file_is_declared():
-    broken = 'package b;\n@RestController\nclass B { @GetMapping("/b") void b() {} void oops( }\n'
+    broken = 'package b;\nimport org.springframework.web.bind.annotation.*;\n@RestController\nclass B { @GetMapping("/b") void b() {} void oops( }\n'
     output = evaluate({'src/main/java/B.java': broken, 'src/main/java/Latin.java': b'\xe9\xe9 class L {}'})
     assert 'file:src/main/java/B.java' in gaps(output)
     unreadable = {item['subject'] for item in output.coverage if item['coverage_type'] == 'READ_ERROR'}
@@ -246,9 +253,9 @@ def test_the_java_analyzer_resolves_only_what_is_written(written, expected):
 
 
 def test_the_impact_of_a_commit_names_the_endpoints_it_introduces_moves_and_removes(make_repo, git, tmp_path):
-    first = 'package p;\n@RestController\nclass A {\n    @GetMapping("/a") void a() {}\n    @GetMapping("/gone") void g() {}\n}\n'
+    first = 'package p;\nimport org.springframework.web.bind.annotation.*;\n@RestController\nclass A {\n    @GetMapping("/a") void a() {}\n    @GetMapping("/gone") void g() {}\n}\n'
     repo = make_repo({'src/main/java/A.java': first}, 'endpoints')
-    second = 'package p;\n@RestController\nclass A {\n    @GetMapping("/a") void renamed() {}\n    @PostMapping("/new") void n() {}\n}\n'
+    second = 'package p;\nimport org.springframework.web.bind.annotation.*;\n@RestController\nclass A {\n    @GetMapping("/a") void renamed() {}\n    @PostMapping("/new") void n() {}\n}\n'
     (repo / 'src/main/java/A.java').write_text(second)
     git(repo, 'add', '-A')
     git(repo, 'commit', '-qm', 'endpoints')
@@ -265,3 +272,67 @@ def test_the_impact_of_a_commit_names_the_endpoints_it_introduces_moves_and_remo
         ('REMOVED', 'endpoint:GET /gone', 'symbol:java:p.A#g', None),
         ('INTRODUCED', 'endpoint:POST /new', None, 'symbol:java:p.A#n'),
     }
+
+
+def test_a_prefix_inherited_from_a_base_type_is_never_dropped():
+    base = '''package com.example;
+import org.springframework.web.bind.annotation.*;
+@RequestMapping("/api")
+abstract class Base {}
+'''
+    child = '''package com.example;
+import org.springframework.web.bind.annotation.*;
+@RestController
+class Child extends Base { @GetMapping("/x") String x() { return ""; } }
+'''
+    own = '''package com.example;
+import org.springframework.web.bind.annotation.*;
+@RestController
+@RequestMapping("/own")
+class Own extends Base { @GetMapping("/y") String y() { return ""; } }
+'''
+    output = evaluate({'src/main/java/Base.java': base, 'src/main/java/Child.java': child,
+                       'src/main/java/Own.java': own})
+    assert handlers(output) == {('endpoint:GET /own/y', 'symbol:java:com.example.Own#y')}, \
+        'sans mapping propre, le prefixe herite est inconnu : pas de /x ; un mapping propre prime sur l heritage'
+    assert {'symbol:java:com.example.Child', 'symbol:java:com.example.Own', 'symbol:java:com.example.Base'} == gaps(output)
+
+
+def test_only_spring_annotations_count():
+    other = '''package com.acme;
+import com.acme.web.GetMapping;
+import com.acme.web.RestController;
+@RestController
+class NotSpring { @GetMapping("/no") void no() {} }
+'''
+    local = '''package com.acme.web;
+import org.springframework.web.bind.annotation.*;
+@RestController
+class Shadowed { @GetMapping("/shadow") void no() {} }
+'''
+    homemade = 'package com.acme.web;\npublic @interface GetMapping { String value(); }\n'
+    qualified = '''package com.acme.api;
+@org.springframework.web.bind.annotation.RestController
+class Qualified { @org.springframework.web.bind.annotation.GetMapping("/yes") void yes() {} }
+'''
+    output = evaluate({'src/main/java/NotSpring.java': other, 'src/main/java/Shadowed.java': local,
+                       'src/main/java/GetMapping.java': homemade, 'src/main/java/Qualified.java': qualified})
+    assert handlers(output) == {('endpoint:GET /yes', 'symbol:java:com.acme.api.Qualified#yes')}, \
+        'un import explicite ou un type du meme paquetage masque Spring ; un nom qualifie de Spring compte'
+    assert gaps(output) == set() and output.status is EvaluationStatus.SUCCESS
+
+
+def test_constants_citing_constants_of_other_files_are_resolved():
+    routes = 'package com.example.api;\npublic final class Routes { public static final String USERS = Api.ROOT + "/users"; }\n'
+    api = 'package com.example.api;\npublic final class Api { public static final String ROOT = Base.PREFIX + "/v1"; }\n'
+    prefix = 'package com.example.api;\ninterface Base { String PREFIX = "/api"; }\n'
+    controller = '''package com.example.api;
+import org.springframework.web.bind.annotation.*;
+@RestController
+@RequestMapping(Routes.USERS)
+class Users { @GetMapping void list() {} }
+'''
+    output = evaluate({'src/main/java/Users.java': controller, 'src/main/java/Routes.java': routes,
+                       'src/main/java/Api.java': api, 'src/main/java/Base.java': prefix})
+    assert handlers(output) == {('endpoint:GET /api/v1/users', 'symbol:java:com.example.api.Users#list')}
+    assert output.status is EvaluationStatus.SUCCESS

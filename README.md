@@ -179,12 +179,13 @@ MVC. Pour chaque méthode d'un `@RestController` ou `@Controller` portant `@GetM
 `symbol:java:com.example.api.users.UserController#list`. Chaque fait a deux preuves, à la ligne et avec
 leur empreinte : le mapping du contrôleur et celui de la méthode.
 
-L'analyseur Java (`app/evaluators/java`, tree-sitter) lit les sources sans JVM, sans Gradle ni Maven, et
-ne connaît aucun framework. Il résout les chemins écrits dans le code :
+Une annotation ne compte que si elle est celle de Spring (nom qualifié ou import) : un `@GetMapping` maison
+n'est pas un endpoint. L'analyseur Java (`app/evaluators/java`, tree-sitter) lit les sources sans JVM,
+sans Gradle ni Maven, et ne connaît aucun framework. Il résout les chemins écrits dans le code :
 
 - chaînes et concaténations ;
 - constantes `static final String` du type, d'un type englobant, d'un import statique, ou d'un autre
-  type du dépôt ;
+  type du dépôt, y compris une constante qui en cite une autre ;
 - tableaux de chemins et de verbes ;
 - types imbriqués.
 
@@ -193,7 +194,8 @@ porte :
 
 - une constante d'un type absent, une propriété `${…}` ;
 - des mappings portés par une interface ou une classe de base ;
-- un contrôleur qui hérite d'une interface générée au build (OpenAPI) ;
+- un contrôleur qui hérite d'une interface générée au build (OpenAPI), ou d'une classe de base porteuse de
+  mappings (sans mapping propre, son préfixe hérité est inconnu : aucun endpoint n'est affirmé) ;
 - un fichier en erreur de syntaxe.
 
 Ses propres mappings, eux, restent des faits. Les sources de test (`src/test`) et les sorties de build

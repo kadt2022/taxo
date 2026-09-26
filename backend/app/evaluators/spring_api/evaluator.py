@@ -31,6 +31,12 @@ VERBS = {'GetMapping': 'GET', 'PostMapping': 'POST', 'PutMapping': 'PUT', 'Delet
          'PatchMapping': 'PATCH'}
 REQUEST_MAPPING = 'RequestMapping'
 MAPPINGS = {*VERBS, REQUEST_MAPPING}
+# Une annotation compte seulement si elle est celle de Spring : son nom se resout vers ces types.
+WEB = 'org.springframework.web.bind.annotation'
+SPRING = {**{name: f'{WEB}.{name}' for name in (*MAPPINGS, 'RestController')},
+          'Controller': 'org.springframework.stereotype.Controller'}
+# Au-dela, une chaine de constantes (A cite B qui cite C...) n'est plus suivie ; sa valeur reste non resolue.
+MAX_CONSTANT_ROUNDS = 8
 HTTP_METHODS = {'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'TRACE'}
 # `@RequestMapping` sans `method` accepte tous les verbes : l'endpoint le dit, sans en choisir un.
 ANY = 'ANY'
@@ -50,23 +56,22 @@ class SpringApiEvaluator:
         sources, excluded = self._select(snapshot)
         warnings, gaps, read_errors = [], {}, []
         contents = self._read(snapshot, sources, warnings, read_errors, progress)
-        # Premier passage : les constantes de chaque type, pour resoudre `Type.CONSTANTE` d'un fichier a l'autre.
-        known = {}
-        for path, data in contents.items():
-            known.update(syntax.parse(path, data).constants())
-        # Seuls les fichiers qui peuvent porter un controleur ou un mapping sont relus avec toutes les constantes.
-        parsed = [syntax.parse(path, data, known) for path, data in contents.items()
-                  if b'Mapping' in data or b'Controller' in data]
-        # Types qui portent eux-memes des mappings : un controleur qui en herite recoit des routes non suivies.
-        mapped = {item.qualified_name for java_file in parsed for item in java_file.types
-                  if _mappings(item.annotations) or any(_mappings(method.annotations) for method in item.methods)}
+        parsed = _parse_all(contents)
+        by_package = {}
+        for java_file in parsed:
+            by_package.setdefault(java_file.package, set()).update(item.qualified_name for item in java_file.types)
+        types = {}
+        for java_file in parsed:
+            names = _Names(java_file, by_package)
+            for java_type in java_file.types:
+                types[java_type.qualified_name] = (java_file, java_type, names)
         facts = {}
         for java_file in parsed:
             if java_file.has_errors:
                 gaps[f'file:{java_file.path}'] = (java_file.path, f'Fichier Java lu en partie (erreur de syntaxe) : '
                                                                   f'{java_file.path}')
-            for java_type in java_file.types:
-                self._type_facts(snapshot, java_file.path, contents[java_file.path], java_type, mapped, facts, gaps)
+        for java_file, java_type, names in types.values():
+            self._type_facts(snapshot, java_file.path, contents[java_file.path], java_type, names, types, facts, gaps)
         progress('endpoints', 'Endpoints relevés', len({fact['subject'] for fact in facts.values()}))
         # Une zone non interpretee a pour perimetre le fichier qui la porte.
         warnings += [message for _, message in gaps.values()]
@@ -121,26 +126,28 @@ class SpringApiEvaluator:
             warnings.append(f'Erreur de lecture : {remaining[0] if remaining else "dépôt"} : {exc}')
         return contents
 
-    def _type_facts(self, snapshot, path, data, java_type, mapped_types, facts, gaps):
+    def _type_facts(self, snapshot, path, data, java_type, names, types, facts, gaps):
         symbol = f'symbol:java:{java_type.qualified_name}'
-        own = [method for method in java_type.methods if _mappings(method.annotations)]
-        type_mapping = next(iter(_mappings(java_type.annotations)), None)
-        controller = any(item.simple_name in CONTROLLERS for item in java_type.annotations)
+        own = [method for method in java_type.methods if names.mappings(method.annotations)]
+        type_mapping = next(iter(names.mappings(java_type.annotations)), None)
+        controller = any(names.spring(item) in CONTROLLERS for item in java_type.annotations)
         if not controller:
             if own or type_mapping is not None:
                 # Interface, classe de base ou controleur declare autrement : ses routes existent peut-etre,
                 # mais par un chemin (heritage, configuration) que cette version ne suit pas.
                 gaps[symbol] = (path, f'Mappings hors d’un contrôleur non interprétés : {java_type.qualified_name}')
             return
-        absent = [written for written, qualified in java_type.supertypes if qualified is None]
-        carrying = [written for written, qualified in java_type.supertypes if qualified in mapped_types]
+        absent, carrying, prefixed = _ancestors(java_type, types)
         if absent or carrying:
-            # Ses propres mappings restent des faits ; ceux qu'il herite (d'une interface generee au build, absente
-            # des sources, ou d'un type qui porte des mappings) ne sont pas suivis : ses routes sont incompletes.
+            # Les mappings herites (d'une interface generee au build, absente des sources, ou d'un type qui porte
+            # des mappings) ne sont pas suivis : les routes de ce controleur sont incompletes.
             reasons = ([f'absent des sources : {", ".join(absent)}'] if absent else []) + (
                 [f'porteur de mappings : {", ".join(carrying)}'] if carrying else [])
             gaps[symbol] = (path, f'Routes héritées non interprétées ({" ; ".join(reasons)}) : '
                                   f'{java_type.qualified_name}')
+            if type_mapping is None and (absent or prefixed):
+                # Sans mapping propre, le controleur herite peut-etre du prefixe d'un ancetre : aucun chemin sur.
+                return
         try:
             base_paths = _paths(type_mapping) if type_mapping is not None else ['']
             base_verbs = _verbs(type_mapping) if type_mapping is not None else []
@@ -149,10 +156,10 @@ class SpringApiEvaluator:
             return
         for method in own:
             handler = f'{symbol}#{method.name}'
-            for annotation in _mappings(method.annotations):
+            for annotation in names.mappings(method.annotations):
+                kind = names.spring(annotation)
                 try:
-                    verbs = ([VERBS[annotation.simple_name]] if annotation.simple_name in VERBS
-                             else _verbs(annotation) or base_verbs or [ANY])
+                    verbs = [VERBS[kind]] if kind in VERBS else _verbs(annotation) or base_verbs or [ANY]
                     paths = _paths(annotation)
                 except _NotInterpreted as exc:
                     gaps[handler] = (path, f'Mapping non résolu ({exc}) : {java_type.qualified_name}#{method.name}')
@@ -160,14 +167,74 @@ class SpringApiEvaluator:
                 evidence = [_evidence(snapshot, path, data, item, handler)
                             for item in (type_mapping, annotation) if item is not None]
                 for base in base_paths:
-                    for own in paths:
+                    for tail in paths:
                         for verb in verbs:
-                            subject = f'endpoint:{verb} {_join(base, own)}'
+                            subject = f'endpoint:{verb} {_join(base, tail)}'
                             facts.setdefault((subject, handler), _assertion(subject, handler, evidence))
 
 
-def _mappings(annotations):
-    return [item for item in annotations if item.simple_name in MAPPINGS]
+def _parse_all(contents):
+    """Chaque fichier, lu avec les constantes de tous les autres : une constante qui en cite une autre
+    (`Routes.USERS = Api.ROOT + "/users"`) se resout de proche en proche, jusqu'a ce que rien ne change."""
+    known, parsed = {}, []
+    for _ in range(MAX_CONSTANT_ROUNDS):
+        parsed = [syntax.parse(path, data, known) for path, data in contents.items()]
+        found = {}
+        for java_file in parsed:
+            found.update(java_file.constants())
+        if found == known:
+            break
+        known = found
+    return parsed
+
+
+class _Names:
+    """Les annotations Spring d'un fichier : un nom compte s'il se resout, par le code ecrit, vers Spring."""
+
+    def __init__(self, java_file, by_package):
+        self.package = java_file.package
+        self.imports = [name for name, static in java_file.imports if not static]
+        self.local = by_package.get(java_file.package, set())
+
+    def spring(self, annotation):
+        """Nom Spring de l'annotation (`GetMapping`, `Controller`...), ou None si elle n'est pas de Spring."""
+        simple = annotation.simple_name
+        target = SPRING.get(simple)
+        if target is None:
+            return None
+        if '.' in annotation.name:
+            return simple if annotation.name == target else None
+        explicit = [name for name in self.imports if name.rsplit('.', 1)[-1] == simple]
+        if explicit:
+            return simple if explicit == [target] else None
+        if f'{self.package}.{simple}' in self.local:
+            return None
+        return simple if f'{target.rpartition(".")[0]}.*' in self.imports else None
+
+    def mappings(self, annotations):
+        return [item for item in annotations if self.spring(item) in MAPPINGS]
+
+
+def _ancestors(java_type, types):
+    """Supertypes, de proche en proche : ceux absents des sources, ceux qui portent des mappings, et s'il en est
+    un qui porte un mapping de type (un prefixe herite)."""
+    absent, carrying, prefixed = [], [], False
+    seen, pending = set(), list(java_type.supertypes)
+    while pending:
+        written, qualified = pending.pop(0)
+        if qualified is None:
+            absent.append(written)
+            continue
+        if qualified in seen or qualified not in types:
+            continue
+        seen.add(qualified)
+        _, ancestor, names = types[qualified]
+        type_level = names.mappings(ancestor.annotations)
+        if type_level or any(names.mappings(method.annotations) for method in ancestor.methods):
+            carrying.append(written)
+        prefixed = prefixed or bool(type_level)
+        pending += ancestor.supertypes
+    return absent, carrying, prefixed
 
 
 def _paths(annotation):

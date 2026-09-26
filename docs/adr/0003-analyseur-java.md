@@ -33,12 +33,18 @@ a prouvé le mécanisme, et ses limites : pas de constantes, pas de tableaux, pa
    - `app/evaluators/java` donne les primitives Java : paquetage, imports, types (imbriqués compris),
      supertypes, annotations et leurs valeurs, méthodes annotées, constantes chaînes. Il ne connaît aucun
      framework ;
-   - `app/evaluators/spring_api` est propriétaire du concept d'endpoint.
+   - `app/evaluators/spring_api` est propriétaire du concept d'endpoint. Une annotation ne compte que si
+     son nom se résout vers Spring (`org.springframework.web.bind.annotation`,
+     `org.springframework.stereotype`) : nom qualifié, import explicite, ou import `*` sans type homonyme
+     dans le paquetage. Un `@GetMapping` maison n'est pas un endpoint.
 3. **Résoudre seulement ce qui est écrit.** Une valeur d'annotation est résolue si elle est une chaîne,
    une concaténation de chaînes, ou une constante `static final String` trouvée sans ambiguïté :
    - dans le type ou un type englobant ;
    - par import statique ;
    - dans un type du dépôt désigné par son nom, un import ou le même paquetage.
+
+   Une constante qui en cite une autre, d'un fichier à l'autre, se résout de proche en proche, jusqu'à ce
+   que plus rien ne change (8 tours au plus).
 
    Tout le reste (méthode, propriété `${…}`, constante d'un type absent) reste non résolu : l'analyseur
    rend le texte tel qu'écrit, jamais une supposition.
@@ -51,8 +57,11 @@ a prouvé le mécanisme, et ses limites : pas de constantes, pas de tableaux, pa
    les porte :
    - un mapping non résolu (sur la méthode, ou sur le contrôleur entier) ;
    - un mapping porté par un type qui n'est pas un contrôleur (interface, classe de base) ;
-   - un contrôleur qui hérite d'un type absent des sources, comme une interface générée au build depuis
-     une spécification OpenAPI, ou d'un type porteur de mappings ;
+   - un contrôleur qui hérite, de proche en proche, d'un type absent des sources (comme une interface
+     générée au build depuis une spécification OpenAPI) ou d'un type porteur de mappings. Sans mapping de
+     type propre, un tel contrôleur n'a aucun endpoint affirmé : il hérite peut-être d'un préfixe de
+     chemin, et `/x` serait faux là où Spring sert `/api/x`. Un mapping de type propre prime sur
+     l'héritage, comme dans Spring ;
    - un fichier en erreur de syntaxe.
 
    Dans tous ces cas, ses propres mappings restent des faits. Un fichier illisible (trop gros, non UTF-8)
