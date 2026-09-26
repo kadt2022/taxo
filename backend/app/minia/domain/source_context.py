@@ -39,6 +39,14 @@ class DiffContext:
     not_sent: list = field(default_factory=list)
     lines: int = 0
     size: int = 0
+    # Poids (lignes, octets) de chaque fichier transmis, dans le meme ordre ; jamais envoye au modele.
+    weights: list = field(default_factory=list, repr=False)
+
+    def drop_last(self):
+        """Retire le dernier fichier transmis, faute de place dans la fenetre du modele."""
+        entry, (lines, size) = self.files.pop(), self.weights.pop()
+        self.lines, self.size = self.lines - lines, self.size - size
+        self.not_sent.append({'path': entry['path'], 'reason': LIMIT})
 
     def summary(self):
         return {'status': 'SENT', 'files_sent': [item['path'] for item in self.files],
@@ -90,5 +98,6 @@ def build(files, read, max_files=MAX_DIFF_FILES, max_lines=MAX_DIFF_LINES, max_b
             context.not_sent.append({'path': changed.path, 'reason': LIMIT})
             continue
         context.files.append(entry)
+        context.weights.append((lines, size))
         context.lines, context.size = context.lines + lines, context.size + size
     return context

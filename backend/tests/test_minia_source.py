@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from app.bootstrap.database import Base
 from app.history.domain.commit import ChangedFile
 from app.main import create_app
-from app.minia.domain import source_context
+from app.minia.domain import briefing, source_context
 from app.minia.domain.answer import SYSTEM, with_diff
 from app.minia.infrastructure.ollama import OllamaModel
 
@@ -172,3 +172,44 @@ def test_the_byte_limit_counts_what_is_sent():
     context = source_context.build(files, lambda changed: _diff(changed.path, text='é' * 10), max_bytes=40)
     assert [item['path'] for item in context.files] == ['a'] and context.size == 40
     assert context.not_sent == [{'path': 'b', 'reason': 'LIMIT'}]
+
+
+class SizedModel(FakeModel):
+    """Modele dont la fenetre est connue : Minia y ajuste son message."""
+
+    def __init__(self, reply, room):
+        super().__init__(reply)
+        self.room = room
+
+    def capacity(self, system):
+        return self.room
+
+
+def test_the_diff_takes_at_most_half_of_the_window(ask):
+    model = SizedModel({'cited': [], 'answer': 'ok', 'unknown': ''}, room=100_000)
+    _, post = ask(model, 'diff')
+    assert post(source_context=True)['source_context']['files_sent'] == ['src/Cors.java']
+    small = SizedModel({'cited': [], 'answer': 'ok', 'unknown': ''}, room=40)
+    _, post = ask(small, 'diff')
+    result = post(source_context=True)
+    assert result['source_context']['files_sent'] == []
+    assert {'path': 'src/Cors.java', 'reason': 'LIMIT'} in result['source_context']['files_not_sent']
+
+
+def test_a_diff_that_overflows_once_escaped_gives_way_file_by_file():
+    context = source_context.build([_file('a'), _file('b')], lambda changed: _diff(changed.path, text='"' * 50))
+    assert [item['path'] for item in context.files] == ['a', 'b']
+
+    class Commit:
+        sha, author, authored_at, subject = 'c' * 40, 'Pi', '2026-09-25T00:00:00Z', 'sujet'
+
+    def reading(changed):
+        return _diff(changed.path, text='"' * 50)
+
+    one = source_context.build([_file('a')], reading)
+    one.not_sent.append({'path': 'b', 'reason': 'LIMIT'})
+    room = len(briefing.build('q', Commit(), None, [], diff=one).text.encode('utf-8'))
+    brief = briefing.build('q', Commit(), None, [], diff=context, max_bytes=room)
+    assert [item['path'] for item in context.files] == ['a'] and brief.diff
+    assert brief.text.count('"b"') == 1, 'b est nomme parmi les fichiers non transmis, sans son diff'
+    assert {'path': 'b', 'reason': 'LIMIT'} in context.not_sent and context.lines == 1 and context.size == 100

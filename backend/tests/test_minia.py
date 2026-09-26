@@ -290,3 +290,30 @@ def test_settings_choose_the_provider(monkeypatch):
     assert minia_model(settings.minia()).num_ctx == 32768
     with pytest.raises(ValueError, match='seul « ollama »'):
         minia_model(settings.minia(provider='claude'))
+
+
+def test_the_window_check_is_a_true_upper_bound_whatever_the_script():
+    def handler(request):
+        raise AssertionError('Ollama ne doit pas etre appele')
+
+    model = OllamaModel('m', 'http://ollama.test:11434', transport=httpx.MockTransport(handler), num_ctx=8192)
+    dense = '提交' * 1500  # 3 000 caracteres, 9 000 octets : « 3 caracteres par token » l'aurait accepte
+    with pytest.raises(MiniaError) as error:
+        model.complete('consignes', dense)
+    assert error.value.code == 'MINIA_CONTEXT_TOO_LARGE'
+    assert model.capacity('consignes') == 8192 - 64 - 1024 - len('consignes')
+
+
+def test_facts_that_do_not_fit_are_counted_not_sent():
+    fact = {'subject': 'commit:' + 'a' * 40, 'relation': 'CHANGES', 'object': 'file:' + 'x' * 200,
+            'qualifiers': {'change': 'MODIFIED'}, 'evidence': []}
+    projection = {'facts': [fact] * 28, 'request': {'kind': 'LATEST'}, 'commits': [1, 2], 'total_commits': 9,
+                  'not_interpreted': []}
+    whole = briefing.selection('q', projection)
+    assert whole.truncated == 0 and len(whole.refs) == 28
+    budget = len(whole.text.encode('utf-8')) // 2
+    fitted = briefing.selection('q', projection, max_bytes=budget)
+    assert len(fitted.text.encode('utf-8')) <= budget
+    assert 0 < len(fitted.refs) < 28 and fitted.truncated == 28 - len(fitted.refs)
+    assert json.loads(fitted.text)['facts_not_sent'] == fitted.truncated
+    assert briefing.selection('q', projection, max_bytes=10).refs == {}, 'aucun fait plutot qu un fait tronque'

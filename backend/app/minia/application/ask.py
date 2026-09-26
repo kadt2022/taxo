@@ -64,6 +64,11 @@ class AskMinia:
         return {'configured': True, 'provider': self.model.provider, 'model': self.model.model_name,
                 'source_context': self.source, 'remote': bool(getattr(self.model, 'remote', False))}
 
+    def _capacity(self, system):
+        """Place disponible (octets) pour le message, si le fournisseur la connait ; None sinon."""
+        capacity = getattr(self.model, 'capacity', None)
+        return None if capacity is None else max(capacity(system), 0)
+
     def _model_view(self):
         return {key: value for key, value in self.status().items() if key in ('configured', 'provider', 'model')}
 
@@ -88,10 +93,12 @@ class AskMinia:
         commit, base, files = self.history.detail(project_id, sha, parent)
         return self._commit_steps(question, project, commit, base, files, source)
 
-    def _diff(self, project, commit, base):
+    def _diff(self, project, commit, base, budget):
         yield _stage('source', 'running', 'Lecture du diff du commit')
         files, read = self.history.diffs(project.id, commit.sha, base)
-        context = source_context.build(files, read)
+        # Le diff n'occupe jamais plus de la moitie de la place : les faits de Taxo gardent la leur.
+        limit = source_context.MAX_DIFF_BYTES if budget is None else min(source_context.MAX_DIFF_BYTES, budget // 2)
+        context = source_context.build(files, read, max_bytes=limit)
         yield _stage('source', 'done', 'Lecture du diff du commit', len(context.files))
         return context
 
@@ -99,12 +106,15 @@ class AskMinia:
         yield _stage('facts', 'running', 'Sélection des faits pertinents')
         _, _, evaluations = self.history.impact(project.id, commit.sha, base)
         diff, sent = None, _NOT_REQUESTED
-        if source and self.source == source_context.DIFF:
-            diff = yield from self._diff(project, commit, base)
-            sent = diff.summary()
+        with_source = source and self.source == source_context.DIFF
+        budget = self._capacity(with_diff(SYSTEM) if with_source else SYSTEM)
+        if with_source:
+            diff = yield from self._diff(project, commit, base, budget)
         elif source:
             sent = _DISABLED
-        brief = briefing.build(question, commit, base, evaluations, files, (project.id, project.name), diff)
+        brief = briefing.build(question, commit, base, evaluations, files, (project.id, project.name), diff, budget)
+        if diff is not None:
+            sent = diff.summary()
         yield _stage('facts', 'done', 'Sélection des faits pertinents', len(brief.refs))
         yield _stage('context', 'done', 'Préparation du contexte')
         result = {'question': question, 'commit': commit.sha, 'parent': base, 'model': self._model_view(),
@@ -145,7 +155,8 @@ class AskMinia:
             yield 'minia.completed', {**result, 'status': NOTHING_KNOWN, 'unknown': _EMPTY[projection['status']]}
             return
         project = projection['project']
-        brief = briefing.selection(question, projection, (project['id'], project['name']))
+        brief = briefing.selection(question, projection, (project['id'], project['name']),
+                                   self._capacity(SYSTEM_SELECTION))
         yield _stage('context', 'done', 'Préparation du contexte')
         raw = yield from self._interpret(SYSTEM_SELECTION, brief)
         answer = parse(raw, brief.refs)
