@@ -125,8 +125,8 @@ class AskMinia:
         """Le modele demande, ou celui par defaut ; un fournisseur non configure est refuse."""
         if self.default is None:
             raise MiniaError(NOT_CONFIGURED, 'Minia n’est pas configurée : définir MINIA_OLLAMA_MODEL (et lancer '
-                             'Ollama), MINIA_CLAUDE_MODEL (et ANTHROPIC_API_KEY) ou MINIA_GEMINI_MODEL (et '
-                             'GEMINI_API_KEY).')
+                             'Ollama), MINIA_CLAUDE_MODEL (et ANTHROPIC_API_KEY), MINIA_GEMINI_MODEL (et '
+                             'GEMINI_API_KEY) ou MINIA_MISTRAL_MODEL (et MISTRAL_API_KEY).')
         name = provider or self.default
         if name not in self.models:
             raise MiniaError(UNKNOWN_PROVIDER, f'Fournisseur de Minia non configuré : {name} '

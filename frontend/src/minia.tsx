@@ -75,7 +75,7 @@ export function withProvider(status:MiniaStatus|null, provider:string):MiniaStat
   return status&&chosen?{...status, ...chosen}:status;
 }
 
-const PROVIDERS:Record<string,string>={ollama:'Ollama', claude:'Claude', gemini:'Gemini'};
+const PROVIDERS:Record<string,string>={ollama:'Ollama', claude:'Claude', gemini:'Gemini', mistral:'Mistral'};
 export const providerName=(provider:string)=>PROVIDERS[provider]??provider;
 export const providerLabel=(item:MiniaProvider)=>`${providerName(item.provider)} · ${item.model} (${item.remote?'distant':'local'}${item.data_use?', niveau gratuit':''})`;
 

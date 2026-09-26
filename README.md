@@ -360,6 +360,24 @@ l'indique (« niveau gratuit ») et le déconseille pour du code privé ; le dif
 clé passe dans un en-tête, jamais dans l'URL. Une réponse bloquée, déclinée ou coupée est signalée, un
 quota atteint aussi.
 
+### Minia Mistral (TAXO-MINIA-10)
+
+Quatrième fournisseur de Minia, même travail que les autres, mode exploration compris (ADR 0009). L'API de
+Mistral (La Plateforme) a un niveau gratuit pour tester.
+
+```powershell
+setx MISTRAL_API_KEY "..."                          # clé créée sur console.mistral.ai (jamais dans le dépôt)
+$env:MINIA_MISTRAL_MODEL = 'mistral-small-latest'   # nom exact d'un modèle ouvert à ce compte
+$env:MINIA_MISTRAL_TIER  = 'free'                   # défaut ; 'paid' si la clé est facturée
+```
+
+Les modèles ouverts au compte se listent avec `GET https://api.mistral.ai/v1/models` (en-tête
+`Authorization: Bearer <clé>`). Au niveau gratuit, Mistral peut utiliser les données envoyées pour
+entraîner ses modèles : le portail l'indique (« niveau gratuit ») et le déconseille pour du code privé ; le
+diff reste décoché par défaut. La réponse est contrainte par un schéma JSON ; une réponse coupée est
+signalée, une surcharge passagère (5xx) est réessayée deux fois avant tout texte, un quota atteint (429)
+jamais.
+
 ### Clochette (SmolLM2-135M, expérimental, ADR 0006)
 
 Clochette est installée par l'étape `python -m app.hypotheses fetch` de la procédure ci-dessus : elle

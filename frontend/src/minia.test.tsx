@@ -183,6 +183,11 @@ describe('niveau gratuit (TAXO-MINIA-06)', ()=>{
     expect(note).toContain('améliorer ses modèles');
     expect(remoteNote({...status, provider:'claude', remote:true, data_use:false})).not.toContain('améliorer');
   });
+  it('nomme Minia Mistral (TAXO-MINIA-10)', ()=>{
+    expect(providerLabel({provider:'mistral', model:'mistral-small-latest', remote:true, data_use:true}))
+      .toBe('Mistral · mistral-small-latest (distant, niveau gratuit)');
+    expect(remoteNote({...status, provider:'mistral', remote:true, data_use:true})).toContain('Minia Mistral est un service distant');
+  });
 });
 
 describe('question sur un commit en exploration (MINIA-09b)', ()=>{
