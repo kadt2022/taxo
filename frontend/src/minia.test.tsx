@@ -172,3 +172,15 @@ describe('modèle qui a répondu', ()=>{
     expect(modelLabel({provider:null, model:null})).toBe('');
   });
 });
+
+describe('niveau gratuit (TAXO-MINIA-06)', ()=>{
+  const status:MiniaStatus={configured:true, provider:'ollama', model:'qwen2.5:3b', source_context:'diff', remote:false,
+    providers:[{provider:'ollama', model:'qwen2.5:3b', remote:false, data_use:false}, {provider:'gemini', model:'gemini-x', remote:true, data_use:true}]};
+  it('dit qu’un fournisseur gratuit peut se servir des données', ()=>{
+    expect(providerLabel(status.providers![1])).toBe('Gemini · gemini-x (distant, niveau gratuit)');
+    const note=remoteNote(withProvider(status,'gemini'));
+    expect(note).toContain('Minia Gemini est un service distant');
+    expect(note).toContain('améliorer ses modèles');
+    expect(remoteNote({...status, provider:'claude', remote:true, data_use:false})).not.toContain('améliorer');
+  });
+});
