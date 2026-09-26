@@ -100,8 +100,8 @@ def test_an_empty_answer_still_says_where_taxo_looked(taxo):
                                   'relation': 'CALLS'}]
     # L'evaluateur Spring a cherche partout : aucun endpoint, et la couverture dit ou il a cherche.
     endpoints = one(client, url, 'find_facts', relation='HANDLED_BY')
-    assert endpoints['items'] == [] and [(item['type'], item['producer']) for item in endpoints['coverage']] == [
-        ('ANALYSED', 'taxo.spring-api')]
+    assert endpoints['items'] == []
+    assert [(item['type'], item['producer']) for item in endpoints['coverage']] == [('ANALYSED', 'taxo.spring-api')]
 
 
 @pytest.mark.parametrize('arguments', [{}, {'relation': 'INVENTED'}, {'subject': 'pas une reference'},

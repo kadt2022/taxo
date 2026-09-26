@@ -114,7 +114,8 @@ def test_the_evidence_points_at_both_mappings_to_the_line():
     assert [item['line_start'] for item in fact['evidence']] == [
         lines.index('@RequestMapping(ApiPaths.ORGS + "/users")') + 1, lines.index('    @GetMapping(ONE)') + 1]
     for item in fact['evidence']:
-        assert item['path'] == f'{ROOT}/api/users/UserController.java' and item['symbol'] == f'{USERS}#get'
+        assert item['path'] == f'{ROOT}/api/users/UserController.java'
+        assert item['symbol'] == f'{USERS}#get'
         assert item['method'] == 'java.spring.request-mapping'
         assert item['content_hash'] == content_hash(source, item['line_start'], item['line_end'])
 
@@ -123,7 +124,8 @@ def test_the_facts_satisfy_the_contract():
     evaluator = SpringApiEvaluator()
     execution = RunEvaluator()(evaluator, snapshot({f'{ROOT}/api/ApiPaths.java': PATHS,
                                                     f'{ROOT}/api/users/UserController.java': CONTROLLER}))
-    assert execution.status is EvaluationStatus.PARTIAL and len(execution.facts) == 7
+    assert execution.status is EvaluationStatus.PARTIAL
+    assert len(execution.facts) == 7
 
 
 def test_static_imports_class_level_verbs_and_nested_controllers():
@@ -153,7 +155,8 @@ class OpsController {
         ('endpoint:GET /ops/stop', 'symbol:java:com.example.web.OpsController#stop'),
         ('endpoint:DELETE /cache/', 'symbol:java:com.example.web.OpsController.Inner#flush'),
     }, 'constante d interface, verbe du type, import statique, type imbrique, / final garde'
-    assert output.status is EvaluationStatus.SUCCESS and gaps(output) == set()
+    assert output.status is EvaluationStatus.SUCCESS
+    assert gaps(output) == set()
 
 
 def test_mappings_outside_a_controller_are_declared_not_guessed():
@@ -215,7 +218,8 @@ import org.springframework.web.bind.annotation.*;
 class Orders { @GetMapping("/orders") void list() {} }
 '''
     output = evaluate({'src/main/java/Orders.java': source})
-    assert output.facts == () and gaps(output) == {'symbol:java:com.example.Orders'}
+    assert output.facts == ()
+    assert gaps(output) == {'symbol:java:com.example.Orders'}
 
 
 def test_test_sources_and_build_outputs_are_outside_the_scope():
@@ -238,7 +242,8 @@ def test_a_broken_or_unreadable_file_is_declared():
 
 def test_a_repository_without_java_is_analysed_and_has_no_endpoint():
     output = evaluate({'main.py': 'print(1)\n'})
-    assert output.facts == () and output.status is EvaluationStatus.SUCCESS
+    assert output.facts == ()
+    assert output.status is EvaluationStatus.SUCCESS
     assert [item['coverage_type'] for item in output.coverage] == ['ANALYSED']
 
 
@@ -249,7 +254,8 @@ def test_a_repository_without_java_is_analysed_and_has_no_endpoint():
 def test_the_java_analyzer_resolves_only_what_is_written(written, expected):
     source = f'class C {{ static final String LOCAL = "/local"; @M({written}) void m() {{}} }}'.encode('utf-8')
     value = syntax.parse('C.java', source).types[0].methods[0].annotations[0].arguments['value'][0]
-    assert value.text == expected and value.written == written
+    assert value.text == expected
+    assert value.written == written
 
 
 def test_the_impact_of_a_commit_names_the_endpoints_it_introduces_moves_and_removes(make_repo, git, tmp_path):
@@ -295,7 +301,7 @@ class Own extends Base { @GetMapping("/y") String y() { return ""; } }
                        'src/main/java/Own.java': own})
     assert handlers(output) == {('endpoint:GET /own/y', 'symbol:java:com.example.Own#y')}, \
         'sans mapping propre, le prefixe herite est inconnu : pas de /x ; un mapping propre prime sur l heritage'
-    assert {'symbol:java:com.example.Child', 'symbol:java:com.example.Own', 'symbol:java:com.example.Base'} == gaps(output)
+    assert gaps(output) == {'symbol:java:com.example.Child', 'symbol:java:com.example.Own', 'symbol:java:com.example.Base'}
 
 
 def test_only_spring_annotations_count():
@@ -319,7 +325,8 @@ class Qualified { @org.springframework.web.bind.annotation.GetMapping("/yes") vo
                        'src/main/java/GetMapping.java': homemade, 'src/main/java/Qualified.java': qualified})
     assert handlers(output) == {('endpoint:GET /yes', 'symbol:java:com.acme.api.Qualified#yes')}, \
         'un import explicite ou un type du meme paquetage masque Spring ; un nom qualifie de Spring compte'
-    assert gaps(output) == set() and output.status is EvaluationStatus.SUCCESS
+    assert gaps(output) == set()
+    assert output.status is EvaluationStatus.SUCCESS
 
 
 def test_constants_citing_constants_of_other_files_are_resolved():
