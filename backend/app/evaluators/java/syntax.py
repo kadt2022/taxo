@@ -6,6 +6,9 @@ d'annotation est resolue quand elle est ecrite dans le code : une chaine, une co
 constante du meme type, d'un type du meme fichier ou d'un type connu (`constants`). Sinon, elle est rendue telle qu'ecrite, marquee non resolue : l'analyseur ne devine
 jamais.
 
+Il donne aussi, a la demande, les chaines d'appels fluentes (`a.b(x).c(y)`) : chaque appel, ses arguments
+(valeur resolue, corps d'une lambda, type declare d'une variable), la methode et le type qui les portent.
+
 Il ne connait aucun framework : ni endpoint, ni controleur. Ce sont les evaluateurs de framework qui donnent
 un sens a ces primitives. Aucun Gradle ni Maven n'est execute, aucun jar n'est lu : seules les sources comptent.
 """
@@ -68,6 +71,46 @@ class JavaType:
 
 
 @dataclass(frozen=True)
+class Lambda:
+    """Une lambda : ses parametres, et les chaines d'appels de son corps. `complete` est faux si son corps
+    contient autre chose que des chaines d'appels (une condition, une boucle...)."""
+    parameters: tuple
+    chains: tuple
+    complete: bool
+
+
+@dataclass(frozen=True)
+class Argument:
+    """Un argument d'appel : sa valeur (resolue si elle est ecrite), la lambda qu'il est, ou, s'il nomme une
+    variable, le type declare de celle-ci : (type ecrit, nom qualifie ou None)."""
+    value: Value
+    function: Lambda | None = None
+    declared: tuple | None = None
+
+
+@dataclass(frozen=True)
+class Call:
+    name: str
+    line_start: int
+    line_end: int
+    arguments: tuple = ()
+
+
+@dataclass(frozen=True)
+class Chain:
+    """Une chaine d'appels fluente, du receveur vers l'exterieur : `http.a().b()` donne `http`, puis a, b.
+    `owner` est le type qualifie qui la porte, `method` sa methode (None hors d'une methode)."""
+    owner: str
+    method: str | None
+    receiver: str
+    calls: tuple
+
+    @property
+    def names(self):
+        return tuple(call.name for call in self.calls)
+
+
+@dataclass(frozen=True)
 class JavaFile:
     path: str
     package: str
@@ -75,10 +118,25 @@ class JavaFile:
     types: tuple
     # Vrai si l'arbre syntaxique contient des erreurs : le fichier n'est lu qu'en partie.
     has_errors: bool
+    _root: object = field(default=None, compare=False, repr=False)
+    _reader: object = field(default=None, compare=False, repr=False)
 
     def constants(self):
         """Constantes chaines du fichier, par nom qualifie de leur type."""
         return {item.qualified_name: item.constants for item in self.types}
+
+    def chains(self, names):
+        """Chaines d'appels du fichier dont un appel porte l'un des noms `names`, dans l'ordre du fichier."""
+        if self._root is None:
+            return ()
+        wanted = set(names)
+        found = []
+        for node in _walk(self._root):
+            if node.type == 'method_invocation' and not _inner(node):
+                chain = self._reader.chain(node)
+                if wanted.intersection(chain.names):
+                    found.append(chain)
+        return tuple(found)
 
 
 def parse(path, source: bytes, constants=None):
@@ -100,7 +158,7 @@ def parse(path, source: bytes, constants=None):
             reader.collect(child, package, types)
     # Les constantes d'abord (tous les types du fichier), puis les annotations qui peuvent les citer.
     types = [reader.complete(item) for item in types]
-    return JavaFile(path, package, tuple(imports), tuple(types), root.has_error)
+    return JavaFile(path, package, tuple(imports), tuple(types), root.has_error, root, reader)
 
 
 def _text(node):
@@ -143,6 +201,83 @@ class _Reader:
         node, name = self._pending[qualified]
         return JavaType(name, qualified, _TYPES[node.type], *_lines(node), self._annotations(node, qualified),
                         self._methods(node, qualified), self.known[qualified], self._supertypes(node, qualified))
+
+    def chain(self, node):
+        """La chaine d'appels dont `node` est l'appel le plus exterieur."""
+        owner, method = self._enclosing(node)
+        calls = []
+        while node.type == 'method_invocation':
+            arguments = node.child_by_field_name('arguments')
+            name = node.child_by_field_name('name')
+            # Les lignes d'un appel vont de son nom a sa parenthese fermante, receveur exclu.
+            calls.append(Call(_text(name), name.start_point[0] + 1, node.end_point[0] + 1,
+                              tuple(self._argument(item, owner) for item in _named(arguments))))
+            receiver = node.child_by_field_name('object')
+            if receiver is None:
+                break
+            node = receiver
+        receiver = _text(node) if node.type != 'method_invocation' else ''
+        return Chain(owner, method, receiver, tuple(reversed(calls)))
+
+    def _enclosing(self, node):
+        """Type qualifie et methode qui portent `node`."""
+        names, method = [], None
+        parent = node.parent
+        while parent is not None:
+            if parent.type in ('method_declaration', 'constructor_declaration') and method is None and not names:
+                method = _text(parent.child_by_field_name('name'))
+            elif parent.type in _TYPES:
+                names.append(_text(parent.child_by_field_name('name')))
+            parent = parent.parent
+        qualified = '.'.join(reversed(names))
+        return (f'{self.package}.{qualified}' if self.package and qualified else qualified or self.package), method
+
+    def _argument(self, node, owner):
+        value = self._value(node, owner)
+        if node.type == 'lambda_expression':
+            return Argument(value, function=self._lambda(node))
+        if node.type == 'identifier':
+            return Argument(value, declared=self._declared(node, owner))
+        return Argument(value)
+
+    def _lambda(self, node):
+        parameters = node.child_by_field_name('parameters')
+        names = (_text(parameters),) if parameters.type == 'identifier' else tuple(
+            _text(item.child_by_field_name('name') or item) for item in _named(parameters))
+        body = node.child_by_field_name('body')
+        if body.type == 'method_invocation':
+            return Lambda(names, (self.chain(body),), True)
+        if body.type != 'block':
+            return Lambda(names, (), False)
+        chains, complete = [], True
+        for statement in _named(body):
+            expression = statement.named_children[0] if statement.type == 'expression_statement' else None
+            if expression is not None and expression.type == 'method_invocation':
+                chains.append(self.chain(expression))
+            else:
+                complete = False
+        return Lambda(names, tuple(chains), complete)
+
+    def _declared(self, node, owner):
+        """Type declare de la variable nommee par `node` : parametre, variable locale ou champ ; None si
+        c'est un parametre de lambda ou si la declaration n'est pas trouvee."""
+        name = _text(node)
+        child, parent = node, node.parent
+        while parent is not None:
+            if parent.type == 'lambda_expression' and name in self._lambda_parameters(parent):
+                return None
+            written = _declaration(parent, name, child)
+            if written is not None:
+                return written, self._type(written, owner)
+            child, parent = parent, parent.parent
+        return None
+
+    @staticmethod
+    def _lambda_parameters(node):
+        parameters = node.child_by_field_name('parameters')
+        if parameters.type == 'identifier':
+            return {_text(parameters)}
+        return {_text(item.child_by_field_name('name') or item) for item in _named(parameters)}
 
     def _methods(self, node, owner):
         """Methodes et constructeurs annotes du type."""
@@ -255,6 +390,51 @@ class _Reader:
         candidates += [f'{name[:-2]}.{head}' for name in plain if name.endswith('.*')]
         full = (f'{candidate}.{rest}' if rest else candidate for candidate in candidates)
         return next((name for name in full if name in self.known), None)
+
+
+def _named(node):
+    return [child for child in node.named_children if child.type not in ('comment', 'line_comment',
+                                                                        'block_comment')] if node is not None else []
+
+
+def _walk(node):
+    pending = [node]
+    while pending:
+        current = pending.pop()
+        yield current
+        pending.extend(reversed(current.named_children))
+
+
+def _inner(node):
+    """Vrai si l'appel `node` est le receveur d'un autre appel : il appartient a une chaine plus longue."""
+    parent = node.parent
+    return parent is not None and parent.type == 'method_invocation' and parent.child_by_field_name('object') == node
+
+
+def _declaration(scope, name, before):
+    """Type ecrit de la variable `name` declaree dans `scope` (avant `before` pour un bloc), ou None."""
+    if scope.type in ('method_declaration', 'constructor_declaration'):
+        for parameter in _named(scope.child_by_field_name('parameters')):
+            if _text(parameter.child_by_field_name('name')) == name:
+                return _type_text(parameter.child_by_field_name('type'))
+        return None
+    if scope.type == 'block':
+        declarations = [item for item in scope.named_children
+                        if item.type == 'local_variable_declaration' and item.start_byte < before.start_byte]
+    elif scope.type in ('class_body', 'enum_body', 'interface_body', 'record_declaration'):
+        declarations = [item for item in _members(scope) if item.type == 'field_declaration']
+    else:
+        return None
+    for declaration in reversed(declarations):
+        names = [_text(item.child_by_field_name('name')) for item in declaration.named_children
+                 if item.type == 'variable_declarator']
+        if name in names:
+            return _type_text(declaration.child_by_field_name('type'))
+    return None
+
+
+def _type_text(node):
+    return _text(_base(node)) if node is not None else None
 
 
 def _string_constant(member, interface):

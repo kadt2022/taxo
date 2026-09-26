@@ -327,3 +327,6 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
 .verified-claim div{display:contents}
 .verified-claim dt{color:var(--muted);font-size:.85em}
 .verified-claim dd{margin:0;overflow-wrap:anywhere}
+.derivation{margin:.35rem 0 .5rem;padding-left:.75rem;border-left:2px solid var(--border);font-size:.9em}
+.derivation p{margin:.2rem 0}
+.derivation ul{margin:.1rem 0 .3rem}

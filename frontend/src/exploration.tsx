@@ -1,6 +1,6 @@
 // Minia interroge Taxo (MINIA-09, ADR 0009) : chaque affirmation de Minia est affichee avec le verdict de Taxo,
 // chaque interpretation comme non verifiee ; la trajectoire (operations demandees) reste visible.
-import {factLine, type GitFact} from './query';
+import {factLine, type Derivation, type GitFact} from './query';
 import {reference, VERBS, label} from './vocabulary';
 
 type ProtocolError = {code:string; message:string};
@@ -27,8 +27,22 @@ const OPERATIONS:Record<string,string>={describe:'Ce que Taxo sait servir', find
 /** Le verdict de Taxo en clair ; une affirmation que Taxo n'a pas pu verifier le dit. */
 export function verdictText(statement:Extract<Statement,{type:'claim'}>){
   if(statement.verdict===null)return `Non vérifiable : ${statement.error?.message??'Taxo n’a pas pu la vérifier.'}`;
-  const text=VERDICTS[statement.verdict]??statement.verdict;
+  const inferred=statement.verdict==='CONFIRMED'&&statement.facts?.some(item=>item.fact.status==='INFERRED');
+  // Une confirmation qui repose sur une deduction de Taxo le dit : elle n'a pas la force d'une observation.
+  const text=inferred?'Confirmée par Taxo, par déduction':VERDICTS[statement.verdict]??statement.verdict;
   return statement.reason?`${text} : ${REASONS[statement.reason]??statement.reason}`:text;
+}
+
+/** Une deduction de Taxo, premisse par premisse (ADR 0009) : ce qui la fonde, et ce qu'elle ne sait pas. */
+function DerivationView({derivation}:Readonly<{derivation:Derivation}>){
+  return <div className="derivation">
+    <p>Déduit par Taxo, règle <code>{derivation.rule}</code>, à partir de :</p>
+    <ul>{derivation.premises.map(item=><li key={`p:${item}`}>{item}</li>)}</ul>
+    {derivation.counter_examples_checked.length?<><p>Écarté :</p>
+      <ul>{derivation.counter_examples_checked.map(item=><li key={`c:${item}`}>{item}</li>)}</ul></>:null}
+    {derivation.known_gaps.length?<><p>Limites connues :</p>
+      <ul>{derivation.known_gaps.map(item=><li key={`g:${item}`}>{item}</li>)}</ul></>:null}
+  </div>;
 }
 
 /** L'affirmation structuree, telle que Taxo l'a verifiee. */
@@ -100,6 +114,7 @@ export function Statements({statements, limits=[]}:Readonly<{statements:Statemen
           </dl>
           {item.facts?.length?<ul>{item.facts.map(f=><li key={f.ref}>{factLine(f.fact)}
             {(item.evidence??[]).filter(proof=>proof.fact===f.ref).map(proof=><span className="evidence" key={proof.ref}>{proofText(proof.location)}</span>)}
+            {f.fact.status==='INFERRED'&&f.fact.derivation?<DerivationView derivation={f.fact.derivation}/>:null}
           </li>)}</ul>:<p className="muted">Aucune preuve : Taxo n’a établi aucun fait pour cette affirmation.</p>}
         </details></li>)}</ul>:<p className="muted">Minia n’a fait aucune affirmation à vérifier.</p>}
     </article>

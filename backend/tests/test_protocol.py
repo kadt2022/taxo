@@ -70,7 +70,7 @@ def test_describe_offers_only_what_taxo_can_serve(taxo):
                           'diff_facts']
     assert 'get_diff' not in operations, 'sans MINIA_SOURCE_CONTEXT=diff, le diff n est pas propose'
     analyzers = {item['analyzer'] for item in described['items'] if item['kind'] == 'analyzer'}
-    assert analyzers == {'taxo.inventory', 'taxo.git', 'taxo.spring-api'}
+    assert analyzers == {'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-security'}
     changes = next(item for item in described['items'] if item.get('relation') == 'CHANGES')
     assert (changes['subject_types'], changes['object_types']) == (['commit'], ['file'])
     assert described['coverage'] and described['snapshot'] == result['snapshot']
@@ -130,7 +130,7 @@ def test_coverage_can_be_asked_for_a_scope(taxo):
     client, url, _ = taxo
     everything = one(client, url, 'get_coverage')
     assert {item['fact']['produced_by']['producer_id'] for item in everything['items']} == {
-        'taxo.inventory', 'taxo.git', 'taxo.spring-api'}
+        'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-security'}
     narrowed = one(client, url, 'get_coverage', scope='file:src/app.txt')
     assert narrowed['items'] == [] and narrowed['count'] == 0
     assert one(client, url, 'get_coverage', scope='rien')['error']['code'] == 'INVALID_ARGUMENT'
@@ -220,9 +220,13 @@ def test_verify_claim_refutes_only_on_an_exclusive_relation(taxo):
 
 def test_verify_claim_says_when_no_analyzer_covers_the_dimension(taxo):
     client, url, _ = taxo
-    verdict = one(client, url, 'verify_claim', subject='endpoint:POST /items', relation='PROTECTED_BY',
-                  object='policy-rule:R1')
+    verdict = one(client, url, 'verify_claim', subject='symbol:java:A#run', relation='CALLS',
+                  object='symbol:java:B#go')
     assert (verdict['verdict'], verdict['reason'], verdict['items']) == (NOT_PROVEN, NOT_ANALYSED, [])
+    protected = one(client, url, 'verify_claim', subject='endpoint:POST /items', relation='PROTECTED_BY',
+                    object='policy-rule:R1')
+    assert (protected['verdict'], protected['reason']) == (NOT_PROVEN, 'NOT_FOUND_IN_ANALYSED_SCOPE'), \
+        'la securite est analysee : non trouve, jamais « non protege »'
     wrong = one(client, url, 'verify_claim', subject='file:a.txt', relation='CHANGES', object='file:b.txt')
     assert wrong['error']['code'] == 'INVALID_ARGUMENT'
     no_object = one(client, url, 'verify_claim', subject='commit:' + '0' * 40, relation='CHANGES')

@@ -152,3 +152,33 @@ describe('affirmation non vérifiable (MINIA-11)', ()=>{
     expect(blue).toContain('Non vérifiable : Relation hors du vocabulaire : INVENTED.');
   });
 });
+
+describe('confirmation par déduction (TAXO-05)', ()=>{
+  const endpoint='endpoint:GET /api/v1/users';
+  const protectedClaim:Statement={type:'claim', text:'Cette route est protégée.', verdict:'CONFIRMED', reason:null,
+    claim:{subject:endpoint, relation:'PROTECTED_BY', object:'policy-rule:authenticated()'},
+    facts:[{ref:'F1', evidence_count:1, fact:{subject:endpoint, relation:'PROTECTED_BY', object:'policy-rule:authenticated()',
+      status:'INFERRED', derivation:{rule:'spring-security.route-authorization-applies',
+        premises:[`MATCHED_BY : ${endpoint} -> route-pattern:/**`, 'AUTHORIZED_BY : route-pattern:/** -> authenticated()'],
+        counter_examples_checked:['ligne 12 : POST /login -> permitAll() : ne correspond pas'],
+        known_gaps:['les rôles et autorités des utilisateurs sont des données, hors du code']}}}],
+    evidence:[{ref:'E1', fact:'F1', location:{path:'SecurityConfig.java', line_start:14, line_end:14}}]};
+  const html=renderToStaticMarkup(<Statements statements={[protectedClaim]}/>);
+
+  it('dit qu’une confirmation repose sur une déduction, pas sur une observation', ()=>{
+    expect(verdictText(protectedClaim as Extract<Statement,{type:'claim'}>)).toBe('Confirmée par Taxo, par déduction');
+    expect(verdictText(confirmed as Extract<Statement,{type:'claim'}>)).toBe('Confirmée par Taxo');
+  });
+  it('montre les prémisses, ce qui a été écarté et les limites connues', ()=>{
+    expect(html).toContain('spring-security.route-authorization-applies');
+    expect(html).toContain('AUTHORIZED_BY : route-pattern:/** -&gt; authenticated()');
+    expect(html).toContain('POST /login -&gt; permitAll() : ne correspond pas');
+    expect(html).toContain('hors du code');
+    expect(html).toContain('Route GET /api/v1/users est protégé par règle authenticated().');
+  });
+  it('lit un fait sans objet (PERMITS_ALL)', ()=>{
+    const open:Statement={...protectedClaim, claim:{subject:'route-pattern:/public/**', relation:'PERMITS_ALL'},
+      facts:[{ref:'F2', evidence_count:0, fact:{subject:'route-pattern:/public/**', relation:'PERMITS_ALL', status:'OBSERVED'}}]};
+    expect(renderToStaticMarkup(<Statements statements={[open]}/>)).toContain('routes /public/** est ouvert à tous');
+  });
+});
