@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.bootstrap import settings
-from app.bootstrap.application import minia_model
+from app.bootstrap.application import minia_model, minia_models
 from app.bootstrap.database import Base
 from app.main import create_app
 from app.minia.domain import briefing
@@ -147,7 +147,7 @@ def test_minia_without_a_model_is_disabled_but_taxo_still_works(repo, ask):
     _, added, _ = repo
     client, post = ask(None)
     assert client.get('/api/minia/status').json() == {'configured': False, 'provider': None, 'model': None,
-                                                      'source_context': 'off', 'remote': False}
+                                                      'source_context': 'off', 'remote': False, 'providers': []}
     response = post(added)
     assert response.status_code == 503 and 'MINIA_NOT_CONFIGURED' in response.json()['detail']
 
@@ -279,17 +279,25 @@ def test_the_ollama_url_must_be_http(url):
 
 
 def test_settings_choose_the_provider(monkeypatch):
-    for name in ('MINIA_PROVIDER', 'MINIA_OLLAMA_URL', 'MINIA_OLLAMA_MODEL', 'MINIA_OLLAMA_NUM_CTX'):
+    for name in ('MINIA_PROVIDER', 'MINIA_OLLAMA_URL', 'MINIA_OLLAMA_MODEL', 'MINIA_OLLAMA_NUM_CTX',
+                 'MINIA_CLAUDE_MODEL'):
         monkeypatch.delenv(name, raising=False)
-    assert settings.minia() == {'provider': 'ollama', 'url': 'http://127.0.0.1:11434', 'model': '', 'num_ctx': 16384}
+    assert settings.minia() == {'provider': 'ollama', 'url': 'http://127.0.0.1:11434', 'model': '', 'num_ctx': 16384,
+                                'claude_model': ''}
     assert minia_model(settings.minia()) is None, 'sans modele, Minia reste desactivee'
     monkeypatch.setenv('MINIA_OLLAMA_MODEL', ' qwen2.5:3b ')
     model = minia_model(settings.minia())
     assert (model.provider, model.model_name, model.url) == ('ollama', 'qwen2.5:3b', 'http://127.0.0.1:11434')
     monkeypatch.setenv('MINIA_OLLAMA_NUM_CTX', '32768')
     assert minia_model(settings.minia()).num_ctx == 32768
-    with pytest.raises(ValueError, match='seul « ollama »'):
-        minia_model(settings.minia(provider='claude'))
+    with pytest.raises(ValueError, match='ollama ou claude'):
+        minia_model(settings.minia(provider='gemini'))
+    monkeypatch.setenv('MINIA_CLAUDE_MODEL', 'claude-opus-5')
+    models = minia_models(settings.minia())
+    assert list(models) == ['ollama', 'claude'] and models['claude'].remote and not models['ollama'].remote
+    assert minia_model(settings.minia(provider='claude')).provider == 'claude', 'MINIA_PROVIDER choisit le defaut'
+    monkeypatch.delenv('MINIA_OLLAMA_MODEL')
+    assert minia_model(settings.minia()).provider == 'claude', 'le seul fournisseur configure sert par defaut'
 
 
 def test_the_window_check_is_a_true_upper_bound_whatever_the_script():

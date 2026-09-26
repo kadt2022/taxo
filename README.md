@@ -252,6 +252,26 @@ Il faut aussi cocher « Autoriser Minia à lire le diff de ce commit » (`"sourc
 l'API). Si `MINIA_OLLAMA_URL` vise une autre machine, le portail avertit que le diff quittera la machine
 de Taxo, et la case n'est pas cochée par défaut.
 
+### Minia Ollama ou Minia Claude (TAXO-MINIA-05)
+
+Minia peut être servie par plusieurs fournisseurs. Elle fait le même travail quel que soit celui choisi :
+mêmes consignes, même contexte borné, même réponse validée par Taxo, jamais un fait. Chaque question
+choisit son fournisseur dans le portail (liste « Minia », affichée dès que deux fournisseurs sont
+configurés) ; la réponse indique lequel a répondu, ce qui permet de comparer.
+
+```powershell
+$env:MINIA_OLLAMA_MODEL = 'qwen2.5:3b'        # Minia Ollama : local
+$env:MINIA_CLAUDE_MODEL = 'claude-opus-5'     # Minia Claude : distant, activée seulement par ce choix
+$env:ANTHROPIC_API_KEY  = '…'                 # identifiants de l'API Claude (jamais dans le dépôt)
+$env:MINIA_PROVIDER     = 'ollama'            # fournisseur proposé par défaut
+```
+
+Claude est un service distant : la question et les faits Taxo transmis (chemins, messages de commit,
+auteurs) quittent la machine de Taxo, et le diff aussi s'il est autorisé. Le portail l'affiche, et la case
+du diff n'est pas cochée par défaut avec Claude. La réponse de Claude est contrainte par un schéma JSON
+(`cited`, `answer`, `unknown`) ; une réponse déclinée ou coupée est signalée, jamais affichée à moitié.
+Sans `ANTHROPIC_API_KEY`, Taxo démarre et Minia Claude le dit à la première question.
+
 ### Clochette (SmolLM2-135M, expérimental, ADR 0006)
 
 Clochette est installée par l'étape `python -m app.hypotheses fetch` de la procédure ci-dessus : elle

@@ -9,10 +9,18 @@ type GitFile = {status:string; path:string; old_path:string|null};
 export type GitCommit = {sha:string; parent:string|null; author:string; authored_at:string; subject:string; files:GitFile[]};
 type NotSent = {path:string; reason:string};
 export type SourceContext = {status:'NOT_REQUESTED'|'DISABLED'}|{status:'SENT'; files_sent:string[]; files_not_sent:NotSent[]; lines_sent:number; bytes_sent:number};
-export type MiniaStatus = {configured:boolean; provider:string|null; model:string|null; source_context:'off'|'diff'; remote:boolean};
+export type MiniaProvider = {provider:string; model:string; remote:boolean};
+/** Le modele qui a repondu ; `fallback_from` quand un autre modele a repris la demande (repli). */
+export type AnswerModel = {configured?:boolean; provider:string|null; model:string|null; fallback_from?:string};
+
+/** Fournisseur et modele de la reponse, pour l'en-tete : « · claude claude-opus-4-8 (repli de claude-opus-5) ». */
+export const modelLabel=(model:AnswerModel)=>model.model
+  ?` · ${model.provider} ${model.model}${model.fallback_from?` (repli de ${model.fallback_from})`:''}`:'';
+export type MiniaStatus = {configured:boolean; provider:string|null; model:string|null; source_context:'off'|'diff'; remote:boolean;
+  providers?:MiniaProvider[]};
 export type MiniaAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'; question:string; commit:string; parent:string|null;
   project:{id:string; name:string}; git:GitCommit; files_not_sent:number; source_context?:SourceContext;
-  model:{configured:boolean; provider:string|null; model:string|null}; facts:CitedFact[]; answer:string; unknown:string;
+  model:AnswerModel; facts:CitedFact[]; answer:string; unknown:string;
   not_interpreted:string[]; failures:string[]; facts_not_sent:number; rejected_citations:string[]};
 
 /** Localisation d'une preuve : chemin, puis lignes quand elles sont connues. */
@@ -57,6 +65,34 @@ export function sourceSummary(context:SourceContext|undefined){
   return [`Diff de ${files(context.files_sent.length)} transmis à Minia${notSent.length?`, ${files(notSent.length)} non transmis : ${reasons}`:''}.`];
 }
 
+/** L'etat de Minia vu depuis le fournisseur choisi pour la demande ; celui par defaut sinon. */
+export function withProvider(status:MiniaStatus|null, provider:string):MiniaStatus|null{
+  const chosen=status?.providers?.find(item=>item.provider===provider);
+  return status&&chosen?{...status, ...chosen}:status;
+}
+
+const PROVIDERS:Record<string,string>={ollama:'Ollama', claude:'Claude'};
+export const providerName=(provider:string)=>PROVIDERS[provider]??provider;
+export const providerLabel=(item:MiniaProvider)=>`${providerName(item.provider)} · ${item.model} (${item.remote?'distant':'local'})`;
+
+/** Avertissement d'un fournisseur distant : la question et le contexte transmis quittent la machine. */
+export function remoteNote(status:MiniaStatus|null){
+  if(!status?.configured||!status.remote||!status.provider)return '';
+  return `Minia ${providerName(status.provider)} est un service distant : la question et les faits Taxo transmis (chemins, messages de commit, auteurs) quittent la machine de Taxo.`;
+}
+
+/** Choix du fournisseur de Minia pour la demande, quand plusieurs sont configures. */
+export function MiniaChoice({status, value, onChange, id}:Readonly<{status:MiniaStatus|null; value:string; onChange:(provider:string)=>void; id:string}>){
+  const providers=status?.providers??[], chosen=withProvider(status,value), note=remoteNote(chosen);
+  return <>
+    {providers.length>1&&<div className="minia-choice"><label htmlFor={id}>Minia</label>
+      <select id={id} value={chosen?.provider??''} onChange={e=>onChange(e.target.value)}>
+        {providers.map(item=><option key={item.provider} value={item.provider}>{providerLabel(item)}</option>)}
+      </select></div>}
+    {note&&<p className="warning remote-note">{note}</p>}
+  </>;
+}
+
 /** La case d'accord : proposee seulement si le reglage l'autorise ; decochee et signalee si le modele est distant. */
 export function sourceConsent(status:MiniaStatus|null){
   if(!status?.configured||status.source_context!=='diff')return null;
@@ -87,7 +123,7 @@ export function gaps(answer:MiniaAnswer){
 export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
   const limits=gaps(answer), diff=answer.source_context?.status==='SENT';
   return <section className="minia" aria-label="Réponse de Minia">
-    <p className="eyebrow">MINIA{answer.model.model?` · ${answer.model.provider} ${answer.model.model}`:''}</p>
+    <p className="eyebrow">MINIA{modelLabel(answer.model)}</p>
     <p className="minia-question">{answer.question}</p>
     <div className="minia-blocks">
       <article className="minia-block fact">

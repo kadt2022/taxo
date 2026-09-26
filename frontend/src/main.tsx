@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import './style.css';
 import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
-import {MiniaView, SourceConsent, sourceConsent, type MiniaAnswer, type MiniaStatus} from './minia';
+import {MiniaChoice, MiniaView, SourceConsent, sourceConsent, withProvider, type MiniaAnswer, type MiniaStatus} from './minia';
 import {ConsultForm} from './consult';
 import {panelKey, ProjectNav, ProjectOverview, technologiesOf, type Scan} from './overview';
 import {AnalysisDetails} from './details';
@@ -22,12 +22,14 @@ type Evaluation = {evaluator_id:string; producer_version:string; comparable:bool
 type Impact = {commit:Commit; parent:string|null; evaluations:Evaluation[]};
 const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DELETED:'Supprimé',RENAMED:'Renommé',COPIED:'Copié',TYPE_CHANGED:'Type modifié'};
 
-function HistoryPanel({projectId}:Readonly<{projectId:string}>){
+function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:MiniaStatus|null}>){
   const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
   const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [question,setQuestion]=useState(''), [live,setLive]=useState<MiniaLive<MiniaAnswer>|null>(null), [consulted,setConsulted]=useState(false), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const base=`/projects/${projectId}/history/commits`;
-  const [minia,setMinia]=useState<MiniaStatus|null>(null), [source,setSource]=useState(false);
-  useEffect(()=>{request<MiniaStatus>('/minia/status').then(s=>{setMinia(s);setSource(sourceConsent(s)?.checked??false);}).catch(()=>setMinia(null));},[]);
+  const [provider,setProvider]=useState(''), [source,setSource]=useState(false);
+  const chosen=withProvider(minia,provider);
+  // Un fournisseur distant decoche l'accord pour le diff ; un fournisseur local le coche.
+  useEffect(()=>{setSource(sourceConsent(chosen)?.checked??false);},[chosen?.provider,chosen?.source_context]);
   // Seule la derniere demande peut modifier l'ecran : une reponse arrivee trop tard est ignoree.
   const latest=useRef(0);
   // Changer de projet efface la consultation : l'historique ne s'affiche que sur demande explicite.
@@ -58,7 +60,7 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
     event.preventDefault();
     const token=++latest.current;
     setBusy(true);setError('');setLive(null);
-    try{await askMinia<MiniaAnswer>(()=>openStream(`/api${base}/${sha}/ask/stream`,questionInit({question,parent,source_context:source&&sourceConsent(minia)!==null})),change=>{if(token===latest.current)setLive(l=>change(l??startMinia()));});}
+    try{await askMinia<MiniaAnswer>(()=>openStream(`/api${base}/${sha}/ask/stream`,questionInit({question,parent,source_context:source&&sourceConsent(chosen)!==null,provider:provider||undefined})),change=>{if(token===latest.current)setLive(l=>change(l??startMinia()));});}
     catch(e){if(token===latest.current)setError((e as Error).message);}
     finally{if(token===latest.current)setBusy(false);}
   }
@@ -91,7 +93,8 @@ function HistoryPanel({projectId}:Readonly<{projectId:string}>){
       <form className="ask-minia" onSubmit={e=>ask(e,detail.commit.sha,detail.parent)}>
         <label htmlFor="minia-question">Demander à Minia</label>
         <textarea id="minia-question" rows={2} maxLength={1000} value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Que change ce commit, et est-ce risqué ?"/>
-        <SourceConsent status={minia} checked={source} onChange={setSource}/>
+        <MiniaChoice id="minia-provider" status={minia} value={provider} onChange={setProvider}/>
+        <SourceConsent status={chosen} checked={source} onChange={setSource}/>
         <button type="submit" className="secondary" disabled={busy||!question.trim()}>{askButton(busy&&live!==null&&!live.result,'Demander à Minia')}</button>
       </form>
       {live?.result?.commit===detail.commit.sha?<MiniaView answer={live.result}/>:live&&!live.result&&<MiniaProgress live={live}/>}
@@ -118,6 +121,8 @@ async function request<T>(path:string, init?:RequestInit):Promise<T> {
 }
 function App(){
   const [projects,setProjects]=useState<Project[]>([]), [selected,setSelected]=useState('');
+  const [minia,setMinia]=useState<MiniaStatus|null>(null);
+  useEffect(()=>{request<MiniaStatus>('/minia/status').then(setMinia).catch(()=>setMinia(null));},[]);
   const [scans,setScans]=useState<Scan[]>([]), [scanId,setScanId]=useState('');
   const [name,setName]=useState(''), [path,setPath]=useState(''), [error,setError]=useState('');
   const [busy,setBusy]=useState(false), [loading,setLoading]=useState(true);
@@ -160,8 +165,8 @@ function App(){
       </section>
       <AnalysisDetails scan={shown}/>
     </>:!running&&<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
-    {selected&&!loading&&scan&&<AskTaxo key={panelKey('ask',selected)} base={`/projects/${selected}`} request={request}/>}
-    {selected&&!loading&&<HistoryPanel key={panelKey('history',selected)} projectId={selected}/>}
+    {selected&&!loading&&scan&&<AskTaxo key={panelKey('ask',selected)} base={`/projects/${selected}`} request={request} minia={minia}/>}
+    {selected&&!loading&&<HistoryPanel key={panelKey('history',selected)} projectId={selected} minia={minia}/>}
     </main>
   </div>;
 }

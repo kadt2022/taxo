@@ -4,6 +4,7 @@ import {useState, type FormEvent} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
 import {ask as askMinia, askButton, MiniaProgress, type MiniaLive} from './minia-live';
+import {MiniaChoice, modelLabel, type AnswerModel, type MiniaStatus} from './minia';
 import {openStream, type ServerEvent} from './sse';
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
@@ -13,7 +14,7 @@ export type GitFact = {subject:string; relation:string; object:string; qualifier
 export type Selection = {status:string; request:Request; analysis:{id:string; created_at:string};
   total_commits:number|null; commits:SelectedCommit[]; facts:GitFact[]; not_interpreted:string[]};
 export type SelectionAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'|'NEEDS_SELECTION'; question:string; request:Request;
-  model:{provider:string|null; model:string|null}; commits:SelectedCommit[]; facts:(GitFact&{ref:string})[];
+  model:AnswerModel; commits:SelectedCommit[]; facts:(GitFact&{ref:string})[];
   answer:string; unknown:string; not_interpreted:string[]; facts_not_sent:number; rejected_citations:string[]};
 type Run = <T>(path:string, init?:RequestInit)=>Promise<T>;
 
@@ -69,7 +70,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:''].filter(Boolean);
   return <section className="minia" aria-label="Réponse de Minia">
-    <p className="eyebrow">MINIA{answer.model.model?` · ${answer.model.provider} ${answer.model.model}`:''} · {describe(answer.request)}</p>
+    <p className="eyebrow">MINIA{modelLabel(answer.model)} · {describe(answer.request)}</p>
     <p className="minia-question">{answer.question}</p>
     <div className="minia-blocks">
       <article className="minia-block fact">
@@ -93,7 +94,8 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
 }
 
 export const queryPath=(base:string, text:string)=>`${base}/query?${new URLSearchParams({q:text})}`;
-export const askInit=(text:string):RequestInit=>({method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({question:text})});
+export const askInit=(text:string, provider=''):RequestInit=>({method:'POST', headers:{'Content-Type':'application/json'},
+  body:JSON.stringify(provider?{question:text, provider}:{question:text})});
 
 type Setters<T> = {setBusy:(value:boolean)=>void; setError:(value:string)=>void; setValue:(value:T)=>void};
 
@@ -114,24 +116,25 @@ type PanelSetters = {setBusy:(value:boolean)=>void; setError:(value:string)=>voi
   setResult:(value:Selection)=>void; setLive:(change:(live:Live|null)=>Live|null)=>void};
 
 /** Les deux actions du panneau : selectionner des faits, ou demander a Minia d'expliquer la selection. */
-export function actions(base:string, text:string, request:Run, set:PanelSetters, stream:Stream=openStream){
+export function actions(base:string, text:string, request:Run, set:PanelSetters, stream:Stream=openStream, provider=''){
   const common={setBusy:set.setBusy, setError:set.setError};
   return {
     select:()=>track(()=>request<Selection>(queryPath(base,text)), {...common, setValue:(value:Selection)=>{set.setResult(value);set.setLive(()=>null);}}),
-    explain:()=>track(()=>askMinia<SelectionAnswer>(()=>stream(`/api${base}/ask/stream`,askInit(text)), change=>set.setLive(live=>change(live as Live))),
+    explain:()=>track(()=>askMinia<SelectionAnswer>(()=>stream(`/api${base}/ask/stream`,askInit(text,provider)), change=>set.setLive(live=>change(live as Live))),
       {...common, setValue:()=>undefined}),
   };
 }
 
-export function AskTaxo({base, request, stream}:Readonly<{base:string; request:Run; stream?:Stream}>){
+export function AskTaxo({base, request, stream, minia=null}:Readonly<{base:string; request:Run; stream?:Stream; minia?:MiniaStatus|null}>){
   const [text,setText]=useState(''), [busy,setBusy]=useState(false), [error,setError]=useState('');
-  const [result,setResult]=useState<Selection|null>(null), [live,setLive]=useState<Live|null>(null);
-  const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setLive},stream);
+  const [result,setResult]=useState<Selection|null>(null), [live,setLive]=useState<Live|null>(null), [provider,setProvider]=useState('');
+  const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setLive},stream,provider);
   return <section className="results ask-taxo" aria-label="Interroger Taxo">
     <div className="section-heading"><div><h2>Interroger Taxo</h2><p>Taxo sélectionne parmi les faits de la dernière analyse globale : « les 3 derniers commits », « le commit 5b9022b », « depuis 2026-09-01 ».</p></div></div>
     <form onSubmit={submitWith(select)}>
       <label htmlFor="taxo-query">Votre requête</label>
       <input id="taxo-query" required maxLength={1000} value={text} onChange={typed(setText)} placeholder="les 3 derniers commits"/>
+      <MiniaChoice id="taxo-provider" status={minia} value={provider} onChange={setProvider}/>
       <div className="actions"><button type="submit" className="secondary" disabled={busy}>Sélectionner</button>
         <button type="button" className="secondary" disabled={busy||!text.trim()} onClick={explain}>{askButton(busy&&live!==null&&!live.result,'Demander à Minia')}</button></div>
     </form>

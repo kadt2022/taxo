@@ -22,6 +22,7 @@ from app.history.api.router import create_router as history_router
 from app.minia.application.ask import AskMinia
 from app.projection.application.query import ProjectQuery
 from app.projection.api.router import create_router as query_router
+from app.minia.infrastructure.claude import ClaudeModel
 from app.minia.infrastructure.ollama import OllamaModel
 from app.minia.api.router import create_router as minia_router
 from . import settings
@@ -29,11 +30,25 @@ from . import settings
 _FROM_SETTINGS = object()
 
 
+PROVIDERS = ('ollama', 'claude')
+
+
+def minia_models(options):
+    """Modeles de Minia par fournisseur configure ; vide si aucun."""
+    if options['provider'] not in PROVIDERS:
+        raise ValueError(f"MINIA_PROVIDER inconnu : {options['provider']} (ollama ou claude).")
+    models = {}
+    if options['model']:
+        models['ollama'] = OllamaModel(options['model'], options['url'], num_ctx=options.get('num_ctx', 16384))
+    if options.get('claude_model'):
+        models['claude'] = ClaudeModel(options['claude_model'])
+    return models
+
+
 def minia_model(options):
-    """Adaptateur du modele de Minia ; None si aucun modele n'est configure."""
-    if options['provider'] != 'ollama':
-        raise ValueError(f"MINIA_PROVIDER inconnu : {options['provider']} (seul « ollama » est disponible).")
-    return OllamaModel(options['model'], options['url'], num_ctx=options.get('num_ctx', 16384)) if options['model'] else None
+    """Modele de Minia par defaut ; None si aucun modele n'est configure."""
+    models = minia_models(options)
+    return models.get(options['provider']) or next(iter(models.values()), None)
 
 
 def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None, minia=_FROM_SETTINGS,
@@ -68,8 +83,11 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     query = ProjectQuery(projects, scans, facts)
     api.include_router(query_router(query))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ADR 0004, regle 14).
-    model = minia_model(settings.minia()) if minia is _FROM_SETTINGS else minia
+    # Plusieurs fournisseurs peuvent servir Minia (Ollama local, Claude distant) : chaque demande choisit.
+    options = settings.minia()
+    models = minia_models(options) if minia is _FROM_SETTINGS else minia
+    default = options['provider'] if minia is _FROM_SETTINGS and options['provider'] in models else None
     # Le diff d'un commit ne lui est joint que si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise (ADR 0008).
     source = settings.minia_source_context(source_context)
-    api.include_router(minia_router(AskMinia(history, model, projects, query, source)))
+    api.include_router(minia_router(AskMinia(history, models, projects, query, source, default)))
     return api

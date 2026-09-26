@@ -7,3 +7,6 @@ pytest>=8,<10
 httpx>=0.28,<1
 jsonschema[format-nongpl]>=4.23,<5
 rfc8785>=0.1.4,<0.2
+anthropic>=1.8,<2
+# Client HTTP du SDK anthropic 1.x ; les tests de Minia Claude en construisent les reponses d'erreur.
+httpx2>=2.13,<3

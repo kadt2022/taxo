@@ -15,7 +15,8 @@ export function reduceMinia<T>(live:MiniaLive<T>, event:ServerEvent):MiniaLive<T
   }
   if(event.type==='minia.delta')return {...live, text:live.text+data.text};
   if(event.type==='minia.completed')return {...live, result:data as T};
-  if(event.type==='minia.failed')return {...live, failure:data.message};
+  // Un echec efface le texte provisoire : une reponse coupee ou declinee n'est jamais montree a moitie.
+  if(event.type==='minia.failed')return {...live, text:'', failure:data.message};
   return live;
 }
 
