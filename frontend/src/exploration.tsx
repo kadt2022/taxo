@@ -35,6 +35,12 @@ export function verdictText(statement:Extract<Statement,{type:'claim'}>){
 export const claimText=(claim:Claim)=>
   [reference(claim.subject), label(VERBS,claim.relation), claim.object?reference(claim.object):null].filter(Boolean).join(' ');
 
+/** L'affirmation dite par Taxo, en une phrase : c'est elle, et elle seule, qui porte le verdict (MINIA-11). */
+export function claimSentence(claim:Claim){
+  const text=claimText(claim);
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}
+
 /** Une etape de la trajectoire en une ligne : l'operation, ses arguments, l'issue. */
 export function stepText(step:TrajectoryStep){
   const name=OPERATIONS[step.operation]??step.operation;
@@ -64,29 +70,47 @@ export function Trajectory({steps}:Readonly<{steps:TrajectoryStep[]}>){
   </details>;
 }
 
-export function Statements({statements}:Readonly<{statements:Statement[]}>){
+/** Les enonces de Minia, separes selon qui en repond (MINIA-11).
+ * - Vert : seulement les affirmations structurees que Taxo a verifiees, dites par Taxo. La phrase de Minia n'y
+ *   figure jamais : un verdict ne couvre que ce qui a ete verifie, pas une formulation qui irait au-dela.
+ * - Bleu : tout ce que Minia ecrit, non verifie : ses interpretations, sa formulation de chaque affirmation, et
+ *   ce qu'elle dit ne pas savoir.
+ * - Jaune : seulement ce que Taxo constate lui-meme (`limits`). */
+export function Statements({statements, limits=[]}:Readonly<{statements:Statement[]; limits?:string[]}>){
   const claims=statements.filter((item):item is Extract<Statement,{type:'claim'}>=>item.type==='claim');
   const interpretations=statements.filter(item=>item.type==='interpretation');
+  const worded=claims.filter(item=>item.text.trim());
   const unknowns=statements.filter(item=>item.type==='unknown');
+  const said=interpretations.length+worded.length+unknowns.length;
   return <div className="minia-blocks">
     <article className="minia-block fact">
       <h3>Affirmations vérifiées par Taxo</h3>
       {claims.length?<ul>{claims.map((item,index)=><li key={index}>
-        <span className={verdictClass(item.verdict)}>{verdictText(item)}</span> {item.text}
-        <details className="proof"><summary>Ce que Taxo a vérifié</summary>{claimText(item.claim)}
+        <span className={verdictClass(item.verdict)}>{verdictText(item)}</span> {claimSentence(item.claim)}
+        <details className="proof"><summary>Ce que Taxo a vérifié</summary>
+          <dl className="verified-claim">
+            <div><dt>subject</dt><dd><code>{item.claim.subject}</code></dd></div>
+            <div><dt>relation</dt><dd><code>{item.claim.relation}</code></dd></div>
+            <div><dt>object</dt><dd><code>{item.claim.object??'—'}</code></dd></div>
+            <div><dt>verdict</dt><dd><code>{item.verdict??'—'}</code>{item.reason?<> · <code>{item.reason}</code></>:null}</dd></div>
+          </dl>
           {item.facts?.length?<ul>{item.facts.map(f=><li key={f.ref}>{factLine(f.fact)}
             {(item.evidence??[]).filter(proof=>proof.fact===f.ref).map(proof=><span className="evidence" key={proof.ref}>{proofText(proof.location)}</span>)}
-          </li>)}</ul>:null}
+          </li>)}</ul>:<p className="muted">Aucune preuve : Taxo n’a établi aucun fait pour cette affirmation.</p>}
         </details></li>)}</ul>:<p className="muted">Minia n’a fait aucune affirmation à vérifier.</p>}
     </article>
     <article className="minia-block interpretation">
       <h3>Ce que Minia en déduit <span className="badge">non vérifié</span></h3>
-      {interpretations.length?<ul>{interpretations.map((item,index)=><li key={index}>{item.text}</li>)}</ul>
-        :<p className="muted">Minia ne propose aucune interprétation.</p>}
+      {said?<ul>
+        {interpretations.map((item,index)=><li key={`i${index}`}>{item.text}</li>)}
+        {worded.map((item,index)=><li key={`c${index}`}>Minia : « {item.text} » <span className="muted">(sa formulation ;
+          Taxo n’a vérifié que : {claimSentence(item.claim)})</span></li>)}
+        {unknowns.map((item,index)=><li key={`u${index}`}><em>Minia dit ne pas savoir :</em> {item.text}</li>)}
+      </ul>:<p className="muted">Minia ne propose aucune interprétation.</p>}
     </article>
     <article className="minia-block unknown">
       <h3>Ce que Taxo ne sait pas</h3>
-      {unknowns.length?<ul>{unknowns.map((item,index)=><li key={index}>{item.text}</li>)}</ul>:<p className="muted">Aucune limite signalée.</p>}
+      {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée par Taxo.</p>}
     </article>
   </div>;
 }

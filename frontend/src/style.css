@@ -321,3 +321,9 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
 .animated-dots::after{content:"...";animation:taxo-dots 1.2s steps(1,end) infinite}
 @keyframes taxo-dots{0%{content:"."}33%{content:".."}66%{content:"..."}}
 @media(prefers-reduced-motion:reduce){.animated-dots::after{animation:none;content:"..."}}
+
+/* MINIA-11 : l'affirmation exactement verifiee par Taxo. */
+.verified-claim{display:grid;grid-template-columns:max-content 1fr;gap:.2rem .75rem;margin:.5rem 0}
+.verified-claim div{display:contents}
+.verified-claim dt{color:var(--muted);font-size:.85em}
+.verified-claim dd{margin:0;overflow-wrap:anywhere}
