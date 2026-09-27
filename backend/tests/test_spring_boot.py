@@ -280,3 +280,30 @@ public class GeneratedController implements OrdersApi {
     output = boot(repository(**{'web/src/main/java/com/acme/web/GeneratedController.java': inherited}))
     assert 'symbol:java:com.acme.web.GeneratedController' in gaps(output)
     assert output.status == EvaluationStatus.PARTIAL
+
+
+def test_a_non_java_dependency_in_a_module_does_not_block_its_classpath():
+    output = boot(repository(**{'web/package.json': '{"name": "web-ui", "dependencies": {"shared": "file:../shared"}}',
+                                'shared/package.json': '{"name": "shared"}'}))
+    assert ('endpoint:GET /orders', SHOP_REF) in served(output)
+    assert SHOP_REF not in gaps(output)
+
+
+def test_an_import_of_a_class_off_the_runtime_classpath_loads_nothing():
+    narrow = application('com.acme.shop', 'ShopApplication', '(scanBasePackages = "com.acme.shop")',
+                         '@Import(com.acme.admin.AdminImports.class)\n')
+    imports = '''package com.acme.admin;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+
+@Configuration
+@Import(com.acme.web.OrderController.class)
+public class AdminImports {
+}
+'''
+    output = boot(repository(**{SHOP: narrow, 'admin/src/main/java/com/acme/admin/AdminImports.java': imports,
+                                'shop-app/build.gradle': 'dependencies {\n    implementation project(":web")\n'
+                                                         '    compileOnly project(":admin")\n}\n'}))
+    assert ('endpoint:GET /orders', SHOP_REF) not in served(output), \
+        'une classe hors du classpath d execution n importe rien'

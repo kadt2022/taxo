@@ -246,6 +246,9 @@ class Deployment:
 
     def _edge(self, dependency, found):
         """(suivre la dependance, raison qui empeche d'etablir le classpath)."""
+        if dependency.system not in RUNTIME:
+            # Une dependance npm ou Python d'un meme dossier ne met rien sur le classpath Java.
+            return False, ''
         kind = _kind(dependency)
         if kind == UNKNOWN:
             return False, (f'configuration « {dependency.configuration or "?"} » non interprétée '
@@ -337,6 +340,9 @@ class Deployment:
         if target not in self.types or target in application.loaded:
             return
         imported_file, imported = self.types[target]
+        if not self._on_classpath(application, imported_file):
+            # Hors du classpath d'execution (compileOnly...) : la classe n'est pas chargee, ni ce qu'elle importe.
+            return
         if {name.rsplit('.', 1)[-1] for name, _ in imported.supertypes} & SELECTORS:
             _open(application, f'import sélectif {target} : classes enregistrées à l’exécution')
             return
