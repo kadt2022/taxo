@@ -218,7 +218,7 @@ def maven_dependencies(reading, poms, texts):
     """Dependances entre modules Maven du depot, par coordonnees completes. Un `groupId` calcule
     (`${...}`) ne se resout pas : la dependance est declaree, jamais rattachee par son seul `artifactId`."""
     known = {(group, artifact): directory for directory, (group, artifact, _) in poms.items()}
-    local = {artifact for _, artifact in known}
+    local = {artifact for (_, artifact, _) in poms.values()}
     for directory, (_, _, dependencies) in poms.items():
         path = 'pom.xml' if directory == '.' else f'{directory}/pom.xml'
         for group, artifact, scope in dependencies:
@@ -239,13 +239,8 @@ def npm_packages(texts, reading):
     """Chaque `package.json` est un module ; les dependances entre paquets du depot sont relevees."""
     packages = {}
     for path, text in sorted(texts.items()):
-        try:
-            content = json.loads(text)
-        except ValueError as exc:
-            reading.gap(path, f'package.json illisible ({exc})')
-            continue
-        if not isinstance(content, dict):
-            reading.gap(path, 'package.json sans objet racine')
+        content = _package(path, text, reading)
+        if content is None:
             continue
         directory = directory_of(path)
         packages[directory] = (path, text, content)
@@ -253,16 +248,33 @@ def npm_packages(texts, reading):
     names = {content.get('name'): directory for directory, (_, _, content) in packages.items()
              if isinstance(content.get('name'), str)}
     for directory, (path, text, content) in packages.items():
-        for section in _SECTIONS:
-            declared = content.get(section)
-            if not isinstance(declared, dict):
-                continue
-            for name, version in declared.items():
-                target = _npm_target(directory, name, version, names)
-                if target is not None and target != directory:
-                    line = _line_of(text, f'"{name}"', text.find(f'"{section}"'))
-                    reading.dependencies.append(Dependency(directory, target, 'npm', section, path, line))
+        _npm_dependencies(directory, path, text, content, names, reading)
     return packages
+
+
+def _package(path, text, reading):
+    """Contenu d'un `package.json`, ou None (et la raison declaree) s'il n'est pas lisible."""
+    try:
+        content = json.loads(text)
+    except ValueError as exc:
+        reading.gap(path, f'package.json illisible ({exc})')
+        return None
+    if not isinstance(content, dict):
+        reading.gap(path, 'package.json sans objet racine')
+        return None
+    return content
+
+
+def _npm_dependencies(directory, path, text, content, names, reading):
+    for section in _SECTIONS:
+        declared = content.get(section)
+        if not isinstance(declared, dict):
+            continue
+        for name, version in declared.items():
+            target = _npm_target(directory, name, version, names)
+            if target is not None and target != directory:
+                line = _line_of(text, f'"{name}"', text.find(f'"{section}"'))
+                reading.dependencies.append(Dependency(directory, target, 'npm', section, path, line))
 
 
 def _npm_target(directory, name, version, names):
@@ -291,7 +303,7 @@ def npm_workspaces(packages, reading):
 # --- Python ---------------------------------------------------------------------------------------
 
 PYTHON_DESCRIPTORS = ('pyproject.toml', 'setup.py', 'requirements.txt')
-_PATH_DEPENDENCY = re.compile(r'^\s*-e\s|\bfile:|\bpath\s*=', re.M)
+_PATH_DEPENDENCY = re.compile(r'(?:^\s*-e\s)|(?:\bfile:)|(?:\bpath\s*=)', re.M)
 
 
 def python_descriptor(path, text, reading):

@@ -200,7 +200,8 @@ def test_empty_descriptors_are_modules_with_whole_file_evidence():
     execution = RunEvaluator()(StructureEvaluator(), snapshot({'lib/requirements.txt': '', 'build.gradle': ''}))
     assert execution.status == EvaluationStatus.SUCCESS
     evidence = [proof for fact in execution.facts for proof in fact['evidence']]
-    assert evidence and all('line_start' not in proof for proof in evidence)
+    assert evidence
+    assert all('line_start' not in proof for proof in evidence)
 
 
 def test_wrapped_project_dependencies_keep_their_outer_configuration():
