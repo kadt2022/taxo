@@ -307,3 +307,21 @@ def test_pattern_matching_has_three_outcomes():
     assert rules.match('/files/x', '/files/{*path}') == rules.SOME
     assert not rules.readable_pattern('/api/{id:\\d+}')
     assert not rules.readable_pattern('api/**')
+
+
+def test_several_deployable_applications_forbid_any_route_conclusion():
+    def application(name):
+        return f'''package com.example.{name};
+
+@SpringBootApplication
+public class {name.capitalize()}Application {{
+}}
+'''
+    output = evaluate(files(**{'app/one/OneApplication.java': application('one'),
+                               'app/two/TwoApplication.java': application('two')}))
+    assert not facts(output, 'MATCHED_BY')
+    assert not facts(output, 'PROTECTED_BY')
+    assert 'endpoint:GET /health' in gaps(output), 'la chaine d une application ne vaut pas pour l autre'
+    assert facts(output, 'AUTHORIZED_BY'), 'les regles lues restent des faits observes'
+    single = evaluate(files(**{'app/one/OneApplication.java': application('one')}))
+    assert 'endpoint:GET /health' in facts(single, 'PROTECTED_BY'), 'une seule application : on conclut'

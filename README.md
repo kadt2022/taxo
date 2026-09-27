@@ -226,7 +226,9 @@ pas, et déclare l'endpoint non interprété, quand :
 - plusieurs chaînes de filtres peuvent traiter la route (par profil ou propriété), ou le périmètre
   `securityMatcher` n'est pas lu ;
 - la route est visée par `web.ignoring()` ;
-- l'analyse des endpoints elle-même n'a pas établi certaines routes.
+- l'analyse des endpoints elle-même n'a pas établi certaines routes ;
+- le dépôt contient plusieurs applications Spring Boot : l'application qui sert la route, et les
+  chaînes qu'elle charge, ne sont pas encore établies (unité déployable, défaut D1).
 
 Seule une chaîne dont le receveur est le `HttpSecurity` de Spring est une configuration de sécurité ; un
 receveur de type inconnu est vu, pas lu. Une expression `access("…")` n'est lue que si elle ne peut que

@@ -42,6 +42,9 @@ multiples.
      `true`, `permitAll`, appel de bean), ou `access(…)` un gestionnaire ni du dépôt ni restrictif de
      Spring ;
    - l'analyse des endpoints n'a pas établi certaines routes (ses zones non interprétées sont reprises).
+   - le dépôt contient plusieurs applications Spring Boot (`@SpringBootApplication`…) : l'application
+     qui sert la route et les chaînes qu'elle charge ne sont pas établies. Les règles restent des faits
+     observés ; aucune route n'est rattachée tant que l'unité déployable n'est pas modélisée (D1).
 
    Seule une chaîne dont le receveur est une variable de type `HttpSecurity` de Spring (nom qualifié ou
    import) est une configuration : une API maison aux mêmes noms de méthode ne l'est pas, et un receveur

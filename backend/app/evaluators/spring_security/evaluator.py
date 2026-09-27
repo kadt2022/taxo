@@ -33,6 +33,8 @@ METHOD_SECURITY = {'PreAuthorize', 'PostAuthorize', 'PreFilter', 'PostFilter', '
                    'DenyAll', 'PermitAll'}
 # Supertypes d'un mecanisme maison : filtre de servlet, gestionnaire d'autorisation.
 CUSTOM = {'OncePerRequestFilter', 'GenericFilterBean', 'Filter', 'AuthorizationManager'}
+# Points d'entree d'une application Spring Boot : chacun charge ses propres chaines de filtres.
+APPLICATIONS = {'SpringBootApplication', 'SpringBootConfiguration', 'EnableAutoConfiguration'}
 ROLE_ACTIONS = ('hasRole', 'hasAnyRole', 'hasAuthority', 'hasAnyAuthority')
 DATA_GAP = 'les rôles et autorités des utilisateurs sont des données, hors du code'
 
@@ -83,10 +85,22 @@ class _Run:
         if endpoints and not self.configurations:
             self.warnings.append('Aucune règle authorizeHttpRequests trouvée : la protection des routes n’est pas '
                                  'établie (configuration par défaut, XML ou Kotlin non lus).')
+        applications = self._applications()
         for endpoint in endpoints:
             self._method_security(endpoint)
-            if self.configurations:
+            if len(applications) > 1:
+                # Plusieurs applications deployables : celle qui sert la route, et les chaines de filtres
+                # qu'elle charge, ne sont pas etablies. Une regle d'une autre application ne s'applique pas.
+                self._gap(endpoint.reference, f'repository:{self.snapshot.repository}',
+                          f'{len(applications)} applications Spring Boot ({", ".join(applications)}) : '
+                          'l’application qui sert cette route n’est pas établie')
+            elif self.configurations:
                 self._endpoint(endpoint)
+
+    def _applications(self):
+        """Types annotes comme point d'entree d'une application Spring Boot, dans l'ordre des noms."""
+        return sorted(java_type.qualified_name for java_file in self.analysis.parsed for java_type in java_file.types
+                      if any(item.simple_name in APPLICATIONS for item in java_type.annotations))
 
     def _gap(self, subject, scope, reason):
         _, reasons = self.gaps.setdefault(subject, (scope, []))
