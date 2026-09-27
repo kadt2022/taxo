@@ -76,6 +76,7 @@ AUTO_CONFIGURATION_FILES = ('META-INF/spring.factories',
                             'META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports')
 MAX_BYTES = 1024 * 1024
 MAX_META = 4
+UNRESOLVED = 'annotation non résolue'
 OTHER_ROUTES = 'les enregistrements par XML, initialiseurs ou propriétés (spring.main.sources) ne sont pas lus'
 _SHARED = re.compile(r'\b(?:subprojects|allprojects|configure)\b[^{]*\{')
 _DEPENDENCIES = re.compile(r'\bdependencies\s*\{')
@@ -191,7 +192,7 @@ class Deployment:
             return application
         condition, unsure = self._condition(java_file, java_type.annotations)
         if condition or unsure:
-            what = f'condition @{condition}' if condition else 'annotation non résolue'
+            what = f'condition @{condition}' if condition else UNRESOLVED
             application.reason = f'application elle-même conditionnelle ({what}) : chargement non établi'
             return application
         if any(self.resolve(java_file, item.name) in SCANS for item in java_type.annotations):
@@ -235,17 +236,25 @@ class Deployment:
             if unread:
                 return {}, f'descripteur non lu : {", ".join(unread)}'
             for dependency in self.edges.get(source, []):
-                kind = _kind(dependency)
-                if kind == UNKNOWN:
-                    return {}, (f'configuration « {dependency.configuration or "?"} » non interprétée '
-                                f'({dependency.path} ligne {dependency.line})')
-                if kind == NO or dependency.target in found:
-                    continue
-                if dependency.target not in self.modules:
-                    return {}, f'dépendance vers un dossier qui n’est pas un module : {dependency.target}'
-                found[dependency.target] = (*found[source], dependency)
-                pending.append(dependency.target)
+                follow, reason = self._edge(dependency, found)
+                if reason:
+                    return {}, reason
+                if follow:
+                    found[dependency.target] = (*found[source], dependency)
+                    pending.append(dependency.target)
         return found, ''
+
+    def _edge(self, dependency, found):
+        """(suivre la dependance, raison qui empeche d'etablir le classpath)."""
+        kind = _kind(dependency)
+        if kind == UNKNOWN:
+            return False, (f'configuration « {dependency.configuration or "?"} » non interprétée '
+                           f'({dependency.path} ligne {dependency.line})')
+        if kind == NO or dependency.target in found:
+            return False, ''
+        if dependency.target not in self.modules:
+            return False, f'dépendance vers un dossier qui n’est pas un module : {dependency.target}'
+        return True, ''
 
     def _unread(self, module):
         """Descripteurs du module que la structure n'a pas lus entierement."""
@@ -311,7 +320,7 @@ class Deployment:
         if stereotype and not condition and not unsure:
             application.loaded[qualified] = (f'@{stereotype} {qualified} dans le paquetage balayé {package}',)
         elif stereotype or unresolved:
-            reason = f'condition @{condition}' if condition else 'annotation non résolue'
+            reason = f'condition @{condition}' if condition else UNRESOLVED
             application.maybe[qualified] = f'{reason} : chargement non établi'
 
     def _imports(self, application, java_file, java_type, sure):
@@ -421,7 +430,7 @@ class Deployment:
             return loading
         condition, unsure = self._condition(java_file, method.annotations)
         if condition or unsure:
-            what = f'condition @{condition}' if condition else 'annotation non résolue'
+            what = f'condition @{condition}' if condition else UNRESOLVED
             return Loading(UNKNOWN, reason=f'bean {qualified}#{signature} : {what}')
         return loading
 
