@@ -134,6 +134,22 @@ Les 17 récits du document de vision restent la description de ces capacités, p
 
 ## Décisions prises
 
+**2026-09-27 (architecture de la Maille, ADR 0011 en projet)**
+
+- La Maille existante est rendue navigable avant d'étendre la couverture Java. Ordre :
+  1. TAXO-ID-01, identité des méthodes par signature syntaxique normalisée, avec sa migration ;
+  2. TAXO-01I, voisinage borné sur les faits existants, avec frontière en trois natures ;
+  3. décision de l'ADR 0011 : `CALLS` déduit, `DISPATCHES_TO` suspendu jusqu'à l'ancrage sur le site,
+     candidats hors des arêtes, preuves avec colonne, propriétaire et rôle ;
+  4. premières liaisons Java, fragment borné, avec prémisses et diagnostic par forme ;
+  5. essai A/B/C.
+- L'essai A/B/C compare Taxo à un agent qui cherche et lit des extraits, pas des fichiers entiers.
+  Questions, réponses attendues et cas où `NOT_PROVEN` est la bonne réponse sont fixés avant l'essai.
+  Le « facteur 8 à 10 » de l'ADR 0005 reste attaché au prototype historique, mesuré contre des
+  fichiers entiers : il ne prédit pas ce gain.
+- Ce qui existe (couvertures, `not_sent`, versions de producteur et de catalogue, verdicts) est
+  réutilisé, pas reconstruit.
+
 **2026-09-26 (ADR 0003)**
 
 - L'analyseur Java lit la syntaxe avec tree-sitter, dans le processus Python, au lieu de JavaParser dans
