@@ -303,14 +303,16 @@ def npm_workspaces(packages, reading):
 # --- Python ---------------------------------------------------------------------------------------
 
 PYTHON_DESCRIPTORS = ('pyproject.toml', 'setup.py', 'requirements.txt')
-_PATH_DEPENDENCY = re.compile(r'(?:^\s*-e\s)|(?:\bfile:)|(?:\bpath\s*=)', re.M)
+# Dependance par chemin : ligne editable (`-e ../lib`), ou reference `file:` / `path =`.
+_EDITABLE = re.compile(r'^\s*-e\s', re.M)
+_PATH_REFERENCE = re.compile(r'\bfile:|\bpath\s*=')
 
 
 def python_descriptor(path, text, reading):
     reading.modules.append(Module(directory_of(path), 'python', path, None))
-    found = _PATH_DEPENDENCY.search(text)
+    found = [match.start() for match in (_EDITABLE.search(text), _PATH_REFERENCE.search(text)) if match]
     if found:
-        reading.gap(path, f'dépendance Python par chemin non lue ligne {_line(text, found.start())}')
+        reading.gap(path, f'dépendance Python par chemin non lue ligne {_line(text, min(found))}')
 
 
 # --- compose --------------------------------------------------------------------------------------
