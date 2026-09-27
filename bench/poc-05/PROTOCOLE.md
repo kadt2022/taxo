@@ -21,6 +21,7 @@ configurations testées. Celui-ci teste des rôles différents pour Taxo. Il doi
 | Taxo | SHA de `main` inscrit à la signature (au plus tôt après la fusion de TAXO-ID-01) : `__________` |
 | Modèle | un seul modèle et une seule version pour tous les bras, inscrits à la signature : `__________` |
 | Budget | par question et par exécution : même plafond de tokens d'entrée et même délai pour tous les bras, inscrits à la signature |
+| Lecture du code par Taxo | `MINIA_SOURCE_CONTEXT=diff` côté serveur **et** `"consent": {"diff": true}` pour chaque échange du bras C₀ : sans les deux, `get_diff` n'est ni proposé ni servi. Valeurs inscrites à la signature ; une exécution qui ne les respecte pas est invalide |
 
 ## Les bras
 
@@ -31,7 +32,7 @@ même ordre, dans une session **fraîche**. Aucun n'a accès au dépôt Taxo ni 
 | --- | --- | --- | --- |
 | **A — code seul** | lecture et recherche libres dans le dépôt | aucun | exécuté |
 | **B — Taxo + lecture ciblée** | opérations Taxo, puis lecture du code des seuls symboles désignés (`get_source`) | pendant | **différé** : `get_source` n'existe pas encore |
-| **C₀ — Taxo seul** | opérations `taxo-query/1` existantes (`describe`, `find_facts`, `get_evidence`, `get_coverage`, `verify_claim`, `get_commit`, `get_diff`, `diff_facts`), sans lecture du dépôt | pendant | exécuté |
+| **C₀ — Taxo seul** | opérations `taxo-query/1` existantes (`describe`, `find_facts`, `get_evidence`, `get_coverage`, `verify_claim`, `get_commit`, `diff_facts`, et `get_diff` sous les deux consentements du gel), sans lecture du dépôt | pendant | exécuté |
 | **D — code, puis vérification** | comme A | **après** : chaque affirmation vérifiable est soumise à `verify_claim` ; une affirmation non confirmée est marquée « non vérifiée » dans la réponse finale, jamais supprimée ni réécrite | exécuté |
 
 Le bras D mesure « Minia enquête librement, Taxo contrôle ses conclusions ». Son coût propre (les
@@ -68,11 +69,14 @@ Bras D, après la réponse :
 
 ## Décision attendue
 
-| Constat | Décision |
-| --- | --- |
-| C₀ ou D > A en score, sans perte de sécurité (aucune fausse affirmation de plus) | ouvrir la piste agent (TAXO-01I, appels, `get_source`), puis réexécuter avec B |
-| D > A, C₀ ≤ A | Taxo vérificateur : MINIA-11 devient le rôle, la piste d'exploration est gelée |
-| A ≥ C₀ et A ≥ D | la piste agent est gelée ; Taxo reste un outil de documentation et d'impact (E1 à E3) |
+Les cas sont exclusifs et se lisent **dans l'ordre** : le premier qui s'applique décide. « Bat A »
+veut dire : score supérieur à A, **et** pas plus de fausses affirmations que A.
+
+| Ordre | Constat | Décision |
+| --- | --- | --- |
+| 1 | C₀ bat A | ouvrir la piste d'exploration (TAXO-01I, appels, `get_source`), puis réexécuter avec B. Le résultat de D décide en plus si la vérification reste active |
+| 2 | C₀ ne bat pas A, D bat A | Taxo vérificateur : MINIA-11 devient le rôle ; la piste d'exploration est gelée |
+| 3 | ni C₀ ni D ne battent A | la piste agent est gelée ; Taxo reste un outil de documentation et d'impact (E1 à E3) |
 
 Les jalons E1 à E3 (structure, dépendances, changements) ne dépendent pas de ce banc.
 
