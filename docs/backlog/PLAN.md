@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-09-19 (réorientation : prouver un fait cher et le mesurer avant 01E)
+Mise à jour : 2026-09-19 (repositionnement : intelligence logicielle, correction des défauts mesurés)
 Références : ADR 0001, ADR 0002, ADR 0004, `EPIC-TAXO-01-fondation-memoire-verifiable.md`
 
 ## MVP
@@ -39,23 +39,40 @@ TAXO-ASK-01        Ask Taxo minimal                        DÉMO PRODUIT
 
 La démo technique est le premier jalon. La démo produit la suit sur la même mémoire.
 
-## NOW : prouver un fait cher, puis mesurer
+## NOW : corriger les défauts mesurés
 
-Réorientation actée le 2026-09-17. L'épique TAXO-01 a livré la forme — contrat, identité,
-instantané, exécution, couverture — mais pas encore la preuve que Taxo établit une connaissance
-qu'une commande shell ne donne pas : sur UAA, l'inventaire demande 30 s là où `git ls-files` répond
-en 1,1 s. Persister des faits dont l'utilité n'est pas mesurée bâtirait sur une intention, ce que le
-[manifeste](../manifeste.md) interdit.
+**Repositionné le 2026-09-19.** Taxo n'est plus présenté comme une mémoire pour agents IA : quatre
+bancs, consignés dans le [journal](../../bench/JOURNAL-2026-09-19.md), n'ont pas démontré de gain
+d'exactitude avec les configurations testées. Une approche nouvelle reste mesurable, à exactitude
+toujours mesurée. Taxo est un **moteur d'intelligence logicielle** : il documente un logiciel — ses
+modules, ses unités déployables, ses dépendances, ses surfaces — et ce qui change entre deux états,
+pour des humains et pour des pages.
 
-| # | Étape | Ce qu'elle tranche |
+Le code est conservé. Ce qui change, c'est ce qu'on en dit, et l'ordre des corrections. La file est
+[DEFAUTS-MESURES.md](DEFAUTS-MESURES.md) ; chaque entrée vient d'une mesure du 2026-09-19 :
+
+| # | Défaut | Pourquoi dans cet ordre |
 | --- | --- | --- |
-| 1 | **[TAXO-POC-01](TAXO-POC-01-verite-de-reference-chaine-autorisation.md)** | une chaîne d'autorisation est-elle produite sur une route réelle, avec preuves, prémisses et limites déclarées comme couvertures ? |
-| 2 | **Benchmark manuel** (§12 du manifeste) | agent seul contre le même agent muni des faits : exactitude, complétude, fausses absences, validité des preuves, stabilité, temps, tokens |
-| 3 | **01E Persistance** | ouverte si — et seulement si — le gain est net |
-| 4 | **MCP-01** | trois outils (`find_facts`, `get_evidence`, `get_coverage`), chaque réponse portant sa couverture |
-| 5 | **HIST-01** | lineage Git : ce qu'il faut recalculer, ce qui peut être réutilisé |
+| **D1** | l'unité déployable est ignorée | quatre questions sur douze en dépendaient, et c'est la première information de la page Architecture |
+| **D2** | le silence du parsing : ce qui n'est pas compris ne produit rien | transforme une lacune en affirmation — l'inventaire annonçait 45 endpoints, il y en a 47 |
+| **D3** | `OUT_OF_SCOPE` déclaré sans avoir cherché | une absence n'est vraie que relativement à ce qui a été inspecté |
+| **D5** | `anyRequest()` non modélisé | six routes sur 45 sans conclusion |
+| **D6** | vocabulaire de l'`ABSENCE` trop catégorique | « ne s'applique pas » n'est pas « monté mais inerte sur ce chemin » |
+| **D7** | les faits bruts ne passent pas à l'échelle | 248 000 tokens contre 2 767 pour la même information |
+| **D4** | le diff se tait sur les vrais changements de protection | à rouvrir **après** D1, D2 et D5, dont il dépend |
 
-01F et 01G reprennent ensuite l'ordre de l'épique. Rien d'autre ne s'ouvre avant la chaîne prouvée.
+Corpus visé, mesuré le 2026-09-19 : 24 dépôts Git, et **7 projets de code sans aucun suivi Git** —
+DOCUMENTUM (534 fichiers), UdeS (798), TKM BUREAU (226), import-massif (192), jeux-video (116),
+Demo (41), CROCHET (22). Majoritairement Gradle/Java, puis Node, un cas .NET.
+
+Deux décisions restent ouvertes, et elles conditionnent la suite : accepter ou non un dossier sans
+dépôt Git — aujourd'hui refusé par `NOT_A_GIT_REPOSITORY`, ce qui exclut ces sept projets — et ce
+que « générique » recouvre exactement, au vu de ce corpus.
+
+**Feuille de route actuelle** : la section [« Élargissement : Taxo au-delà de Spring »](#élargissement--taxo-au-delà-de-spring).
+Elle donne l'ordre des jalons (E1 à E4) et la correspondance avec les défauts D1 à D7. Les tables
+qui suivent (épique, NEXT) décrivent la trajectoire planifiée avant le gel du 2026-09-19. Elles sont
+conservées comme mémoire du projet et comme description des récits, pas comme file d'attente.
 
 État des récits de l'épique :
 
@@ -74,8 +91,8 @@ Récits de l'épique placés au moment où ils servent :
 
 | Récit | Contenu | Tâches | À réaliser avec |
 | --- | --- | --- | --- |
-| **01H** Validité et invalidation | `STALE`, `REVALIDATION_REQUIRED` | T7 | TAXO-03, premier producteur de faits `INFERRED` (`DISPATCHES_TO`) |
-| **01I** Voisinage et projectabilité | voisinage d'une entité, reconstruction d'un flux depuis les seuls faits, trois fins de parcours ([récit](TAXO-01I-voisinage-et-projectabilite.md)) | T6, T12 | TAXO-PROJ-API-01 |
+| **01H** Validité et invalidation | `STALE`, `REVALIDATION_REQUIRED` | T7 | les premiers faits `INFERRED` (`MATCHED_BY`, `PROTECTED_BY` de TAXO-05) ; `DISPATCHES_TO` est suspendu (ADR 0011) |
+| **01I** Voisinage et projectabilité | voisinage borné d'une entité, frontière déclarée, trois fins de parcours ([récit](TAXO-01I-voisinage-et-projectabilite.md)) | T6, T12 | après TAXO-ID-01, sur les faits existants ; TAXO-PROJ-API-01 le réutilise |
 
 ```text
 01A Contrat ──► 01B Références ──┐
@@ -93,7 +110,7 @@ l'inventaire avec les preuves, et distingue une évolution du logiciel d'une év
 | Récit | Résultat attendu |
 | --- | --- |
 | **TAXO-02** Inventory Evaluator | inventaire complet sous forme de faits ; lecture de Gradle (`build.gradle`, `settings.gradle`), aujourd'hui ignoré par Inventory v0 alors que TAKIBO est un projet Gradle |
-| **TAXO-03** Java Analyzer | analyseur de langage : classes, méthodes, annotations et leurs valeurs, constantes, types, appels, héritage, interfaces, résolution de symboles, sous forme de faits (`ANNOTATED_WITH`, `CALLS`, `IMPLEMENTS`, `DISPATCHES_TO`…). **Ne connaît pas le concept d'endpoint.** Spike de deux jours sur TAKIBO, puis ADR 0003 ; recommandation à confirmer : JavaParser + JavaSymbolSolver, sources seules, processus JVM séparé qui passe la suite de conformité de 01A. Avec 01H : `DISPATCHES_TO` devient `STALE` si une deuxième implémentation apparaît |
+| **TAXO-03** Java Analyzer | analyseur de langage : types, méthodes, annotations et leurs valeurs, constantes, supertypes, chaînes d'appels. **Ne connaît pas le concept d'endpoint.** Décidé par l'ADR 0003 : **tree-sitter, dans le processus Python, sans JVM**, sources seules. Première tranche livrée avec TAXO-04. Suite : identité par signature (TAXO-ID-01), puis appels selon l'ADR 0011 (`CALLS` déduit, fragment borné ; `DISPATCHES_TO` suspendu jusqu'à l'ancrage sur le site) |
 | **TAXO-04** Spring API Evaluator | évaluateur de framework, **propriétaire du concept d'endpoint** : consomme les primitives du Java Analyzer et produit `HANDLED_BY`, `ACCEPTS`, `RETURNS` avec des preuves dans la source |
 | **TAXO-05** Spring Security Evaluator | propriétaire des concepts Spring Security : `PERMITS_ALL`, `AUTHORIZED_BY` (`OBSERVED`), puis `MATCHED_BY` et `PROTECTED_BY` (`INFERRED`) ; mécanismes maison déclarés `NOT_INTERPRETED` ; critère anti-faux-positif bloquant |
 | **TAXO-PROJ-PR-01** Projection PR | **démo technique** : commentaire de PR listant les endpoints et autorisations ajoutés, modifiés ou retirés entre base et tête, avec preuves et commits ; distingue changement du logiciel et changement de producteur (cas 2) |
@@ -107,7 +124,8 @@ Les trois récits TILES forment le substrat commun des projections : ce que la P
 Taxo et un futur MCP consomment sans relire le dépôt. Ils sont rédigés mais **non ouverts**, et
 supposent les faits de TAXO-04 et TAXO-05. Vocabulaire figé par l'[ADR 0005](../adr/0005-vocabulaire-tuile-maille-contexte.md).
 
-Critères du spike TAXO-03 (vérifiables sur TAKIBO) :
+Critères du spike TAXO-03 (vérifiables sur TAKIBO). Rédigés le 2026-09-13, ils restent des cas
+d'essai ; les critères 3 et 4 relèvent désormais de l'ADR 0011 (appels, fragment borné) :
 
 1. Le Java Analyzer fournit les informations et résolutions nécessaires pour permettre au Spring API
    Evaluator de reconstruire les endpoints Spring du banc TAKIBO : annotations de classe et de
@@ -116,7 +134,8 @@ Critères du spike TAXO-03 (vérifiables sur TAKIBO) :
    Analyzer.
 2. `TechnicalRole.ORG_OWNER.code()` (`PolicyEvaluator.java:396`) résolu en `"R_ORG_OWNER"`, ou
    déclaré `NOT_INTERPRETED`.
-3. `spaceRepository.save` mène à `SpaceRepository`, puis à `SpaceRepositoryAdapter` (`IMPLEMENTS`).
+3. `spaceRepository.save` mène à la déclaration `SpaceRepository#save` (`CALLS`, déduit) ; le lien vers
+   `SpaceRepositoryAdapter` reste un candidat tant que le dispatch n'est pas ancré sur le site.
 4. `@RequireActiveSpace` résolu vers son nom complet, alors qu'il vient d'un autre module.
 5. Aucun Gradle exécuté, aucun jar lu, temps d'analyse mesuré.
 6. Tout échec de résolution produit un fait `COVERAGE` ; l'analyse ne s'arrête jamais en entier.
@@ -124,15 +143,87 @@ Critères du spike TAXO-03 (vérifiables sur TAKIBO) :
 Spring sert de cas de test difficile au spike. Le Java Analyzer ne devient pas pour autant un
 analyseur Spring.
 
+## Élargissement : Taxo au-delà de Spring
+
+Spring est le premier cas difficile, pas le périmètre de Taxo. Un **lecteur de langage** donne la
+structure de tout code, maison compris : types, fonctions, imports, appels. Un **lecteur de
+framework** y ajoute un sens particulier : routes, règles de sécurité. L'élargissement a des jalons
+aussi concrets que la sécurité Spring. Chacun :
+- se valide sur un projet **sans Spring** ;
+- a une démonstration et des critères d'acceptation ;
+- déclare ce qu'il ne lit pas.
+
+| Jalon | Résultat | Validé sur | Tranche |
+| --- | --- | --- | --- |
+| **E1** Structure et unités déployables | modules et leur graphe, depuis `settings.gradle`, `build.gradle`, `pom.xml`, `package.json` (workspaces), `pyproject.toml` ; langage de chaque module ; unités déployables (point d'entrée d'application, `Dockerfile`, service `compose`) ; chaque fichier rattaché à son module | Taxo lui-même (Python et TypeScript, `compose.yaml`), puis TAKIBO (deux applications Spring Boot) | défaut **D1** de la PR #13. TAXO-05 ne fait que le **neutraliser** dans le cas détecté : plusieurs points d'entrée Spring Boot, aucune route rattachée. E1 le **résout** : il établit, pour chaque route, l'application qui l'expose et les chaînes de filtres que cette application charge. C'est son critère d'acceptation explicite |
+| **E2** Dépendances | dépendances déclarées : entre modules du dépôt, et vers l'extérieur avec leur version déclarée. Ce que le fichier de build ne déclare pas (version calculée par un plugin, catalogue non lu) est `NOT_INTERPRETED` | Taxo lui-même, puis un dépôt Node | relation de dépendance à ajouter au vocabulaire v1 : amendement de l'ADR 0002 |
+| **E3** Changements de structure entre deux commits | module ajouté ou retiré, dépendance ajoutée, retirée ou changée de version, unité déployable modifiée, avec preuves | l'historique de Taxo lui-même | l'impact d'un commit est déjà générique : aucun consommateur ne change |
+| **E4** Deuxième langage | un lecteur Python (tree-sitter) : modules, classes, fonctions, imports entre modules du dépôt. Même contrat, même identité syntaxique, mêmes règles de non-interprétation. Aucun évaluateur de framework ne connaît un autre langage | le backend de Taxo | éprouve le socle hors de Java : ce qui ne tient pas dans le contrat devient un ADR, pas une exception |
+
+Correspondance avec les défauts mesurés de la PR #13 :
+
+| Défaut | Où il est traité |
+| --- | --- |
+| **D1** unité déployable | neutralisé par TAXO-05 (#45) dans le cas détecté ; résolu par **E1** |
+| **D2** silence du parsing | en partie : `taxo.spring-api` déclare ses mappings non résolus et ses héritages non suivis. Une construction d'endpoint non modélisée (`@Endpoint` d'actuator) reste silencieuse : récit à ouvrir avec E1 |
+| **D3** `OUT_OF_SCOPE` sans avoir cherché | produit par le POC `authchain`, pas par les évaluateurs livrés ; règle à reprendre dans tout évaluateur qui déclarera `OUT_OF_SCOPE` |
+| **D4** diff muet sur la protection | après E1 : l'impact compare déjà les faits de TAXO-05 entre parent et commit |
+| **D5** `anyRequest()` | lu par TAXO-05 (#45) |
+| **D6** `ABSENCE` trop catégorique | produit par le POC, pas par les évaluateurs livrés ; à respecter quand une `ABSENCE` sera produite |
+| **D7** faits bruts trop gros | la Tuile compacte (TAXO-01I), mesurée par l'essai A/B/C |
+
+Ordre proposé, **à décider** :
+
+1. #45 ;
+2. TAXO-ID-01 ;
+3. **E1** ;
+4. TAXO-01I ;
+5. **E2**, puis **E3** ;
+6. décision de l'ADR 0011 et premières liaisons Java ;
+7. **E4** ;
+8. essai A/B/C.
+
+Placer E1 avant TAXO-01I est un **choix de priorité**, pas une dépendance technique. Une Tuile peut
+déjà montrer les faits existants et leurs limites ; elle ne crée aucun rattachement entre
+applications. E1 passe d'abord parce qu'il donne vite une capacité utile au-delà de Spring. Il passe
+aussi avant les appels pour la même raison.
+
+Le positionnement de la PR #13 (moteur d'intelligence logicielle, bancs du 2026-09-19) conditionne
+l'essai A/B/C. Ces bancs n'ont pas démontré de gain d'exactitude avec les configurations testées :
+cela justifie le repositionnement, sans interdire de mesurer une approche nouvelle. L'essai mesure
+donc une hypothèse plus étroite : une Tuile compacte avec sa frontière (défaut D7) coûte moins
+qu'une exploration par extraits. La qualité est toujours mesurée : exactitude, omissions, fausses
+affirmations, abstentions correctes. Un gain de tokens obtenu au prix de la qualité est un échec. Si
+l'essai ne confirme pas l'hypothèse, la valeur de Taxo reste celle de la documentation vérifiable, et
+c'est elle qu'on présente.
+
 ## LATER
 
-Dependencies, Data, Documentation Drift, autres diagrammes, Impact Analysis, MCP, Structure,
-Configuration, Frontend, Tests, CI/CD, Deployment, inventaire Documentation, Business Flows,
-Release notes, source Sonar, source Runtime.
+Data, Documentation Drift, autres diagrammes, Configuration, Frontend, Tests, CI/CD, inventaire
+Documentation, Business Flows, Release notes, source Sonar, source Runtime.
 
-Les 17 récits du document de vision restent la description de ces capacités, pas un backlog.
+Les récits du document de vision restent la description de ces capacités, pas un backlog. Structure,
+Dependencies, Deployment et Impact Analysis ont quitté cette liste : ils sont les jalons E1 à E3.
 
 ## Décisions prises
+
+**2026-09-27 (architecture de la Maille, ADR 0011 en projet)**
+
+- La Maille existante est rendue navigable avant d'étendre la couverture Java. Ordre :
+  1. TAXO-ID-01, identité des méthodes par signature syntaxique normalisée, avec sa migration ;
+  2. TAXO-01I, voisinage borné sur les faits existants, avec frontière en trois natures ;
+  3. décision de l'ADR 0011 : `CALLS` déduit, `DISPATCHES_TO` suspendu jusqu'à l'ancrage sur le site,
+     candidats hors des arêtes, preuves avec colonne, propriétaire et rôle ;
+  4. premières liaisons Java, fragment borné, avec prémisses et diagnostic par forme ;
+  5. essai A/B/C.
+
+  Cet ordre est à croiser avec les jalons d'élargissement E1 à E4 (section « Élargissement »).
+- L'essai A/B/C compare Taxo à un agent qui cherche et lit des extraits, pas des fichiers entiers.
+  Questions, réponses attendues et cas où `NOT_PROVEN` est la bonne réponse sont fixés avant l'essai.
+  Le « facteur 8 à 10 » de l'ADR 0005 reste attaché au prototype historique, mesuré contre des
+  fichiers entiers : il ne prédit pas ce gain.
+- Ce qui existe (couvertures, `not_sent`, versions de producteur et de catalogue, verdicts) est
+  réutilisé, pas reconstruit.
 
 **2026-09-27 (ADR 0010)**
 
@@ -140,6 +231,8 @@ Les 17 récits du document de vision restent la description de ces capacités, p
   `AUTHORIZED_BY`), rattachées aux endpoints par déduction (`MATCHED_BY`, puis `PROTECTED_BY`).
 - Critère anti-faux-positif : une conclusion n'est produite que si elle vaut pour toute requête de la
   route ; sinon l'endpoint est `NOT_INTERPRETED`. Sécurité de méthode et mécanismes maison déclarés.
+- Plusieurs applications Spring Boot dans le dépôt : aucune route rattachée (D1 neutralisé, résolu
+  par E1).
 - Une confirmation de Minia fondée sur un fait `INFERRED` est dite « par déduction », prémisses visibles.
 
 **2026-09-26 (ADR 0003)**
@@ -223,8 +316,8 @@ branches : `SpaceRepository#save` (vers la table `spaces`) et `SpaceEventPublish
 
 Pièges à couvrir :
 
-- les appels passent par des interfaces, donc le lien vers l'implémentation est `DISPATCHES_TO`
-  (`INFERRED`) ;
+- les appels passent par des interfaces : `CALLS` vise la déclaration d'interface, et le lien vers
+  l'implémentation reste un candidat jusqu'à un `DISPATCHES_TO` ancré sur le site (ADR 0011) ;
 - `OrgBoundaryFilter` est dans la chaîne de filtres mais ne s'applique pas à cette route
   (`OrgBoundaryFilter.java:28-35`, `:57`) : la sécurité se calcule endpoint par endpoint ;
 - la projection doit s'arrêter sur une fin « non interprétée » ou « non analysée » là où la suite

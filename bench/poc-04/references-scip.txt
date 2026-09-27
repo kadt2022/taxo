@@ -1,0 +1,34 @@
+# References exactes du symbole, produites par scip-java 0.12.3 depuis l index SCIP
+# symbole : org/keycloak/storage/user/UserLookupProvider#getUserById().
+# 41 occurrences dans 30 fichiers ; la premiere est la declaration elle-meme
+
+model/storage-private/src/main/java/org/keycloak/models/session/PersistentUserSessionAdapter.java:204
+model/storage-private/src/main/java/org/keycloak/storage/UserStorageManager.java:230,411,418
+server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:215
+server-spi-private/src/main/java/org/keycloak/authorization/policy/evaluation/DefaultEvaluation.java:185
+server-spi-private/src/main/java/org/keycloak/models/utils/ModelToRepresentation.java:1132,1181,1182
+server-spi-private/src/main/java/org/keycloak/models/utils/RepresentationToModel.java:1508
+server-spi/src/main/java/org/keycloak/storage/user/UserLookupProvider.java:45
+services/src/main/java/org/keycloak/authentication/authenticators/broker/AbstractIdpAuthenticator.java:126
+services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java:196
+services/src/main/java/org/keycloak/authentication/authenticators/resetcred/ResetCredentialChooseUser.java:69
+services/src/main/java/org/keycloak/authorization/admin/PolicyEvaluationService.java:269
+services/src/main/java/org/keycloak/authorization/admin/representation/PolicyEvaluationResponseBuilder.java:247,248
+services/src/main/java/org/keycloak/authorization/protection/permission/PermissionTicketService.java:95,261
+services/src/main/java/org/keycloak/events/email/EmailEventListenerProvider.java:92
+services/src/main/java/org/keycloak/organization/admin/resource/OrganizationInvitationResource.java:98
+services/src/main/java/org/keycloak/organization/admin/resource/OrganizationMemberResource.java:100,277
+services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java:281
+services/src/main/java/org/keycloak/protocol/oidc/grants/ciba/CibaGrantType.java:228
+services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/V1TokenExchangeProvider.java:104
+services/src/main/java/org/keycloak/services/DefaultKeycloakContext.java:295
+services/src/main/java/org/keycloak/services/clientpolicy/condition/ClientUpdaterSourceGroupsCondition.java:118
+services/src/main/java/org/keycloak/services/clientpolicy/condition/ClientUpdaterSourceRolesCondition.java:122
+services/src/main/java/org/keycloak/services/clientpolicy/context/AbstractDynamicClientCRUDContext.java:41
+services/src/main/java/org/keycloak/services/managers/DefaultBruteForceProtector.java:133,180
+services/src/main/java/org/keycloak/services/resources/LoginActionsServiceChecks.java:123
+services/src/main/java/org/keycloak/services/resources/account/resources/AbstractResourceService.java:154
+services/src/main/java/org/keycloak/services/resources/admin/AdminEventBuilder.java:93
+services/src/main/java/org/keycloak/services/resources/admin/AttackDetectionResource.java:88,150
+services/src/main/java/org/keycloak/services/resources/admin/ClientScopeEvaluateResource.java:292
+services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:231,303,415
