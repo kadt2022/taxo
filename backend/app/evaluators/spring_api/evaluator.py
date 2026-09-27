@@ -13,6 +13,7 @@ une specification OpenAPI, par exemple) ou d'un type porteur de mappings, un fic
 couvertures NOT_INTERPRETED, jamais un endpoint invente ni une absence affirmee. Les sources de test (`src/test`) sont hors du perimetre, et le disent.
 """
 
+from dataclasses import dataclass
 from itertools import product
 
 from app.evaluations.domain.evaluator import EvaluationOutput
@@ -55,23 +56,72 @@ class SpringApiEvaluator:
 
     def evaluate(self, snapshot, progress=silent):
         repository = f'repository:{snapshot.repository}'
-        sources, excluded = _select(snapshot)
-        warnings, read_errors = [], []
-        contents = _read(snapshot, sources, warnings, read_errors, progress)
-        run = _Run(snapshot, contents, _parse_all(contents))
-        run.evaluate()
+        analysis = analyse(snapshot, progress)
+        run, read_errors = analysis.run, analysis.read_errors
         endpoints = len({subject for subject, _ in run.facts})
         progress('endpoints', 'Endpoints relevés', endpoints)
         # Une zone non interpretee a pour perimetre le fichier qui la porte.
-        warnings += [message for _, message in run.gaps.values()]
-        scope = {'include': [repository], 'exclude': sorted(excluded)}
-        coverage = [{**_coverage(repository, 'ANALYSED', repository), 'scope': scope}]
+        warnings = analysis.warnings + [message for _, message in run.gaps.values()]
+        coverage = [{**_coverage(repository, 'ANALYSED', repository), 'scope': analysis.scope(repository)}]
         coverage += [_coverage(subject, 'NOT_INTERPRETED', f'file:{path}')
                      for subject, (path, _) in sorted(run.gaps.items())]
         coverage += [_coverage(subject, 'READ_ERROR', subject) for subject in read_errors]
         status = EvaluationStatus.PARTIAL if run.gaps or read_errors else EvaluationStatus.SUCCESS
-        legacy = {'java_files': len(contents), 'endpoints': endpoints}
+        legacy = {'java_files': len(analysis.contents), 'endpoints': endpoints}
         return EvaluationOutput(tuple(run.facts.values()), tuple(coverage), status, tuple(warnings), legacy)
+
+
+@dataclass
+class Analysis:
+    """Les sources Java lues, leurs primitives et les endpoints etablis : ce que d'autres evaluateurs Spring
+    (la securite, TAXO-05) reprennent sans relire ni redecider ce qu'est un endpoint."""
+    contents: dict
+    parsed: list
+    run: '_Run'
+    excluded: set
+    warnings: list
+    read_errors: list
+
+    def scope(self, repository):
+        return {'include': [repository], 'exclude': sorted(self.excluded)}
+
+    def endpoints(self):
+        """Faits HANDLED_BY etablis, avec le type et la methode qui traitent chaque endpoint."""
+        for (subject, handler), fact in self.run.facts.items():
+            qualified, _, method = handler.removeprefix('symbol:java:').rpartition('#')
+            java_file, java_type, _ = self.run.types[qualified]
+            yield Endpoint(subject, handler, fact, java_file.path, java_type,
+                           tuple(item for item in java_type.methods if item.name == method))
+
+
+@dataclass(frozen=True)
+class Endpoint:
+    reference: str
+    handler: str
+    fact: dict
+    path: str
+    java_type: object
+    # Les methodes du type qui portent ce nom (surcharges comprises).
+    methods: tuple
+
+    @property
+    def verb(self):
+        return self.reference.removeprefix('endpoint:').partition(' ')[0]
+
+    @property
+    def route(self):
+        return self.reference.removeprefix('endpoint:').partition(' ')[2]
+
+
+def analyse(snapshot, progress=silent):
+    """Lit les sources Java du perimetre et etablit les endpoints."""
+    sources, excluded = _select(snapshot)
+    warnings, read_errors = [], []
+    contents = _read(snapshot, sources, warnings, read_errors, progress)
+    parsed = _parse_all(contents)
+    run = _Run(snapshot, contents, parsed)
+    run.evaluate()
+    return Analysis(contents, parsed, run, excluded, warnings, read_errors)
 
 
 def _select(snapshot):

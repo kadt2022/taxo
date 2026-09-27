@@ -1,7 +1,8 @@
 // Vocabulaire de presentation (TAXO-UI-01) : le contrat de faits reste la representation interne de Taxo ;
 // ces libelles en sont la lecture humaine. Rien n'est renomme cote backend : un terme inconnu s'affiche tel quel.
 
-export const EVALUATORS:Record<string,string>={'taxo.inventory':'Inventaire du code', 'taxo.git':'Historique Git', 'taxo.spring-api':'Endpoints Spring'};
+export const EVALUATORS:Record<string,string>={'taxo.inventory':'Inventaire du code', 'taxo.git':'Historique Git', 'taxo.spring-api':'Endpoints Spring',
+  'taxo.spring-security':'Sécurité Spring'};
 
 export const STATUSES:Record<string,string>={SUCCESS:'Terminée', PARTIAL:'Partielle', FAILED:'Échec'};
 
@@ -31,7 +32,7 @@ export function label(labels:Record<string,string>, key:string){
 }
 
 const TYPES:Record<string,string>={technology:'technologie', language:'langage', module:'module', symbol:'symbole',
-  endpoint:'route', 'route-pattern':'routes', person:'', file:'', commit:'commit'};
+  endpoint:'route', 'route-pattern':'routes', 'policy-rule':'règle', person:'', file:'', commit:'commit'};
 
 /** Une reference `type:cle` dite en clair : le depot par le nom du projet, un commit par son identifiant court. */
 export function reference(value:string|null, project?:{id:string; name:string}){

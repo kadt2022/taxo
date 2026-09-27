@@ -204,6 +204,44 @@ sont hors du périmètre, et la couverture le dit.
 Les endpoints rejoignent l'impact d'un commit (endpoint introduit, retiré, ou traité par une autre
 méthode), le protocole `taxo-query/1` et Minia, sans changement de ces consommateurs.
 
+### Sécurité Spring : quelle règle protège chaque route (TAXO-05, ADR 0010)
+
+Quatrième évaluateur, `taxo.spring-security` lit les règles `authorizeHttpRequests` (et
+`authorizeRequests` de Spring Security 5) et les rattache aux endpoints de `taxo.spring-api` :
+
+- chaque règle lue est un fait `OBSERVED`, à la ligne : `route-pattern:POST /api/v1/auth/login`
+  `PERMITS_ALL`, ou `route-pattern:/api/**` `AUTHORIZED_BY` `hasRole("ADMIN")` (ou le type qui décide,
+  pour `access(manager)`) ;
+- `endpoint` `MATCHED_BY` `route-pattern` est une déduction (`INFERRED`) : la première règle qui capture
+  **toutes** les requêtes de la route, les règles antérieures en contre-exemples ;
+- `endpoint` `PROTECTED_BY` `policy-rule:authenticated()` (ou `symbol:java:…`) repose sur `MATCHED_BY`
+  puis `AUTHORIZED_BY`, jamais sur `HANDLED_BY`, avec ses limites connues (les rôles sont des données).
+
+Critère anti-faux-positif : Taxo ne déclare jamais une route protégée ou publique à tort. Il ne conclut
+pas, et déclare l'endpoint non interprété, quand :
+
+- une règle antérieure n'est pas lue (constante absente, matcher non littéral) ;
+- une règle antérieure ne vise qu'une partie des requêtes (`POST /x` devant une route `ANY /x`,
+  `/users/me` devant `/users/{id}`) ;
+- plusieurs chaînes de filtres peuvent traiter la route (par profil ou propriété), ou le périmètre
+  `securityMatcher` n'est pas lu ;
+- la route est visée par `web.ignoring()` ;
+- l'analyse des endpoints elle-même n'a pas établi certaines routes ;
+- le dépôt contient plusieurs applications Spring Boot : l'application qui sert la route, et les
+  chaînes qu'elle charge, ne sont pas encore établies (unité déployable, défaut D1).
+
+Seule une chaîne dont le receveur est le `HttpSecurity` de Spring est une configuration de sécurité ; un
+receveur de type inconnu est vu, pas lu. Une expression `access("…")` n'est lue que si elle ne peut que
+restreindre (`hasRole('X') and isAuthenticated()`), et `access(manager)` que si le gestionnaire est dans
+les sources : la décision qu'il prend reste une limite connue.
+
+La sécurité de méthode (`@PreAuthorize`, `@Secured`, `@RolesAllowed`…) et les mécanismes maison
+(filtres, `AuthorizationManager`) sont déclarés non interprétés : la protection réelle peut s'y
+trouver. Sans règle `authorizeHttpRequests` dans les sources, Taxo n'affirme rien et le dit.
+
+Dans Minia, une affirmation confirmée par une déduction s'affiche « Confirmée par Taxo, par déduction »,
+avec ses prémisses, ce qui a été écarté et ses limites.
+
 ### Interroger Taxo (TAXO-QUERY-01)
 
 > Les évaluateurs savent observer. Taxo sait conserver et relier les faits. La requête sait sélectionner.

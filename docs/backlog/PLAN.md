@@ -225,6 +225,16 @@ Dependencies, Deployment et Impact Analysis ont quitté cette liste : ils sont l
 - Ce qui existe (couvertures, `not_sent`, versions de producteur et de catalogue, verdicts) est
   réutilisé, pas reconstruit.
 
+**2026-09-27 (ADR 0010)**
+
+- Première tranche de TAXO-05 : règles d'URL `authorizeHttpRequests` en faits (`PERMITS_ALL`,
+  `AUTHORIZED_BY`), rattachées aux endpoints par déduction (`MATCHED_BY`, puis `PROTECTED_BY`).
+- Critère anti-faux-positif : une conclusion n'est produite que si elle vaut pour toute requête de la
+  route ; sinon l'endpoint est `NOT_INTERPRETED`. Sécurité de méthode et mécanismes maison déclarés.
+- Plusieurs applications Spring Boot dans le dépôt : aucune route rattachée (D1 neutralisé, résolu
+  par E1).
+- Une confirmation de Minia fondée sur un fait `INFERRED` est dite « par déduction », prémisses visibles.
+
 **2026-09-26 (ADR 0003)**
 
 - L'analyseur Java lit la syntaxe avec tree-sitter, dans le processus Python, au lieu de JavaParser dans

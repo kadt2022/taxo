@@ -10,7 +10,10 @@ import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exp
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
 type SelectedCommit = {sha:string; authored_at?:string; subject?:string};
-export type GitFact = {subject:string; relation:string; object:string; qualifiers?:Record<string,unknown>;
+/** Pour un fait INFERRED : ses premisses, la regle appliquee, ce qui a ete ecarte et ce qui reste inconnu. */
+export type Derivation = {premises:string[]; rule:string; counter_examples_checked:string[]; known_gaps:string[]};
+export type GitFact = {subject:string; relation:string; object?:string; qualifiers?:Record<string,unknown>;
+  status?:string; derivation?:Derivation;
   produced_by?:{producer_id:string; producer_version:string}; evidence?:{object?:string; commit:string}[]};
 export type Selection = {status:string; request:Request; analysis:{id:string; created_at:string};
   total_commits:number|null; commits:SelectedCommit[]; facts:GitFact[]; not_interpreted:string[]};
@@ -48,7 +51,8 @@ export function factLine(fact:GitFact){
   const q=fact.qualifiers??{};
   const detail=[q.subject?`« ${q.subject} »`:null, q.authored_at??null, q.name??null, q.change??null,
     q.old_path?`depuis ${q.old_path}`:null].filter(Boolean).join(', ');
-  return `${reference(fact.subject)} ${label(VERBS,fact.relation)} ${reference(fact.object)}${detail?` (${detail})`:''}`;
+  const said=[reference(fact.subject), label(VERBS,fact.relation), fact.object?reference(fact.object):null].filter(Boolean).join(' ');
+  return detail?`${said} (${detail})`:said;
 }
 
 const short=(sha:string)=>sha.slice(0,12);
