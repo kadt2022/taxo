@@ -143,6 +143,18 @@ aussi concrets que la sécurité Spring. Chacun :
 | **E3** Changements de structure entre deux commits | module ajouté ou retiré, dépendance ajoutée, retirée ou changée de version, unité déployable modifiée, avec preuves | l'historique de Taxo lui-même | l'impact d'un commit est déjà générique : aucun consommateur ne change |
 | **E4** Deuxième langage | un lecteur Python (tree-sitter) : modules, classes, fonctions, imports entre modules du dépôt. Même contrat, même identité syntaxique, mêmes règles de non-interprétation. Aucun évaluateur de framework ne connaît un autre langage | le backend de Taxo | éprouve le socle hors de Java : ce qui ne tient pas dans le contrat devient un ADR, pas une exception |
 
+Correspondance avec les défauts mesurés de la PR #13 :
+
+| Défaut | Où il est traité |
+| --- | --- |
+| **D1** unité déployable | neutralisé par TAXO-05 (#45) dans le cas détecté ; résolu par **E1** |
+| **D2** silence du parsing | en partie : `taxo.spring-api` déclare ses mappings non résolus et ses héritages non suivis. Une construction d'endpoint non modélisée (`@Endpoint` d'actuator) reste silencieuse : récit à ouvrir avec E1 |
+| **D3** `OUT_OF_SCOPE` sans avoir cherché | produit par le POC `authchain`, pas par les évaluateurs livrés ; règle à reprendre dans tout évaluateur qui déclarera `OUT_OF_SCOPE` |
+| **D4** diff muet sur la protection | après E1 : l'impact compare déjà les faits de TAXO-05 entre parent et commit |
+| **D5** `anyRequest()` | lu par TAXO-05 (#45) |
+| **D6** `ABSENCE` trop catégorique | produit par le POC, pas par les évaluateurs livrés ; à respecter quand une `ABSENCE` sera produite |
+| **D7** faits bruts trop gros | la Tuile compacte (TAXO-01I), mesurée par l'essai A/B/C |
+
 Ordre proposé, **à décider** :
 
 1. #45 ;
