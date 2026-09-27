@@ -176,8 +176,15 @@ Troisième évaluateur de l'analyse, `taxo.spring-api` relève la surface HTTP d
 MVC. Pour chaque méthode d'un `@RestController` ou `@Controller` portant `@GetMapping`, `@PostMapping`,
 `@PutMapping`, `@DeleteMapping`, `@PatchMapping` ou `@RequestMapping`, il produit
 `endpoint:GET /api/v1/orgs/{orgCode}/users` `HANDLED_BY`
-`symbol:java:com.example.api.users.UserController#list`. Chaque fait a deux preuves, à la ligne et avec
-leur empreinte : le mapping du contrôleur et celui de la méthode.
+`symbol:java:com.example.api.users.UserController#list(String)`. Chaque fait a deux preuves, à la ligne et
+avec leur empreinte : le mapping du contrôleur et celui de la méthode.
+
+Une méthode est désignée par sa **signature syntaxique normalisée** (TAXO-ID-01, schéma
+`java-symbol-syntactic/1`) : types des paramètres tels qu'écrits, sans noms, annotations ni arguments
+de type, `T...` écrit `T[]`, constructeur `#<init>(...)`. Les types ne sont pas résolus : `List` et
+`java.util.List` restent deux écritures. Deux déclarations de même signature ne produisent aucun fait
+et sont déclarées non interprétées. Deux états dont le schéma d'identité diffère ne sont jamais
+comparés : l'impact les déclare non comparables.
 
 Une annotation ne compte que si elle est celle de Spring (nom qualifié ou import) : un `@GetMapping` maison
 n'est pas un endpoint. L'analyseur Java (`app/evaluators/java`, tree-sitter) lit les sources sans JVM,

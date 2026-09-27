@@ -22,6 +22,9 @@ _TYPES = {'class_declaration': 'class', 'interface_declaration': 'interface', 'e
           'record_declaration': 'record', 'annotation_type_declaration': 'annotation'}
 # Au-dela, une concatenation n'est plus lue : une valeur d'annotation n'en a jamais autant.
 MAX_PARTS = 64
+# Schema des references de methode (TAXO-ID-01) : signature syntaxique normalisee, types non resolus.
+IDENTITY_SCHEMA = 'java-symbol-syntactic/1'
+_SIMPLE_TYPES = {'type_identifier', 'integral_type', 'floating_point_type', 'boolean_type', 'void_type'}
 
 
 @dataclass(frozen=True)
@@ -54,6 +57,14 @@ class Method:
     line_start: int
     line_end: int
     annotations: tuple = ()
+    # Types des parametres, normalises (TAXO-ID-01) : identite syntaxique, jamais des types resolus.
+    parameters: tuple = ()
+    constructor: bool = False
+
+    @property
+    def signature(self):
+        """`nom(Type,Type)`, ou `<init>(...)` pour un constructeur (schema `java-symbol-syntactic/1`)."""
+        return f'{"<init>" if self.constructor else self.name}({",".join(self.parameters)})'
 
 
 @dataclass(frozen=True)
@@ -68,6 +79,12 @@ class JavaType:
     constants: dict = field(default_factory=dict)
     # Supertypes (classe etendue, interfaces), tels qu'ecrits, avec leur nom qualifie s'il est connu, sinon None.
     supertypes: tuple = ()
+    # Signatures de toutes les methodes et constructeurs du type, annotes ou non : deux egales sont ambigues.
+    signatures: tuple = ()
+
+    def ambiguous(self, signature):
+        """Vrai si plusieurs declarations du type partagent cette signature syntaxique normalisee."""
+        return self.signatures.count(signature) > 1
 
 
 @dataclass(frozen=True)
@@ -99,7 +116,7 @@ class Call:
 @dataclass(frozen=True)
 class Chain:
     """Une chaine d'appels fluente, du receveur vers l'exterieur : `http.a().b()` donne `http`, puis a, b.
-    `owner` est le type qualifie qui la porte, `method` sa methode (None hors d'une methode)."""
+    `owner` est le type qualifie qui la porte, `method` la signature de sa methode (None hors d'une methode)."""
     owner: str
     method: str | None
     receiver: str
@@ -202,7 +219,8 @@ class _Reader:
     def complete(self, qualified):
         node, name = self._pending[qualified]
         return JavaType(name, qualified, _TYPES[node.type], *_lines(node), self._annotations(node, qualified),
-                        self._methods(node, qualified), self.known[qualified], self._supertypes(node, qualified))
+                        self._methods(node, qualified), self.known[qualified], self._supertypes(node, qualified),
+                        _signatures(node))
 
     def chain(self, node):
         """La chaine d'appels dont `node` est l'appel le plus exterieur."""
@@ -228,7 +246,9 @@ class _Reader:
         parent = node.parent
         while parent is not None:
             if parent.type in ('method_declaration', 'constructor_declaration') and method is None and not names:
-                method = _text(parent.child_by_field_name('name'))
+                method = Method(_text(parent.child_by_field_name('name')), 0, 0, (),
+                                _parameters(parent.child_by_field_name('parameters')),
+                                parent.type == 'constructor_declaration').signature
             elif parent.type in _TYPES:
                 names.append(_text(parent.child_by_field_name('name')))
             parent = parent.parent
@@ -290,7 +310,9 @@ class _Reader:
                 continue
             annotations = self._annotations(member, owner)
             if annotations:
-                methods.append(Method(_text(member.child_by_field_name('name')), *_lines(member), annotations))
+                methods.append(Method(_text(member.child_by_field_name('name')), *_lines(member), annotations,
+                                      _parameters(member.child_by_field_name('parameters')),
+                                      member.type == 'constructor_declaration'))
         return tuple(methods)
 
     def _supertypes(self, node, owner):
@@ -438,6 +460,56 @@ def _declaration(scope, name, before):
 
 def _type_text(node):
     return _text(_base(node)) if node is not None else None
+
+
+def _signatures(node):
+    return tuple(Method(_text(member.child_by_field_name('name')), 0, 0, (),
+                        _parameters(member.child_by_field_name('parameters')),
+                        member.type == 'constructor_declaration').signature
+                 for member in _members(node.child_by_field_name('body'))
+                 if member.type in ('method_declaration', 'constructor_declaration'))
+
+
+def _parameters(node):
+    """Types des parametres, normalises : noms, modificateurs, annotations, arguments de type et espaces
+    exclus ; dimensions du declarateur reportees sur le type ; parametre variable `T...` ecrit `T[]`
+    (JLS 8.4.1). Le parametre recepteur (`Foo this`) n'appartient pas a la signature."""
+    types = []
+    for parameter in _named(node):
+        if parameter.type == 'formal_parameter':
+            if _text(parameter.child_by_field_name('name')).split('.')[-1] == 'this':
+                continue
+            types.append(_type_name(parameter.child_by_field_name('type'))
+                         + '[]' * _dimensions(parameter.child_by_field_name('dimensions')))
+        elif parameter.type == 'spread_parameter':
+            written = next(item for item in parameter.named_children
+                           if item.type not in ('modifiers', 'variable_declarator', 'marker_annotation', 'annotation'))
+            types.append(_type_name(written) + '[]')
+    return tuple(types)
+
+
+def _type_name(node):
+    """Un type ecrit, sans annotation ni argument de type ; un nom compose reste compose."""
+    if node is None:
+        return ''
+    if node.type in _SIMPLE_TYPES:
+        return _text(node)
+    if node.type == 'scoped_type_identifier':
+        return '.'.join(_type_name(item) for item in node.named_children
+                        if item.type in ('type_identifier', 'scoped_type_identifier', 'generic_type'))
+    if node.type == 'generic_type':
+        return _type_name(_first(node, ('type_identifier', 'scoped_type_identifier')))
+    if node.type == 'array_type':
+        return _type_name(node.child_by_field_name('element')) + '[]' * _dimensions(
+            node.child_by_field_name('dimensions'))
+    if node.type == 'annotated_type':
+        return _type_name(next((item for item in node.named_children
+                                if item.type not in ('marker_annotation', 'annotation')), None))
+    return ''.join(_text(node).split())
+
+
+def _dimensions(node):
+    return sum(1 for child in node.children if child.type == '[') if node is not None else 0
 
 
 def _string_constant(member, interface):

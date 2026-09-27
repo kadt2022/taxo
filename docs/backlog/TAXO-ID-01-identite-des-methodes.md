@@ -1,6 +1,6 @@
 # TAXO-ID-01 — Identité des méthodes : une signature syntaxique normalisée
 
-Statut : rédigé le 2026-09-27. À réaliser avant TAXO-01I.
+Statut : rédigé le 2026-09-27, réalisé le 2026-09-27.
 
 Dépend de : ADR 0002 (références), TAXO-01B (identité canonique), ADR 0003 (analyseur Java).
 Amende : la forme des références `symbol:java:` (ADR 0011, point 1).

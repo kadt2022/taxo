@@ -28,6 +28,19 @@ def _change(change, before=None, after=None):
     return result
 
 
+def same_schema(before, after):
+    """Vrai si deux listes de faits viennent des memes catalogues, dans les memes versions.
+
+    Une version de catalogue fixe la forme des references (TAXO-ID-01 : `#list` devient `#list(String)`).
+    Comparer deux versions ferait passer un changement de Taxo pour un changement massif du logiciel :
+    une telle comparaison est declaree non comparable, jamais calculee. Une liste vide ne dit rien."""
+    def catalogs(facts):
+        return {(fact['produced_by'].get('catalog_id'), fact['produced_by'].get('catalog_version'))
+                for fact in facts if 'produced_by' in fact}
+    older, newer = catalogs(before), catalogs(after)
+    return not older or not newer or older == newer
+
+
 def unknowns(coverage):
     return sorted({fact['subject'] for fact in coverage if fact['coverage_type'] in _UNKNOWN_COVERAGE})
 

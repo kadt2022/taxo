@@ -49,7 +49,8 @@ a prouvé le mécanisme, et ses limites : pas de constantes, pas de tableaux, pa
    Tout le reste (méthode, propriété `${…}`, constante d'un type absent) reste non résolu : l'analyseur
    rend le texte tel qu'écrit, jamais une supposition.
 4. **Un endpoint est un fait `OBSERVED`** : `endpoint:<VERBE> <chemin>` `HANDLED_BY`
-   `symbol:java:<type qualifié>#<méthode>`. Il a deux preuves à la ligne, avec leur empreinte : le mapping
+   `symbol:java:<type qualifié>#<méthode>(<types>)` (signature syntaxique normalisée depuis TAXO-ID-01 ;
+   avant, le seul nom de la méthode). Il a deux preuves à la ligne, avec leur empreinte : le mapping
    du contrôleur et celui de la méthode. Le chemin est combiné comme Spring le fait (un seul `/` entre les
    parties, `/` en tête, `/` final gardé). `@RequestMapping` sans `method` donne le verbe `ANY` : il
    accepte tous les verbes, et Taxo n'en choisit pas un.

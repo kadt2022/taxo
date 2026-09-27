@@ -89,6 +89,9 @@ policy-rule:POL_OAUTH_CLIENT_ADMIN_REQUIRED
   `qualifiers`.
 - Les clés naturelles ne contiennent jamais de numéro de ligne ni d'identifiant technique généré.
 - Ajouter un type est une évolution explicite du contrat.
+- Depuis TAXO-ID-01, une méthode Java est désignée par sa signature syntaxique normalisée :
+  `symbol:java:<type>#<nom>(<types>)`. Les exemples de cet ADR (`#register`, `#save`…) sont dans la
+  forme antérieure.
 
 ### 4. Périmètre
 

@@ -131,7 +131,7 @@ def test_each_readable_rule_is_an_observed_fact_with_its_line():
                           'route-pattern:/api/v1/**': 'symbol:java:com.example.security.PolicyManager',
                           'route-pattern:/**': 'authenticated()'}
     chains = {fact['qualifiers']['filter_chain'] for fact in output.facts}
-    assert chains == {'symbol:java:com.example.security.SecurityConfig#chain'}, 'chaque regle dit sa chaine de filtres'
+    assert chains == {'symbol:java:com.example.security.SecurityConfig#chain(HttpSecurity)'}, 'chaque regle dit sa chaine de filtres'
     evidence = facts(output, 'AUTHORIZED_BY')['route-pattern:/api/orgs/**']['evidence'][0]
     lines = config(RULES).splitlines()
     assert '"/api/orgs/**"' in lines[evidence['line_start'] - 1]
@@ -163,7 +163,7 @@ def test_an_unread_rule_blocks_every_conclusion_after_it_but_not_before():
     assert 'endpoint:POST /api/v1/auth/login' in facts(output, 'MATCHED_BY')
     assert 'endpoint:GET /health' not in facts(output, 'MATCHED_BY')
     assert {'endpoint:GET /health', 'endpoint:GET /api/v1/orgs/{orgCode}/users',
-            'symbol:java:com.example.security.SecurityConfig#chain'} <= gaps(output)
+            'symbol:java:com.example.security.SecurityConfig#chain(HttpSecurity)'} <= gaps(output)
     assert not any('Unknown' in fact['subject'] for fact in output.facts), 'un motif non lu n est pas invente'
 
 
@@ -197,7 +197,7 @@ def test_routes_the_endpoint_analysis_could_not_establish_stay_not_interpreted()
     public String hidden() { return ""; }
 ''')
     output = evaluate(files(**{'web/BrokenController.java': broken}))
-    assert 'symbol:java:com.example.web.BrokenController#hidden' in gaps(output)
+    assert 'symbol:java:com.example.web.BrokenController#hidden()' in gaps(output)
     assert output.status == EvaluationStatus.PARTIAL
 
 
