@@ -248,3 +248,13 @@ def test_a_non_utf8_commit_message_does_not_fail_the_history(make_repo, git):
     git(repo, 'commit', '-qm', 'résumé'.encode('latin-1').decode('utf-8', 'surrogateescape'))
     execution = execute(repo)
     assert execution.status is EvaluationStatus.SUCCESS, execution.warnings
+
+
+def test_facts_of_different_identity_schemas_are_never_compared():
+    from app.history.domain.impact import same_schema
+
+    def fact(version):
+        return {'kind': 'ASSERTION', 'produced_by': {'catalog_id': 'spring-api', 'catalog_version': version}}
+    assert same_schema([fact('2')], [fact('2')])
+    assert not same_schema([fact('1')], [fact('2')]), '#list et #list(String) ne se comparent pas'
+    assert same_schema([], [fact('2')]), 'un cote vide ne dit rien du schema'

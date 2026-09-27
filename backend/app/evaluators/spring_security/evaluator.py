@@ -41,7 +41,7 @@ DATA_GAP = 'les rôles et autorités des utilisateurs sont des données, hors du
 
 class SpringSecurityEvaluator:
     evaluator_id = 'taxo.spring-security'
-    producer_version = '0.1.0'
+    producer_version = '0.2.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):

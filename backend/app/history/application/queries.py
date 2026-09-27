@@ -6,7 +6,7 @@ from app.facts import fact_identity
 from app.history.domain.commit import ChangedFile, Commit, is_confidential
 from app.history.domain.diff import BINARY, CONFIDENTIAL, Blob, as_text, refusal, side_by_side
 from app.history.domain.errors import UNKNOWN_PARENT, UNKNOWN_PATH, HistoryError
-from app.history.domain.impact import compare, unknowns
+from app.history.domain.impact import compare, same_schema, unknowns
 from app.history.domain.links import link
 from app.projects.application.queries import require_project
 from app.snapshots.domain.errors import SnapshotError
@@ -120,19 +120,22 @@ class ProjectHistory:
         executed_before = self.runner(evaluator, before) if before else None
         failed = [execution for execution in (executed_before, executed_after)
                   if execution is not None and execution.status is EvaluationStatus.FAILED]
-        if failed:
-            # Une execution echouee n'a produit aucun fait : la comparer inventerait des changements.
+        before_facts = executed_before.facts if executed_before else ()
+        incompatible = not failed and not same_schema(before_facts, executed_after.facts)
+        if failed or incompatible:
+            # Une execution echouee n'a produit aucun fait, et deux schemas d'identite differents ne se
+            # comparent pas : les comparer inventerait des changements.
             changes, unchanged = [], 0
         else:
-            changes, unchanged = compare(executed_before.facts if executed_before else (),
-                                         executed_after.facts, fact_identity)
+            changes, unchanged = compare(before_facts, executed_after.facts, fact_identity)
         return {
             'evaluator_id': evaluator.evaluator_id,
             'producer_version': evaluator.producer_version,
             'status_before': executed_before.status.value if executed_before else None,
             'status_after': executed_after.status.value,
-            'comparable': not failed,
-            'failures': [warning for execution in failed for warning in execution.warnings],
+            'comparable': not (failed or incompatible),
+            'failures': [warning for execution in failed for warning in execution.warnings] + (
+                ['Schéma d’identité différent entre les deux états : faits non comparés.'] if incompatible else []),
             'changes': changes,
             'unchanged_count': unchanged,
             'not_interpreted_before': unknowns(executed_before.coverage) if executed_before else [],

@@ -51,7 +51,7 @@ class _NotInterpreted(Exception):
 
 class SpringApiEvaluator:
     evaluator_id = 'taxo.spring-api'
-    producer_version = '0.1.0'
+    producer_version = '0.2.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
@@ -88,10 +88,10 @@ class Analysis:
     def endpoints(self):
         """Faits HANDLED_BY etablis, avec le type et la methode qui traitent chaque endpoint."""
         for (subject, handler), fact in self.run.facts.items():
-            qualified, _, method = handler.removeprefix('symbol:java:').rpartition('#')
+            qualified, _, signature = handler.removeprefix('symbol:java:').rpartition('#')
             java_file, java_type, _ = self.run.types[qualified]
             yield Endpoint(subject, handler, fact, java_file.path, java_type,
-                           tuple(item for item in java_type.methods if item.name == method))
+                           tuple(item for item in java_type.methods if item.signature == signature))
 
 
 @dataclass(frozen=True)
@@ -101,7 +101,7 @@ class Endpoint:
     fact: dict
     path: str
     java_type: object
-    # Les methodes du type qui portent ce nom (surcharges comprises).
+    # La methode qui traite l'endpoint (une seule : sa signature est sans ambiguite dans le type).
     methods: tuple
 
     @property
@@ -239,13 +239,18 @@ class _Run:
         return type_mapping is not None or not (absent or prefixed)
 
     def _method_facts(self, path, java_type, method, annotation, kind, type_mapping, base):
-        handler = f'symbol:java:{java_type.qualified_name}#{method.name}'
+        handler = f'symbol:java:{java_type.qualified_name}#{method.signature}'
+        if java_type.ambiguous(method.signature):
+            # Deux declarations, une seule reference : aucun fait ne doit les confondre (TAXO-ID-01).
+            self._gap(f'symbol:java:{java_type.qualified_name}#{method.name}', path,
+                      f'Identité syntaxique ambiguë : {java_type.qualified_name}#{method.signature}')
+            return
         base_paths, base_verbs = base
         try:
             verbs = [VERBS[kind]] if kind in VERBS else _verbs(annotation) or base_verbs or [ANY]
             paths = _paths(annotation)
         except _NotInterpreted as exc:
-            self._gap(handler, path, f'Mapping non résolu ({exc}) : {java_type.qualified_name}#{method.name}')
+            self._gap(handler, path, f'Mapping non résolu ({exc}) : {java_type.qualified_name}#{method.signature}')
             return
         data = self.contents[path]
         evidence = [_evidence(self.snapshot, path, data, item, handler)
