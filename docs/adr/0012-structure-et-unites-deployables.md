@@ -59,6 +59,46 @@ Une dépendance vers un module que Taxo ne connaît pas est déclarée, jamais i
    TAXO-05 rattache alors chaque route aux seules chaînes de filtres chargées par l'application
    qui la sert.
 
+### 4. Tranche 2 : ce qu'une application charge
+
+Un évaluateur `taxo.spring-boot` (catalogue `spring-boot` v1) produit :
+- `application:<fichier source>#<Type>` `BUILT_FROM` `module:<dossier>` pour chaque
+  `@SpringBootApplication` des sources principales (`src/main`) d'un module (`OBSERVED`) ;
+- `endpoint SERVED_BY application` (`INFERRED`), quand l'application charge le contrôleur de la route.
+
+Une application charge une classe du dépôt si trois prémisses sont établies :
+1. **classpath** : le module de la classe est atteint depuis celui de l'application par des
+   dépendances d'exécution (`implementation`, `api`, `runtimeOnly`, `compile`, `runtime`) ;
+2. **enregistrement** : la classe est dans un paquetage balayé, ou importée par un `@Import`
+   littéral d'une classe chargée ;
+3. **inconditionnelle** : ni `@Profile` ni `@Conditional…`, sur la classe ou sur la méthode `@Bean`.
+
+Ce qui ne s'établit pas ainsi est **inconnu**, et l'endpoint est `NOT_INTERPRETED`. Aucune attribution
+par paquetage, proximité ou nom : c'est la forme subtile que D1 prendrait sinon. Les causes
+d'inconnu sont :
+- une configuration de dépendance hors des deux listes ;
+- un descripteur non lu ;
+- des dépendances communes (`subprojects`, `allprojects`, `configure`, `apply from`, `buildSrc`,
+  `<dependencies>` d'un pom parent, dépendance par coordonnées vers le groupe du dépôt) ;
+- `@ComponentScan` supplémentaire ;
+- un `@Import` non littéral ou sélectif ;
+- une auto-configuration déclarée (`spring.factories`, `AutoConfiguration.imports`) ;
+- une annotation non résolue qui peut porter un stéréotype ou une condition.
+
+Seule l'absence du classpath prouve sans réserve qu'une classe n'est pas chargée. Une classe du classpath
+hors du balayage n'est pas chargée **par les voies lues** : XML, initialiseurs et `spring.main.sources`
+restent une lacune connue, portée par chaque conclusion qui s'en sert.
+
+TAXO-05 ne garde de candidates, pour une route, que les chaînes que charge l'application qui la sert.
+Il déclare l'endpoint non interprété si :
+- une application la sert peut-être ;
+- une chaîne qui peut s'y appliquer a un chargement inconnu ;
+- deux applications qui la servent chargent des chaînes différentes.
+
+La garde « plusieurs applications » de la tranche 1 disparaît : elle est remplacée par ces prémisses.
+Le qualificatif `filter_chain` et le catalogue `spring-security` v2 ne changent pas : l'identité des
+faits est la même, seules les prémisses de leurs déductions s'enrichissent.
+
 ## Conséquences
 
 - Le schéma, le validateur et la suite de conformité ajoutent le type `application` et les

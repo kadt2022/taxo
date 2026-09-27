@@ -30,6 +30,8 @@ RELATIONS = {
     # Structure du depot (ADR 0012) : modules et leurs dependances, unites deployables.
     'DEPENDS_ON': ({'module'}, {'module'}, {'OBSERVED'}),
     'BUILT_FROM': ({'application'}, {'module'}, {'OBSERVED'}),
+    # L'application qui expose une route : deduite du classpath et du balayage (E1, tranche 2).
+    'SERVED_BY': ({'endpoint'}, {'application'}, {'INFERRED'}),
 }
 # Un commit est designe par son identifiant Git complet, comme l'instantane (ADR 0007).
 _COMMIT_KEY = re.compile(r'(?:[0-9a-f]{40}|[0-9a-f]{64})')

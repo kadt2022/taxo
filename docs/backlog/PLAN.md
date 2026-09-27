@@ -164,7 +164,7 @@ Correspondance avec les défauts mesurés de la PR #13 :
 
 | Défaut | Où il est traité |
 | --- | --- |
-| **D1** unité déployable | neutralisé par TAXO-05 (#45) dans le cas détecté ; résolu par **E1** |
+| **D1** unité déployable | neutralisé par TAXO-05 (#45) dans le cas détecté ; résolu par **E1** tranche 2 : chaque route est rattachée aux seules chaînes de l'application qui la sert, sinon non interprétée |
 | **D2** silence du parsing | en partie : `taxo.spring-api` déclare ses mappings non résolus et ses héritages non suivis. Une construction d'endpoint non modélisée (`@Endpoint` d'actuator) reste silencieuse : récit à ouvrir avec E1 |
 | **D3** `OUT_OF_SCOPE` sans avoir cherché | produit par le POC `authchain`, pas par les évaluateurs livrés ; règle à reprendre dans tout évaluateur qui déclarera `OUT_OF_SCOPE` |
 | **D4** diff muet sur la protection | après E1 : l'impact compare déjà les faits de TAXO-05 entre parent et commit |
@@ -206,6 +206,16 @@ Les récits du document de vision restent la description de ces capacités, pas 
 Dependencies, Deployment et Impact Analysis ont quitté cette liste : ils sont les jalons E1 à E3.
 
 ## Décisions prises
+
+**2026-09-27 (E1 tranche 2, ADR 0012 § 4)**
+
+- Nouvel évaluateur `taxo.spring-boot` : `application BUILT_FROM module` pour chaque
+  `@SpringBootApplication`, et `endpoint SERVED_BY application` déduit du classpath et du balayage.
+- TAXO-05 ne garde, pour une route, que les chaînes chargées par l'application qui la sert. La garde
+  « plusieurs applications » est remplacée par ces prémisses : D1 est résolu là où elles s'établissent.
+- Ce qui ne s'établit pas statiquement reste non interprété, jamais attribué par paquetage ou par nom.
+- Le banc POC-05 (#48) n'est pas signé sur `c9bb788` : cette tranche change la capacité qu'il
+  mesure. La version de Taxo qui affrontera Minia seule reste à choisir.
 
 **2026-09-27 (architecture de la Maille, ADR 0011 en projet)**
 

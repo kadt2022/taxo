@@ -11,7 +11,7 @@
     "status": {"enum": ["OBSERVED", "INFERRED", "HUMAN_VALIDATED"]},
     "validity": {"enum": ["VALID", "STALE", "REVALIDATION_REQUIRED"]},
     "subject": {"$ref": "#/$defs/reference"},
-    "relation": {"enum": ["CONTAINS", "WRITTEN_IN", "USES_TECHNOLOGY", "DECLARED_BY", "ANNOTATED_WITH", "CALLS", "IMPLEMENTS", "DISPATCHES_TO", "HANDLED_BY", "ACCEPTS", "RETURNS", "PERMITS_ALL", "AUTHORIZED_BY", "MATCHED_BY", "PROTECTED_BY", "HAS_COMMIT", "AUTHORED_BY", "CHILD_OF", "CHANGES", "DEPENDS_ON", "BUILT_FROM"]},
+    "relation": {"enum": ["CONTAINS", "WRITTEN_IN", "USES_TECHNOLOGY", "DECLARED_BY", "ANNOTATED_WITH", "CALLS", "IMPLEMENTS", "DISPATCHES_TO", "HANDLED_BY", "ACCEPTS", "RETURNS", "PERMITS_ALL", "AUTHORIZED_BY", "MATCHED_BY", "PROTECTED_BY", "HAS_COMMIT", "AUTHORED_BY", "CHILD_OF", "CHANGES", "DEPENDS_ON", "BUILT_FROM", "SERVED_BY"]},
     "object": {"$ref": "#/$defs/text"},
     "qualifiers": {"$ref": "#/$defs/qualifiers"},
     "pattern": {
