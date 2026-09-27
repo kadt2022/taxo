@@ -492,11 +492,13 @@ def _type_name(node):
     """Un type ecrit, sans annotation ni argument de type ; un nom compose reste compose."""
     if node is None:
         return ''
-    if node.type in _SIMPLE_TYPES:
+    if node.type in _SIMPLE_TYPES or node.type == 'identifier':
         return _text(node)
-    if node.type == 'scoped_type_identifier':
+    if node.type in ('scoped_type_identifier', 'scoped_identifier'):
+        # Un prefixe de paquetage peut etre lu comme `scoped_identifier` : il fait partie du nom ecrit.
         return '.'.join(_type_name(item) for item in node.named_children
-                        if item.type in ('type_identifier', 'scoped_type_identifier', 'generic_type'))
+                        if item.type in ('type_identifier', 'scoped_type_identifier', 'generic_type',
+                                         'identifier', 'scoped_identifier'))
     if node.type == 'generic_type':
         return _type_name(_first(node, ('type_identifier', 'scoped_type_identifier')))
     if node.type == 'array_type':

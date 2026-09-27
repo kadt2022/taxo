@@ -294,6 +294,8 @@ def test_every_fact_satisfies_the_contract():
     assert execution.status == EvaluationStatus.PARTIAL, execution.error
     assert {fact['status'] for fact in execution.facts} == {'OBSERVED', 'INFERRED'}
     assert all(fact['produced_by']['catalog_id'] == 'spring-security' for fact in execution.facts)
+    assert {fact['produced_by']['catalog_version'] for fact in execution.facts} == {'2'}, \
+        'filter_chain porte une signature : schema d identite en version 2'
 
 
 def test_pattern_matching_has_three_outcomes():

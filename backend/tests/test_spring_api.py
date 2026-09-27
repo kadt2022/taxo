@@ -425,3 +425,17 @@ def test_a_commit_that_touches_no_controller_changes_no_endpoint(make_repo, git,
     assert spring['comparable'] is True
     assert spring['changes'] == []
     assert spring['unchanged_count'] == 1, 'les deux cotes sont evalues avec le meme schema d identite'
+
+
+def test_overloads_differing_by_package_stay_distinct():
+    controller = '''package com.example;
+import org.springframework.web.bind.annotation.*;
+@RestController
+class Items {
+    @GetMapping("/a") String find(com.a.Foo foo) { return ""; }
+    @GetMapping("/b") String find(com.b.Foo foo) { return ""; }
+}
+'''
+    output = evaluate({f'{ROOT}/Items.java': controller})
+    assert handlers(output) == {('endpoint:GET /a', 'symbol:java:com.example.Items#find(com.a.Foo)'),
+                                ('endpoint:GET /b', 'symbol:java:com.example.Items#find(com.b.Foo)')}
