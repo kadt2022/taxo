@@ -51,6 +51,12 @@ export function protectionText(fact:RouteFact){
   return object.startsWith('symbol:')?shortSymbol(object):object;
 }
 
+/** La chaine de filtres qui porte un fait, par sa methode ; vide si le fait n'en nomme pas. */
+export function chainName(fact:RouteFact){
+  const chain=fact.qualifiers?.filter_chain;
+  return typeof chain==='string'?shortSymbol(chain):'';
+}
+
 export function proofText(proof:Proof){
   if(!proof.path)return '';
   if(proof.line_start===undefined)return proof.path;
@@ -87,7 +93,7 @@ export function RouteDetail({row}:Readonly<{row:RouteRow}>){
     <h3><code>{row.verb} {row.path}</code> <span className={`state state-${row.state.toLowerCase()}`}>{STATES[row.state]}</span></h3>
     <Facts title="Traitée par" facts={row.handlers} render={fact=>shortSymbol(fact.object)}/>
     <Facts title="Servie par" facts={row.applications} render={fact=>applicationName(fact.object)}/>
-    <Facts title="Règle qui la capture" facts={row.matched} render={fact=>`${(fact.object??'').replace(/^route-pattern:/, '')} · chaîne ${shortSymbol(String(fact.qualifiers?.filter_chain??''))}`}/>
+    <Facts title="Règle qui la capture" facts={row.matched} render={fact=>`${(fact.object??'').replace(/^route-pattern:/, '')} · chaîne ${chainName(fact)}`}/>
     <Facts title="Règle écrite" facts={row.rules} render={ruleText}/>
     <Facts title="Protection" facts={row.protections} render={protectionText}/>
     {row.gaps.length>0&&<div className="route-facts"><h4>Ce que Taxo ne sait pas</h4><ul>
@@ -123,7 +129,7 @@ export function RoutesPanel({base, scanId, request}:Readonly<{base:string; scanI
   return <section className="results routes" id="routes" aria-label="Routes">
     <div className="section-heading"><div><h2>Routes</h2><p>Ce que Taxo prouve de chaque route HTTP : qui la traite, quelle application la sert, quelle règle la capture et ce qui la protège. Tout vient des faits, avec leurs preuves ; rien n’est rédigé par Minia.</p></div></div>
     {error&&<div role="alert" className="error">{error}</div>}
-    {!result&&!error&&<p role="status">Chargement des routes…</p>}
+    {!result&&!error&&<output>Chargement des routes…</output>}
     {result&&<>
       <div className="filters">
         <label>Chemin ou verbe<input value={text} onChange={typed(setText)} placeholder="GET /api/admin"/></label>

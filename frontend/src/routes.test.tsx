@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {applicationName, filterRoutes, proofText, protectionText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow} from './routes';
+import {applicationName, chainName, filterRoutes, proofText, protectionText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow} from './routes';
 
 const admin:RouteRow={endpoint:'endpoint:GET /api/admin/users', verb:'GET', path:'/api/admin/users', state:'PROTECTED',
   handlers:[{subject:'endpoint:GET /api/admin/users', relation:'HANDLED_BY', object:'symbol:java:com.takibo.adp.test.controller.TestController#adminUsers(Authentication)',
@@ -30,6 +30,8 @@ describe('lecture des faits d’une route', ()=>{
     expect(ruleText(open.rules[0])).toBe('/api/health → permitAll()');
     expect(protectionText(admin.protections[0])).toBe('TestSecurityConfig#adpAuthorizationManager()');
     expect(protectionText({subject:'x', relation:'PROTECTED_BY', object:'policy-rule:hasRole("ADMIN")'})).toBe('hasRole("ADMIN")');
+    expect(chainName(admin.matched[0])).toBe('TestSecurityConfig#securityFilterChain(HttpSecurity)');
+    expect(chainName(admin.handlers[0])).toBe('');
     expect(proofText({path:'A.java', line_start:3, line_end:5})).toBe('A.java:3-5');
     expect(proofText({path:'build.gradle'})).toBe('build.gradle');
   });

@@ -9,6 +9,7 @@ from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
 ENDPOINTS = 'taxo.spring-api'
+ENDPOINT = 'endpoint:'
 EVALUATORS = ('taxo.spring-api', 'taxo.spring-boot', 'taxo.spring-security')
 RELATIONS = ('HANDLED_BY', 'SERVED_BY', 'MATCHED_BY', 'PROTECTED_BY')
 RULES = ('PERMITS_ALL', 'AUTHORIZED_BY')
@@ -39,7 +40,7 @@ def project_routes(by_relation, gaps):
     for fact in gaps:
         entry = {'subject': fact['subject'], 'type': fact['coverage_type'], 'reason': fact.get('reason', ''),
                  'evaluator': fact.get('produced_by', {}).get('producer_id', '')}
-        if fact['subject'].startswith('endpoint:'):
+        if fact['subject'].startswith(ENDPOINT):
             endpoint_gaps.setdefault(fact['subject'], []).append(entry)
         elif entry['evaluator'] == ENDPOINTS:
             unestablished.append(entry)
@@ -59,7 +60,7 @@ def _route(endpoint, grouped, rules, gaps):
         state = PERMITTED
     else:
         state = NOT_INTERPRETED if gaps else NO_CONCLUSION
-    verb, _, path = endpoint.removeprefix('endpoint:').partition(' ')
+    verb, _, path = endpoint.removeprefix(ENDPOINT).partition(' ')
     return {'endpoint': endpoint, 'verb': verb, 'path': path, 'state': state,
             'handlers': grouped['HANDLED_BY'][endpoint], 'applications': grouped.get('SERVED_BY', {}).get(endpoint, []),
             'matched': matched, 'rules': applied, 'protections': protections, 'gaps': gaps}
@@ -73,5 +74,5 @@ def _by_subject(items):
 
 
 def _order(endpoint):
-    verb, _, path = endpoint.removeprefix('endpoint:').partition(' ')
+    verb, _, path = endpoint.removeprefix(ENDPOINT).partition(' ')
     return path, verb
