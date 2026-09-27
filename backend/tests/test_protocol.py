@@ -70,7 +70,7 @@ def test_describe_offers_only_what_taxo_can_serve(taxo):
                           'diff_facts']
     assert 'get_diff' not in operations, 'sans MINIA_SOURCE_CONTEXT=diff, le diff n est pas propose'
     analyzers = {item['analyzer'] for item in described['items'] if item['kind'] == 'analyzer'}
-    assert analyzers == {'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-security'}
+    assert analyzers == {'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-security', 'taxo.structure'}
     changes = next(item for item in described['items'] if item.get('relation') == 'CHANGES')
     assert (changes['subject_types'], changes['object_types']) == (['commit'], ['file'])
     assert described['coverage'] and described['snapshot'] == result['snapshot']
@@ -130,7 +130,7 @@ def test_coverage_can_be_asked_for_a_scope(taxo):
     client, url, _ = taxo
     everything = one(client, url, 'get_coverage')
     assert {item['fact']['produced_by']['producer_id'] for item in everything['items']} == {
-        'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-security'}
+        'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-security', 'taxo.structure'}
     narrowed = one(client, url, 'get_coverage', scope='file:src/app.txt')
     assert narrowed['items'] == [] and narrowed['count'] == 0
     assert one(client, url, 'get_coverage', scope='rien')['error']['code'] == 'INVALID_ARGUMENT'
