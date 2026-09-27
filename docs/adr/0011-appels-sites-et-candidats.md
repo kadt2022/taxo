@@ -60,10 +60,23 @@ Les références de méthode portent leur signature syntaxique normalisée (TAXO
 
   Une forme syntaxique (`this.f()`, champ, paramètre, statique) ne suffit pas. Même `this.f(x)`
   demande de traiter les surcharges, l'héritage et le type de `x`. Un type déclaré connu est une
-  prémisse utile, jamais une liaison à lui seul. Par exemple, pour un premier fragment :
-  - un appel non qualifié à une méthode `private` du même type, d'arité unique parmi les déclarations
-    de ce nom, sans méthode de même nom héritée ;
-  - sinon, `NOT_INTERPRETED` sur le site, avec la raison.
+  prémisse utile, jamais une liaison à lui seul.
+
+  L'analyse ne compile pas : elle ne peut pas vérifier qu'un argument est applicable au type d'un
+  paramètre. Le premier fragment se limite donc aux formes où la sélection s'établit **sans typer
+  d'argument**. Par exemple :
+  - un appel non qualifié **sans argument**, `f()` ;
+  - écrit directement dans le corps d'une méthode ou d'un constructeur du type `T`, hors lambda et
+    hors classe anonyme ou locale ;
+  - `T` déclare exactement une méthode nommée `f` : `private`, sans paramètre, non variable ;
+  - aucun type englobant de `T` ne déclare de méthode `f` ;
+  - tous les supertypes de `T`, de proche en proche, sont dans les sources et aucun ne déclare de
+    méthode `f` ;
+  - `f` n'est pas une méthode de `java.lang.Object`.
+
+  Toute autre forme (argument, surcharge, supertype absent, `super.f()`, receveur explicite) donne
+  `NOT_INTERPRETED`, avec la raison. `f(1)` face à `private void f(String)` n'est jamais lié :
+  l'applicabilité des arguments n'est pas établie.
 - **Pas d'élargissement par nom.** Une recherche de méthodes par nom n'est jamais présentée comme une
   résolution Java.
 
@@ -93,11 +106,40 @@ lu et ce qui est déduit deviendrait invisible, et elle changerait de sens selon
 - **Pas de relation `MAY_CALL`**, ni de statut « possible ». Un fait « peut-être » finit toujours lu
   comme un fait.
 - Un site non résolu est déclaré `NOT_INTERPRETED`. Son diagnostic dit :
-  - la raison (`receiver_not_established`, `overload_ambiguous`, `declaration_absent`…) ;
+  - la raison (`receiver_not_established`, `overload_ambiguous`, `arguments_not_typed`,
+    `declaration_absent`…) ;
   - les candidats trouvés ;
   - s'il est complet (`candidate_set_complete: false` par défaut) ;
   - ce que « candidat » signifie : type compatible trouvé dans le périmètre, ou cible possible selon
     une analyse nommée. Les deux ne se mélangent pas dans une même liste.
+- **Où vit ce diagnostic : dans la couverture, par un champ ajouté au contrat.** Le schéma v1 ferme
+  `COVERAGE` : ni `qualifiers` ni champ libre. Ce projet ajoute un champ facultatif `diagnostic`,
+  admis sur une couverture `NOT_INTERPRETED` seulement :
+
+  ```json
+  {
+    "kind": "COVERAGE", "coverage_type": "NOT_INTERPRETED",
+    "subject": "symbol:java:com.example.OrderService#submit(Order)",
+    "scope": {"include": ["file:src/main/java/com/example/OrderService.java"]},
+    "diagnostic": {
+      "sites": [
+        {"line_start": 42, "column_start": 8, "column_end": 31, "reason": "receiver_not_established",
+         "candidates": ["symbol:java:com.example.DefaultPort#send(Message)"],
+         "candidate_meaning": "compatible_type_in_scope", "candidate_set_complete": false}
+      ]
+    }
+  }
+  ```
+
+  - `diagnostic` n'entre pas dans l'identité de la couverture (ADR 0002 : type, sujet, périmètre,
+    producteur). Plusieurs sites non résolus d'une même méthode forment une seule couverture, avec
+    une entrée par site.
+  - `reason` et `candidate_meaning` sont des listes fermées, déclarées par le catalogue de
+    l'évaluateur. Les candidats sont des références `symbol:`.
+  - Le schéma, le validateur et la suite de conformité changent ensemble. Une couverture qui porte
+    `diagnostic` sans être `NOT_INTERPRETED` est refusée.
+  - Un troisième espace de stockage (« résultats de résolution ») n'est pas créé : il viendra avec la
+    référence de site, si une requête par site le demande.
 - **Une seule candidate reste une candidate.**
 - **Lambdas et références de méthode.** Créer une lambda n'est pas l'appeler : les appels de son corps
   appartiennent à la lambda, jamais à la méthode englobante. Une référence de méthode (`this::f`)
@@ -150,5 +192,3 @@ d'interface serait distincte, et n'est pas dans ce projet.
    le premier fragment, ou seulement avec le dispatch ?
 2. L'identité d'une lambda : position (`#m(...)$lambda@L12:C8`), ou ordre dans la méthode ? La
    position change à chaque édition ; l'ordre, à chaque insertion.
-3. Faut-il publier les diagnostics de résolution comme couvertures `NOT_INTERPRETED` par site, ou
-   comme un troisième espace (résultats de résolution) consultable par l'API ?

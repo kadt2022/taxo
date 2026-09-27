@@ -42,8 +42,14 @@ frontière. Rien d'autre.
 ## Périmètre
 
 - **Une analyse et une racine.** L'analyse est explicite ; la racine est une référence `type:clé`.
-- **Relations explicites.** La requête nomme les relations à suivre, prises dans les relations
-  réellement présentes dans l'analyse. Une relation inconnue est une erreur `INVALID_ARGUMENT`.
+- **Relations explicites.** La requête nomme les relations à suivre. Elles sont validées contre le
+  vocabulaire v1 et les catalogues des évaluateurs **exécutés** dans l'analyse, jamais contre les
+  relations qui ont au moins un fait enregistré :
+  - relation hors du vocabulaire : erreur `INVALID_ARGUMENT` ;
+  - relation déclarée par un évaluateur exécuté, sans aucun fait : acceptée, réponse vide
+    **couverte**. Par exemple, `HANDLED_BY` sur un dépôt sans contrôleur ;
+  - relation du vocabulaire qu'aucun évaluateur exécuté ne produit : acceptée, frontière de contexte,
+    réponse `UNKNOWN`.
 - **Direction `OUTGOING` ou `INCOMING`.** `BOTH` attendra.
 - **Parcours en largeur, ordre stable.** Tri par relation, puis par référence (forme canonique de
   01B), puis par identité de fait.
@@ -125,9 +131,18 @@ La complétude d'un parcours des **faits enregistrés** n'est jamais présentée
 
 ### Continuation
 
-Pas de curseur dans cette tranche. Pour aller plus loin, le consommateur demande une nouvelle Tuile
-autour d'une référence de la frontière, sur la même analyse. Une Tuile ne mélange jamais deux
-analyses.
+Pas de curseur général dans cette tranche. Deux reprises seulement :
+
+- **Nœud non développé** (profondeur atteinte) : le consommateur demande une nouvelle Tuile dont il
+  est la racine.
+- **Liste de voisins coupée** (budget de nœuds, d'arêtes, d'octets ou de travail atteint en parcourant
+  les voisins d'un nœud). Redemander une Tuile autour de ce nœud rendrait le même début, dans le même
+  ordre : les voisins suivants seraient inatteignables. La frontière porte donc, pour ce nœud, une
+  **position de reprise** : la relation, le sens, et la clé de tri du dernier fait examiné. La requête
+  accepte cette position (`after`) et reprend strictement après elle, dans le même ordre stable.
+
+La position de reprise vaut pour l'analyse qui l'a produite ; elle est refusée sur une autre. Une
+Tuile ne mélange jamais deux analyses.
 
 ## Minia
 
@@ -157,7 +172,8 @@ elle demande `CALLS`. Ici, elle s'arrête honnêtement à la frontière.
 ## Acceptation
 
 1. Une racine et une analyse valides ne rendent que des faits de cette analyse et des relations
-   demandées.
+   demandées. Une relation d'un évaluateur exécuté sans aucun fait donne une réponse vide couverte ;
+   une relation qu'aucun évaluateur exécuté ne produit donne `UNKNOWN`.
 2. Les sens entrant et sortant sont corrects, sans fait inverse fabriqué.
 3. Les nœuds sont dédupliqués ; les arêtes distinctes sont conservées tant que le budget le permet.
 4. Un cycle, ou une boucle sur un même nœud, termine.
@@ -167,6 +183,9 @@ elle demande `CALLS`. Ici, elle s'arrête honnêtement à la frontière.
    erreur explicite, jamais une Tuile amputée en silence.
 7. Un nœud à fort degré n'entraîne pas le chargement de tout son voisinage.
 8. Chaque coupure est dans la frontière, avec sa nature. Aucun compte exact n'est inventé.
+   Une liste de voisins coupée porte une position de reprise ; des reprises successives atteignent
+   tous les voisins connus, chacun une seule fois, même quand leur nombre dépasse toute limite de
+   réponse.
 9. Tout parcours finit sur l'une des trois fins ; un test distingue `ABSENCE` couverte,
    `NOT_INTERPRETED` et `UNKNOWN`.
 10. Un fait `INFERRED` rendu montre ses prémisses.
@@ -180,7 +199,7 @@ elle demande `CALLS`. Ici, elle s'arrête honnêtement à la frontière.
 ## Hors périmètre
 
 - Nouvelles relations, dont `CALLS`, `IMPLEMENTS` et `DISPATCHES_TO` (ADR 0011).
-- Direction `BOTH`, curseur, pondération des relations, profils de parcours.
+- Direction `BOTH`, curseur général (au-delà de la position de reprise), pondération des relations, profils de parcours.
 - Recherche de chemins entre deux nœuds.
 - Écran de graphe (TAXO-PROJ-API-01), narration (TAXO-ASK-01), maille des tuiles (TAXO-TILES-02).
   Ces trois récits réutiliseront ce voisinage au lieu d'en créer un second.
