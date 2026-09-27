@@ -183,6 +183,17 @@ Ordre proposé, **à décider** :
 7. **E4** ;
 8. essai A/B/C.
 
+**Porte d'entrée de la piste agent : le banc v0 ([POC-05](../../bench/poc-05/README.md)).** Quatre
+bras sur TAKIBO, préenregistrés :
+- A : code seul ;
+- B : Taxo et lecture ciblée ;
+- C₀ : Taxo seul ;
+- D : code, puis vérification par Taxo.
+
+Taxo + Minia < Minia est un résultat possible, et il est accepté d'avance. TAXO-01I, les appels
+et `get_source` ne s'ouvrent pour servir un agent que si C₀ ou D battent A sans fausse
+affirmation de plus. Les jalons E1 à E3 n'en dépendent pas.
+
 Placer E1 avant TAXO-01I est un **choix de priorité**, pas une dépendance technique. Une Tuile peut
 déjà montrer les faits existants et leurs limites ; elle ne crée aucun rattachement entre
 applications. E1 passe d'abord parce qu'il donne vite une capacité utile au-delà de Spring. Il passe
