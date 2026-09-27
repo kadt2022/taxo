@@ -249,6 +249,32 @@ trouver. Sans règle `authorizeHttpRequests` dans les sources, Taxo n'affirme ri
 Dans Minia, une affirmation confirmée par une déduction s'affiche « Confirmée par Taxo, par déduction »,
 avec ses prémisses, ce qui a été écarté et ses limites.
 
+### Structure du dépôt : modules et unités déployables (TAXO-E1, ADR 0012)
+
+Cinquième évaluateur, `taxo.structure` dit de quoi un dépôt est fait, quel que soit son langage.
+Il lit les descripteurs de build et de déploiement, sans rien exécuter :
+
+| Système | Modules | Dépendances entre modules |
+| --- | --- | --- |
+| Gradle (Groovy, Kotlin) | `include` de `settings.gradle` | `project(':x')`, avec sa configuration |
+| Maven | `<modules>` | `<dependency>` vers un module du dépôt, avec son `scope` |
+| npm | chaque `package.json`, `workspaces` | dépendance vers un paquet du dépôt (`workspace:`, `file:`) |
+| Python | `pyproject.toml`, `setup.py`, `requirements.txt` | non lues ; une dépendance par chemin est déclarée |
+| compose | services construits depuis le dépôt | `application:compose.yaml#api` `BUILT_FROM` `module:backend` |
+
+Il produit `repository CONTAINS module`, `module DEPENDS_ON module` et
+`application BUILT_FROM module`, chaque fait avec la ligne qui le porte. Ce qu'il ne sait pas
+lire est déclaré non interprété sur son fichier :
+- une inclusion calculée ;
+- un `projectDir` redéfini ;
+- un `project(...)` non littéral ;
+- un module inconnu ;
+- un contexte de build calculé ou sans module.
+
+Un service à image externe (`image: postgres`) n'est ni un fait ni une lacune. L'impact d'un
+commit montre un module ajouté ou une dépendance ajoutée. Validé sur Taxo lui-même (deux modules,
+deux applications) et sur TAKIBO (18 modules Gradle, 37 dépendances).
+
 ### Interroger Taxo (TAXO-QUERY-01)
 
 > Les évaluateurs savent observer. Taxo sait conserver et relier les faits. La requête sait sélectionner.
