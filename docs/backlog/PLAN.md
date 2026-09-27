@@ -69,8 +69,10 @@ Deux décisions restent ouvertes, et elles conditionnent la suite : accepter ou 
 dépôt Git — aujourd'hui refusé par `NOT_A_GIT_REPOSITORY`, ce qui exclut ces sept projets — et ce
 que « générique » recouvre exactement, au vu de ce corpus.
 
-Les tables ci-dessous décrivent la trajectoire telle qu'elle était planifiée avant le gel. Elles
-sont conservées comme mémoire du projet, pas comme file d'attente.
+**Feuille de route actuelle** : la section [« Élargissement : Taxo au-delà de Spring »](#élargissement--taxo-au-delà-de-spring).
+Elle donne l'ordre des jalons (E1 à E4) et la correspondance avec les défauts D1 à D7. Les tables
+qui suivent (épique, NEXT) décrivent la trajectoire planifiée avant le gel du 2026-09-19. Elles sont
+conservées comme mémoire du projet et comme description des récits, pas comme file d'attente.
 
 État des récits de l'épique :
 
