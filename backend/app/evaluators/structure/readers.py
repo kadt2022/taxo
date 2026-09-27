@@ -19,7 +19,8 @@ class Module:
     directory: str
     system: str
     path: str
-    line: int
+    # Ligne qui declare le module ; None quand c'est le descripteur entier (un fichier vide compris).
+    line: int | None
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,7 @@ def directory_of(path):
 def _join(base, relative):
     """Dossier relatif au depot, ou None s'il sort du depot."""
     joined = posixpath.normpath(posixpath.join('' if base == '.' else base, relative))
-    return None if joined.startswith('..') or joined.startswith('/') else joined
+    return None if joined.startswith(('..', '/')) else joined
 
 
 # --- Gradle ---------------------------------------------------------------------------------------
@@ -72,8 +73,9 @@ def _join(base, relative):
 _COMMENT = re.compile(r'//[^\n]*|/\*.*?\*/', re.S)
 _INCLUDE = re.compile(r'\binclude\b')
 _LITERAL = re.compile(r'''(['"])([^'"\n]*)\1''')
-_PROJECT = re.compile(r'''\bproject\s*\(\s*(?:path\s*[:=]\s*)?(?P<arg>[^)]*)\)''')
-_CONFIGURATION = re.compile(r'(\w+)\s*\(?\s*$')
+_PROJECT = re.compile(r'''\bproject\s*\(([^)]*)\)''')
+# Enveloppes d'une dependance de projet : la configuration est l'identifiant qui les precede.
+_WRAPPERS = {'platform', 'enforcedPlatform', 'testFixtures'}
 GRADLE_SETTINGS = ('settings.gradle', 'settings.gradle.kts')
 GRADLE_BUILDS = ('build.gradle', 'build.gradle.kts')
 
@@ -135,7 +137,10 @@ def gradle_dependencies(path, text, reading, projects):
     source = directory_of(path)
     for match in _PROJECT.finditer(text):
         line = _line(text, match.start())
-        literal = _LITERAL.fullmatch(match.group('arg').strip())
+        argument = match.group(1).strip()
+        if argument.startswith('path'):
+            argument = argument[len('path'):].lstrip().lstrip(':=').strip()
+        literal = _LITERAL.fullmatch(argument)
         if literal is None:
             reading.gap(path, f'project(...) non littéral ligne {line}')
             continue
@@ -143,11 +148,17 @@ def gradle_dependencies(path, text, reading, projects):
         if target is None:
             reading.gap(path, f'module inconnu {literal.group(2)} ligne {line}')
             continue
-        # La configuration est l'identifiant qui precede `project(` sur sa ligne : `api(project(...))`.
         prefix = text[text.rfind('\n', 0, match.start()) + 1:match.start()]
-        configuration = _CONFIGURATION.search(prefix)
-        name = configuration.group(1) if configuration else ''
-        reading.dependencies.append(Dependency(source, target, 'gradle', name, path, line))
+        reading.dependencies.append(Dependency(source, target, 'gradle', _configuration(prefix), path, line))
+
+
+def _configuration(prefix):
+    """Configuration d'une dependance : l'identifiant qui precede `project(` sur sa ligne, au-dela des
+    enveloppes (`implementation(platform(project(...)))` donne `implementation`)."""
+    words = re.findall(r'\w+', prefix.replace('(', ' '))
+    while words and words[-1] in _WRAPPERS:
+        words.pop()
+    return words[-1] if words and words[-1] != 'dependencies' else ''
 
 
 def gradle_path(directory, root):
@@ -204,19 +215,17 @@ def maven_pom(path, text, reading, poms):
 
 
 def maven_dependencies(reading, poms, texts):
-    """Dependances entre modules Maven du depot, par coordonnees."""
+    """Dependances entre modules Maven du depot, par coordonnees completes. Un `groupId` calcule
+    (`${...}`) ne se resout pas : la dependance est declaree, jamais rattachee par son seul `artifactId`."""
     known = {(group, artifact): directory for directory, (group, artifact, _) in poms.items()}
-    by_artifact = {}
-    for (group, artifact), directory in known.items():
-        by_artifact.setdefault(artifact, []).append(directory)
+    local = {artifact for _, artifact in known}
     for directory, (_, _, dependencies) in poms.items():
         path = 'pom.xml' if directory == '.' else f'{directory}/pom.xml'
         for group, artifact, scope in dependencies:
             target = known.get((group, artifact))
-            if target is None and group.startswith('${') and len(by_artifact.get(artifact, [])) == 1:
-                target = by_artifact[artifact][0]
-                reading.gap(path, f'groupId calculé pour {artifact} : rattaché par artifactId seul')
-            if target is not None and target != directory:
+            if target is None and '${' in group and artifact in local:
+                reading.gap(path, f'groupId calculé pour {artifact} : dépendance non rattachée')
+            elif target is not None and target != directory:
                 line = _line_of(texts[path], f'>{artifact}<', texts[path].find('<dependencies>'))
                 reading.dependencies.append(Dependency(directory, target, 'maven', scope, path, line))
 
@@ -240,7 +249,7 @@ def npm_packages(texts, reading):
             continue
         directory = directory_of(path)
         packages[directory] = (path, text, content)
-        reading.modules.append(Module(directory, 'npm', path, _line_of(text, '"name"') if 'name' in content else 1))
+        reading.modules.append(Module(directory, 'npm', path, _line_of(text, '"name"') if 'name' in content else None))
     names = {content.get('name'): directory for directory, (_, _, content) in packages.items()
              if isinstance(content.get('name'), str)}
     for directory, (path, text, content) in packages.items():
@@ -259,9 +268,7 @@ def npm_packages(texts, reading):
 def _npm_target(directory, name, version, names):
     if isinstance(version, str) and version.startswith(('file:', 'link:')):
         return _join(directory, version.split(':', 1)[1])
-    if isinstance(version, str) and version.startswith('workspace:') or name in names:
-        return names.get(name)
-    return None
+    return names.get(name)
 
 
 def npm_workspaces(packages, reading):
@@ -288,7 +295,7 @@ _PATH_DEPENDENCY = re.compile(r'^\s*-e\s|\bfile:|\bpath\s*=', re.M)
 
 
 def python_descriptor(path, text, reading):
-    reading.modules.append(Module(directory_of(path), 'python', path, 1))
+    reading.modules.append(Module(directory_of(path), 'python', path, None))
     found = _PATH_DEPENDENCY.search(text)
     if found:
         reading.gap(path, f'dépendance Python par chemin non lue ligne {_line(text, found.start())}')
@@ -314,23 +321,35 @@ def compose_file(path, text, reading):
         return
     base = directory_of(path)
     for key, service in services.value:
-        build = _mapping_value(service, 'build')
-        if build is None:
+        found = _build_context(_mapping_value(service, 'build'))
+        if found is None:
             continue
-        context = build if isinstance(build, yaml.ScalarNode) else _mapping_value(build, 'context')
-        if context is None and isinstance(build, yaml.MappingNode):
-            context_value, node = '.', build
-        elif isinstance(context, yaml.ScalarNode) and '$' not in context.value:
-            context_value, node = context.value, context
-        else:
+        context_value, node = found
+        module = None if context_value is None else _join(base, context_value)
+        if context_value is None:
             reading.gap(path, f'contexte de build non lu : service {key.value}')
-            continue
-        module = _join(base, context_value)
-        if module is None or '://' in context_value:
+        elif module is None or '://' in context_value:
             reading.gap(path, f'contexte de build hors du dépôt : service {key.value}')
-            continue
-        reading.applications.append(Application(f'{path}#{key.value}', module or '.', path,
-                                                key.start_mark.line + 1, node.end_mark.line + 1))
+        else:
+            reading.applications.append(Application(f'{path}#{key.value}', module, path,
+                                                    key.start_mark.line + 1, node.end_mark.line + 1))
+
+
+def _build_context(build):
+    """(contexte ecrit, noeud) du `build` d'un service ; (None, noeud) s'il n'est pas litteral ; None sans build."""
+    if build is None:
+        return None
+    if isinstance(build, yaml.ScalarNode):
+        context = build
+    elif isinstance(build, yaml.MappingNode):
+        context = _mapping_value(build, 'context')
+        if context is None:
+            return '.', build
+    else:
+        return None, build
+    if isinstance(context, yaml.ScalarNode) and '$' not in context.value:
+        return context.value, context
+    return None, build
 
 
 def _mapping_value(node, name):

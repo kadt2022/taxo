@@ -165,7 +165,8 @@ def test_compose_services_built_from_a_module_are_deployable_units():
                                     'application:compose.yaml#portal': 'module:frontend'}
     assert 'file:compose.yaml' in gaps(output), 'contexte calcule, et contexte sans module reconnu'
     reasons = ' '.join(output.warnings)
-    assert 'worker' in reasons and 'docs' in reasons
+    assert 'worker' in reasons
+    assert 'docs' in reasons
     assert 'db' not in reasons, 'une image externe n est ni un fait ni une lacune'
 
 
@@ -193,3 +194,25 @@ def test_the_impact_of_a_commit_shows_a_new_module_and_a_new_dependency(make_rep
     structure = next(item for item in impact['evaluations'] if item['evaluator_id'] == 'taxo.structure')
     changes = {(item['change'], item['relation'], item['after']) for item in structure['changes']}
     assert changes == {('INTRODUCED', 'CONTAINS', 'module:web'), ('INTRODUCED', 'DEPENDS_ON', 'module:core')}
+
+
+def test_empty_descriptors_are_modules_with_whole_file_evidence():
+    execution = RunEvaluator()(StructureEvaluator(), snapshot({'lib/requirements.txt': '', 'build.gradle': ''}))
+    assert execution.status == EvaluationStatus.SUCCESS
+    evidence = [proof for fact in execution.facts for proof in fact['evidence']]
+    assert evidence and all('line_start' not in proof for proof in evidence)
+
+
+def test_wrapped_project_dependencies_keep_their_outer_configuration():
+    build = ('dependencies {\n    implementation(platform(project(":bom")))\n'
+             '    testImplementation(testFixtures(project(":core")))\n}\n')
+    output = evaluate({'settings.gradle': 'include "bom", "core", "app"\n', 'app/build.gradle': build})
+    assert dependencies(output) == {('app', 'bom', 'implementation'), ('app', 'core', 'testImplementation')}
+
+
+def test_a_maven_dependency_with_a_computed_group_is_never_attached():
+    app = APP_POM.replace('<groupId>com.acme</groupId>\n      <artifactId>api</artifactId>',
+                          '<groupId>${vendor.group}</groupId>\n      <artifactId>api</artifactId>')
+    output = evaluate({'pom.xml': POM, 'app/pom.xml': app, 'api/pom.xml': API_POM})
+    assert dependencies(output) == set()
+    assert 'file:app/pom.xml' in gaps(output)

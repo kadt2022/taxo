@@ -82,10 +82,10 @@ def _interpret(texts):
     for path, text in sorted(_named(texts, readers.COMPOSE_FILES).items()):
         readers.compose_file(path, text, reading)
     known = {module.directory for module in reading.modules}
-    for application in list(reading.applications):
+    for application in reading.applications:
         if application.module not in known:
-            reading.applications.remove(application)
             reading.gap(application.path, f'contexte de build sans module reconnu : {application.key}')
+    reading.applications = [item for item in reading.applications if item.module in known]
     return reading
 
 
@@ -105,7 +105,7 @@ def _gradle(settings, builds, reading):
         root = next((candidate for candidate in sorted(roots, key=len, reverse=True)
                      if candidate == '.' or directory == candidate or directory.startswith(candidate + '/')), None)
         if root is None:
-            reading.modules.append(readers.Module(directory, 'gradle', path, 1))
+            reading.modules.append(readers.Module(directory, 'gradle', path, None))
             projects = {':': directory}
         else:
             projects = roots[root]
@@ -125,7 +125,7 @@ def _maven(poms, reading):
         directory = readers.directory_of(path)
         aggregator = '<modules>' in poms[path]
         if directory in parsed and directory not in listed and not aggregator:
-            reading.modules.append(readers.Module(directory, 'maven', path, 1))
+            reading.modules.append(readers.Module(directory, 'maven', path, None))
     readers.maven_dependencies(reading, parsed, poms)
 
 
@@ -159,9 +159,13 @@ def _facts(snapshot, repository, texts, reading):
 
 
 def _evidence(snapshot, texts, path, line_start, line_end, method):
-    return {'repository': snapshot.repository, 'commit': snapshot.commit, 'path': path,
-            'line_start': line_start, 'line_end': line_end, 'method': method,
-            'content_hash': content_hash(texts[path].encode('utf-8'), line_start, line_end)}
+    """Preuve a la ligne ; sans ligne, le descripteur entier (un fichier vide n'a pas de ligne 1)."""
+    data = texts[path].encode('utf-8')
+    evidence = {'repository': snapshot.repository, 'commit': snapshot.commit, 'path': path, 'method': method}
+    if line_start is None:
+        return {**evidence, 'content_hash': content_hash(data)}
+    return {**evidence, 'line_start': line_start, 'line_end': line_end,
+            'content_hash': content_hash(data, line_start, line_end)}
 
 
 def _assertion(subject, relation, target, qualifiers, evidence):
