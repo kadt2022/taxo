@@ -234,13 +234,17 @@ pas, et déclare l'endpoint non interprété, quand :
   `securityMatcher` n'est pas lu ;
 - la route est visée par `web.ignoring()` ;
 - l'analyse des endpoints elle-même n'a pas établi certaines routes ;
-- le dépôt contient plusieurs applications Spring Boot : l'application qui sert la route, et les
-  chaînes qu'elle charge, ne sont pas encore établies (unité déployable, défaut D1).
+- l'application qui sert la route, ou les chaînes qu'elle charge, ne sont pas établies (voir
+  « Applications Spring Boot et routes servies »).
+
+Dès qu'une `@SpringBootApplication` est vue, une route n'est rattachée qu'aux chaînes de filtres
+chargées par l'application qui la sert : une règle d'une autre application ne s'y applique jamais.
 
 Seule une chaîne dont le receveur est le `HttpSecurity` de Spring est une configuration de sécurité ; un
 receveur de type inconnu est vu, pas lu. Une expression `access("…")` n'est lue que si elle ne peut que
 restreindre (`hasRole('X') and isAuthenticated()`), et `access(manager)` que si le gestionnaire est dans
-les sources : la décision qu'il prend reste une limite connue.
+les sources, ou `access(manager())` que si la méthode sans paramètre est déclarée dans la configuration
+elle-même : la décision qu'il prend reste une limite connue.
 
 La sécurité de méthode (`@PreAuthorize`, `@Secured`, `@RolesAllowed`…) et les mécanismes maison
 (filtres, `AuthorizationManager`) sont déclarés non interprétés : la protection réelle peut s'y
@@ -274,6 +278,35 @@ lire est déclaré non interprété sur son fichier :
 Un service à image externe (`image: postgres`) n'est ni un fait ni une lacune. L'impact d'un
 commit montre un module ajouté ou une dépendance ajoutée. Validé sur Taxo lui-même (deux modules,
 deux applications) et sur TAKIBO (18 modules Gradle, 37 dépendances).
+
+### Applications Spring Boot et routes servies (TAXO-E1 tranche 2, ADR 0012)
+
+Sixième évaluateur, `taxo.spring-boot` dit quelle application sert chaque route. Chaque
+`@SpringBootApplication` des sources principales d'un module devient
+`application:<fichier>#<Type>` `BUILT_FROM` `module:<dossier>`. Puis `endpoint` `SERVED_BY`
+`application` est déduit (`INFERRED`) si trois prémisses sont établies sans rien exécuter :
+
+1. le module du contrôleur est sur le classpath d'exécution de l'application : son module, puis les
+   dépendances `implementation`, `api`, `runtimeOnly` (Maven : `compile`, `runtime`) de proche en proche,
+   lues par `taxo.structure` ;
+2. le contrôleur est dans un paquetage balayé (`scanBasePackages`, `scanBasePackageClasses`, sinon celui de
+   l'application), ou importé par un `@Import` littéral ;
+3. il ne porte aucune condition (`@Profile`, `@Conditional…`).
+
+Taxo n'attribue jamais une route par paquetage, proximité ou nom : un paquetage balayé dont le module
+n'est pas sur le classpath ne charge rien. Est déclaré non interprété, jamais tranché :
+- une configuration de dépendance inconnue, un descripteur non lu, des dépendances communes
+  (`subprojects`, `apply from`, `buildSrc`, pom parent) ;
+- un balayage supplémentaire (`@ComponentScan`), un import non littéral ou sélectif ;
+- une auto-configuration déclarée (ses conditions ne sont pas évaluées) ;
+- une annotation non résolue, une condition.
+
+Une chaîne hors du classpath est écartée sans réserve ; une chaîne hors du balayage l'est avec une
+lacune connue (XML, initialiseurs et `spring.main.sources` ne sont pas lus). Sur TAKIBO,
+`GET /api/admin/users` est servie par `AdpTestApplication`, protégée par
+`TestSecurityConfig#adpAuthorizationManager()`, et `SecurityConfig` est écartée : son module n'est pas
+sur le classpath de cette application. Les routes `/debug/secure/**` restent non interprétées :
+leur contrôleur est sous `@Profile`.
 
 ### Interroger Taxo (TAXO-QUERY-01)
 

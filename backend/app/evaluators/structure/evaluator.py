@@ -43,6 +43,13 @@ class StructureEvaluator:
         return EvaluationOutput(tuple(facts), tuple(coverage), status, tuple(warnings), legacy)
 
 
+def read(snapshot):
+    """Les descripteurs lus, leur lecture et les fichiers illisibles : ce que l'evaluateur Spring Boot reprend
+    pour etablir le classpath d'une application (E1, tranche 2), sans relire ni redecider ce qu'est un module."""
+    texts, read_errors, _ = _read(snapshot)
+    return texts, _interpret(texts), read_errors
+
+
 def _read(snapshot):
     wanted, read_errors, warnings = [], [], []
     for file in snapshot.iter_files():

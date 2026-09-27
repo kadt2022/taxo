@@ -1,6 +1,6 @@
 # TAXO-E1 — Structure et unités déployables
 
-Statut : rédigé le 2026-09-27. Tranche 1 en cours.
+Statut : rédigé le 2026-09-27. Tranche 1 réalisée (#49). Tranche 2 réalisée.
 
 Décision : [ADR 0012](../adr/0012-structure-et-unites-deployables.md). Défaut : D1 (`DEFAUTS-MESURES.md`).
 Jalon E1 de la section « Élargissement » du plan.
@@ -54,6 +54,28 @@ chaînes de filtres que cette application charge. Sur TAKIBO :
 
 TAXO-05 lève alors sa garde « plusieurs applications » là où la tranche 2 conclut. Il la garde là
 où elle ne conclut pas : scan calculé, dépendance non lue, classe hors de tout module.
+
+**Contrainte** : si Taxo ne peut pas établir statiquement qu'une application charge une configuration
+ou une chaîne, l'endpoint reste `NOT_INTERPRETED`. Aucune association par paquetage, proximité ou
+nom (ADR 0012, § 4).
+
+### Résultat sur TAKIBO (`6d9b214`)
+
+- Deux applications : `AdpTestApplication` (module `takibo-adp-test`) et `TakiboIamBootApplication`
+  (module `takibo-iam-boot`), chacune `BUILT_FROM` son module.
+- 37 routes servies :
+  - 30 par `TakiboIamBootApplication` : 23 de `takibo-identity-core` et 7 de `takibo-management-service` ;
+  - 7 par `AdpTestApplication` : celles de `TestController`.
+- `TakiboIamBootApplication` balaie `com.takibo` entier, donc aussi `com.takibo.adp.test`. Mais
+  `takibo-adp-test` n'est pas sur son classpath : `TestController` et `TestSecurityConfig` n'y sont
+  pas chargés. C'est le piège de D1, évité.
+- `GET /api/admin/users` : `SERVED_BY` `AdpTestApplication`, `MATCHED_BY` `/**` de
+  `TestSecurityConfig`, `PROTECTED_BY` `TestSecurityConfig#adpAuthorizationManager()`, avec
+  `SecurityConfig` écartée (« hors du classpath »).
+- Les 8 routes `/debug/secure/**` : non interprétées, car leur contrôleur porte `@Profile`.
+- Les routes de `TakiboIamBootApplication` restent non interprétées pour la sécurité. La chaîne du
+  serveur d'autorisation (`@Order(1)`) a un périmètre `securityMatcher(endpointsMatcher)` que Taxo ne
+  lit pas. Cette limite de TAXO-05 est sans rapport avec D1.
 
 ## Hors périmètre
 

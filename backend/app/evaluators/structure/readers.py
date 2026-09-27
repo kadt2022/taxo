@@ -80,7 +80,7 @@ GRADLE_SETTINGS = ('settings.gradle', 'settings.gradle.kts')
 GRADLE_BUILDS = ('build.gradle', 'build.gradle.kts')
 
 
-def _blank_comments(text):
+def blank_comments(text):
     """Commentaires remplaces par des blancs : positions et lignes inchangees."""
     return _COMMENT.sub(lambda match: re.sub(r'[^\n]', ' ', match.group(0)), text)
 
@@ -109,7 +109,7 @@ def _include_arguments(text, start):
 
 def gradle_settings(path, text, reading):
     """Modules inclus par un fichier `settings.gradle(.kts)`."""
-    text = _blank_comments(text)
+    text = blank_comments(text)
     base = directory_of(path)
     if re.search(r'\bprojectDir\b', text):
         reading.gap(path, 'dossier de projet redéfini (projectDir)')
@@ -133,7 +133,7 @@ def gradle_settings(path, text, reading):
 
 def gradle_dependencies(path, text, reading, projects):
     """Dependances `project(':x')` d'un `build.gradle(.kts)` ; `projects` : chemin Gradle -> dossier."""
-    text = _blank_comments(text)
+    text = blank_comments(text)
     source = directory_of(path)
     for match in _PROJECT.finditer(text):
         line = _line(text, match.start())

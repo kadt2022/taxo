@@ -15,11 +15,19 @@ regle anterieure non lue ou qui ne correspond qu'a une partie des requetes, plus
 candidates, un perimetre non lu, `web.ignoring()` : l'endpoint est NOT_INTERPRETED, jamais declare
 protege ni public a tort. La securite de methode (`@PreAuthorize`...) et les filtres ou gestionnaires
 d'autorisation maison sont declares NOT_INTERPRETED : la protection reelle peut s'y trouver.
+
+Applications (E1, tranche 2 ; ADR 0012) : des qu'une `@SpringBootApplication` est vue, une route n'est
+rattachee qu'aux chaines de filtres chargees par l'application qui la sert (SERVED_BY), et les chaines d'une
+autre application sont ecartees avec leur raison. Une application qui la sert peut-etre, une chaine dont le
+chargement n'est pas etabli, plusieurs applications aux chaines differentes : l'endpoint est NOT_INTERPRETED.
 """
+from dataclasses import dataclass, field
+
 from app.evaluations.domain.evaluator import EvaluationOutput
 from app.evaluations.domain.progress import silent
 from app.evaluations.domain.status import EvaluationStatus
 from app.evaluators.spring_api.evaluator import analyse
+from app.evaluators.spring_boot.applications import NO, OTHER_ROUTES, UNKNOWN, YES, Deployment
 from app.facts import content_hash
 from . import rules
 from .catalog import CATALOG
@@ -33,21 +41,19 @@ METHOD_SECURITY = {'PreAuthorize', 'PostAuthorize', 'PreFilter', 'PostFilter', '
                    'DenyAll', 'PermitAll'}
 # Supertypes d'un mecanisme maison : filtre de servlet, gestionnaire d'autorisation.
 CUSTOM = {'OncePerRequestFilter', 'GenericFilterBean', 'Filter', 'AuthorizationManager'}
-# Points d'entree d'une application Spring Boot : chacun charge ses propres chaines de filtres.
-APPLICATIONS = {'SpringBootApplication', 'SpringBootConfiguration', 'EnableAutoConfiguration'}
 ROLE_ACTIONS = ('hasRole', 'hasAnyRole', 'hasAuthority', 'hasAnyAuthority')
 DATA_GAP = 'les rôles et autorités des utilisateurs sont des données, hors du code'
 
 
 class SpringSecurityEvaluator:
     evaluator_id = 'taxo.spring-security'
-    producer_version = '0.2.0'
+    producer_version = '0.3.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
         repository = f'repository:{snapshot.repository}'
         analysis = analyse(snapshot, progress)
-        run = _Run(snapshot, analysis)
+        run = _Run(snapshot, analysis, Deployment(snapshot, analysis))
         run.evaluate()
         progress('security', 'Routes rattachées à une règle', run.matched)
         coverage = [{**_coverage(repository, 'ANALYSED', repository), 'scope': analysis.scope(repository)}]
@@ -61,9 +67,19 @@ class SpringSecurityEvaluator:
         return EvaluationOutput(tuple(run.facts.values()), tuple(coverage), status, tuple(warnings), legacy)
 
 
+@dataclass
+class _Serving:
+    """Pourquoi une route est rattachee a ces chaines : l'application qui la sert, ce qu'elle charge, ce
+    qu'elle ecarte."""
+    premises: list = field(default_factory=list)
+    checked: list = field(default_factory=list)
+    gaps: list = field(default_factory=list)
+    applications: list = field(default_factory=list)
+
+
 class _Run:
-    def __init__(self, snapshot, analysis):
-        self.snapshot, self.analysis = snapshot, analysis
+    def __init__(self, snapshot, analysis, deployment):
+        self.snapshot, self.analysis, self.deployment = snapshot, analysis, deployment
         self.facts, self.gaps, self.warnings = {}, {}, []
         self.configurations, self.ignored = [], []
         self.matched = self.protected = 0
@@ -71,7 +87,7 @@ class _Run:
             if b'authorize' in analysis.contents[java_file.path] or b'ignoring' in analysis.contents[java_file.path]:
                 found, ignored = rules.configurations(java_file)
                 self.configurations += found
-                self.ignored += [(java_file.path, patterns, line) for patterns, line in ignored]
+                self.ignored += [(java_file.path, *item) for item in ignored]
 
     def evaluate(self):
         for subject, (path, message) in self.analysis.run.gaps.items():
@@ -85,22 +101,69 @@ class _Run:
         if endpoints and not self.configurations:
             self.warnings.append('Aucune règle authorizeHttpRequests trouvée : la protection des routes n’est pas '
                                  'établie (configuration par défaut, XML ou Kotlin non lus).')
-        applications = self._applications()
         for endpoint in endpoints:
             self._method_security(endpoint)
-            if len(applications) > 1:
-                # Plusieurs applications deployables : celle qui sert la route, et les chaines de filtres
-                # qu'elle charge, ne sont pas etablies. Une regle d'une autre application ne s'applique pas.
-                self._gap(endpoint.reference, f'repository:{self.snapshot.repository}',
-                          f'{len(applications)} applications Spring Boot ({", ".join(applications)}) : '
-                          'l’application qui sert cette route n’est pas établie')
-            elif self.configurations:
-                self._endpoint(endpoint)
+            if not self.deployment.applications:
+                # Aucune application vue (bibliotheque, deploiement hors Spring Boot) : toutes les chaines lues.
+                if self.configurations:
+                    self._endpoint(endpoint, self.configurations, _Serving())
+                continue
+            served = self._served(endpoint)
+            if served is not None:
+                self._endpoint(endpoint, *served)
 
-    def _applications(self):
-        """Types annotes comme point d'entree d'une application Spring Boot, dans l'ordre des noms."""
-        return sorted(java_type.qualified_name for java_file in self.analysis.parsed for java_type in java_file.types
-                      if any(item.simple_name in APPLICATIONS for item in java_type.annotations))
+    def _served(self, endpoint):
+        """Les chaines chargees par l'application qui sert la route, et pourquoi ; ou None (raison declaree)."""
+        scope = f'file:{endpoint.path}'
+        serving = []
+        for application in self.deployment.applications:
+            loading = self.deployment.loads(application, endpoint.java_type.qualified_name)
+            if loading.outcome == UNKNOWN:
+                self._gap(endpoint.reference, scope,
+                          f'servie peut-être par {application.reference} ({loading.reason})')
+                return None
+            if loading.outcome == YES:
+                serving.append(application)
+        if not serving:
+            self._gap(endpoint.reference, scope, 'aucune application établie ne sert cette route')
+            return None
+        chosen = None
+        for application in serving:
+            loaded, context = self._loaded(endpoint, application)
+            if loaded is None:
+                return None
+            if chosen is not None and loaded != chosen[0]:
+                self._gap(endpoint.reference, f'repository:{self.snapshot.repository}',
+                          f'servie par {len(serving)} applications qui chargent des chaînes différentes')
+                return None
+            chosen = (loaded, context) if chosen is None else (chosen[0], _merge(chosen[1], context))
+        if not chosen[0]:
+            self._gap(endpoint.reference, f'file:{serving[0].path}',
+                      'aucune chaîne de filtres lue n’est chargée par l’application : chaîne par défaut non lue')
+            return None
+        return chosen
+
+    def _loaded(self, endpoint, application):
+        """Chaines chargees par `application`, et le contexte de la conclusion ; (None, None) si l'une reste inconnue."""
+        context = _Serving([f'SERVED_BY : {endpoint.reference} -> {application.reference}'], applications=[application])
+        loaded = []
+        for configuration in self.configurations:
+            owner, _, signature = configuration.symbol.removeprefix('symbol:java:').partition('#')
+            loading = self.deployment.loads_bean(application, owner, signature)
+            if loading.outcome == YES:
+                loaded.append(configuration)
+                context.premises.append(f'{application.reference} charge {configuration.symbol}')
+            elif loading.outcome == UNKNOWN and configuration.applies(endpoint.route) != rules.NONE:
+                self._gap(endpoint.reference, f'file:{configuration.path}',
+                          f'chargement de {configuration.symbol} par {application.reference} non établi '
+                          f'({loading.reason})')
+                return None, None
+            elif loading.outcome == NO:
+                context.checked.append(f'{configuration.symbol} : non chargée par {application.reference} '
+                                       f'({loading.reason})')
+                if 'hors du classpath' not in loading.reason and OTHER_ROUTES not in context.gaps:
+                    context.gaps.append(OTHER_ROUTES)
+        return tuple(loaded), context
 
     def _gap(self, subject, scope, reason):
         _, reasons = self.gaps.setdefault(subject, (scope, []))
@@ -146,11 +209,11 @@ class _Run:
             self._gap(endpoint.reference, f'file:{endpoint.path}',
                       f'sécurité de méthode non interprétée ({", ".join("@" + name for name in found)})')
 
-    def _endpoint(self, endpoint):
+    def _endpoint(self, endpoint, configurations, serving):
         """Rattache l'endpoint a sa regle gagnante, ou dit pourquoi il ne le peut pas."""
-        if self._ignored(endpoint):
+        if self._ignored(endpoint, serving.applications):
             return
-        configuration = self._configuration(endpoint)
+        configuration = self._configuration(endpoint, configurations)
         if configuration is None:
             return
         scope = f'file:{configuration.path}'
@@ -167,21 +230,25 @@ class _Run:
                 reason = 'non lue' if not rule.readable else 'correspond à une partie des requêtes seulement'
                 self._gap(endpoint.reference, scope, f'règle antérieure {reason} : {rule.describe()}')
                 return
-            self._conclude(endpoint, configuration, checked, rule)
+            self._conclude(endpoint, configuration, checked, rule, serving)
             return
         self._gap(endpoint.reference, scope, 'aucune règle ne capture la route')
 
-    def _ignored(self, endpoint):
+    def _ignored(self, endpoint, applications):
         """Vrai si une exclusion `web.ignoring()` peut viser la route : elle est alors declaree, pas conclue."""
-        for path, patterns, line in self.ignored:
+        for path, patterns, line, owner, method in self.ignored:
+            if applications and all(self.deployment.loads_bean(application, owner, method).outcome == NO
+                                    for application in applications):
+                # Une exclusion qu'aucune application qui sert la route ne charge ne s'y applique pas.
+                continue
             if patterns is None or max(rules.match(pattern, endpoint.route) for pattern in patterns) != rules.NONE:
                 self._gap(endpoint.reference, f'file:{path}', f'exclusion web.ignoring() ligne {line} non écartée')
                 return True
         return False
 
-    def _configuration(self, endpoint):
+    def _configuration(self, endpoint, configurations):
         """La seule chaine de filtres qui traite toute requete de la route, ou None (et la raison declaree)."""
-        candidates = [(item, item.applies(endpoint.route)) for item in self.configurations]
+        candidates = [(item, item.applies(endpoint.route)) for item in configurations]
         candidates = [(item, applies) for item, applies in candidates if applies != rules.NONE]
         if len(candidates) == 1 and candidates[0][1] == rules.ALL:
             return candidates[0][0]
@@ -193,7 +260,7 @@ class _Run:
                       f'{len(candidates)} chaînes de filtres candidates')
         return None
 
-    def _conclude(self, endpoint, configuration, checked, winner):
+    def _conclude(self, endpoint, configuration, checked, winner, serving):
         prefix = f'{winner.verb} ' if winner.verb else ''
         pattern = next(f'route-pattern:{prefix}{item}' for item in winner.patterns
                        if rules.match(item, endpoint.route) == rules.ALL)
@@ -204,10 +271,10 @@ class _Run:
         chain = configuration.symbol
         matched = _inference(
             endpoint.reference, 'MATCHED_BY', pattern, evidence, chain,
-            premises=[f'HANDLED_BY : {endpoint.reference} -> {endpoint.handler}',
+            premises=[f'HANDLED_BY : {endpoint.reference} -> {endpoint.handler}', *serving.premises,
                       *[rule.describe() for rule in (*checked, winner)]],
-            rule=FIRST_MATCH, checked=[f'{rule.describe()} : ne correspond pas' for rule in checked],
-            gaps=[winner.note] if winner.note else [])
+            rule=FIRST_MATCH, checked=[*serving.checked, *[f'{rule.describe()} : ne correspond pas' for rule in checked]],
+            gaps=[*serving.gaps, *([winner.note] if winner.note else [])])
         self._add(matched)
         self.matched += 1
         if winner.permits:
@@ -218,7 +285,7 @@ class _Run:
             endpoint.reference, 'PROTECTED_BY', target, evidence, chain,
             premises=[f'MATCHED_BY : {endpoint.reference} -> {pattern}',
                       f'AUTHORIZED_BY : {pattern} -> {winner.target or winner.expression}'],
-            rule=APPLIES, checked=[], gaps=gaps))
+            rule=APPLIES, checked=[], gaps=[*serving.gaps, *gaps]))
         self.protected += 1
 
     def _evidence(self, path, line_start, line_end, method):
@@ -226,6 +293,13 @@ class _Run:
         return {'repository': self.snapshot.repository, 'commit': self.snapshot.commit, 'path': path,
                 'line_start': line_start, 'line_end': line_end, 'method': method,
                 'content_hash': content_hash(data, line_start, line_end)}
+
+
+def _merge(first, second):
+    """Contexte de plusieurs applications qui chargent les memes chaines : leurs premisses reunies."""
+    unique = lambda items: list(dict.fromkeys(items))
+    return _Serving(unique(first.premises + second.premises), unique(first.checked + second.checked),
+                    unique(first.gaps + second.gaps), first.applications + second.applications)
 
 
 def _protection_gaps(winner):
