@@ -114,16 +114,20 @@ export function RoutesTable({routes, selected, onSelect}:Readonly<{routes:RouteR
     </tr>)}</tbody></table></div>;
 }
 
-export function RoutesPanel({base, scanId, request}:Readonly<{base:string; scanId:string; request:Run}>){
-  const [result,setResult]=useState<RoutesResult|null>(null), [error,setError]=useState('');
-  const [text,setText]=useState(''), [filter,setFilter]=useState('ALL'), [selected,setSelected]=useState('');
-  useEffect(()=>{
-    let active=true;
-    setResult(null);setError('');setSelected('');
-    request<RoutesResult>(`${base}/scans/${scanId}/routes`).then(value=>{if(active)setResult(value);})
-      .catch(e=>{if(active)setError((e as Error).message);});
-    return ()=>{active=false;};
-  },[base, scanId, request]);
+type Loaded = {onResult:(value:RoutesResult)=>void; onError:(message:string)=>void};
+
+/** Charge les routes d'une analyse ; rend de quoi ignorer une reponse arrivee apres un changement d'analyse. */
+export function loadRoutes(request:Run, base:string, scanId:string, {onResult, onError}:Loaded){
+  let active=true;
+  request<RoutesResult>(`${base}/scans/${scanId}/routes`).then(value=>{if(active)onResult(value);})
+    .catch(e=>{if(active)onError((e as Error).message);});
+  return ()=>{active=false;};
+}
+
+type ViewProps = {result:RoutesResult|null; error:string; text:string; filter:string; selected:string;
+  onText:(value:string)=>void; onFilter:(value:string)=>void; onSelect:(endpoint:string)=>void};
+
+export function RoutesView({result, error, text, filter, selected, onText, onFilter, onSelect}:Readonly<ViewProps>){
   const shown=result?filterRoutes(result.routes, text, filter):[];
   const row=result?.routes.find(item=>item.endpoint===selected);
   return <section className="results routes" id="routes" aria-label="Routes">
@@ -132,16 +136,27 @@ export function RoutesPanel({base, scanId, request}:Readonly<{base:string; scanI
     {!result&&!error&&<output>Chargement des routes…</output>}
     {result&&<>
       <div className="filters">
-        <label>Chemin ou verbe<input value={text} onChange={typed(setText)} placeholder="GET /api/admin"/></label>
-        <label>État<select value={filter} onChange={e=>setFilter(e.target.value)}>{Object.entries(FILTERS).map(([key, value])=><option key={key} value={key}>{value}</option>)}</select></label>
+        <label>Chemin ou verbe<input value={text} onChange={typed(onText)} placeholder="GET /api/admin"/></label>
+        <label>État<select value={filter} onChange={typed(onFilter)}>{Object.entries(FILTERS).map(([key, value])=><option key={key} value={key}>{value}</option>)}</select></label>
         <p className="muted">{shown.length} sur {result.routes.length} routes</p>
       </div>
       {result.routes.length===0?<p className="empty">Aucune route HTTP établie par cette analyse.</p>
-        :<RoutesTable routes={shown} selected={selected} onSelect={setSelected}/>}
+        :<RoutesTable routes={shown} selected={selected} onSelect={onSelect}/>}
       {row&&<RouteDetail row={row}/>}
       {result.unestablished.length>0&&<details className="analysis-details"><summary>Des routes peuvent manquer ({result.unestablished.length})</summary><ul>
         {result.unestablished.map(gap=><li key={gap.subject}><code>{gap.subject}</code> : {gap.reason||'raison non conservée par cette analyse'}</li>)}
       </ul></details>}
     </>}
   </section>;
+}
+
+export function RoutesPanel({base, scanId, request}:Readonly<{base:string; scanId:string; request:Run}>){
+  const [result,setResult]=useState<RoutesResult|null>(null), [error,setError]=useState('');
+  const [text,setText]=useState(''), [filter,setFilter]=useState('ALL'), [selected,setSelected]=useState('');
+  useEffect(()=>{
+    setResult(null);setError('');setSelected('');
+    return loadRoutes(request, base, scanId, {onResult:setResult, onError:setError});
+  },[base, scanId, request]);
+  return <RoutesView result={result} error={error} text={text} filter={filter} selected={selected}
+    onText={setText} onFilter={setFilter} onSelect={setSelected}/>;
 }
