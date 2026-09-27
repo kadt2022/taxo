@@ -38,7 +38,8 @@ class SpringBootEvaluator:
         run.evaluate()
         progress('applications', 'Applications Spring Boot', len(deployment.applications))
         coverage = [{**_coverage(repository, 'ANALYSED', repository), 'scope': analysis.scope(repository)}]
-        coverage += [_coverage(subject, 'NOT_INTERPRETED', scope) for subject, (scope, _) in sorted(run.gaps.items())]
+        coverage += [_coverage(subject, 'NOT_INTERPRETED', scope, ' ; '.join(reasons))
+                     for subject, (scope, reasons) in sorted(run.gaps.items())]
         coverage += [_coverage(subject, 'READ_ERROR', subject) for subject in analysis.read_errors]
         warnings = analysis.warnings + run.warnings + [
             f'{subject} : {" ; ".join(reasons)}' for subject, (_, reasons) in sorted(run.gaps.items())]
@@ -120,6 +121,8 @@ def _assertion(application, module, evidence):
             'evidence': evidence}
 
 
-def _coverage(subject, coverage_type, scope):
-    return {'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED', 'validity': 'VALID',
+def _coverage(subject, coverage_type, scope, reason=None):
+    """Une couverture ; `reason` dit pourquoi une zone n'est pas interpretee (hors identite du fait)."""
+    fact = {'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED', 'validity': 'VALID',
             'subject': subject, 'coverage_type': coverage_type, 'scope': {'include': [scope]}}
+    return {**fact, 'reason': reason} if reason else fact

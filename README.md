@@ -106,9 +106,31 @@ Après l'analyse globale, le portail présente d'abord ce que Taxo a compris du 
 (technologies, fichiers analysés, historique Git) et, pour ce que Taxo ne sait pas encore déterminer
 (architecture, API, sécurité), la mention « Non analysé » : une absence d'information n'est jamais
 présentée comme un résultat. La navigation ne propose que les sections réellement disponibles
-(Vue d'ensemble, Technologies, Historique). Le vocabulaire du contrat de faits est traduit dans la couche
+(Vue d'ensemble, Technologies, Routes, Historique). Le vocabulaire du contrat de faits est traduit dans la couche
 de présentation (`frontend/src/vocabulary.ts`), sans rien renommer côté backend. Évaluateurs, versions,
 identifiants d'exécution, couverture et relations restent consultables sous « Détails de l'analyse ».
+
+### Routes : ce que Taxo prouve de chaque route (TAXO-UI-02)
+
+La section **Routes** du portail montre, pour chaque route HTTP établie, une ligne lue dans les seuls
+faits de Taxo :
+- la méthode qui la traite (`HANDLED_BY`) ;
+- l'application qui la sert (`SERVED_BY`) ;
+- la règle qui la capture (`MATCHED_BY`, puis la règle écrite de la même chaîne) ;
+- sa protection (`PROTECTED_BY`) ;
+- son état.
+
+On filtre par chemin ou verbe, et par état. Un état n'est affiché que si un fait le porte :
+- « Protégée » : un fait `PROTECTED_BY` ;
+- « Règle permitAll() » : la règle qui la capture est `PERMITS_ALL` dans la même chaîne ;
+- « Non interprétée » : une couverture le dit, avec sa raison exacte ;
+- « Sans conclusion » : sinon.
+
+Un clic sur une route montre chaque fait, avec ses preuves (fichier et lignes), ses prémisses, ce qui a
+été écarté et ses limites connues. Les zones où des routes ont pu échapper à l'analyse sont listées
+(« Des routes peuvent manquer »). Aucune phrase de Minia sur cette page.
+
+API : `GET /api/projects/{id}/scans/{scan_id}/routes`.
 
 ### Des analyses et une Minia progressives (TAXO-UX-02)
 

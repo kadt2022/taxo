@@ -27,6 +27,8 @@ technologie de sérialisation ne sont décidés ici.
 - **Une absence n'a pas de preuve** : c'est sa définition. Sa rigueur vient de son motif, de son
   périmètre et de sa méthode. Une absence littérale ne prouve pas une absence à l'exécution.
 - Types de couverture v1 : `ANALYSED`, `RECOGNIZED`, `NOT_INTERPRETED`, `OUT_OF_SCOPE`, `READ_ERROR`.
+- Une `COVERAGE` peut porter une raison (`reason`, texte facultatif) : pourquoi la zone n'est pas
+  interprétée. Elle n'entre pas dans l'identité du fait. Une assertion ou une absence n'en porte pas.
 
 ### 2. Identité et occurrence
 
@@ -406,6 +408,12 @@ comprend pas, et une personne comble l'écart jusqu'à ce qu'un évaluateur sach
   passer la suite de conformité.
 
 ## Historique
+
+**2026-09-27 (TAXO-UI-02)**
+
+- Champ facultatif `reason` sur une `COVERAGE`. Il dit pourquoi une zone n'est pas interprétée, pour
+  que la page Routes l'affiche sans le tronquer. Il reste hors de l'identité : deux occurrences d'une
+  même couverture ne diffèrent pas par leur raison. Deux cas de conformité l'accompagnent.
 
 **2026-09-13 (revue de la PR #1)**
 

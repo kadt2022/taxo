@@ -207,6 +207,17 @@ Dependencies, Deployment et Impact Analysis ont quitté cette liste : ils sont l
 
 ## Décisions prises
 
+**2026-09-27 (TAXO-UI-02, page Routes)**
+
+- Le portail montre les routes et leur chaîne de preuve, lues dans les seuls faits : méthode,
+  application, règle, protection, état, preuves et prémisses. Ni Minia, ni graphe, ni protocole nouveau.
+- Une `COVERAGE` porte désormais sa raison (`reason`, hors identité, ADR 0002) : une route non
+  interprétée dit exactement pourquoi.
+- Ordre retenu ensuite :
+  1. questions libres sur les routes et la sécurité ;
+  2. le banc ;
+  3. Tuile et graphe, seulement après la décision de POC-05.
+
 **2026-09-27 (E1 tranche 2, ADR 0012 § 4)**
 
 - Nouvel évaluateur `taxo.spring-boot` : `application BUILT_FROM module` pour chaque

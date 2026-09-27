@@ -63,8 +63,8 @@ class SpringApiEvaluator:
         # Une zone non interpretee a pour perimetre le fichier qui la porte.
         warnings = analysis.warnings + [message for _, message in run.gaps.values()]
         coverage = [{**_coverage(repository, 'ANALYSED', repository), 'scope': analysis.scope(repository)}]
-        coverage += [_coverage(subject, 'NOT_INTERPRETED', f'file:{path}')
-                     for subject, (path, _) in sorted(run.gaps.items())]
+        coverage += [_coverage(subject, 'NOT_INTERPRETED', f'file:{path}', message)
+                     for subject, (path, message) in sorted(run.gaps.items())]
         coverage += [_coverage(subject, 'READ_ERROR', subject) for subject in read_errors]
         status = EvaluationStatus.PARTIAL if run.gaps or read_errors else EvaluationStatus.SUCCESS
         legacy = {'java_files': len(analysis.contents), 'endpoints': endpoints}
@@ -369,6 +369,8 @@ def _assertion(subject, handler, evidence):
             'evidence': evidence}
 
 
-def _coverage(subject, coverage_type, scope):
-    return {'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED', 'validity': 'VALID',
+def _coverage(subject, coverage_type, scope, reason=None):
+    """Une couverture ; `reason` dit pourquoi une zone n'est pas interpretee (hors identite du fait)."""
+    fact = {'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED', 'validity': 'VALID',
             'subject': subject, 'coverage_type': coverage_type, 'scope': {'include': [scope]}}
+    return {**fact, 'reason': reason} if reason else fact
