@@ -138,7 +138,7 @@ aussi concrets que la sécurité Spring. Chacun :
 
 | Jalon | Résultat | Validé sur | Tranche |
 | --- | --- | --- | --- |
-| **E1** Structure et unités déployables | modules et leur graphe, depuis `settings.gradle`, `build.gradle`, `pom.xml`, `package.json` (workspaces), `pyproject.toml` ; langage de chaque module ; unités déployables (point d'entrée d'application, `Dockerfile`, service `compose`) ; chaque fichier rattaché à son module | Taxo lui-même (Python et TypeScript, `compose.yaml`), puis TAKIBO (deux applications Spring Boot) | défaut **D1** de la PR #13. Lève la réserve de TAXO-05 sur les dépôts à plusieurs applications |
+| **E1** Structure et unités déployables | modules et leur graphe, depuis `settings.gradle`, `build.gradle`, `pom.xml`, `package.json` (workspaces), `pyproject.toml` ; langage de chaque module ; unités déployables (point d'entrée d'application, `Dockerfile`, service `compose`) ; chaque fichier rattaché à son module | Taxo lui-même (Python et TypeScript, `compose.yaml`), puis TAKIBO (deux applications Spring Boot) | défaut **D1** de la PR #13. TAXO-05 ne fait que le **neutraliser** dans le cas détecté : plusieurs points d'entrée Spring Boot, aucune route rattachée. E1 le **résout** : il établit, pour chaque route, l'application qui l'expose et les chaînes de filtres que cette application charge. C'est son critère d'acceptation explicite |
 | **E2** Dépendances | dépendances déclarées : entre modules du dépôt, et vers l'extérieur avec leur version déclarée. Ce que le fichier de build ne déclare pas (version calculée par un plugin, catalogue non lu) est `NOT_INTERPRETED` | Taxo lui-même, puis un dépôt Node | relation de dépendance à ajouter au vocabulaire v1 : amendement de l'ADR 0002 |
 | **E3** Changements de structure entre deux commits | module ajouté ou retiré, dépendance ajoutée, retirée ou changée de version, unité déployable modifiée, avec preuves | l'historique de Taxo lui-même | l'impact d'un commit est déjà générique : aucun consommateur ne change |
 | **E4** Deuxième langage | un lecteur Python (tree-sitter) : modules, classes, fonctions, imports entre modules du dépôt. Même contrat, même identité syntaxique, mêmes règles de non-interprétation. Aucun évaluateur de framework ne connaît un autre langage | le backend de Taxo | éprouve le socle hors de Java : ce qui ne tient pas dans le contrat devient un ADR, pas une exception |
@@ -154,15 +154,19 @@ Ordre proposé, **à décider** :
 7. **E4** ;
 8. essai A/B/C.
 
-E1 passe avant TAXO-01I : sans unité déployable, une Tuile de sécurité mélangerait deux applications.
-Il passe aussi avant les appels : c'est le premier jalon utile à un projet sans Spring.
+Placer E1 avant TAXO-01I est un **choix de priorité**, pas une dépendance technique. Une Tuile peut
+déjà montrer les faits existants et leurs limites ; elle ne crée aucun rattachement entre
+applications. E1 passe d'abord parce qu'il donne vite une capacité utile au-delà de Spring. Il passe
+aussi avant les appels pour la même raison.
 
 Le positionnement de la PR #13 (moteur d'intelligence logicielle, bancs du 2026-09-19) conditionne
-l'essai A/B/C. Ces bancs ont mesuré qu'un agent muni des faits bruts n'était pas plus exact qu'un
-agent qui lit le code. L'essai ne reteste donc pas « la mémoire pour agents ». Il mesure une
-hypothèse plus étroite : une Tuile compacte avec sa frontière (défaut D7) coûte moins qu'une
-exploration par extraits, à exactitude égale. Si l'essai ne la confirme pas, la valeur de Taxo reste
-celle de la documentation vérifiable, et c'est elle qu'on présente.
+l'essai A/B/C. Ces bancs n'ont pas démontré de gain d'exactitude avec les configurations testées :
+cela justifie le repositionnement, sans interdire de mesurer une approche nouvelle. L'essai mesure
+donc une hypothèse plus étroite : une Tuile compacte avec sa frontière (défaut D7) coûte moins
+qu'une exploration par extraits. La qualité est toujours mesurée : exactitude, omissions, fausses
+affirmations, abstentions correctes. Un gain de tokens obtenu au prix de la qualité est un échec. Si
+l'essai ne confirme pas l'hypothèse, la valeur de Taxo reste celle de la documentation vérifiable, et
+c'est elle qu'on présente.
 
 ## LATER
 
