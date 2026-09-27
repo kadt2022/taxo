@@ -137,7 +137,8 @@ def test_a_route_is_protected_only_by_the_chains_its_application_loads():
     assert admin['qualifiers']['filter_chain'] == 'symbol:java:com.acme.admin.AdminSecurity#chain(HttpSecurity)'
     assert f'SERVED_BY : endpoint:GET /admin/users -> {ADMIN_REF}' in admin['derivation']['premises']
     excluded = ' '.join(admin['derivation']['counter_examples_checked'])
-    assert 'ShopSecurity' in excluded and 'hors du classpath' in excluded
+    assert 'ShopSecurity' in excluded
+    assert 'hors du classpath' in excluded
     assert admin['derivation']['known_gaps'] == [], 'une chaine hors du classpath est ecartee sans reserve'
 
 
@@ -173,7 +174,8 @@ def test_an_application_outside_a_module_or_without_scan_is_declared():
     assert {SHOP_REF, ADMIN_REF} <= gaps(output)
     computed = application('com.acme.shop', 'ShopApplication', '(scanBasePackages = Packages.ROOT)')
     output = boot(repository(**{SHOP: computed}))
-    assert SHOP_REF in gaps(output) and 'endpoint:GET /orders' in gaps(output)
+    assert SHOP_REF in gaps(output)
+    assert 'endpoint:GET /orders' in gaps(output)
 
 
 def test_imports_extend_what_is_loaded_and_extra_scans_or_auto_configurations_stay_unknown():
@@ -221,3 +223,60 @@ def test_every_fact_satisfies_the_contract():
         assert execution.status == EvaluationStatus.SUCCESS
     execution = RunEvaluator()(SpringBootEvaluator(), snapshot(repository()))
     assert {fact['relation'] for fact in execution.facts} == {'BUILT_FROM', 'SERVED_BY'}
+
+
+def test_a_conditional_application_loads_nothing_for_sure():
+    profiled = application('com.acme.shop', 'ShopApplication', '(scanBasePackages = "com.acme")',
+                           '@org.springframework.context.annotation.Profile("prod")\n')
+    output = boot(repository(**{SHOP: profiled}))
+    assert not {pair for pair in served(output) if pair[1] == SHOP_REF}
+    assert 'condition @Profile' in reasons(output, SHOP_REF)
+
+
+def test_a_condition_hidden_deeper_than_the_meta_annotations_read_stays_unknown():
+    chain = {f'web/src/main/java/com/acme/web/Level{index}.java':
+             f'package com.acme.web;\n\n@Level{index + 1}\npublic @interface Level{index} {{\n}}\n'
+             for index in range(6)}
+    chain['web/src/main/java/com/acme/web/Level6.java'] = (
+        'package com.acme.web;\n\nimport org.springframework.context.annotation.Profile;\n\n'
+        '@Profile("dev")\npublic @interface Level6 {\n}\n')
+    deep = controller('com.acme.web', 'OrderController', '/orders', '@Level0\n')
+    output = boot(repository(**chain, **{'web/src/main/java/com/acme/web/OrderController.java': deep}))
+    assert ('endpoint:GET /orders', SHOP_REF) not in served(output)
+    assert 'endpoint:GET /orders' in gaps(output)
+
+
+def test_an_exclusion_no_serving_application_loads_does_not_block_the_route():
+    customizer = '''package com.acme.admin;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class AdminWeb {
+    @Bean
+    WebSecurityCustomizer ignore() {
+        return web -> web.ignoring().requestMatchers("/orders");
+    }
+}
+'''
+    output = secure(repository(**{'admin/src/main/java/com/acme/admin/AdminWeb.java': customizer}))
+    assert protected(output)['endpoint:GET /orders'] == 'policy-rule:authenticated()', \
+        'l exclusion d une application dont le module n est pas sur le classpath ne vise pas la route'
+    loaded = repository(**{'web/src/main/java/com/acme/web/WebIgnore.java':
+                           customizer.replace('com.acme.admin', 'com.acme.web').replace('AdminWeb', 'WebIgnore')})
+    assert 'endpoint:GET /orders' not in protected(secure(loaded))
+
+
+def test_routes_the_endpoint_analysis_could_not_establish_stay_not_interpreted():
+    inherited = '''package com.acme.web;
+
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class GeneratedController implements OrdersApi {
+}
+'''
+    output = boot(repository(**{'web/src/main/java/com/acme/web/GeneratedController.java': inherited}))
+    assert 'symbol:java:com.acme.web.GeneratedController' in gaps(output)
+    assert output.status == EvaluationStatus.PARTIAL

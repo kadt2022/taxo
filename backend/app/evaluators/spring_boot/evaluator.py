@@ -54,6 +54,9 @@ class _Run:
         self.served = 0
 
     def evaluate(self):
+        for subject, (path, message) in self.analysis.run.gaps.items():
+            # Une route que l'analyse des endpoints n'a pas etablie n'est servie par personne a coup sur.
+            self._gap(subject, f'file:{path}', f'routes non établies par l’analyse des endpoints ({message})')
         for application in self.deployment.applications:
             scope = f'file:{application.path}'
             if application.module is not None:

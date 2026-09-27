@@ -74,6 +74,7 @@ class _Serving:
     premises: list = field(default_factory=list)
     checked: list = field(default_factory=list)
     gaps: list = field(default_factory=list)
+    applications: list = field(default_factory=list)
 
 
 class _Run:
@@ -86,7 +87,7 @@ class _Run:
             if b'authorize' in analysis.contents[java_file.path] or b'ignoring' in analysis.contents[java_file.path]:
                 found, ignored = rules.configurations(java_file)
                 self.configurations += found
-                self.ignored += [(java_file.path, patterns, line) for patterns, line in ignored]
+                self.ignored += [(java_file.path, *item) for item in ignored]
 
     def evaluate(self):
         for subject, (path, message) in self.analysis.run.gaps.items():
@@ -144,7 +145,7 @@ class _Run:
 
     def _loaded(self, endpoint, application):
         """Chaines chargees par `application`, et le contexte de la conclusion ; (None, None) si l'une reste inconnue."""
-        context = _Serving([f'SERVED_BY : {endpoint.reference} -> {application.reference}'])
+        context = _Serving([f'SERVED_BY : {endpoint.reference} -> {application.reference}'], applications=[application])
         loaded = []
         for configuration in self.configurations:
             owner, _, signature = configuration.symbol.removeprefix('symbol:java:').partition('#')
@@ -210,7 +211,7 @@ class _Run:
 
     def _endpoint(self, endpoint, configurations, serving):
         """Rattache l'endpoint a sa regle gagnante, ou dit pourquoi il ne le peut pas."""
-        if self._ignored(endpoint):
+        if self._ignored(endpoint, serving.applications):
             return
         configuration = self._configuration(endpoint, configurations)
         if configuration is None:
@@ -233,9 +234,13 @@ class _Run:
             return
         self._gap(endpoint.reference, scope, 'aucune règle ne capture la route')
 
-    def _ignored(self, endpoint):
+    def _ignored(self, endpoint, applications):
         """Vrai si une exclusion `web.ignoring()` peut viser la route : elle est alors declaree, pas conclue."""
-        for path, patterns, line in self.ignored:
+        for path, patterns, line, owner, method in self.ignored:
+            if applications and all(self.deployment.loads_bean(application, owner, method).outcome == NO
+                                    for application in applications):
+                # Une exclusion qu'aucune application qui sert la route ne charge ne s'y applique pas.
+                continue
             if patterns is None or max(rules.match(pattern, endpoint.route) for pattern in patterns) != rules.NONE:
                 self._gap(endpoint.reference, f'file:{path}', f'exclusion web.ignoring() ligne {line} non écartée')
                 return True
@@ -294,7 +299,7 @@ def _merge(first, second):
     """Contexte de plusieurs applications qui chargent les memes chaines : leurs premisses reunies."""
     unique = lambda items: list(dict.fromkeys(items))
     return _Serving(unique(first.premises + second.premises), unique(first.checked + second.checked),
-                    unique(first.gaps + second.gaps))
+                    unique(first.gaps + second.gaps), first.applications + second.applications)
 
 
 def _protection_gaps(winner):

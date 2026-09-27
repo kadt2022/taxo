@@ -130,7 +130,7 @@ def configurations(java_file):
     groups, ignored = {}, []
     for chain in chains:
         if IGNORING in chain.names:
-            ignored.append(_ignoring(chain))
+            ignored.append((*_ignoring(chain), chain.owner, chain.method))
             continue
         receiver = OTHER if chain in inner else _receiver(chain, java_file)
         if receiver != OTHER:

@@ -79,7 +79,7 @@ MAX_META = 4
 OTHER_ROUTES = 'les enregistrements par XML, initialiseurs ou propriétés (spring.main.sources) ne sont pas lus'
 _SHARED = re.compile(r'\b(?:subprojects|allprojects|configure)\b[^{]*\{')
 _DEPENDENCIES = re.compile(r'\bdependencies\s*\{')
-_APPLY_FROM = re.compile(r'\bapply\s*\(?\s*from\b')
+_APPLY_FROM = re.compile(r'\bapply[\s(]*from\b')
 _GROUP = re.compile(r'''\bgroup\s*=\s*['"]([^'"\s]+)['"]''')
 _CLASS_NAME = re.compile(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*')
 
@@ -189,6 +189,11 @@ class Deployment:
         if application.module is None:
             application.reason = 'application hors des sources principales (src/main) d’un module lu'
             return application
+        condition, unsure = self._condition(java_file, java_type.annotations)
+        if condition or unsure:
+            what = f'condition @{condition}' if condition else 'annotation non résolue'
+            application.reason = f'application elle-même conditionnelle ({what}) : chargement non établi'
+            return application
         if any(self.resolve(java_file, item.name) in SCANS for item in java_type.annotations):
             application.reason = '@ComponentScan sur l’application : balayage non établi'
             return application
@@ -226,11 +231,7 @@ class Deployment:
         found, pending = {module: ()}, [module]
         while pending:
             source = pending.pop(0)
-            descriptors = [item.path for item in self.reading.modules if item.directory == source]
-            descriptors += [path for path in self.texts if readers.directory_of(path) == source]
-            unread = sorted({path for path in descriptors if path in self.reading.gaps} |
-                            {path.removeprefix('file:') for path in self.read_errors
-                             if readers.directory_of(path.removeprefix('file:')) == source})
+            unread = self._unread(source)
             if unread:
                 return {}, f'descripteur non lu : {", ".join(unread)}'
             for dependency in self.edges.get(source, []):
@@ -246,6 +247,14 @@ class Deployment:
                 pending.append(dependency.target)
         return found, ''
 
+    def _unread(self, module):
+        """Descripteurs du module que la structure n'a pas lus entierement."""
+        descriptors = [item.path for item in self.reading.modules if item.directory == module]
+        descriptors += [path for path in self.texts if readers.directory_of(path) == module]
+        errors = [path.removeprefix('file:') for path in self.read_errors]
+        return sorted({path for path in descriptors if path in self.reading.gaps} |
+                      {path for path in errors if readers.directory_of(path) == module})
+
     def _shared(self, snapshot):
         """Ce qui ajoute des dependances hors du descripteur de chaque module : le classpath n'est alors pas etabli."""
         if any(file.path.startswith('buildSrc/') for file in snapshot.iter_files()):
@@ -256,8 +265,11 @@ class Deployment:
         groups = {match for text in self.texts.values() for match in _GROUP.findall(text)}
         for path, text in sorted(self.texts.items()):
             name = path.rsplit('/', 1)[-1]
-            reason = _gradle_shared(path, text, groups) if name in readers.GRADLE_BUILDS else \
-                _maven_shared(path, text) if name == 'pom.xml' else ''
+            reason = ''
+            if name in readers.GRADLE_BUILDS:
+                reason = _gradle_shared(path, text, groups)
+            elif name == 'pom.xml':
+                reason = _maven_shared(path, text)
             if reason:
                 return reason
         return ''
@@ -299,8 +311,7 @@ class Deployment:
         if stereotype and not condition and not unsure:
             application.loaded[qualified] = (f'@{stereotype} {qualified} dans le paquetage balayé {package}',)
         elif stereotype or unresolved:
-            reason = (f'condition @{condition}' if condition else
-                      'annotation non résolue' if unsure or unresolved else '')
+            reason = f'condition @{condition}' if condition else 'annotation non résolue'
             application.maybe[qualified] = f'{reason} : chargement non établi'
 
     def _imports(self, application, java_file, java_type, sure):
@@ -351,9 +362,10 @@ class Deployment:
             name = self.resolve(java_file, annotation.name)
             if name in wanted:
                 return annotation.simple_name, False
-            if self._unsure(name):
+            if self._unsure(name) or (name in self.types and depth >= MAX_META):
+                # Au-dela de la profondeur lue, une meta-annotation peut encore porter ce qu'on cherche.
                 unresolved = True
-            elif name in self.types and depth < MAX_META:
+            elif name in self.types:
                 meta_file, meta_type = self.types[name]
                 found, deeper = self._meta(meta_file, meta_type.annotations, wanted, depth + 1)
                 if found:
@@ -366,11 +378,11 @@ class Deployment:
         unsure = False
         for annotation in annotations:
             name = self.resolve(java_file, annotation.name)
-            if self._unsure(name):
+            if self._unsure(name) or (name in self.types and depth >= MAX_META):
                 unsure = True
             elif name in (f'{CONTEXT}.Profile', f'{CONTEXT}.Conditional') or name.startswith(CONDITION + '.'):
                 return annotation.simple_name, False
-            elif name in self.types and depth < MAX_META:
+            elif name in self.types:
                 meta_file, meta_type = self.types[name]
                 found, deeper = self._condition(meta_file, meta_type.annotations, depth + 1)
                 if found:
