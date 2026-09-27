@@ -103,7 +103,7 @@ le format de livraison.
 
 ## Ce que ces corrections ne rachètent pas
 
-Les bancs du 2026-09-19 ont mesuré qu'un agent muni des faits de Taxo n'est pas plus exact qu'un
-agent qui lit le code, sur ce dépôt et avec ce modèle. Corriger D1 à D7 rend Taxo **juste** ; cela
-ne le rend pas **nécessaire à un agent**. C'est pourquoi le positionnement change : Taxo produit une
+Les bancs du 2026-09-19 n'ont pas démontré de gain d'exactitude pour un agent muni des faits de
+Taxo, sur ce dépôt, avec ce modèle et ces configurations. Corriger D1 à D7 rend Taxo **juste** ; cela
+ne démontre pas qu'il soit **utile à un agent**, ce qu'une approche nouvelle devra mesurer. C'est pourquoi le positionnement change : Taxo produit une
 connaissance du logiciel pour des humains et des pages, pas une mémoire pour des modèles.

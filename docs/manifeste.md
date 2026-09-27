@@ -10,9 +10,11 @@
 
 > **Taxo est un utilitaire de vérité logicielle : il transforme le code source en faits logiciels vérifiables, reproductibles, rattachés à leurs preuves, à leur périmètre et à un état précis du logiciel.**
 
-Taxo n'est pas une mémoire pour agents. Cette thèse a été mise à l'épreuve le 2026-09-19 sur quatre
-bancs et n'a pas tenu : sur un dépôt réel, avec un modèle de premier plan, un agent muni des faits
-de Taxo n'a pas répondu plus juste qu'un agent qui lit le code. Le compte rendu est dans
+Taxo n'est pas d'abord une mémoire pour agents. Cette thèse a été mise à l'épreuve le 2026-09-19 sur
+quatre bancs : ces essais n'ont pas démontré de gain d'exactitude avec les configurations testées. Sur
+un dépôt réel, avec un modèle de premier plan, un agent muni des faits de Taxo n'a pas répondu plus
+juste qu'un agent qui lit le code. Cela justifie le repositionnement ; cela n'interdit pas de mesurer
+une approche nouvelle, qualité comprise. Le compte rendu est dans
 [le journal](../bench/JOURNAL-2026-09-19.md), et les défauts qu'il a révélés sont dans
 [les défauts mesurés](backlog/DEFAUTS-MESURES.md).
 

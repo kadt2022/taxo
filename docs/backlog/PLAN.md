@@ -42,8 +42,9 @@ La démo technique est le premier jalon. La démo produit la suit sur la même m
 ## NOW : corriger les défauts mesurés
 
 **Repositionné le 2026-09-19.** Taxo n'est plus présenté comme une mémoire pour agents IA : quatre
-bancs ont réfuté cette thèse, et le [journal](../../bench/JOURNAL-2026-09-19.md) la consigne
-définitivement. Taxo est un **moteur d'intelligence logicielle** : il documente un logiciel — ses
+bancs, consignés dans le [journal](../../bench/JOURNAL-2026-09-19.md), n'ont pas démontré de gain
+d'exactitude avec les configurations testées. Une approche nouvelle reste mesurable, à exactitude
+toujours mesurée. Taxo est un **moteur d'intelligence logicielle** : il documente un logiciel — ses
 modules, ses unités déployables, ses dépendances, ses surfaces — et ce qui change entre deux états,
 pour des humains et pour des pages.
 
