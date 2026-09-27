@@ -95,7 +95,7 @@ describe('outcome et sections', ()=>{
     expect(outcomeState({...scan, evaluations:[inventory, {...git, status:'FAILED'}]})).toBe('failed');
   });
   it('ne propose que les sections réellement disponibles', ()=>{
-    expect(sections(scan).map(item=>item.label)).toEqual(['Vue d’ensemble', 'Technologies', 'Historique']);
+    expect(sections(scan).map(item=>item.label)).toEqual(['Vue d’ensemble', 'Technologies', 'Routes', 'Historique']);
     expect(sections(undefined).map(item=>item.id)).toEqual(['historique']);
     const nav=renderToStaticMarkup(<ProjectNav scan={scan}/>);
     expect(nav).toContain('href="#historique"');

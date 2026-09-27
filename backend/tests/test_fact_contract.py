@@ -269,3 +269,10 @@ def test_errors_do_not_echo_source_values():
     with pytest.raises(FactValidationError) as caught:
         validate_fact(fact)
     assert 'secret-source-marker' not in str(caught.value)
+
+
+def test_a_coverage_reason_says_why_but_never_changes_identity():
+    fact = read('valid-coverage-reason')
+    validate_fact(fact)
+    without = {key: value for key, value in fact.items() if key != 'reason'}
+    assert identity_fields(fact) == identity_fields(without)

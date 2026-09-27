@@ -787,6 +787,21 @@
         "path": "/evidence/0"
       },
       "reason": "Evidence is either file content or a Git object, never both."
+    },
+    {
+      "file": "valid-coverage-reason.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "invalid-reason-on-assertion.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_None",
+        "path": "/"
+      },
+      "reason": "Only coverage carries a reason for what was not interpreted."
     }
   ]
 }

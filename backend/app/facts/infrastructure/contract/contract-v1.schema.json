@@ -21,6 +21,7 @@
     "scope": {"$ref": "#/$defs/scope"},
     "method": {"$ref": "#/$defs/text"},
     "coverage_type": {"enum": ["ANALYSED", "RECOGNIZED", "NOT_INTERPRETED", "OUT_OF_SCOPE", "READ_ERROR"]},
+    "reason": {"$ref": "#/$defs/text"},
     "snapshot": {
       "type": "object", "additionalProperties": false, "required": ["repository", "commit", "mode"],
       "properties": {
@@ -65,8 +66,8 @@
     }
   },
   "allOf": [
-    {"if": {"properties": {"kind": {"const": "ASSERTION"}}}, "then": {"required": ["subject", "relation", "qualifiers"], "properties": {"pattern": false, "scope": false, "method": false, "coverage_type": false}}},
-    {"if": {"properties": {"kind": {"const": "ABSENCE"}}}, "then": {"required": ["pattern", "scope", "method"], "properties": {"status": {"const": "OBSERVED"}, "subject": false, "relation": false, "object": false, "qualifiers": false, "evidence": false, "coverage_type": false}}},
+    {"if": {"properties": {"kind": {"const": "ASSERTION"}}}, "then": {"required": ["subject", "relation", "qualifiers"], "properties": {"pattern": false, "scope": false, "method": false, "coverage_type": false, "reason": false}}},
+    {"if": {"properties": {"kind": {"const": "ABSENCE"}}}, "then": {"required": ["pattern", "scope", "method"], "properties": {"status": {"const": "OBSERVED"}, "subject": false, "relation": false, "object": false, "qualifiers": false, "evidence": false, "coverage_type": false, "reason": false}}},
     {"if": {"properties": {"kind": {"const": "COVERAGE"}}}, "then": {"required": ["subject", "coverage_type", "scope"], "properties": {"status": {"const": "OBSERVED"}, "relation": false, "object": false, "qualifiers": false, "pattern": false, "method": false}}},
     {"if": {"properties": {"kind": {"const": "ASSERTION"}, "status": {"const": "OBSERVED"}}}, "then": {"required": ["evidence"], "properties": {"evidence": {"minItems": 1}}}},
     {"if": {"properties": {"status": {"const": "INFERRED"}}}, "then": {"required": ["derivation"]}, "else": {"properties": {"derivation": false}}},

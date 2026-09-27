@@ -107,7 +107,7 @@ export function outcomeState(scan:Scan){
 
 /** Sections proposees : seulement celles qui correspondent a une capacite reelle de Taxo. */
 export function sections(scan:Scan|undefined){
-  const items=[{id:'vue-ensemble', label:'Vue d’ensemble'}, {id:'technologies', label:'Technologies'}];
+  const items=[{id:'vue-ensemble', label:'Vue d’ensemble'}, {id:'technologies', label:'Technologies'}, {id:'routes', label:'Routes'}];
   return [...(scan?items:[]), {id:'historique', label:'Historique'}];
 }
 
