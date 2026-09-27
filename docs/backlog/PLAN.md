@@ -74,8 +74,8 @@ Récits de l'épique placés au moment où ils servent :
 
 | Récit | Contenu | Tâches | À réaliser avec |
 | --- | --- | --- | --- |
-| **01H** Validité et invalidation | `STALE`, `REVALIDATION_REQUIRED` | T7 | TAXO-03, premier producteur de faits `INFERRED` (`DISPATCHES_TO`) |
-| **01I** Voisinage et projectabilité | voisinage d'une entité, reconstruction d'un flux depuis les seuls faits, trois fins de parcours ([récit](TAXO-01I-voisinage-et-projectabilite.md)) | T6, T12 | TAXO-PROJ-API-01 |
+| **01H** Validité et invalidation | `STALE`, `REVALIDATION_REQUIRED` | T7 | les premiers faits `INFERRED` (`MATCHED_BY`, `PROTECTED_BY` de TAXO-05) ; `DISPATCHES_TO` est suspendu (ADR 0011) |
+| **01I** Voisinage et projectabilité | voisinage borné d'une entité, frontière déclarée, trois fins de parcours ([récit](TAXO-01I-voisinage-et-projectabilite.md)) | T6, T12 | après TAXO-ID-01, sur les faits existants ; TAXO-PROJ-API-01 le réutilise |
 
 ```text
 01A Contrat ──► 01B Références ──┐
@@ -93,7 +93,7 @@ l'inventaire avec les preuves, et distingue une évolution du logiciel d'une év
 | Récit | Résultat attendu |
 | --- | --- |
 | **TAXO-02** Inventory Evaluator | inventaire complet sous forme de faits ; lecture de Gradle (`build.gradle`, `settings.gradle`), aujourd'hui ignoré par Inventory v0 alors que TAKIBO est un projet Gradle |
-| **TAXO-03** Java Analyzer | analyseur de langage : classes, méthodes, annotations et leurs valeurs, constantes, types, appels, héritage, interfaces, résolution de symboles, sous forme de faits (`ANNOTATED_WITH`, `CALLS`, `IMPLEMENTS`, `DISPATCHES_TO`…). **Ne connaît pas le concept d'endpoint.** Spike de deux jours sur TAKIBO, puis ADR 0003 ; recommandation à confirmer : JavaParser + JavaSymbolSolver, sources seules, processus JVM séparé qui passe la suite de conformité de 01A. Avec 01H : `DISPATCHES_TO` devient `STALE` si une deuxième implémentation apparaît |
+| **TAXO-03** Java Analyzer | analyseur de langage : types, méthodes, annotations et leurs valeurs, constantes, supertypes, chaînes d'appels. **Ne connaît pas le concept d'endpoint.** Décidé par l'ADR 0003 : **tree-sitter, dans le processus Python, sans JVM**, sources seules. Première tranche livrée avec TAXO-04. Suite : identité par signature (TAXO-ID-01), puis appels selon l'ADR 0011 (`CALLS` déduit, fragment borné ; `DISPATCHES_TO` suspendu jusqu'à l'ancrage sur le site) |
 | **TAXO-04** Spring API Evaluator | évaluateur de framework, **propriétaire du concept d'endpoint** : consomme les primitives du Java Analyzer et produit `HANDLED_BY`, `ACCEPTS`, `RETURNS` avec des preuves dans la source |
 | **TAXO-05** Spring Security Evaluator | propriétaire des concepts Spring Security : `PERMITS_ALL`, `AUTHORIZED_BY` (`OBSERVED`), puis `MATCHED_BY` et `PROTECTED_BY` (`INFERRED`) ; mécanismes maison déclarés `NOT_INTERPRETED` ; critère anti-faux-positif bloquant |
 | **TAXO-PROJ-PR-01** Projection PR | **démo technique** : commentaire de PR listant les endpoints et autorisations ajoutés, modifiés ou retirés entre base et tête, avec preuves et commits ; distingue changement du logiciel et changement de producteur (cas 2) |
@@ -107,7 +107,8 @@ Les trois récits TILES forment le substrat commun des projections : ce que la P
 Taxo et un futur MCP consomment sans relire le dépôt. Ils sont rédigés mais **non ouverts**, et
 supposent les faits de TAXO-04 et TAXO-05. Vocabulaire figé par l'[ADR 0005](../adr/0005-vocabulaire-tuile-maille-contexte.md).
 
-Critères du spike TAXO-03 (vérifiables sur TAKIBO) :
+Critères du spike TAXO-03 (vérifiables sur TAKIBO). Rédigés le 2026-09-13, ils restent des cas
+d'essai ; les critères 3 et 4 relèvent désormais de l'ADR 0011 (appels, fragment borné) :
 
 1. Le Java Analyzer fournit les informations et résolutions nécessaires pour permettre au Spring API
    Evaluator de reconstruire les endpoints Spring du banc TAKIBO : annotations de classe et de
@@ -116,7 +117,8 @@ Critères du spike TAXO-03 (vérifiables sur TAKIBO) :
    Analyzer.
 2. `TechnicalRole.ORG_OWNER.code()` (`PolicyEvaluator.java:396`) résolu en `"R_ORG_OWNER"`, ou
    déclaré `NOT_INTERPRETED`.
-3. `spaceRepository.save` mène à `SpaceRepository`, puis à `SpaceRepositoryAdapter` (`IMPLEMENTS`).
+3. `spaceRepository.save` mène à la déclaration `SpaceRepository#save` (`CALLS`, déduit) ; le lien vers
+   `SpaceRepositoryAdapter` reste un candidat tant que le dispatch n'est pas ancré sur le site.
 4. `@RequireActiveSpace` résolu vers son nom complet, alors qu'il vient d'un autre module.
 5. Aucun Gradle exécuté, aucun jar lu, temps d'analyse mesuré.
 6. Tout échec de résolution produit un fait `COVERAGE` ; l'analyse ne s'arrête jamais en entier.
@@ -124,13 +126,51 @@ Critères du spike TAXO-03 (vérifiables sur TAKIBO) :
 Spring sert de cas de test difficile au spike. Le Java Analyzer ne devient pas pour autant un
 analyseur Spring.
 
+## Élargissement : Taxo au-delà de Spring
+
+Spring est le premier cas difficile, pas le périmètre de Taxo. Un **lecteur de langage** donne la
+structure de tout code, maison compris : types, fonctions, imports, appels. Un **lecteur de
+framework** y ajoute un sens particulier : routes, règles de sécurité. L'élargissement a des jalons
+aussi concrets que la sécurité Spring. Chacun :
+- se valide sur un projet **sans Spring** ;
+- a une démonstration et des critères d'acceptation ;
+- déclare ce qu'il ne lit pas.
+
+| Jalon | Résultat | Validé sur | Tranche |
+| --- | --- | --- | --- |
+| **E1** Structure et unités déployables | modules et leur graphe, depuis `settings.gradle`, `build.gradle`, `pom.xml`, `package.json` (workspaces), `pyproject.toml` ; langage de chaque module ; unités déployables (point d'entrée d'application, `Dockerfile`, service `compose`) ; chaque fichier rattaché à son module | Taxo lui-même (Python et TypeScript, `compose.yaml`), puis TAKIBO (deux applications Spring Boot) | défaut **D1** de la PR #13. Lève la réserve de TAXO-05 sur les dépôts à plusieurs applications |
+| **E2** Dépendances | dépendances déclarées : entre modules du dépôt, et vers l'extérieur avec leur version déclarée. Ce que le fichier de build ne déclare pas (version calculée par un plugin, catalogue non lu) est `NOT_INTERPRETED` | Taxo lui-même, puis un dépôt Node | relation de dépendance à ajouter au vocabulaire v1 : amendement de l'ADR 0002 |
+| **E3** Changements de structure entre deux commits | module ajouté ou retiré, dépendance ajoutée, retirée ou changée de version, unité déployable modifiée, avec preuves | l'historique de Taxo lui-même | l'impact d'un commit est déjà générique : aucun consommateur ne change |
+| **E4** Deuxième langage | un lecteur Python (tree-sitter) : modules, classes, fonctions, imports entre modules du dépôt. Même contrat, même identité syntaxique, mêmes règles de non-interprétation. Aucun évaluateur de framework ne connaît un autre langage | le backend de Taxo | éprouve le socle hors de Java : ce qui ne tient pas dans le contrat devient un ADR, pas une exception |
+
+Ordre proposé, **à décider** :
+
+1. #45 ;
+2. TAXO-ID-01 ;
+3. **E1** ;
+4. TAXO-01I ;
+5. **E2**, puis **E3** ;
+6. décision de l'ADR 0011 et premières liaisons Java ;
+7. **E4** ;
+8. essai A/B/C.
+
+E1 passe avant TAXO-01I : sans unité déployable, une Tuile de sécurité mélangerait deux applications.
+Il passe aussi avant les appels : c'est le premier jalon utile à un projet sans Spring.
+
+Le positionnement de la PR #13 (moteur d'intelligence logicielle, bancs du 2026-09-19) conditionne
+l'essai A/B/C. Ces bancs ont mesuré qu'un agent muni des faits bruts n'était pas plus exact qu'un
+agent qui lit le code. L'essai ne reteste donc pas « la mémoire pour agents ». Il mesure une
+hypothèse plus étroite : une Tuile compacte avec sa frontière (défaut D7) coûte moins qu'une
+exploration par extraits, à exactitude égale. Si l'essai ne la confirme pas, la valeur de Taxo reste
+celle de la documentation vérifiable, et c'est elle qu'on présente.
+
 ## LATER
 
-Dependencies, Data, Documentation Drift, autres diagrammes, Impact Analysis, MCP, Structure,
-Configuration, Frontend, Tests, CI/CD, Deployment, inventaire Documentation, Business Flows,
-Release notes, source Sonar, source Runtime.
+Data, Documentation Drift, autres diagrammes, Configuration, Frontend, Tests, CI/CD, inventaire
+Documentation, Business Flows, Release notes, source Sonar, source Runtime.
 
-Les 17 récits du document de vision restent la description de ces capacités, pas un backlog.
+Les récits du document de vision restent la description de ces capacités, pas un backlog. Structure,
+Dependencies, Deployment et Impact Analysis ont quitté cette liste : ils sont les jalons E1 à E3.
 
 ## Décisions prises
 
@@ -143,6 +183,8 @@ Les 17 récits du document de vision restent la description de ces capacités, p
      candidats hors des arêtes, preuves avec colonne, propriétaire et rôle ;
   4. premières liaisons Java, fragment borné, avec prémisses et diagnostic par forme ;
   5. essai A/B/C.
+
+  Cet ordre est à croiser avec les jalons d'élargissement E1 à E4 (section « Élargissement »).
 - L'essai A/B/C compare Taxo à un agent qui cherche et lit des extraits, pas des fichiers entiers.
   Questions, réponses attendues et cas où `NOT_PROVEN` est la bonne réponse sont fixés avant l'essai.
   Le « facteur 8 à 10 » de l'ADR 0005 reste attaché au prototype historique, mesuré contre des
@@ -231,8 +273,8 @@ branches : `SpaceRepository#save` (vers la table `spaces`) et `SpaceEventPublish
 
 Pièges à couvrir :
 
-- les appels passent par des interfaces, donc le lien vers l'implémentation est `DISPATCHES_TO`
-  (`INFERRED`) ;
+- les appels passent par des interfaces : `CALLS` vise la déclaration d'interface, et le lien vers
+  l'implémentation reste un candidat jusqu'à un `DISPATCHES_TO` ancré sur le site (ADR 0011) ;
 - `OrgBoundaryFilter` est dans la chaîne de filtres mais ne s'applique pas à cette route
   (`OrgBoundaryFilter.java:28-35`, `:57`) : la sécurité se calcule endpoint par endpoint ;
 - la projection doit s'arrêter sur une fin « non interprétée » ou « non analysée » là où la suite
