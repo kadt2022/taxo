@@ -16,7 +16,7 @@ candidates, un perimetre non lu, `web.ignoring()` : l'endpoint est NOT_INTERPRET
 protege ni public a tort. La securite de methode (`@PreAuthorize`...) et les filtres ou gestionnaires
 d'autorisation maison sont declares NOT_INTERPRETED : la protection reelle peut s'y trouver.
 
-Applications (E1, tranche 2 ; ADR 0012) : des qu'une `@SpringBootApplication` est vue, une route n'est
+Applications (E1, tranche 2 ; ARCHITECTURE § 7.6) : des qu'une `@SpringBootApplication` est vue, une route n'est
 rattachee qu'aux chaines de filtres chargees par l'application qui la sert (SERVED_BY), et les chaines d'une
 autre application sont ecartees avec leur raison. Une application qui la sert peut-etre, une chaine dont le
 chargement n'est pas etabli, plusieurs applications aux chaines differentes : l'endpoint est NOT_INTERPRETED.
@@ -315,7 +315,7 @@ def _protection_gaps(winner):
 
 
 def _assertion(subject, relation, target, evidence, chain):
-    """PERMITS_ALL est la seule relation sans objet (ADR 0002). Le qualificatif `filter_chain` nomme la chaine de
+    """PERMITS_ALL est la seule relation sans objet (ARCHITECTURE § 5). Le qualificatif `filter_chain` nomme la chaine de
     filtres qui porte la regle : deux chaines peuvent traiter le meme motif differemment."""
     fact = {'contract_version': 1, 'kind': 'ASSERTION', 'status': 'OBSERVED', 'validity': 'VALID',
             'subject': subject, 'relation': relation, 'qualifiers': {'filter_chain': chain}, 'evidence': evidence}

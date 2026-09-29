@@ -1,4 +1,4 @@
-// Minia interroge Taxo (MINIA-09, ADR 0009) : chaque affirmation de Minia est affichee avec le verdict de Taxo,
+// Minia interroge Taxo (MINIA-09, ARCHITECTURE § 12) : chaque affirmation de Minia est affichee avec le verdict de Taxo,
 // chaque interpretation comme non verifiee ; la trajectoire (operations demandees) reste visible.
 import {factLine, type Derivation, type GitFact} from './query';
 import {reference, VERBS, label} from './vocabulary';
@@ -33,7 +33,7 @@ export function verdictText(statement:Extract<Statement,{type:'claim'}>){
   return statement.reason?`${text} : ${REASONS[statement.reason]??statement.reason}`:text;
 }
 
-/** Une deduction de Taxo, premisse par premisse (ADR 0009) : ce qui la fonde, et ce qu'elle ne sait pas. */
+/** Une deduction de Taxo, premisse par premisse (ARCHITECTURE § 12) : ce qui la fonde, et ce qu'elle ne sait pas. */
 function DerivationView({derivation}:Readonly<{derivation:Derivation}>){
   return <div className="derivation">
     <p>Déduit par Taxo, règle <code>{derivation.rule}</code>, à partir de :</p>

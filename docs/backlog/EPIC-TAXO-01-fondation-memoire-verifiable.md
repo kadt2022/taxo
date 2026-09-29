@@ -2,7 +2,7 @@
 
 Statut : À FAIRE  
 Nature : épique, découpé en récits TAXO-01A à TAXO-01I (voir `docs/backlog/PLAN.md`)  
-Références : ADR 0001, ADR 0002, `docs/backlog/PLAN.md`  
+Références : ARCHITECTURE § 1, ARCHITECTURE § 5, `docs/backlog/PLAN.md`  
 Remplace : T03, T05, T06 et T08 de l'ancien récit TAXO-EVAL-01
 
 ## Récit
@@ -75,7 +75,7 @@ Ce récit prépare ces capacités, il ne les implémente pas.
 
 # T1 — Schéma machine du fait Taxo
 
-Dériver de l'ADR 0002 un contrat machine versionné représentant au minimum :
+Dériver d'ARCHITECTURE § 5 un contrat machine versionné représentant au minimum :
 
 - nature du fait ;
 - sujet ;
@@ -96,7 +96,7 @@ L'horodatage d'analyse appartient à l'exécution référencée, pas au fait.
 
 Le contrat doit être validable automatiquement.
 
-Exemples de règles obligatoires (détail complet : ADR 0002 et TAXO-01A) :
+Exemples de règles obligatoires (détail complet : ARCHITECTURE § 5 et TAXO-01A) :
 
 ```text
 ASSERTION OBSERVED
@@ -225,7 +225,7 @@ snapshot
 started_at
 finished_at
 status
-scope          (structure de l'ADR 0002 : include, exclude)
+scope          (structure d'ARCHITECTURE § 5 : include, exclude)
 ```
 
 États :
@@ -342,7 +342,7 @@ Une future projection de diagramme peut parcourir des relations sans relire le r
 
 # T7 — Validité, dérivation et invalidation
 
-Implémenter les règles de validité prévues par l'ADR 0002.
+Implémenter les règles de validité prévues par ARCHITECTURE § 5.
 
 ### Fait ASSERTION OBSERVED
 
@@ -614,7 +614,7 @@ Il teste la **projectabilité de la connaissance**.
 
 # Critères de terminé
 
-1. Le schéma machine du fait existe, est versionné et applique les règles de cohérence de l'ADR 0002.
+1. Le schéma machine du fait existe, est versionné et applique les règles de cohérence d'ARCHITECTURE § 5.
 2. Les entités disposent de références stables utilisables par plusieurs producteurs.
 3. Une analyse peut cibler un commit précis sans dépendre du dossier de travail.
 4. Le mode `WORKING_TREE` est explicitement identifiable.

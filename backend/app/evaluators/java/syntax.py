@@ -1,4 +1,4 @@
-"""Analyseur Java (TAXO-03, ADR 0003) : les primitives Java d'un fichier source, lues par sa syntaxe.
+"""Analyseur Java (TAXO-03, ARCHITECTURE § 7.3) : les primitives Java d'un fichier source, lues par sa syntaxe.
 
 Il donne le paquetage, les imports, les types (classes, interfaces, enums, records, types imbriques), leurs
 annotations et leurs methodes annotees, et les constantes chaines (`static final String`). Une valeur

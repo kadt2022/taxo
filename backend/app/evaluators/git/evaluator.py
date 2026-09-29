@@ -1,4 +1,4 @@
-"""Evaluateur Git (TAXO-EVAL-02, ADR 0007) : l'historique atteignable depuis l'instantane, en faits.
+"""Evaluateur Git (TAXO-EVAL-02, ARCHITECTURE § 7.2) : l'historique atteignable depuis l'instantane, en faits.
 
 Il observe ; il ne choisit jamais ce qui sera montre. Aucune fenetre de commits n'appartient a son
 contrat : il lit tout l'historique atteignable. MAX_COMMITS n'est qu'un budget de lecture ; au-dela,

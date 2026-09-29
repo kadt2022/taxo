@@ -1,4 +1,4 @@
-"""Minia interroge Taxo (MINIA-09, ADR 0009) : le mode exploration et les enonces types.
+"""Minia interroge Taxo (MINIA-09, ARCHITECTURE § 12) : le mode exploration et les enonces types.
 
 Minia ne recoit plus un paquet de contexte fixe : elle demande a Taxo les operations du protocole, une par
 une, et decide de la suivante d'apres les resultats. Taxo fixe les garde-fous (nombre d'operations,

@@ -3,7 +3,7 @@
 Statut : Implémentation terminée et tests validés ; revue PR et intégration dans `main` en attente.
 
 Parent : EPIC TAXO-01 — Fondation de la mémoire logicielle vérifiable (`../EPIC-TAXO-01-fondation-memoire-verifiable.md`)
-Références : ADR 0001, ADR 0002
+Références : ARCHITECTURE § 1, ARCHITECTURE § 5
 
 ## Vérification de l'implémentation
 
@@ -20,7 +20,7 @@ après intégration de la PR #1.
 - `npm ci` puis `npm run build` dans `frontend` : type-check et build réussis.
 
 Décisions de représentation détaillées dans `backend/app/facts/README.md` :
-`derivation.rule` suit l'ADR 0002, les versions de producteurs sont textuelles,
+`derivation.rule` suit ARCHITECTURE § 5, les versions de producteurs sont textuelles,
 les commits sont complets, et l'extraction des champs d'identité ne calcule pas
 encore leur forme canonique. La validation des faits conservés est distincte
 de la validation de soumission.
@@ -585,7 +585,7 @@ sha256:<empreinte des lignes de la méthode>
 
 # T15 — Vocabulaire versionné
 
-Le contrat utilise le vocabulaire v1 de l'ADR 0002 :
+Le contrat utilise le vocabulaire v1 d'ARCHITECTURE § 5 :
 
 ```text
 CONTAINS

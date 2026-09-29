@@ -1,11 +1,11 @@
-"""Verdict de Taxo sur une affirmation structuree (ADR 0009, section 6) : Minia propose, Taxo prouve.
+"""Verdict de Taxo sur une affirmation structuree (ARCHITECTURE § 12.4) : Minia propose, Taxo prouve.
 
 - `CONFIRMED` : un fait etabli affirme la meme chose.
 - `REFUTED` : un fait etabli la contredit, sur une relation que le vocabulaire declare exclusive (un
   commit n'a qu'un auteur, un fichier qu'un langage). La refutation par un fait `ABSENCE` attend le
   premier analyseur qui en produit : aucun n'en produit encore, et la correspondance entre un motif
   d'absence et une affirmation sera fixee avec lui.
-- `NOT_PROVEN` : ni l'un ni l'autre, avec l'une des trois fins de parcours de l'ADR 0002.
+- `NOT_PROVEN` : ni l'un ni l'autre, avec l'une des trois fins de parcours d'ARCHITECTURE § 5.
 
 « Non trouve » n'est jamais « faux ».
 """

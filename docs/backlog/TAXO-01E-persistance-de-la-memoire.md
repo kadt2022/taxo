@@ -3,7 +3,7 @@
 Statut : rédigé le 2026-09-17, à ouvrir après la fusion de 01D.
 
 Source de vérité : [T5 de l'EPIC TAXO-01](EPIC-TAXO-01-fondation-memoire-verifiable.md). En cas de
-divergence avec un récit antérieur, T5 prévaut. Contrat du fait : [ADR 0002](../adr/0002-contrat-du-fait.md).
+divergence avec un récit antérieur, T5 prévaut. Contrat du fait : [ARCHITECTURE § 5](../ARCHITECTURE.md).
 
 Dépend de : 01A (contrat), 01B (identité stable), 01C (instantané), 01D (exécution et couverture).
 
@@ -21,7 +21,7 @@ puis indexée.
 - un fait existe une fois ; chaque exécution qui le produit ajoute une **occurrence** portant
   l'exécution, l'instantané et la provenance ;
 - les dérivations sont persistées comme des liens fait vers prémisses : sans elles, un
-  `PROTECTED_BY` ne peut pas être expliqué, ce qu'exigent l'ADR 0002 et TAXO-POC-01 ;
+  `PROTECTED_BY` ne peut pas être expliqué, ce qu'exigent ARCHITECTURE § 5 et TAXO-POC-01 ;
 - l'identité stable est indexée, ainsi que sujet, objet, relation et instantané ;
 - migrations Alembic, appliquées au démarrage comme aujourd'hui ;
 - le JSON historique de l'API continue d'être servi, mais **dérivé** de la mémoire persistée.

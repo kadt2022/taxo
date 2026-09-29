@@ -2,8 +2,8 @@
 
 Statut : rédigé le 2026-09-27, réalisé le 2026-09-27.
 
-Dépend de : ADR 0002 (références), TAXO-01B (identité canonique), ADR 0003 (analyseur Java).
-Amende : la forme des références `symbol:java:` (ADR 0011, point 1).
+Dépend de : ARCHITECTURE § 5 (références), TAXO-01B (identité canonique), ARCHITECTURE § 7.3 (analyseur Java).
+Amende : la forme des références `symbol:java:` (ARCHITECTURE § 14).
 
 ## Pourquoi maintenant
 
@@ -121,7 +121,7 @@ d'origine, avec leur `catalog_version` 1. Aucune migration de données n'est fai
 - Minia et `verify_claim` : une affirmation dans l'ancienne forme (`#list`) n'est plus trouvée. Elle
   donne `NOT_PROVEN`, jamais `REFUTED`, puisque `HANDLED_BY` n'est pas exclusive. `describe` et les
   exemples du protocole montrent la nouvelle forme.
-- Exemples des ADR 0002, 0009 et 0010 : mis à jour, ou annotés « forme antérieure à TAXO-ID-01 ».
+- Exemples d'ARCHITECTURE § 5, § 7.4 et § 12 : mis à jour, ou annotés « forme antérieure à TAXO-ID-01 ».
 
 ## Acceptation
 
@@ -145,4 +145,4 @@ d'origine, avec leur `catalog_version` 1. Aucune migration de données n'est fai
 - Résolution des types des paramètres vers leur nom qualifié.
 - Effacement des variables de type vers leurs bornes.
 - Références de méthodes non annotées (elles viendront avec les appels).
-- Lambdas : leur identité propre sera fixée avec les appels (ADR 0011, point 4).
+- Lambdas : leur identité propre sera fixée avec les appels (ARCHITECTURE § 14).

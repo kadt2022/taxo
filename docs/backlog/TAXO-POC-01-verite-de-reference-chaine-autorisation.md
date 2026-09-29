@@ -5,7 +5,7 @@ POC et au benchmark. Elle ne doit pas être modifiée pour faire passer un éval
 fausse, on corrige en citant le code, et on note la correction ici.
 
 Source de vérité : le code de TAKIBO au commit `032788fb6db90470ce2a7cd71193f99f6ec1e57d`. Les
-relations, natures et statuts suivent l'ADR 0002 et le contrat TAXO-01A.
+relations, natures et statuts suivent ARCHITECTURE § 5 et le contrat TAXO-01A.
 
 ## Objectif
 

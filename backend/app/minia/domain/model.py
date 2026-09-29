@@ -13,5 +13,5 @@ class MiniaModel(Protocol):
 
     # Facultatif : `stream(system, user)` rend les morceaux du meme texte au fur et a mesure (TAXO-UX-02).
     # Un fournisseur qui ne l'offre pas repond d'un bloc ; Minia annonce alors ses etapes sans texte provisoire.
-    # Facultatif : `explores = True` si le fournisseur sait mener l'exploration de MINIA-09 (ADR 0009) :
+    # Facultatif : `explores = True` si le fournisseur sait mener l'exploration de MINIA-09 (ARCHITECTURE § 12) :
     # demander les operations de Taxo une par une. Sinon, Minia recoit un paquet de contexte.

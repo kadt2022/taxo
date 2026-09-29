@@ -1,4 +1,4 @@
-"""Evaluateur de structure (TAXO-E1, ADR 0012) : modules, dependances entre modules, unites deployables.
+"""Evaluateur de structure (TAXO-E1, ARCHITECTURE § 7.5) : modules, dependances entre modules, unites deployables.
 
 Il lit les descripteurs de build (Gradle, Maven, npm, Python) et de deploiement (compose), sans rien
 executer, et ne connait aucun framework. Il produit `repository CONTAINS module`, `module DEPENDS_ON module`

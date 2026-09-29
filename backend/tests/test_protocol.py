@@ -1,4 +1,4 @@
-"""TAXO-QUERY-02 : les operations v1 du protocole Taxo (ADR 0009), sur les faits d'une analyse."""
+"""TAXO-QUERY-02 : les operations v1 du protocole Taxo (ARCHITECTURE § 12), sur les faits d'une analyse."""
 from pathlib import Path
 
 import pytest
@@ -375,7 +375,7 @@ def test_a_response_never_exceeds_its_budget():
     assert closed['not_sent'] == [{'what': 'items', 'count': 20 - added, 'reason': 'BUDGET'}]
 
 
-# Critere de revue de l'ADR 0009 : aucune operation du coeur ne nomme une technologie ou un projet.
+# Critere de revue d'ARCHITECTURE § 12 : aucune operation du coeur ne nomme une technologie ou un projet.
 _TECHNOLOGIES = ('java', 'spring', 'python', 'typescript', 'javascript', 'react', 'maven', 'gradle', 'django',
                  'kotlin', 'hibernate', 'express', 'angular', 'dotnet')
 

@@ -2,7 +2,7 @@
 
 Minia ne lit ni le depot ni le code : elle recoit ce que Git sait du commit (auteur, date, message,
 fichiers et statuts), les faits changes par le commit (impact de Taxo), leurs preuves et la couverture.
-Seule exception, a double consentement (TAXO-MINIA-02, ADR 0008) : si le reglage MINIA_SOURCE_CONTEXT
+Seule exception, a double consentement (TAXO-MINIA-02, ARCHITECTURE § 12.6) : si le reglage MINIA_SOURCE_CONTEXT
 vaut `diff` et que la demande l'autorise, le diff du commit est joint, lu par l'historique avec ses refus.
 Ce que Git sait est toujours renvoye tel quel, quelle que soit la reponse du modele. Sans fait change et
 sans echec d'evaluateur, le modele n'est pas appele : Taxo ne sait rien de plus, et Minia le dit. Aucune
@@ -27,7 +27,7 @@ from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.projects.application.queries import require_project
 
 MAX_QUESTION = 1000
-# Garde-fous de l'exploration (ADR 0009, section 8), fixes par Taxo : une description, au plus 8 operations
+# Garde-fous de l'exploration (ARCHITECTURE § 12.5), fixes par Taxo : une description, au plus 8 operations
 # choisies par Minia, puis au plus 10 affirmations verifiees ; l'echange en permet 20.
 MAX_CALLS = 8
 MAX_CLAIMS = 10
@@ -146,7 +146,7 @@ def _packet(fallback, trajectory):
 
 def _step(operation, arguments, response):
     """Une etape de la trajectoire, telle que l'humain la voit : l'operation, ses arguments, l'issue, la
-    taille du resultat et ce qui n'a pas ete transmis (ADR 0009, section 10)."""
+    taille du resultat et ce qui n'a pas ete transmis (ARCHITECTURE § 12.5)."""
     entry = {'operation': operation, 'arguments': arguments, 'outcome': response['outcome'],
              'bytes': response['bytes']}
     if response['outcome'] == 'OK':
@@ -186,7 +186,7 @@ class AskMinia:
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
         self.history, self.projects, self.query = history, projects, query
-        # Protocole Taxo (ADR 0009) : sans lui, Minia recoit toujours un paquet de contexte.
+        # Protocole Taxo (ARCHITECTURE § 12) : sans lui, Minia recoit toujours un paquet de contexte.
         self.taxo_query = taxo_query
         self.models, self.source = _models(models), source
         if default is not None and default not in self.models:
@@ -283,7 +283,7 @@ class AskMinia:
         commit, base, files = self.history.detail(project_id, sha, parent)
         if self.taxo_query is not None and getattr(model, 'explores', False):
             try:
-                # Le diff n'est lisible dans l'echange que si le reglage et la demande l'autorisent (ADR 0008).
+                # Le diff n'est lisible dans l'echange que si le reglage et la demande l'autorisent (ARCHITECTURE § 12.6).
                 exchange = self.taxo_query.open(project_id, diff_consent=source and self.source == source_context.DIFF,
                                             max_bytes=self._exchange_bytes(model))
             except QueryError as exc:

@@ -40,7 +40,7 @@ ANSWER_SCHEMA = {
 class ClaudeModel:
     provider = 'claude'
     remote = True
-    # Sait mener l'exploration de MINIA-09 : demander les operations de Taxo une par une (ADR 0009).
+    # Sait mener l'exploration de MINIA-09 : demander les operations de Taxo une par une (ARCHITECTURE § 12).
     explores = True
 
     def __init__(self, model_name=DEFAULT_MODEL, client=None, max_input_bytes=MAX_INPUT_BYTES):

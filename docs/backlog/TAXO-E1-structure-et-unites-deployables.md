@@ -2,7 +2,7 @@
 
 Statut : rédigé le 2026-09-27. Tranche 1 réalisée (#49). Tranche 2 réalisée.
 
-Décision : [ADR 0012](../adr/0012-structure-et-unites-deployables.md). Défaut : D1 (`DEFAUTS-MESURES.md`).
+Décision : [ARCHITECTURE § 7.5](../ARCHITECTURE.md). Défaut : D1 (`DEFAUTS-MESURES.md`).
 Jalon E1 de la section « Élargissement » du plan.
 
 ## Pourquoi
@@ -37,7 +37,7 @@ route, et quelles règles de sécurité elle charge.
 2. Sur TAKIBO (`6d9b214`) :
    - les 18 modules de `settings.gradle` ;
    - les dépendances `project(...)` de chaque `build.gradle`, avec leur configuration.
-3. Chaque construction non lue du tableau de l'ADR 0012 (§ 2) a son test et produit une couverture
+3. Chaque construction non lue du tableau d'ARCHITECTURE § 7.5 a son test et produit une couverture
    `NOT_INTERPRETED`, jamais un module ni une dépendance devinés.
 4. Une dépendance vers un module inconnu est déclarée non interprétée.
 5. L'impact d'un commit montre un module ajouté et une dépendance ajoutée.
@@ -57,7 +57,7 @@ où elle ne conclut pas : scan calculé, dépendance non lue, classe hors de tou
 
 **Contrainte** : si Taxo ne peut pas établir statiquement qu'une application charge une configuration
 ou une chaîne, l'endpoint reste `NOT_INTERPRETED`. Aucune association par paquetage, proximité ou
-nom (ADR 0012, § 4).
+nom (ARCHITECTURE § 7.6).
 
 ### Résultat sur TAKIBO (`6d9b214`)
 

@@ -1,4 +1,4 @@
-"""Evaluateur Spring Boot (TAXO-E1, tranche 2 ; ADR 0012) : les applications et les routes qu'elles servent.
+"""Evaluateur Spring Boot (TAXO-E1, tranche 2 ; ARCHITECTURE § 7.6) : les applications et les routes qu'elles servent.
 
 Il reprend les endpoints de l'evaluateur Spring API et la structure du depot (modules, dependances), et
 produit :

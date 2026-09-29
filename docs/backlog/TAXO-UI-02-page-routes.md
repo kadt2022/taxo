@@ -39,7 +39,7 @@ route → traitée par → servie par → chaîne → règle applicable → prot
 ## Contrat
 
 La raison d'une couverture était perdue : seuls cinq avertissements par évaluateur étaient conservés.
-Une `COVERAGE` porte désormais `reason`, un texte facultatif hors identité (ADR 0002, historique du
+Une `COVERAGE` porte désormais `reason`, un texte facultatif hors identité (ARCHITECTURE § 5, historique du
 2026-09-27). `taxo.spring-api`, `taxo.spring-boot` et `taxo.spring-security` le renseignent.
 
 ## Acceptation

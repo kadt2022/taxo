@@ -1,6 +1,6 @@
 # Taxo Fact Contract v1
 
-Contrat de TAXO-01A, derive de l'ADR 0002. Ce module ne depend ni du scanner,
+Contrat de TAXO-01A, derive d'ARCHITECTURE § 5. Ce module ne depend ni du scanner,
 ni de la base, ni d'un analyseur de langage.
 
 ## Utilisation
@@ -65,7 +65,7 @@ Le schema seul ne constitue donc pas un validateur Taxo complet.
   ceux d'occurrence. `identity_fields` en renvoie la forme canonique
   detachee et `fact_identity` son empreinte (voir « Identite canonique »). Pour
   COVERAGE, l'identite inclut `producer_id`.
-- `derivation.rule` est le nom normatif de l'ADR 0002. Le terme
+- `derivation.rule` est le nom normatif d'ARCHITECTURE § 5. Le terme
   `derivation_rule` du paragraphe T13 du recit ne constitue pas un alias.
 - Les premisses sont des identifiants opaques non vides en attendant TAXO-01B.
   `counter_examples_checked` et `known_gaps` sont des listes de textes,
@@ -82,7 +82,7 @@ Le schema seul ne constitue donc pas un validateur Taxo complet.
 - Une preuve cite soit un fichier (`path`, `content_hash`), soit un objet Git
   (`object: commit:<sha>`), jamais les deux. Seules les relations d'historique
   (`HAS_COMMIT`, `AUTHORED_BY`, `CHILD_OF`, `CHANGES`) exigent un objet Git,
-  et elles seules l'acceptent (ADR 0007). `evidence.commit` reste celui de
+  et elles seules l'acceptent (ARCHITECTURE § 7.2). `evidence.commit` reste celui de
   l'instantane.
 - Les lignes d'une preuve sont optionnelles mais doivent etre presentes ensemble,
   entieres, positives, et ordonnees. Une preuve sans lignes cite le fichier entier.

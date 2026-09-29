@@ -1,4 +1,4 @@
-"""Executable dependency boundaries for ADR 0004."""
+"""Executable dependency boundaries for ARCHITECTURE § 3."""
 import ast
 from importlib.util import resolve_name
 from pathlib import Path
@@ -243,7 +243,7 @@ def test_registering_a_project_takes_primitives_not_an_http_schema():
 
 
 def test_minia_explains_but_never_writes_facts_and_stays_apart_from_clochette():
-    """Minia lit l'impact de Taxo ; elle ne connait ni le contrat du fait ni Clochette (ADR 0004, ADR 0006)."""
+    """Minia lit l'impact de Taxo ; elle ne connait ni le contrat du fait ni Clochette (ARCHITECTURE § 3 et § 13)."""
     violations = []
     for path in APP.rglob('*.py'):
         parts = path.relative_to(APP).parts

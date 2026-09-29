@@ -43,5 +43,5 @@ couverture et trous.
 
 ## Hors périmètre
 
-Ask Taxo, MCP, diagrammes, tuiles et contexte (TAXO-TILES-03, qui consommera cette API pour les
+Ask Taxo, MCP, diagrammes, tuiles et contexte (ARCHITECTURE § 9 et § 12, qui consommeront cette API pour les
 preuves).

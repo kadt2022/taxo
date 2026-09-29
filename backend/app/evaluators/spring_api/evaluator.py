@@ -1,4 +1,4 @@
-"""Evaluateur Spring API (TAXO-04, ADR 0003) : les endpoints HTTP d'une application Spring MVC, en faits.
+"""Evaluateur Spring API (TAXO-04, ARCHITECTURE § 7.3) : les endpoints HTTP d'une application Spring MVC, en faits.
 
 Il est proprietaire du concept d'endpoint ; il consomme les primitives de l'analyseur Java, qui n'en sait
 rien. Pour chaque methode d'un controleur (`@RestController`, `@Controller`) portant une annotation de

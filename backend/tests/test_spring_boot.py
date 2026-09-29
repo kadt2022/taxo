@@ -1,4 +1,4 @@
-"""TAXO-E1 tranche 2 (ADR 0012) : l'application qui sert chaque route, et les chaines de filtres qu'elle charge.
+"""TAXO-E1 tranche 2 (ARCHITECTURE § 7.6) : l'application qui sert chaque route, et les chaines de filtres qu'elle charge.
 
 Une route n'est rattachee a une application, et a ses chaines, que par le classpath et le balayage etablis :
 jamais par paquetage, proximite ou nom. Ce qui ne s'etablit pas reste NOT_INTERPRETED.

@@ -1,8 +1,8 @@
 # TAXO-MINIA-01 — Demander à Minia ce que signifie un commit
 
 Statut : livré dans la PR de la branche `feat/taxo-minia-01-ask-commit`.
-Dépend de : TAXO-HIST-01 (impact d'un commit), ADR 0004 (règle 14 : le LLM ne produit pas de faits),
-ADR 0006 (Clochette reste séparée).
+Dépend de : TAXO-HIST-01 (impact d'un commit), ARCHITECTURE § 2, principe 5 (le LLM ne produit pas de faits),
+ARCHITECTURE § 13 (Clochette reste séparée).
 
 ## Objectif
 
