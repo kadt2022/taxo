@@ -54,6 +54,13 @@ La file détaillée est [DEFAUTS-MESURES.md](DEFAUTS-MESURES.md).
 ## Questions ouvertes
 
 - L'ordre de la séquence proposée, étape par étape.
+- **Recommandation, à confirmer** : juger la Tuile sur des critères d'usage explicites (utilité pour
+  l'humain et pour l'API), évalués séparément des économies de tokens (étape 3).
+- **Recommandation, à confirmer** : ne pas corriger avant le banc la limite `securityMatcher(...)` non
+  résolue (serveur d'autorisation). La version mesurée la déclare ; ce que l'on attend alors **de
+  Taxo** sur ces routes est une abstention correcte. Ce n'est pas la vérité de référence du banc,
+  établie à la main dans le code : un bras qui lit le code peut établir ce que Taxo ne résout pas
+  encore. Une correction ultérieure donnerait lieu à une autre campagne.
 - Accepter ou non un dossier sans dépôt Git (refusé aujourd'hui par `NOT_A_GIT_REPOSITORY`).
 - Ce que « générique » recouvre exactement, au vu du corpus mesuré le 2026-09-19.
 
@@ -69,11 +76,6 @@ sources Sonar et exécution. Les récits de vision décrivent ces capacités ; i
 - [ARCHITECTURE.md](../ARCHITECTURE.md) remplace les douze ADR et les récits TILES. Il définit Nœud,
   Graphe, Maille, Chemin, Tuile, Tuile adaptative, Frontière, Arbre, Forêt et Contexte.
 - Le plan se réduit à une séquence proposée, dont l'ordre reste à décider étape par étape.
-- La Tuile est jugée sur des critères d'usage explicites : utilité pour l'humain et pour l'API, évaluée
-  séparément des économies de tokens (étape 3).
-- La limite `securityMatcher(...)` non résolue (serveur d'autorisation) n'est pas corrigée avant le
-  banc : la version mesurée la déclare, et l'abstention correcte est la réponse attendue sur ces routes.
-  Une correction ultérieure donnera lieu à une autre campagne.
 
 **2026-09-27 (TAXO-UI-02, page Routes)**
 

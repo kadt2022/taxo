@@ -51,8 +51,9 @@ frontière. Rien d'autre.
   - relation du vocabulaire qu'aucun évaluateur exécuté ne produit : acceptée, frontière de contexte,
     réponse `UNKNOWN`.
 - **Direction `OUTGOING` ou `INCOMING`.** `BOTH` attendra.
-- **Parcours en largeur, ordre stable.** Tri par relation, puis par référence (forme canonique de
-  01B), puis par identité de fait.
+- **Parcours en largeur, ordre stable.** Les relations sont prises dans l'ordre de priorité demandé
+  (par défaut, l'ordre de la liste des relations ; ARCHITECTURE § 9.1). Entre voisins d'une même
+  relation, le départage se fait par référence (forme canonique de 01B), puis par identité de fait.
 - **Déduplication des nœuds, conservation des arêtes.** Une arête qui referme un cycle est montrée.
   Un nœud déjà visité n'est pas redéveloppé.
 - **Budgets de sortie** : profondeur, nœuds, arêtes, octets sérialisés (frontière comprise).
