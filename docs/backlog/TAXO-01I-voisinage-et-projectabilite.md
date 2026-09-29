@@ -1,11 +1,12 @@
 # TAXO-01I — Voisinage borné : la première Tuile
 
-Statut : rédigé le 2026-09-17, révisé le 2026-09-27. À réaliser après TAXO-ID-01, sur les faits
-existants.
+Statut : rédigé le 2026-09-17, révisé le 2026-09-29. Étape 4 de la séquence proposée
+([PLAN](PLAN.md)), sur les faits existants.
 
-Source de vérité : [T6 et T12 de l'EPIC TAXO-01](EPIC-TAXO-01-fondation-memoire-verifiable.md).
+Source de vérité : [ARCHITECTURE § 9](../ARCHITECTURE.md). En cas de divergence, le document cible
+prévaut.
 
-Dépend de : 01E (persistance), 01G (lecture), TAXO-ID-01 (identité des méthodes).
+Dépend de : stockage des faits par analyse, lecture filtrée et identité des méthodes, tous livrés.
 Étalon : [TAXO-POC-01](TAXO-POC-01-verite-de-reference-chaine-autorisation.md). Vocabulaire : ARCHITECTURE § 4.
 
 ## Pourquoi ce récit en premier
@@ -28,7 +29,7 @@ qu'elle laisse de côté et pourquoi.
 
 | Besoin | Existant réutilisé |
 | --- | --- |
-| Faits et preuves d'une analyse | stockage des faits (01E), lecture (01G) |
+| Faits et preuves d'une analyse | stockage des faits par analyse et lecture filtrée (ARCHITECTURE § 8) |
 | Limites de connaissance | couvertures `NOT_INTERPRETED`, `READ_ERROR`, `ANALYSED` des évaluateurs |
 | Ce qui n'a pas été transmis | `not_sent` du protocole `taxo-query/1` (ARCHITECTURE § 12) |
 | Budget de réponse | `max_bytes` et le mécanisme de réponse bornée du protocole |
@@ -110,7 +111,7 @@ omis sont qualifiés :
 
 On n'affiche jamais « 7 omises » si le moteur n'en a vu que 7 avant d'arrêter.
 
-### Trois fins de parcours (T6), et seulement trois
+### Trois fins de parcours, et seulement trois
 
 1. **Un fait connu** poursuit la chaîne. Un fait `ABSENCE` correctement couvert la termine sur une
    absence établie : c'est le seul cas où Taxo affirme une absence.

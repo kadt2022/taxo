@@ -78,8 +78,8 @@ formats, les décisions de représentation et les limites de validation.
 
 Depuis `backend`, `python -m app.facts --conformance` rejoue les 84 exemples de
 faits, les 8 vecteurs d'empreinte et les vecteurs d'identite canonique (19 positifs,
-5 negatifs). Le scanner existant conserve son format
-actuel jusqu'à TAXO-01D ; le contrat n'est pas encore une mémoire persistante.
+5 negatifs). Chaque évaluateur produit des faits validés par ce contrat avant
+d'être conservés.
 
 Le backend est organisé par capacité : `projects`, `snapshots`, `facts`, `scans` et
 `evaluators/inventory`. Le domaine est indépendant des frameworks ; les cas
@@ -89,8 +89,8 @@ d'utilisation passent par des ports, câblés dans `bootstrap.application`.
 
 L'inventaire reçoit un Snapshot et produit désormais une `EvaluatorExecution` avec
 Facts, Coverage, provenance et statut technique via le moteur `evaluations`. Les
-métadonnées historiques de l'API restent disponibles jusqu'à TAXO-01E, qui
-introduira la persistance de la mémoire. Le portail interroge toujours la même API.
+faits sont conservés par analyse et relus sans relire le dépôt
+([ARCHITECTURE § 8](docs/ARCHITECTURE.md)). Le portail interroge toujours la même API.
 
 ### Analyse globale et historique (TAXO-EVAL-01)
 
