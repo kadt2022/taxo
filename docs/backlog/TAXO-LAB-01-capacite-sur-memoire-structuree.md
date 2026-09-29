@@ -120,7 +120,7 @@ de Taxo. Les modèles expérimentaux sont entraînés à partir de zéro ; un mo
 
 LAB-01 répond à une seule question : **un modèle statistique ajoute-t-il une capacité** à la mémoire
 vérifiée ? Il ne dit pas si la boucle observer, vérifier, historiser apporte de la valeur. Cette boucle
-se construit sans modèle : comparaison d'instantanés (01F), contraintes explicites, oracle dynamique,
+se construit sans modèle : comparaison d'instantanés (impact d'un commit), contraintes explicites, oracle dynamique,
 journal des vérifications. L'endpoint oublié du POC-01 a été détecté par une règle déterministe.
 
 Un résultat nul de LAB-01 signifie donc, pour ce domaine, que la valeur vient de la mémoire et de la

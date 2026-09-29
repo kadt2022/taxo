@@ -89,8 +89,8 @@ d'utilisation passent par des ports, câblés dans `bootstrap.application`.
 
 L'inventaire reçoit un Snapshot et produit désormais une `EvaluatorExecution` avec
 Facts, Coverage, provenance et statut technique via le moteur `evaluations`. Les
-métadonnées historiques de l'API restent disponibles jusqu'à TAXO-01E, qui
-introduira la persistance de la mémoire. Le portail interroge toujours la même API.
+faits sont conservés par analyse et relus sans relire le dépôt
+([ARCHITECTURE § 8](docs/ARCHITECTURE.md)). Le portail interroge toujours la même API.
 
 ### Analyse globale et historique (TAXO-EVAL-01)
 

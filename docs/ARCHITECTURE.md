@@ -875,6 +875,7 @@ Les renvois « ADR 00xx » du code et des récits pointent désormais ici :
 | ADR 0011 — appels, sites et candidats | § 14 |
 | ADR 0012 — structure et unités déployables | § 7.5, § 7.6 |
 | TAXO-TILES-01, 02, 03 | § 9, § 10, § 15 |
+| Épique TAXO-01, récits 01A à 01G, ARCH-01, CI-01, ID-01, E1, MINIA-01, UI-02 (livrés ou remplacés) | § 3, § 5, § 7, § 8, § 12, § 16 |
 
 ## 19. Historique
 
@@ -890,3 +891,5 @@ règles normatives des ADR 0001 à 0012, supprimés du dépôt. Décisions :
 - relecture avant fusion : la réfutation par `ABSENCE` et la vérification du texte en mode paquet ne
   sont plus présentées comme existantes ; la priorité devient un paramètre explicite, pour que toute
   Tuile adaptative soit rejouable ; `commit-impact/1` annonce son raccord manquant.
+- nettoyage : les récits livrés ou remplacés et l'épique TAXO-01 quittent le backlog ; le manifeste
+  renvoie au § 16 pour l'état, au lieu d'en tenir une copie.

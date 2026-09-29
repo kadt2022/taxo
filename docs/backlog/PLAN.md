@@ -3,6 +3,8 @@
 Mise à jour : 2026-09-29 (document cible unique ; une seule séquence proposée)
 Référence : [ARCHITECTURE.md](../ARCHITECTURE.md), seul document d'architecture. Les ADR 0001 à 0012
 et les récits TAXO-TILES-01 à 03 y sont fondus (§ 18) ; leur texte reste dans l'historique Git.
+Le backlog ne garde que le travail à venir et ses étalons : les récits livrés ou remplacés sont retirés
+et restent dans l'historique Git.
 
 ## Ce que Taxo promet
 
@@ -65,6 +67,10 @@ La file détaillée est [DEFAUTS-MESURES.md](DEFAUTS-MESURES.md).
 - Ce que « générique » recouvre exactement, au vu du corpus mesuré le 2026-09-19.
 
 ## Hors séquence
+
+Capacités du contrat encore sans moteur : la validité (`STALE`, `REVALIDATION_REQUIRED`) et la saisie
+de validations humaines (`HUMAN_VALIDATED`), [ARCHITECTURE § 5.5 et § 6](../ARCHITECTURE.md). Elles
+viendront avec leur premier usage.
 
 Data, dérive de documentation, configuration, frontend, tests, CI/CD, flux métier, notes de version,
 sources Sonar et exécution. Les récits de vision décrivent ces capacités ; ils ne sont pas un backlog.
