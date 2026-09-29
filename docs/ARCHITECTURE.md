@@ -204,8 +204,10 @@ attendu) que tout producteur doit passer, en Python comme ailleurs.
 
 Une **occurrence** rattache une identité à un instantané : statut, validité, preuves, dérivation ou
 validation, producteur. Deux instantanés se comparent par identité : introduit, modifié (même sujet et
-relation, autre objet ou qualificatifs, ou autre statut), retiré. Identité canonique : normalisation NFC,
-sérialisation RFC 8785, empreinte.
+relation, autre objet ou qualificatifs), retiré. Un changement de statut à identité constante (par
+exemple `INFERRED` devenu `HUMAN_VALIDATED`) n'est pas encore signalé par la comparaison livrée : le
+fait compte parmi les inchangés (À construire). Identité canonique : normalisation NFC, sérialisation
+RFC 8785, empreinte.
 
 Deux analyses dont les catalogues d'un même évaluateur diffèrent sont **non comparables** pour cet
 évaluateur ; la différence est marquée « cause possible : évolution du producteur ». Un changement de
