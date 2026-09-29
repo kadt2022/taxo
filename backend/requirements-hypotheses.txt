@@ -1,4 +1,4 @@
-# Mode hypotheses (ADR 0006) : a installer en plus de requirements.txt, jamais requis par la CI.
+# Mode hypotheses (ARCHITECTURE § 13) : a installer en plus de requirements.txt, jamais requis par la CI.
 -r requirements.txt
 torch>=2.4,<3
 transformers>=4.45,<6

@@ -1,4 +1,4 @@
-"""Lecture des descripteurs de build et de deploiement, par leur forme ecrite (ADR 0012).
+"""Lecture des descripteurs de build et de deploiement, par leur forme ecrite (ARCHITECTURE § 7.5).
 
 Chaque lecteur rend ce qu'il a lu (modules, dependances entre modules, applications), chaque element avec
 sa ligne, et ce qu'il n'a pas su lire (`gaps` : chemin -> raison). Il ne devine jamais : une inclusion

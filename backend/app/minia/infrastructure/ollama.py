@@ -2,7 +2,7 @@
 
 Le modele recoit la projection Taxo de MINIA-01 (faits changes, localisation des preuves, couverture,
 metadonnees du commit) et, seulement si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise, le diff
-du commit (ADR 0008). MINIA_OLLAMA_URL peut viser un Ollama local ou distant : s'il est distant, ces
+du commit (ARCHITECTURE § 12.6). MINIA_OLLAMA_URL peut viser un Ollama local ou distant : s'il est distant, ces
 donnees quittent le processus et la machine de Taxo ; `remote` le signale au portail.
 """
 import ipaddress

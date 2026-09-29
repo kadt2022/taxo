@@ -1,4 +1,4 @@
-"""Applications Spring Boot et ce qu'elles chargent (TAXO-E1, tranche 2 ; ADR 0012).
+"""Applications Spring Boot et ce qu'elles chargent (TAXO-E1, tranche 2 ; ARCHITECTURE § 7.6).
 
 Une application est un type annote `@SpringBootApplication` dans les sources principales d'un module. Elle
 charge une classe du depot si, et seulement si, les trois prémisses suivantes sont etablies statiquement :

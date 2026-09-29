@@ -47,5 +47,5 @@ changé, et le prouver.
 
 ## Hors périmètre
 
-Projection PR (TAXO-PROJ-PR-01), API publique de comparaison (01G), tuiles et maille (TAXO-TILES-01
-et 02), qui réutiliseront ce résultat comme critère d'invalidation.
+Projection PR (TAXO-PROJ-PR-01), API publique de comparaison (01G), tuiles et maille (ARCHITECTURE § 8,
+§ 9 et § 15), qui réutiliseront ce résultat comme critère d'invalidation.

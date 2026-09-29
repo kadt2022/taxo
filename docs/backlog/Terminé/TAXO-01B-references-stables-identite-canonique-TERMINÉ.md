@@ -3,7 +3,7 @@
 **Statut : TERMINÉ — implémentation terminée et tests validés ; revue PR et intégration dans `main` en attente.**  
 **Parent : EPIC TAXO-01 — Fondation de la mémoire logicielle vérifiable**  
 **Dépend de : TAXO-01A — Contrat machine du fait**  
-**Références : ADR 0001, ADR 0002**
+**Références : ARCHITECTURE § 1, ARCHITECTURE § 5**
 
 ## Vérification de l'implémentation
 
@@ -246,7 +246,7 @@ scope canonique
 producer_id
 ```
 
-Le `producer_id` fait partie de l'identité d'une `COVERAGE`, conformément à ADR 0002.
+Le `producer_id` fait partie de l'identité d'une `COVERAGE`, conformément à ARCHITECTURE § 5.
 
 ---
 

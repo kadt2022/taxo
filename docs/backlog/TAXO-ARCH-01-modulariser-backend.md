@@ -1,6 +1,6 @@
 # TAXO-ARCH-01 — Modulariser le backend selon l'architecture DDD/hexagonale
 
-Position : après 01A/01B/01C, avant 01D. Décision : [ADR 0004](../adr/0004-monolithe-modulaire.md).
+Position : après 01A/01B/01C, avant 01D. Décision : [ARCHITECTURE § 3](../ARCHITECTURE.md).
 
 ## Objectif
 

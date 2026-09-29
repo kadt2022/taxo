@@ -1,4 +1,4 @@
-"""Le diff d'un commit, donne a Minia comme matiere d'interpretation (TAXO-MINIA-02, ADR 0008).
+"""Le diff d'un commit, donne a Minia comme matiere d'interpretation (TAXO-MINIA-02, ARCHITECTURE § 12.6).
 
 Taxo etablit, Git montre ce qui a change, Minia lit les deux et explique. Le diff n'est jamais un fait :
 c'est du contexte documentaire, et ce que Minia en deduit reste une interpretation non verifiee.
@@ -11,7 +11,7 @@ limites, un fichier n'est pas transmis ; il est nomme, avec sa raison, pour que 
 import re
 from dataclasses import dataclass, field
 
-# Limites et fichiers generes : la politique de transmission du diff, commune au protocole (ADR 0008).
+# Limites et fichiers generes : la politique de transmission du diff, commune au protocole (ARCHITECTURE § 12.6).
 from app.history.domain.disclosure import (GENERATED, LIMIT, MAX_DIFF_BYTES, MAX_DIFF_FILES,
                                            MAX_DIFF_LINES, generated)
 

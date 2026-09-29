@@ -481,8 +481,8 @@ Le parallélisme ne doit jamais détruire le déterminisme.
 - résumé d'exécution borné dans la console.
 
 Les récits 01A, 01B, 01C, ARCH-01 et 01D sont fusionnés. 01E, 01F, 01G et 01I sont rédigés et non
-ouverts. Le vocabulaire Fait / Tuile / Maille / Contexte est figé par l'ADR 0005, et le lot TILES
-est rédigé sans être ouvert : il suppose les faits de TAXO-04 et TAXO-05.
+ouverts. Le vocabulaire (Fait, Maille, Tuile, Tuile adaptative, Arbre, Forêt, Chemin, Contexte) est fixé par le
+document cible unique, [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ### Limites mesurées
 

@@ -1,4 +1,4 @@
-"""L'hypothese statistique n'est pas un fait (ADR 0006).
+"""L'hypothese statistique n'est pas un fait (ARCHITECTURE § 13).
 
 Une hypothese ne passe jamais par le contrat du fait : elle ne peut donc etre ni une premisse, ni une
 preuve, ni une validation. Seul un verificateur produit un fait, sous sa propre provenance.

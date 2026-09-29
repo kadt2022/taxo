@@ -85,7 +85,7 @@ Le backend est organisé par capacité : `projects`, `snapshots`, `facts`, `scan
 `evaluators/inventory`. Le domaine est indépendant des frameworks ; les cas
 d'utilisation passent par des ports, câblés dans `bootstrap.application`.
 `main.py` conserve la factory Uvicorn. Alembic charge les mappings via
-`bootstrap.database`. Voir [ADR 0004](docs/adr/0004-monolithe-modulaire.md).
+`bootstrap.database`. Voir [ARCHITECTURE § 3](docs/ARCHITECTURE.md).
 
 L'inventaire reçoit un Snapshot et produit désormais une `EvaluatorExecution` avec
 Facts, Coverage, provenance et statut technique via le moteur `evaluations`. Les
@@ -178,7 +178,7 @@ produit aujourd'hui, prouve par fichier entier : ses liens sont donc `FILE`.
 L'impact sur les chaînes d'autorisation passe encore par le POC Spring, hors produit :
 `py -m poc.authchain.impact --root <dépôt> --commit <sha>` (résultat marqué `provisional`).
 
-### Git, deuxième évaluateur (TAXO-EVAL-02, ADR 0007)
+### Git, deuxième évaluateur (TAXO-EVAL-02, ARCHITECTURE § 7.2)
 
 L'analyse globale exécute tous les évaluateurs sur le même instantané. À côté de l'inventaire, Git
 transforme **tout** l'historique atteignable en faits : `HAS_COMMIT` (dépôt → commit, date et message),
@@ -192,7 +192,7 @@ Les faits de chaque évaluateur sont conservés et s'interrogent après l'analys
 Git et ceux du code se rejoignent par la même référence `file:`. L'impact d'un commit et Minia ne
 comparent que les évaluateurs de contenu.
 
-### Endpoints Spring, premier analyseur de code (TAXO-03, TAXO-04, ADR 0003)
+### Endpoints Spring, premier analyseur de code (TAXO-03, TAXO-04, ARCHITECTURE § 7.3)
 
 Troisième évaluateur de l'analyse, `taxo.spring-api` relève la surface HTTP d'une application Spring
 MVC. Pour chaque méthode d'un `@RestController` ou `@Controller` portant `@GetMapping`, `@PostMapping`,
@@ -233,7 +233,7 @@ sont hors du périmètre, et la couverture le dit.
 Les endpoints rejoignent l'impact d'un commit (endpoint introduit, retiré, ou traité par une autre
 méthode), le protocole `taxo-query/1` et Minia, sans changement de ces consommateurs.
 
-### Sécurité Spring : quelle règle protège chaque route (TAXO-05, ADR 0010)
+### Sécurité Spring : quelle règle protège chaque route (TAXO-05, ARCHITECTURE § 7.4)
 
 Quatrième évaluateur, `taxo.spring-security` lit les règles `authorizeHttpRequests` (et
 `authorizeRequests` de Spring Security 5) et les rattache aux endpoints de `taxo.spring-api` :
@@ -275,7 +275,7 @@ trouver. Sans règle `authorizeHttpRequests` dans les sources, Taxo n'affirme ri
 Dans Minia, une affirmation confirmée par une déduction s'affiche « Confirmée par Taxo, par déduction »,
 avec ses prémisses, ce qui a été écarté et ses limites.
 
-### Structure du dépôt : modules et unités déployables (TAXO-E1, ADR 0012)
+### Structure du dépôt : modules et unités déployables (TAXO-E1, ARCHITECTURE § 7.5)
 
 Cinquième évaluateur, `taxo.structure` dit de quoi un dépôt est fait, quel que soit son langage.
 Il lit les descripteurs de build et de déploiement, sans rien exécuter :
@@ -301,7 +301,7 @@ Un service à image externe (`image: postgres`) n'est ni un fait ni une lacune. 
 commit montre un module ajouté ou une dépendance ajoutée. Validé sur Taxo lui-même (deux modules,
 deux applications) et sur TAKIBO (18 modules Gradle, 37 dépendances).
 
-### Applications Spring Boot et routes servies (TAXO-E1 tranche 2, ADR 0012)
+### Applications Spring Boot et routes servies (TAXO-E1 tranche 2, ARCHITECTURE § 7.6)
 
 Sixième évaluateur, `taxo.spring-boot` dit quelle application sert chaque route. Chaque
 `@SpringBootApplication` des sources principales d'un module devient
@@ -353,7 +353,7 @@ globale), ou sans commit correspondant, le modèle n'est pas appelé et Minia le
 
 API : `GET /api/projects/{id}/query?q=…` et `POST /api/projects/{id}/ask` avec `{"question": "…"}`.
 
-### Protocole Taxo, opérations v1 (TAXO-QUERY-02, ADR 0009)
+### Protocole Taxo, opérations v1 (TAXO-QUERY-02, ARCHITECTURE § 12)
 
 > Minia comprend la question et raisonne. Taxo cherche, relie et prouve. L'humain décide.
 
@@ -368,7 +368,7 @@ relations et les références du contrat du fait.
 | `get_evidence` | les preuves d'un fait reçu dans l'échange (`F…`) |
 | `get_coverage` | ce qui a été analysé ou non, éventuellement pour un périmètre (`scope`) |
 | `get_commit` | les faits Git d'un commit, sans contenu |
-| `get_diff` | les blocs modifiés d'un fichier touché par un commit, sur double consentement (ADR 0008) |
+| `get_diff` | les blocs modifiés d'un fichier touché par un commit, sur double consentement (ARCHITECTURE § 12.6) |
 | `verify_claim` | `CONFIRMED`, `REFUTED` ou `NOT_PROVEN` (avec sa raison) pour une affirmation structurée |
 
 ```http
@@ -390,13 +390,13 @@ POST /api/projects/{id}/taxo-query
   `NOT_ANALYSED`. La réfutation par un fait `ABSENCE` attend le premier analyseur qui en produit.
 - **`get_diff`** n'est proposé que si `MINIA_SOURCE_CONTEXT=diff`, et ne répond qu'avec
   `"consent": {"diff": true}` ; les refus de l'historique (`.env`, binaires, fichiers trop gros…) restent.
-- `diff_facts` (réservée par l'ADR, activée par TAXO-MINIA-09b) rend les faits qu'un commit introduit, modifie
+- `diff_facts` (réservée par le protocole, activée par TAXO-MINIA-09b) rend les faits qu'un commit introduit, modifie
   ou retire, d'après l'impact (comparaison avec le premier parent). Ce sont des changements, sans référence
   `F…`, avec la localisation de leurs preuves.
 - Les autres opérations réservées (`find_endpoint`, `find_callers`, `get_source`…) répondent `NOT_AVAILABLE`
   tant qu'aucun analyseur ne les nourrit.
 
-### Minia interroge Taxo (TAXO-MINIA-09, ADR 0009)
+### Minia interroge Taxo (TAXO-MINIA-09, ARCHITECTURE § 12)
 
 Dans « Interroger Taxo », Minia ne reçoit plus un paquet de faits fixe, quel que soit le fournisseur (Ollama,
 Claude, Gemini, Mistral) : elle **interroge Taxo**, une opération du protocole à la fois (`describe`, `find_facts`, `get_commit`…), et
@@ -452,7 +452,7 @@ depuis Taxo), **Interprétation Minia** (non vérifiée) et **Inconnu / non inte
 inventée par le modèle est écartée et signalée. Ce que Git sait du commit est toujours affiché, tiré de
 Git et non du modèle. Si Taxo n'a vu changer aucun fait et qu'aucun évaluateur n'a échoué, le modèle
 n'est pas appelé et Minia dit qu'elle ne sait pas (une zone non interprétée seule ne suffit pas). Aucune réponse n'est conservée, et une réponse n'est jamais
-enregistrée comme un fait (ADR 0004, règle 14). Minia est indépendante de Clochette.
+enregistrée comme un fait (ARCHITECTURE § 2, principe 5). Minia est indépendante de Clochette.
 
 Minia fonctionne avec un modèle servi par [Ollama](https://ollama.com), gratuit. `MINIA_OLLAMA_URL`
 peut viser un Ollama local ou distant : sans `MINIA_SOURCE_CONTEXT=diff` (voir TAXO-MINIA-02), Minia
@@ -484,7 +484,7 @@ API : `GET /api/minia/status` et `POST …/commits/{sha}/ask` avec `{"question":
 Le modèle est derrière l'interface `MiniaModel` : un adaptateur Claude pourra s'ajouter sans toucher au
 reste (`MINIA_PROVIDER=claude`, pas encore disponible).
 
-### Minia lit le diff d'un commit (TAXO-MINIA-02, ADR 0008)
+### Minia lit le diff d'un commit (TAXO-MINIA-02, ARCHITECTURE § 12.6)
 
 > Taxo établit. Git montre ce qui a changé. Minia lit les deux et explique.
 
@@ -557,7 +557,7 @@ quota atteint aussi.
 
 ### Minia Mistral (TAXO-MINIA-10)
 
-Quatrième fournisseur de Minia, même travail que les autres, mode exploration compris (ADR 0009). L'API de
+Quatrième fournisseur de Minia, même travail que les autres, mode exploration compris (ARCHITECTURE § 12). L'API de
 Mistral (La Plateforme) a un niveau gratuit pour tester.
 
 ```powershell
@@ -578,7 +578,7 @@ diff reste décoché par défaut. La réponse est contrainte par un schéma JSON
 signalée, une surcharge passagère (5xx) est réessayée deux fois avant tout texte, un quota atteint (429)
 jamais.
 
-### Clochette (SmolLM2-135M, expérimental, ADR 0006)
+### Clochette (SmolLM2-135M, expérimental, ARCHITECTURE § 13)
 
 Clochette est installée par l'étape `python -m app.hypotheses fetch` de la procédure ci-dessus : elle
 télécharge une seule fois la révision épinglée dans `TAXO_MODELS_DIR` (par défaut

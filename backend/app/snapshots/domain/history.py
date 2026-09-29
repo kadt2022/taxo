@@ -1,4 +1,4 @@
-"""L'historique Git atteignable depuis le commit d'un instantane (ADR 0007)."""
+"""L'historique Git atteignable depuis le commit d'un instantane (ARCHITECTURE § 7.2)."""
 from dataclasses import dataclass
 
 

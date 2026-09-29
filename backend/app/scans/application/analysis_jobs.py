@@ -4,7 +4,7 @@ Le lancement valide la demande et rend la main aussitot ; l'analyse se deroule d
 chaque evenement reel est conserve dans le journal de l'analyse. Un observateur lit ce journal depuis le
 debut, ou reprend apres le dernier evenement recu : un navigateur qui se reconnecte ne perd rien.
 
-Les journaux vivent dans la memoire du processus, comme il sied au monolithe (ADR 0004) : un deploiement a
+Les journaux vivent dans la memoire du processus, comme il sied au monolithe (ARCHITECTURE § 3) : un deploiement a
 plusieurs instances devra les partager ou router un client vers l'instance qui a lance son analyse.
 """
 import threading

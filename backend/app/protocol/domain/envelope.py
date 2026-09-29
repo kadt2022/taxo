@@ -1,11 +1,11 @@
-"""Enveloppe commune des reponses du protocole Taxo (ADR 0009, section 4).
+"""Enveloppe commune des reponses du protocole Taxo (ARCHITECTURE § 12.2).
 
 Toute reponse d'operation a la meme forme : une issue (`OK` ou `ERROR`, avec un code ferme), l'instantane
 de l'echange, les resultats sous references courtes, la couverture (obligatoire), ce qui n'a pas ete
 transmis et sa taille en octets. Rien n'est tronque au milieu : un element qui ne tient pas dans le budget
 n'est pas transmis, il est compte dans `not_sent`.
 
-Taille : octets UTF-8 du JSON compact, borne sure du nombre de tokens (ADR 0009, section 7).
+Taille : octets UTF-8 du JSON compact, borne sure du nombre de tokens (ARCHITECTURE § 12.5).
 """
 import json
 

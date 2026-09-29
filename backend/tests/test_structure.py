@@ -1,4 +1,4 @@
-"""TAXO-E1 (ADR 0012) : modules, dependances entre modules et unites deployables, lus sans rien executer."""
+"""TAXO-E1 (ARCHITECTURE § 7.5) : modules, dependances entre modules et unites deployables, lus sans rien executer."""
 from fastapi.testclient import TestClient
 
 from app.bootstrap.database import Base

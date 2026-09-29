@@ -1,4 +1,4 @@
-"""Lecture de la reponse du modele. Une reponse de Minia n'est jamais un fait (ADR 0004, regle 14).
+"""Lecture de la reponse du modele. Une reponse de Minia n'est jamais un fait (ARCHITECTURE § 2, principe 5).
 
 Le modele ne rend que des references et du texte : les faits affiches sont ceux de Taxo, retrouves par
 reference. Une reference inconnue est ecartee et signalee, jamais affichee comme un fait.

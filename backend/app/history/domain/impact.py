@@ -1,6 +1,6 @@
 """Ce que Taxo comprend d'un commit : les faits introduits, retires ou modifies entre deux instantanes.
 
-La comparaison porte sur l'identite canonique des faits (ADR 0002) : une preuve qui se deplace ne change
+La comparaison porte sur l'identite canonique des faits (ARCHITECTURE § 5) : une preuve qui se deplace ne change
 pas un fait. Les couvertures ne sont pas des changements ; elles disent ce qui reste non interprete.
 """
 INTRODUCED, REMOVED, MODIFIED = 'INTRODUCED', 'REMOVED', 'MODIFIED'

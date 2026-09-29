@@ -6,7 +6,7 @@ existants.
 Source de vérité : [T6 et T12 de l'EPIC TAXO-01](EPIC-TAXO-01-fondation-memoire-verifiable.md).
 
 Dépend de : 01E (persistance), 01G (lecture), TAXO-ID-01 (identité des méthodes).
-Étalon : [TAXO-POC-01](TAXO-POC-01-verite-de-reference-chaine-autorisation.md). Vocabulaire : ADR 0005.
+Étalon : [TAXO-POC-01](TAXO-POC-01-verite-de-reference-chaine-autorisation.md). Vocabulaire : ARCHITECTURE § 4.
 
 ## Pourquoi ce récit en premier
 
@@ -16,7 +16,7 @@ valide ainsi la sélection, les budgets, la frontière et la navigation inverse 
 vérifier. On voit aussi où de nouveaux analyseurs seraient utiles.
 
 Aucune relation n'est ajoutée pour la démonstration. En particulier, pas de `CALLS` : il viendra avec
-l'ADR 0011.
+ARCHITECTURE § 14.
 
 ## Intention
 
@@ -30,7 +30,7 @@ qu'elle laisse de côté et pourquoi.
 | --- | --- |
 | Faits et preuves d'une analyse | stockage des faits (01E), lecture (01G) |
 | Limites de connaissance | couvertures `NOT_INTERPRETED`, `READ_ERROR`, `ANALYSED` des évaluateurs |
-| Ce qui n'a pas été transmis | `not_sent` du protocole `taxo-query/1` (ADR 0009) |
+| Ce qui n'a pas été transmis | `not_sent` du protocole `taxo-query/1` (ARCHITECTURE § 12) |
 | Budget de réponse | `max_bytes` et le mécanisme de réponse bornée du protocole |
 | Références de faits et de preuves | `F…` / `E…` de l'échange, `get_evidence` |
 | Versions | `produced_by` (évaluateur, version, catalogue) sur chaque fait |
@@ -146,7 +146,7 @@ Tuile ne mélange jamais deux analyses.
 
 ## Minia
 
-`get_neighborhood` est une opération de `taxo-query/1`. L'ajouter est une évolution de l'ADR 0009 :
+`get_neighborhood` est une opération de `taxo-query/1`. L'ajouter est une évolution d'ARCHITECTURE § 12 :
 la PR qui l'introduit amende la section 5.
 
 - `describe` l'expose avec les relations disponibles dans l'analyse.
@@ -198,8 +198,8 @@ elle demande `CALLS`. Ici, elle s'arrête honnêtement à la frontière.
 
 ## Hors périmètre
 
-- Nouvelles relations, dont `CALLS`, `IMPLEMENTS` et `DISPATCHES_TO` (ADR 0011).
+- Nouvelles relations, dont `CALLS`, `IMPLEMENTS` et `DISPATCHES_TO` (ARCHITECTURE § 14).
 - Direction `BOTH`, curseur général (au-delà de la position de reprise), pondération des relations, profils de parcours.
 - Recherche de chemins entre deux nœuds.
-- Écran de graphe (TAXO-PROJ-API-01), narration (TAXO-ASK-01), maille des tuiles (TAXO-TILES-02).
+- Écran de graphe (TAXO-PROJ-API-01), narration (TAXO-ASK-01), Tuiles (ARCHITECTURE § 9).
   Ces trois récits réutiliseront ce voisinage au lieu d'en créer un second.

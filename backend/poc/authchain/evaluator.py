@@ -209,7 +209,7 @@ class AuthorizationChainPoc:
 
     @staticmethod
     def _assertion(subject, relation, object_reference, evidence):
-        """`PERMITS_ALL` est la seule relation du catalogue sans objet (ADR 0002)."""
+        """`PERMITS_ALL` est la seule relation du catalogue sans objet (ARCHITECTURE § 5)."""
         fact = {'contract_version': 1, 'kind': 'ASSERTION', 'status': 'OBSERVED',
                 'validity': 'VALID', 'subject': subject, 'relation': relation,
                 'qualifiers': {}, 'evidence': evidence}

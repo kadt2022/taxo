@@ -1,5 +1,5 @@
 # Fins de ligne : LF dans Git, quel que soit le poste.
-# Cohérent avec la règle d'empreinte de l'ADR 0002 (content_hash normalisé en LF).
+# Cohérent avec la règle d'empreinte d'ARCHITECTURE § 5 (content_hash normalisé en LF).
 * text=auto eol=lf
 
 # Scripts Windows

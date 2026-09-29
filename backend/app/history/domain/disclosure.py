@@ -1,7 +1,7 @@
-"""Ce que Taxo accepte de transmettre du diff d'un commit a un modele (ADR 0008).
+"""Ce que Taxo accepte de transmettre du diff d'un commit a un modele (ARCHITECTURE § 12.6).
 
 Les memes limites valent pour le paquet de Minia et pour les lectures a la demande du protocole
-(`get_diff`, ADR 0009) : des fichiers generes jamais lus, et un total borne en fichiers, lignes et octets.
+(`get_diff`, ARCHITECTURE § 12) : des fichiers generes jamais lus, et un total borne en fichiers, lignes et octets.
 Au-dela, un fichier n'est pas tronque : il n'est pas transmis.
 """
 MAX_DIFF_FILES = 20
