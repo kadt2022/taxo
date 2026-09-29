@@ -11,7 +11,9 @@ from app.snapshots.infrastructure.git.reader import GitSnapshotReader
 from app.evaluators.inventory.evaluator import InventoryEvaluator
 from app.evaluators.git.evaluator import GitEvaluator
 from app.evaluators.spring_api.evaluator import SpringApiEvaluator
+from app.evaluators.spring_boot.evaluator import SpringBootEvaluator
 from app.evaluators.spring_security.evaluator import SpringSecurityEvaluator
+from app.evaluators.structure.evaluator import StructureEvaluator
 from app.scans.infrastructure.sqlalchemy.fact_store import SqlAlchemyAnalysisFacts
 from app.evaluations.application.registry import EvaluatorRegistry
 from app.evaluations.application.run_evaluator import RunEvaluator
@@ -69,7 +71,8 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     paths = LocalProjectPaths(settings.allowed_roots(allowed_roots))
     projects = SqlAlchemyProjectRepository(engine)
     scans = SqlAlchemyScanRepository(engine)
-    registry = EvaluatorRegistry([InventoryEvaluator(), GitEvaluator(), SpringApiEvaluator(), SpringSecurityEvaluator()])
+    registry = EvaluatorRegistry([InventoryEvaluator(), GitEvaluator(), SpringApiEvaluator(), SpringBootEvaluator(),
+                                  SpringSecurityEvaluator(), StructureEvaluator()])
     inventory = registry.get('taxo.inventory')
     facts = SqlAlchemyAnalysisFacts(engine)
     # Analyse globale : chaque evaluateur observe l'instantane ; l'inventaire du code reste le principal.
@@ -79,7 +82,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     history = ProjectHistory(projects, paths, GitHistoryReader(), GitSnapshotReader(),
                              registry.content(), RunEvaluator())
     # Mode hypotheses : les poids sont prepares et verifies au demarrage ; aucune API ne les expose
-    # tant que TAXO-LAB-01 n'a pas conclu (ADR 0006).
+    # tant que TAXO-LAB-01 n'a pas conclu (ARCHITECTURE § 13).
     store = model_store or ModelStore()
     for name in settings.hypotheses_models(hypotheses):
         store.ensure(name)
@@ -94,17 +97,17 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     # La requete selectionne parmi les faits conserves ; elle ne relit jamais le depot (TAXO-QUERY-01).
     query = ProjectQuery(projects, scans, facts)
     api.include_router(query_router(query))
-    # Protocole Taxo (ADR 0009) : operations en lecture seule sur la derniere analyse ; le diff reste soumis
-    # au meme double consentement que pour Minia (ADR 0008).
+    # Protocole Taxo (ARCHITECTURE § 12) : operations en lecture seule sur la derniere analyse ; le diff reste soumis
+    # au meme double consentement que pour Minia (ARCHITECTURE § 12.6).
     source = settings.minia_source_context(source_context)
     api.state.taxo_query = TaxoQuery(projects, scans, facts, history, registry.all(), source)
     api.include_router(protocol_router(api.state.taxo_query))
-    # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ADR 0004, regle 14).
+    # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ARCHITECTURE § 2, principe 5).
     # Plusieurs fournisseurs peuvent servir Minia (Ollama local, Claude distant) : chaque demande choisit.
     options = settings.minia()
     models = minia_models(options) if minia is _FROM_SETTINGS else minia
     default = options['provider'] if minia is _FROM_SETTINGS and options['provider'] in models else None
-    # Le diff d'un commit ne lui est joint que si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise (ADR 0008).
+    # Le diff d'un commit ne lui est joint que si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise (ARCHITECTURE § 12.6).
     api.state.minia = AskMinia(history, models, projects, query, source, default, taxo_query=api.state.taxo_query)
     api.include_router(minia_router(api.state.minia))
     return api

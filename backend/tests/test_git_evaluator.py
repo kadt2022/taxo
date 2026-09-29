@@ -124,7 +124,7 @@ def api_fixture(story, tmp_path):
 def test_the_global_analysis_runs_every_evaluator_and_keeps_their_facts(api):
     client, base, sha = api
     analysis = client.post(f'{base}/scans').json()
-    assert {item['evaluator_id'] for item in analysis['evaluations']} == {'taxo.git', 'taxo.inventory', 'taxo.spring-api', 'taxo.spring-security'}
+    assert {item['evaluator_id'] for item in analysis['evaluations']} == {'taxo.git', 'taxo.inventory', 'taxo.spring-api', 'taxo.spring-boot', 'taxo.spring-security', 'taxo.structure'}
     assert analysis['evaluation_summary']['evaluator_id'] == 'taxo.inventory', 'le resume principal reste le code'
     facts = f'{base}/scans/{analysis["id"]}/facts'
     commits = client.get(facts, params={'evaluator': 'taxo.git', 'relation': 'HAS_COMMIT'}).json()
@@ -157,14 +157,14 @@ def test_the_code_analysis_survives_a_failing_git_evaluator(api, monkeypatch):
     assert analysis.status_code == 201
     statuses = {item['evaluator_id']: item['status'] for item in analysis.json()['evaluations']}
     assert statuses == {'taxo.git': 'FAILED', 'taxo.inventory': 'SUCCESS', 'taxo.spring-api': 'SUCCESS',
-                        'taxo.spring-security': 'SUCCESS'}
+                        'taxo.spring-boot': 'SUCCESS', 'taxo.spring-security': 'SUCCESS', 'taxo.structure': 'SUCCESS'}
     assert analysis.json()['evaluation_summary']['fact_count'] > 0
 
 
 def test_the_impact_of_a_commit_compares_content_only(api):
     client, base, sha = api
     impact = client.get(f'{base}/history/commits/{sha["moved"]}/impact').json()
-    assert [item['evaluator_id'] for item in impact['evaluations']] == ['taxo.inventory', 'taxo.spring-api', 'taxo.spring-security']
+    assert [item['evaluator_id'] for item in impact['evaluations']] == ['taxo.inventory', 'taxo.spring-api', 'taxo.spring-boot', 'taxo.spring-security', 'taxo.structure']
 
 
 def test_a_third_evaluator_joins_without_touching_the_first_two(story, tmp_path):
@@ -248,3 +248,13 @@ def test_a_non_utf8_commit_message_does_not_fail_the_history(make_repo, git):
     git(repo, 'commit', '-qm', 'résumé'.encode('latin-1').decode('utf-8', 'surrogateescape'))
     execution = execute(repo)
     assert execution.status is EvaluationStatus.SUCCESS, execution.warnings
+
+
+def test_facts_of_different_identity_schemas_are_never_compared():
+    from app.history.domain.impact import same_schema
+
+    def fact(version):
+        return {'kind': 'ASSERTION', 'produced_by': {'catalog_id': 'spring-api', 'catalog_version': version}}
+    assert same_schema([fact('2')], [fact('2')])
+    assert not same_schema([fact('1')], [fact('2')]), '#list et #list(String) ne se comparent pas'
+    assert same_schema([], [fact('2')]), 'un cote vide ne dit rien du schema'

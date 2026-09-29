@@ -2,7 +2,7 @@
 // ces libelles en sont la lecture humaine. Rien n'est renomme cote backend : un terme inconnu s'affiche tel quel.
 
 export const EVALUATORS:Record<string,string>={'taxo.inventory':'Inventaire du code', 'taxo.git':'Historique Git', 'taxo.spring-api':'Endpoints Spring',
-  'taxo.spring-security':'Sécurité Spring'};
+  'taxo.spring-boot':'Applications Spring Boot', 'taxo.spring-security':'Sécurité Spring', 'taxo.structure':'Structure du dépôt'};
 
 export const STATUSES:Record<string,string>={SUCCESS:'Terminée', PARTIAL:'Partielle', FAILED:'Échec'};
 
@@ -18,21 +18,24 @@ export const RELATIONS:Record<string,string>={CONTAINS:'Fichiers du projet', WRI
   ANNOTATED_WITH:'Annotations', CALLS:'Appels', IMPLEMENTS:'Implémentations', DISPATCHES_TO:'Délégations',
   HANDLED_BY:'Routes traitées', ACCEPTS:'Entrées acceptées', RETURNS:'Réponses renvoyées',
   PERMITS_ALL:'Routes ouvertes à tous', AUTHORIZED_BY:'Autorisations', MATCHED_BY:'Correspondances de routes',
-  PROTECTED_BY:'Protections'};
+  PROTECTED_BY:'Protections', DEPENDS_ON:'Dépendances entre modules', BUILT_FROM:'Applications construites',
+  SERVED_BY:'Routes servies'};
 
 /** Ce qu'une relation affirme, dans une phrase « sujet verbe objet ». */
 export const VERBS:Record<string,string>={CONTAINS:'contient', WRITTEN_IN:'est écrit en', USES_TECHNOLOGY:'utilise',
   DECLARED_BY:'est déclarée dans', HAS_COMMIT:'contient le', AUTHORED_BY:'a pour auteur', CHILD_OF:'suit le',
   CHANGES:'modifie', ANNOTATED_WITH:'est annoté', CALLS:'appelle', IMPLEMENTS:'implémente', DISPATCHES_TO:'délègue à',
   HANDLED_BY:'est traité par', ACCEPTS:'accepte', RETURNS:'renvoie', PERMITS_ALL:'est ouvert à tous',
-  AUTHORIZED_BY:'est autorisé par', MATCHED_BY:'correspond à', PROTECTED_BY:'est protégé par'};
+  AUTHORIZED_BY:'est autorisé par', MATCHED_BY:'correspond à', PROTECTED_BY:'est protégé par',
+  DEPENDS_ON:'dépend de', BUILT_FROM:'est construite depuis',
+  SERVED_BY:'est servie par'};
 
 export function label(labels:Record<string,string>, key:string){
   return labels[key]??key;
 }
 
 const TYPES:Record<string,string>={technology:'technologie', language:'langage', module:'module', symbol:'symbole',
-  endpoint:'route', 'route-pattern':'routes', 'policy-rule':'règle', person:'', file:'', commit:'commit'};
+  endpoint:'route', 'route-pattern':'routes', 'policy-rule':'règle', application:'application', person:'', file:'', commit:'commit'};
 
 /** Une reference `type:cle` dite en clair : le depot par le nom du projet, un commit par son identifiant court. */
 export function reference(value:string|null, project?:{id:string; name:string}){

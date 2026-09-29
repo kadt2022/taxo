@@ -22,13 +22,18 @@ RELATIONS = {
     'AUTHORIZED_BY': ({'route-pattern'}, {'symbol'}, {'OBSERVED'}),
     'MATCHED_BY': ({'endpoint'}, {'route-pattern'}, {'INFERRED'}),
     'PROTECTED_BY': ({'endpoint'}, {'symbol', 'policy-rule'}, {'INFERRED', 'HUMAN_VALIDATED'}),
-    # Historique Git (ADR 0007) : un commit, son auteur, ses parents et les fichiers qu'il change.
+    # Historique Git (ARCHITECTURE § 7.2) : un commit, son auteur, ses parents et les fichiers qu'il change.
     'HAS_COMMIT': ({'repository'}, {'commit'}, {'OBSERVED'}),
     'AUTHORED_BY': ({'commit'}, {'person'}, {'OBSERVED'}),
     'CHILD_OF': ({'commit'}, {'commit'}, {'OBSERVED'}),
     'CHANGES': ({'commit'}, {'file'}, {'OBSERVED'}),
+    # Structure du depot (ARCHITECTURE § 7.5) : modules et leurs dependances, unites deployables.
+    'DEPENDS_ON': ({'module'}, {'module'}, {'OBSERVED'}),
+    'BUILT_FROM': ({'application'}, {'module'}, {'OBSERVED'}),
+    # L'application qui expose une route : deduite du classpath et du balayage (E1, tranche 2).
+    'SERVED_BY': ({'endpoint'}, {'application'}, {'INFERRED'}),
 }
-# Un commit est designe par son identifiant Git complet, comme l'instantane (ADR 0007).
+# Un commit est designe par son identifiant Git complet, comme l'instantane (ARCHITECTURE § 7.2).
 _COMMIT_KEY = re.compile(r'(?:[0-9a-f]{40}|[0-9a-f]{64})')
 _GIT_RELATIONS = {'HAS_COMMIT', 'AUTHORED_BY', 'CHILD_OF', 'CHANGES'}
 _STATUS_PRODUCERS = {

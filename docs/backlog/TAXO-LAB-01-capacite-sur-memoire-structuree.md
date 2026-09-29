@@ -7,7 +7,7 @@ validés puis figés. L'épique TAXO-01 reste prioritaire.
 Source de vérité : cette fiche. Elle applique le [manifeste](../manifeste.md) à une question de
 recherche : ce qui est mesuré est dit mesuré, ce qui est supposé est dit supposé.
 
-Dépend de : TAXO-POC-01 (chaîne d'autorisation, `anyRequest()` compris) ; ADR 0006 (l'hypothèse
+Dépend de : TAXO-POC-01 (chaîne d'autorisation, `anyRequest()` compris) ; ARCHITECTURE § 13 (l'hypothèse
 statistique n'est pas un fait).
 
 ## Question
@@ -107,7 +107,7 @@ TAKIBO réel                  → test final   (jamais vu, jamais utilisé pour 
 
 ## Décision préalable : l'hypothèse n'est pas un fait
 
-Tranchée par l'[ADR 0006](../adr/0006-hypothese-statistique.md) (proposé) : une prédiction de modèle
+Tranchée par [ARCHITECTURE § 13](../ARCHITECTURE.md) (proposé) : une prédiction de modèle
 est une `Hypothesis`, objet distinct du fait. Le contrat v1 ne change pas. Une hypothèse n'est jamais
 une prémisse ; seul un vérificateur produit un fait, sous sa propre provenance ; les hypothèses
 rejetées restent dans le journal des hypothèses.
@@ -120,7 +120,7 @@ de Taxo. Les modèles expérimentaux sont entraînés à partir de zéro ; un mo
 
 LAB-01 répond à une seule question : **un modèle statistique ajoute-t-il une capacité** à la mémoire
 vérifiée ? Il ne dit pas si la boucle observer, vérifier, historiser apporte de la valeur. Cette boucle
-se construit sans modèle : comparaison d'instantanés (01F), contraintes explicites, oracle dynamique,
+se construit sans modèle : comparaison d'instantanés (impact d'un commit), contraintes explicites, oracle dynamique,
 journal des vérifications. L'endpoint oublié du POC-01 a été détecté par une règle déterministe.
 
 Un résultat nul de LAB-01 signifie donc, pour ce domaine, que la valeur vient de la mémoire et de la
@@ -136,7 +136,7 @@ seulement si LAB-01 conclut positivement, et sous trois garde-fous posés dès m
    le modèle n'apprend et n'est mesuré que là où il a choisi de regarder, et une dérive reste invisible.
 3. **Une nouvelle version du modèle ne remplace l'ancienne** qu'après avoir fait au moins aussi bien
    sur un banc figé, jamais sur ses propres données récentes. Chaque version est enregistrée
-   (ADR 0006, champ `model`).
+   (ARCHITECTURE § 13, champ `model`).
 
 ## Acceptation
 

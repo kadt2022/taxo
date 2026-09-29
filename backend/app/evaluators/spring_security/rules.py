@@ -43,6 +43,7 @@ HTTP, OTHER, UNKNOWN = 'http', 'other', 'unknown'
 # reste (`or`, `true`, `permitAll`, une methode d'un bean...) peut tout permettre : la regle n'est pas lue.
 _SPEL_ATOM = (r"(?:hasRole|hasAnyRole|hasAuthority|hasAnyAuthority|hasIpAddress)\(\s*'[^'()]+'"
               r"(?:\s*,\s*'[^'()]+')*\s*\)|isAuthenticated\(\)|isFullyAuthenticated\(\)|denyAll")
+_FACTORY = re.compile(r'(?:this\s*\.\s*)?([A-Za-z_$][\w$]*)\s*\(\s*\)')
 _RESTRICTIVE_SPEL = re.compile(rf'\s*(?:{_SPEL_ATOM})(?:\s+and\s+(?:{_SPEL_ATOM}))*\s*')
 # `access(...)` avec un gestionnaire de Spring qui ne peut que restreindre.
 _MANAGER = re.compile(r"(?:AuthorityAuthorizationManager\.)?(?:hasRole|hasAnyRole|hasAuthority|hasAnyAuthority)"
@@ -129,12 +130,14 @@ def configurations(java_file):
     groups, ignored = {}, []
     for chain in chains:
         if IGNORING in chain.names:
-            ignored.append(_ignoring(chain))
+            ignored.append((*_ignoring(chain), chain.owner, chain.method))
             continue
         receiver = OTHER if chain in inner else _receiver(chain, java_file)
         if receiver != OTHER:
             groups.setdefault((chain.owner, chain.method), []).append((chain, receiver))
-    found = [_checked(java_file.path, owner, method, group) for (owner, method), group in groups.items()
+    factories = {item.qualified_name: _factories(item) for item in java_file.types}
+    found = [_checked(java_file.path, owner, method, group, factories.get(owner, set()))
+             for (owner, method), group in groups.items()
              if any(set(AUTHORIZE) & set(chain.names) for chain, _ in group)]
     return found, ignored
 
@@ -145,8 +148,14 @@ def _lambda_chains(chains):
             if argument.function is not None for inner in argument.function.chains}
 
 
-def _checked(path, owner, method, group):
-    configuration = _configuration(path, owner, method, [chain for chain, _ in group])
+def _factories(java_type):
+    """Methodes sans parametre du type, sans ambiguite : `access(manager())` y designe la fabrique du gestionnaire."""
+    return {signature[:-2] for signature in java_type.signatures
+            if signature.endswith('()') and not signature.startswith('<init>') and not java_type.ambiguous(signature)}
+
+
+def _checked(path, owner, method, group, factories):
+    configuration = _configuration(path, owner, method, [chain for chain, _ in group], factories)
     if configuration.readable and any(receiver == UNKNOWN for _, receiver in group):
         # Un receveur de type inconnu est peut-etre HttpSecurity : la configuration est vue, pas lue.
         return replace(configuration, rules=(), reason='receveur dont le type n’est pas établi')
@@ -168,7 +177,7 @@ def _receiver(chain, java_file):
     return OTHER
 
 
-def _configuration(path, owner, method, chains):
+def _configuration(path, owner, method, chains, factories=frozenset()):
     authorizing = [(chain, index) for chain in chains for index, name in enumerate(chain.names) if name in AUTHORIZE]
     lines = [call for chain in chains for call in chain.calls]
     start, end = min(call.line_start for call in lines), max(call.line_end for call in lines)
@@ -180,7 +189,7 @@ def _configuration(path, owner, method, chains):
     calls, reason = _rule_calls(chain, index)
     if reason:
         return Configuration(path, owner, method, (), scope, start, end, reason)
-    return Configuration(path, owner, method, tuple(_rules(calls)), scope, start, end)
+    return Configuration(path, owner, method, tuple(_rules(calls, owner, factories)), scope, start, end)
 
 
 def _scope(chains, authorizing):
@@ -243,7 +252,7 @@ def _rule_calls(chain, index):
     return calls, ''
 
 
-def _rules(calls):
+def _rules(calls, owner='', factories=frozenset()):
     """Regles dans l'ordre de declaration. Un appel inattendu devient une regle non lue, a sa place."""
     rules, pending = [], None
     for call in calls:
@@ -254,7 +263,7 @@ def _rules(calls):
                 rules.append(_unread(pending, pending, f'{pending.name} sans action'))
             pending = call
         elif pending is not None and (call.name == PERMIT or call.name in PROTECTING):
-            rules.append(_rule(pending, call))
+            rules.append(_rule(pending, call, owner, factories))
             pending = None
         else:
             rules.append(_unread(call, call, f'appel {call.name} non interprété'))
@@ -268,12 +277,12 @@ def _unread(first, last, reason):
     return Rule(first.line_start, last.line_end, readable=False, reason=reason)
 
 
-def _rule(matcher, action):
+def _rule(matcher, action, owner='', factories=frozenset()):
     matched = _matcher(matcher)
     if isinstance(matched, str):
         return _unread(matcher, action, matched)
     patterns, verb, never, note = matched
-    expression, target = _action(action)
+    expression, target = _action(action, owner, factories)
     if expression is None:
         return _unread(matcher, action, target)
     return Rule(matcher.line_start, action.line_end, patterns, verb, action.name, expression,
@@ -315,8 +324,8 @@ def _http_method(written):
     return None
 
 
-def _action(call):
-    """(expression ecrite, type qui decide) de l'action ; (None, raison) si elle n'est pas lue."""
+def _action(call, owner='', factories=frozenset()):
+    """(expression ecrite, type ou fabrique qui decide) de l'action ; (None, raison) si elle n'est pas lue."""
     written = ', '.join(argument.value.written for argument in call.arguments)
     expression = f'{call.name}({written})'
     if call.name != 'access':
@@ -335,6 +344,11 @@ def _action(call):
         return expression, f'symbol:java:{declared[1]}'
     if _MANAGER.fullmatch(argument.value.written):
         return expression, None
+    factory = _FACTORY.fullmatch(argument.value.written)
+    if factory and factory.group(1) in factories:
+        # `access(manager())` : le gestionnaire est celui que rend cette methode du type, sans parametre et
+        # sans ambiguite. La decision reste la sienne, non lue (lacune connue).
+        return expression, f'symbol:java:{owner}#{factory.group(1)}()'
     return None, f'access({argument.value.written}) : gestionnaire non interprété'
 
 

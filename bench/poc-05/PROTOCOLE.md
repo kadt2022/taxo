@@ -74,11 +74,21 @@ veut dire : score supérieur à A, **et** pas plus de fausses affirmations que A
 
 | Ordre | Constat | Décision |
 | --- | --- | --- |
-| 1 | C₀ bat A | ouvrir la piste d'exploration (TAXO-01I, appels, `get_source`), puis réexécuter avec B. Le résultat de D décide en plus si la vérification reste active |
-| 2 | C₀ ne bat pas A, D bat A | Taxo vérificateur : MINIA-11 devient le rôle ; la piste d'exploration est gelée |
-| 3 | ni C₀ ni D ne battent A | la piste agent est gelée ; Taxo reste un outil de documentation et d'impact (E1 à E3) |
+| 1 | C₀ bat A | ouvrir l'exploration par agent (TAXO-01I, appels et `get_source` mis à la disposition de Minia), puis réexécuter avec B. Le résultat de D décide en plus si la vérification reste active |
+| 2 | C₀ ne bat pas A, D bat A | Taxo vérificateur : MINIA-11 devient le rôle ; l'exploration par agent est gelée |
+| 3 | ni C₀ ni D ne battent A | la piste agent est gelée ; Taxo reste un outil de documentation et d'impact |
 
-Les jalons E1 à E3 (structure, dépendances, changements) ne dépendent pas de ce banc.
+Ce banc décide de l'**usage par un agent**, pas du développement des capacités. TAXO-01I (voisinage,
+Tuile), les appels Java et les jalons E1 à E3 servent aussi la navigation humaine et l'API : ils
+suivent leurs propres critères d'usage ([PLAN](../../docs/backlog/PLAN.md)), quel que soit le cas
+retenu ici. Un cas 2 ou 3 gèle leur exposition à Minia, pas leur construction.
+
+**Limite déclarée de la version mesurée.** Les routes servies par `TakiboIamBootApplication`, qui
+charge aussi la chaîne du serveur d'autorisation (`securityMatcher(endpointsMatcher)` non résolu),
+restent sans conclusion de sécurité dans Taxo. La campagne mesure cette version telle quelle : les
+vérités de référence restent établies dans le code (Q2), et une abstention de Taxo sur ces routes
+est notée selon la grille : le code permet de conclure, c'est donc une abstention injustifiée (0),
+jamais une abstention juste. Une version qui lève cette limite ouvre une autre campagne.
 
 ## Signature
 

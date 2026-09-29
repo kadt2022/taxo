@@ -1,4 +1,4 @@
-"""Transport HTTP du protocole Taxo (ADR 0009, section 11) : un echange par requete.
+"""Transport HTTP du protocole Taxo (ARCHITECTURE § 12.5) : un echange par requete.
 
 Les operations d'une meme requete partagent l'instantane, le budget et les references (`F…`, `E…`).
 Chaque operation repond dans l'enveloppe commune ; un refus est un resultat `ERROR`, pas une erreur HTTP.
@@ -16,7 +16,7 @@ _ERRORS = {404: {'description': 'Projet introuvable.'},
 
 
 class Consent(BaseModel):
-    diff: bool = Field(False, description='Autoriser la lecture des blocs modifiés d’un commit (ADR 0008).')
+    diff: bool = Field(False, description='Autoriser la lecture des blocs modifiés d’un commit (ARCHITECTURE § 12.6).')
 
 
 class Operation(BaseModel):

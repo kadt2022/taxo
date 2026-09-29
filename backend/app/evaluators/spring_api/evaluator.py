@@ -1,4 +1,4 @@
-"""Evaluateur Spring API (TAXO-04, ADR 0003) : les endpoints HTTP d'une application Spring MVC, en faits.
+"""Evaluateur Spring API (TAXO-04, ARCHITECTURE § 7.3) : les endpoints HTTP d'une application Spring MVC, en faits.
 
 Il est proprietaire du concept d'endpoint ; il consomme les primitives de l'analyseur Java, qui n'en sait
 rien. Pour chaque methode d'un controleur (`@RestController`, `@Controller`) portant une annotation de
@@ -51,7 +51,7 @@ class _NotInterpreted(Exception):
 
 class SpringApiEvaluator:
     evaluator_id = 'taxo.spring-api'
-    producer_version = '0.1.0'
+    producer_version = '0.2.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
@@ -63,8 +63,8 @@ class SpringApiEvaluator:
         # Une zone non interpretee a pour perimetre le fichier qui la porte.
         warnings = analysis.warnings + [message for _, message in run.gaps.values()]
         coverage = [{**_coverage(repository, 'ANALYSED', repository), 'scope': analysis.scope(repository)}]
-        coverage += [_coverage(subject, 'NOT_INTERPRETED', f'file:{path}')
-                     for subject, (path, _) in sorted(run.gaps.items())]
+        coverage += [_coverage(subject, 'NOT_INTERPRETED', f'file:{path}', message)
+                     for subject, (path, message) in sorted(run.gaps.items())]
         coverage += [_coverage(subject, 'READ_ERROR', subject) for subject in read_errors]
         status = EvaluationStatus.PARTIAL if run.gaps or read_errors else EvaluationStatus.SUCCESS
         legacy = {'java_files': len(analysis.contents), 'endpoints': endpoints}
@@ -88,10 +88,10 @@ class Analysis:
     def endpoints(self):
         """Faits HANDLED_BY etablis, avec le type et la methode qui traitent chaque endpoint."""
         for (subject, handler), fact in self.run.facts.items():
-            qualified, _, method = handler.removeprefix('symbol:java:').rpartition('#')
+            qualified, _, signature = handler.removeprefix('symbol:java:').rpartition('#')
             java_file, java_type, _ = self.run.types[qualified]
             yield Endpoint(subject, handler, fact, java_file.path, java_type,
-                           tuple(item for item in java_type.methods if item.name == method))
+                           tuple(item for item in java_type.methods if item.signature == signature))
 
 
 @dataclass(frozen=True)
@@ -101,7 +101,7 @@ class Endpoint:
     fact: dict
     path: str
     java_type: object
-    # Les methodes du type qui portent ce nom (surcharges comprises).
+    # La methode qui traite l'endpoint (une seule : sa signature est sans ambiguite dans le type).
     methods: tuple
 
     @property
@@ -239,13 +239,18 @@ class _Run:
         return type_mapping is not None or not (absent or prefixed)
 
     def _method_facts(self, path, java_type, method, annotation, kind, type_mapping, base):
-        handler = f'symbol:java:{java_type.qualified_name}#{method.name}'
+        handler = f'symbol:java:{java_type.qualified_name}#{method.signature}'
+        if java_type.ambiguous(method.signature):
+            # Deux declarations, une seule reference : aucun fait ne doit les confondre (TAXO-ID-01).
+            self._gap(f'symbol:java:{java_type.qualified_name}#{method.name}', path,
+                      f'Identité syntaxique ambiguë : {java_type.qualified_name}#{method.signature}')
+            return
         base_paths, base_verbs = base
         try:
             verbs = [VERBS[kind]] if kind in VERBS else _verbs(annotation) or base_verbs or [ANY]
             paths = _paths(annotation)
         except _NotInterpreted as exc:
-            self._gap(handler, path, f'Mapping non résolu ({exc}) : {java_type.qualified_name}#{method.name}')
+            self._gap(handler, path, f'Mapping non résolu ({exc}) : {java_type.qualified_name}#{method.signature}')
             return
         data = self.contents[path]
         evidence = [_evidence(self.snapshot, path, data, item, handler)
@@ -364,6 +369,8 @@ def _assertion(subject, handler, evidence):
             'evidence': evidence}
 
 
-def _coverage(subject, coverage_type, scope):
-    return {'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED', 'validity': 'VALID',
+def _coverage(subject, coverage_type, scope, reason=None):
+    """Une couverture ; `reason` dit pourquoi une zone n'est pas interpretee (hors identite du fait)."""
+    fact = {'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED', 'validity': 'VALID',
             'subject': subject, 'coverage_type': coverage_type, 'scope': {'include': [scope]}}
+    return {**fact, 'reason': reason} if reason else fact

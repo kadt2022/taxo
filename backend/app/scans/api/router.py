@@ -4,6 +4,7 @@ from fastapi import APIRouter, Header
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from app.scans.application.queries import analysis_facts, list_scans
+from app.scans.application.routes import analysis_routes
 
 def _response(scan):
     return {'id': scan.id, 'created_at': scan.created_at, **scan.result}
@@ -45,6 +46,12 @@ def create_router(projects, repository, run, facts=None, jobs=None):
                    subject: str | None = None, relation: str | None = None, object: str | None = None):
         return analysis_facts(project_id, scan_id, projects, repository, facts, evaluator_id=evaluator, kind=kind,
                               subject=subject, relation=relation, object=object)
+
+    @router.get('/api/projects/{project_id}/scans/{scan_id}/routes',
+                responses={404: {'description': 'Projet ou analyse introuvable.'}})
+    def scan_routes(project_id: str, scan_id: str):
+        """Les routes de l'analyse, chacune avec ce que Taxo en prouve et ce qu'il ne sait pas (TAXO-UI-02)."""
+        return analysis_routes(project_id, scan_id, projects, repository, facts)
 
     if jobs is not None:
         @router.post('/api/projects/{project_id}/analyses', status_code=202, responses={

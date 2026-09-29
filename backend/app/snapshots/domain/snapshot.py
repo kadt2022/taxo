@@ -41,7 +41,7 @@ class Snapshot:
         yield from self.content.history(self.commit, limit)
 
     def reference(self):
-        """Snapshot fields of the fact contract (ADR 0002)."""
+        """Snapshot fields of the fact contract (ARCHITECTURE § 5)."""
         reference = {'repository': self.repository, 'commit': self.commit, 'mode': self.mode}
         if self.content_fingerprint:
             reference['content_fingerprint'] = self.content_fingerprint

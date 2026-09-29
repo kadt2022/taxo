@@ -62,7 +62,7 @@ def gemini_schema(schema):
 class GeminiModel:
     provider = 'gemini'
     remote = True
-    # Sait mener l'exploration de MINIA-09 : demander les operations de Taxo une par une (ADR 0009).
+    # Sait mener l'exploration de MINIA-09 : demander les operations de Taxo une par une (ARCHITECTURE § 12).
     explores = True
 
     def __init__(self, model_name, tier=FREE, api_key=None, transport=None, timeout=300.0,

@@ -29,7 +29,7 @@ _GIT = ['git', '-c', 'safe.directory=*', '-c', 'core.fsmonitor=false']
 _ENV = {'GIT_TERMINAL_PROMPT': '0', 'GIT_OPTIONAL_LOCKS': '0'}
 _FILE_MODES = {b'100644', b'100755'}
 _CHUNK = 1 << 16
-# Historique (ADR 0007) : lecture seule, sans diff externe, textconv ni verification de signature.
+# Historique (ARCHITECTURE § 7.2) : lecture seule, sans diff externe, textconv ni verification de signature.
 _LOG = ['-c', 'log.showSignature=false', '-c', 'diff.external=', 'log', '-z', '--no-color', '--no-ext-diff',
         '--no-textconv', '--format=%x1e%H%x00%P%x00%an%x00%ae%x00%aI%x00%cI%x00%s', '--name-status', '-M',
         '--diff-merges=first-parent']

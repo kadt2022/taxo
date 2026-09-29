@@ -78,19 +78,19 @@ formats, les décisions de représentation et les limites de validation.
 
 Depuis `backend`, `python -m app.facts --conformance` rejoue les 84 exemples de
 faits, les 8 vecteurs d'empreinte et les vecteurs d'identite canonique (19 positifs,
-5 negatifs). Le scanner existant conserve son format
-actuel jusqu'à TAXO-01D ; le contrat n'est pas encore une mémoire persistante.
+5 negatifs). Chaque évaluateur produit des faits validés par ce contrat avant
+d'être conservés.
 
 Le backend est organisé par capacité : `projects`, `snapshots`, `facts`, `scans` et
 `evaluators/inventory`. Le domaine est indépendant des frameworks ; les cas
 d'utilisation passent par des ports, câblés dans `bootstrap.application`.
 `main.py` conserve la factory Uvicorn. Alembic charge les mappings via
-`bootstrap.database`. Voir [ADR 0004](docs/adr/0004-monolithe-modulaire.md).
+`bootstrap.database`. Voir [ARCHITECTURE § 3](docs/ARCHITECTURE.md).
 
 L'inventaire reçoit un Snapshot et produit désormais une `EvaluatorExecution` avec
 Facts, Coverage, provenance et statut technique via le moteur `evaluations`. Les
-métadonnées historiques de l'API restent disponibles jusqu'à TAXO-01E, qui
-introduira la persistance de la mémoire. Le portail interroge toujours la même API.
+faits sont conservés par analyse et relus sans relire le dépôt
+([ARCHITECTURE § 8](docs/ARCHITECTURE.md)). Le portail interroge toujours la même API.
 
 ### Analyse globale et historique (TAXO-EVAL-01)
 
@@ -106,9 +106,31 @@ Après l'analyse globale, le portail présente d'abord ce que Taxo a compris du 
 (technologies, fichiers analysés, historique Git) et, pour ce que Taxo ne sait pas encore déterminer
 (architecture, API, sécurité), la mention « Non analysé » : une absence d'information n'est jamais
 présentée comme un résultat. La navigation ne propose que les sections réellement disponibles
-(Vue d'ensemble, Technologies, Historique). Le vocabulaire du contrat de faits est traduit dans la couche
+(Vue d'ensemble, Technologies, Routes, Historique). Le vocabulaire du contrat de faits est traduit dans la couche
 de présentation (`frontend/src/vocabulary.ts`), sans rien renommer côté backend. Évaluateurs, versions,
 identifiants d'exécution, couverture et relations restent consultables sous « Détails de l'analyse ».
+
+### Routes : ce que Taxo prouve de chaque route (TAXO-UI-02)
+
+La section **Routes** du portail montre, pour chaque route HTTP établie, une ligne lue dans les seuls
+faits de Taxo :
+- la méthode qui la traite (`HANDLED_BY`) ;
+- l'application qui la sert (`SERVED_BY`) ;
+- la règle qui la capture (`MATCHED_BY`, puis la règle écrite de la même chaîne) ;
+- sa protection (`PROTECTED_BY`) ;
+- son état.
+
+On filtre par chemin ou verbe, et par état. Un état n'est affiché que si un fait le porte :
+- « Protégée » : un fait `PROTECTED_BY` ;
+- « Règle permitAll() » : la règle qui la capture est `PERMITS_ALL` dans la même chaîne ;
+- « Non interprétée » : une couverture le dit, avec sa raison exacte ;
+- « Sans conclusion » : sinon.
+
+Un clic sur une route montre chaque fait, avec ses preuves (fichier et lignes), ses prémisses, ce qui a
+été écarté et ses limites connues. Les zones où des routes ont pu échapper à l'analyse sont listées
+(« Des routes peuvent manquer »). Aucune phrase de Minia sur cette page.
+
+API : `GET /api/projects/{id}/scans/{scan_id}/routes`.
 
 ### Des analyses et une Minia progressives (TAXO-UX-02)
 
@@ -156,7 +178,7 @@ produit aujourd'hui, prouve par fichier entier : ses liens sont donc `FILE`.
 L'impact sur les chaînes d'autorisation passe encore par le POC Spring, hors produit :
 `py -m poc.authchain.impact --root <dépôt> --commit <sha>` (résultat marqué `provisional`).
 
-### Git, deuxième évaluateur (TAXO-EVAL-02, ADR 0007)
+### Git, deuxième évaluateur (TAXO-EVAL-02, ARCHITECTURE § 7.2)
 
 L'analyse globale exécute tous les évaluateurs sur le même instantané. À côté de l'inventaire, Git
 transforme **tout** l'historique atteignable en faits : `HAS_COMMIT` (dépôt → commit, date et message),
@@ -170,14 +192,21 @@ Les faits de chaque évaluateur sont conservés et s'interrogent après l'analys
 Git et ceux du code se rejoignent par la même référence `file:`. L'impact d'un commit et Minia ne
 comparent que les évaluateurs de contenu.
 
-### Endpoints Spring, premier analyseur de code (TAXO-03, TAXO-04, ADR 0003)
+### Endpoints Spring, premier analyseur de code (TAXO-03, TAXO-04, ARCHITECTURE § 7.3)
 
 Troisième évaluateur de l'analyse, `taxo.spring-api` relève la surface HTTP d'une application Spring
 MVC. Pour chaque méthode d'un `@RestController` ou `@Controller` portant `@GetMapping`, `@PostMapping`,
 `@PutMapping`, `@DeleteMapping`, `@PatchMapping` ou `@RequestMapping`, il produit
 `endpoint:GET /api/v1/orgs/{orgCode}/users` `HANDLED_BY`
-`symbol:java:com.example.api.users.UserController#list`. Chaque fait a deux preuves, à la ligne et avec
-leur empreinte : le mapping du contrôleur et celui de la méthode.
+`symbol:java:com.example.api.users.UserController#list(String)`. Chaque fait a deux preuves, à la ligne et
+avec leur empreinte : le mapping du contrôleur et celui de la méthode.
+
+Une méthode est désignée par sa **signature syntaxique normalisée** (TAXO-ID-01, schéma
+`java-symbol-syntactic/1`) : types des paramètres tels qu'écrits, sans noms, annotations ni arguments
+de type, `T...` écrit `T[]`, constructeur `#<init>(...)`. Les types ne sont pas résolus : `List` et
+`java.util.List` restent deux écritures. Deux déclarations de même signature ne produisent aucun fait
+et sont déclarées non interprétées. Deux états dont le schéma d'identité diffère ne sont jamais
+comparés : l'impact les déclare non comparables.
 
 Une annotation ne compte que si elle est celle de Spring (nom qualifié ou import) : un `@GetMapping` maison
 n'est pas un endpoint. L'analyseur Java (`app/evaluators/java`, tree-sitter) lit les sources sans JVM,
@@ -204,7 +233,7 @@ sont hors du périmètre, et la couverture le dit.
 Les endpoints rejoignent l'impact d'un commit (endpoint introduit, retiré, ou traité par une autre
 méthode), le protocole `taxo-query/1` et Minia, sans changement de ces consommateurs.
 
-### Sécurité Spring : quelle règle protège chaque route (TAXO-05, ADR 0010)
+### Sécurité Spring : quelle règle protège chaque route (TAXO-05, ARCHITECTURE § 7.4)
 
 Quatrième évaluateur, `taxo.spring-security` lit les règles `authorizeHttpRequests` (et
 `authorizeRequests` de Spring Security 5) et les rattache aux endpoints de `taxo.spring-api` :
@@ -227,13 +256,17 @@ pas, et déclare l'endpoint non interprété, quand :
   `securityMatcher` n'est pas lu ;
 - la route est visée par `web.ignoring()` ;
 - l'analyse des endpoints elle-même n'a pas établi certaines routes ;
-- le dépôt contient plusieurs applications Spring Boot : l'application qui sert la route, et les
-  chaînes qu'elle charge, ne sont pas encore établies (unité déployable, défaut D1).
+- l'application qui sert la route, ou les chaînes qu'elle charge, ne sont pas établies (voir
+  « Applications Spring Boot et routes servies »).
+
+Dès qu'une `@SpringBootApplication` est vue, une route n'est rattachée qu'aux chaînes de filtres
+chargées par l'application qui la sert : une règle d'une autre application ne s'y applique jamais.
 
 Seule une chaîne dont le receveur est le `HttpSecurity` de Spring est une configuration de sécurité ; un
 receveur de type inconnu est vu, pas lu. Une expression `access("…")` n'est lue que si elle ne peut que
 restreindre (`hasRole('X') and isAuthenticated()`), et `access(manager)` que si le gestionnaire est dans
-les sources : la décision qu'il prend reste une limite connue.
+les sources, ou `access(manager())` que si la méthode sans paramètre est déclarée dans la configuration
+elle-même : la décision qu'il prend reste une limite connue.
 
 La sécurité de méthode (`@PreAuthorize`, `@Secured`, `@RolesAllowed`…) et les mécanismes maison
 (filtres, `AuthorizationManager`) sont déclarés non interprétés : la protection réelle peut s'y
@@ -241,6 +274,61 @@ trouver. Sans règle `authorizeHttpRequests` dans les sources, Taxo n'affirme ri
 
 Dans Minia, une affirmation confirmée par une déduction s'affiche « Confirmée par Taxo, par déduction »,
 avec ses prémisses, ce qui a été écarté et ses limites.
+
+### Structure du dépôt : modules et unités déployables (TAXO-E1, ARCHITECTURE § 7.5)
+
+Cinquième évaluateur, `taxo.structure` dit de quoi un dépôt est fait, quel que soit son langage.
+Il lit les descripteurs de build et de déploiement, sans rien exécuter :
+
+| Système | Modules | Dépendances entre modules |
+| --- | --- | --- |
+| Gradle (Groovy, Kotlin) | `include` de `settings.gradle` | `project(':x')`, avec sa configuration |
+| Maven | `<modules>` | `<dependency>` vers un module du dépôt, avec son `scope` |
+| npm | chaque `package.json`, `workspaces` | dépendance vers un paquet du dépôt (`workspace:`, `file:`) |
+| Python | `pyproject.toml`, `setup.py`, `requirements.txt` | non lues ; une dépendance par chemin est déclarée |
+| compose | services construits depuis le dépôt | `application:compose.yaml#api` `BUILT_FROM` `module:backend` |
+
+Il produit `repository CONTAINS module`, `module DEPENDS_ON module` et
+`application BUILT_FROM module`, chaque fait avec la ligne qui le porte. Ce qu'il ne sait pas
+lire est déclaré non interprété sur son fichier :
+- une inclusion calculée ;
+- un `projectDir` redéfini ;
+- un `project(...)` non littéral ;
+- un module inconnu ;
+- un contexte de build calculé ou sans module.
+
+Un service à image externe (`image: postgres`) n'est ni un fait ni une lacune. L'impact d'un
+commit montre un module ajouté ou une dépendance ajoutée. Validé sur Taxo lui-même (deux modules,
+deux applications) et sur TAKIBO (18 modules Gradle, 37 dépendances).
+
+### Applications Spring Boot et routes servies (TAXO-E1 tranche 2, ARCHITECTURE § 7.6)
+
+Sixième évaluateur, `taxo.spring-boot` dit quelle application sert chaque route. Chaque
+`@SpringBootApplication` des sources principales d'un module devient
+`application:<fichier>#<Type>` `BUILT_FROM` `module:<dossier>`. Puis `endpoint` `SERVED_BY`
+`application` est déduit (`INFERRED`) si trois prémisses sont établies sans rien exécuter :
+
+1. le module du contrôleur est sur le classpath d'exécution de l'application : son module, puis les
+   dépendances `implementation`, `api`, `runtimeOnly` (Maven : `compile`, `runtime`) de proche en proche,
+   lues par `taxo.structure` ;
+2. le contrôleur est dans un paquetage balayé (`scanBasePackages`, `scanBasePackageClasses`, sinon celui de
+   l'application), ou importé par un `@Import` littéral ;
+3. il ne porte aucune condition (`@Profile`, `@Conditional…`).
+
+Taxo n'attribue jamais une route par paquetage, proximité ou nom : un paquetage balayé dont le module
+n'est pas sur le classpath ne charge rien. Est déclaré non interprété, jamais tranché :
+- une configuration de dépendance inconnue, un descripteur non lu, des dépendances communes
+  (`subprojects`, `apply from`, `buildSrc`, pom parent) ;
+- un balayage supplémentaire (`@ComponentScan`), un import non littéral ou sélectif ;
+- une auto-configuration déclarée (ses conditions ne sont pas évaluées) ;
+- une annotation non résolue, une condition.
+
+Une chaîne hors du classpath est écartée sans réserve ; une chaîne hors du balayage l'est avec une
+lacune connue (XML, initialiseurs et `spring.main.sources` ne sont pas lus). Sur TAKIBO,
+`GET /api/admin/users` est servie par `AdpTestApplication`, protégée par
+`TestSecurityConfig#adpAuthorizationManager()`, et `SecurityConfig` est écartée : son module n'est pas
+sur le classpath de cette application. Les routes `/debug/secure/**` restent non interprétées :
+leur contrôleur est sous `@Profile`.
 
 ### Interroger Taxo (TAXO-QUERY-01)
 
@@ -265,7 +353,7 @@ globale), ou sans commit correspondant, le modèle n'est pas appelé et Minia le
 
 API : `GET /api/projects/{id}/query?q=…` et `POST /api/projects/{id}/ask` avec `{"question": "…"}`.
 
-### Protocole Taxo, opérations v1 (TAXO-QUERY-02, ADR 0009)
+### Protocole Taxo, opérations v1 (TAXO-QUERY-02, ARCHITECTURE § 12)
 
 > Minia comprend la question et raisonne. Taxo cherche, relie et prouve. L'humain décide.
 
@@ -280,7 +368,7 @@ relations et les références du contrat du fait.
 | `get_evidence` | les preuves d'un fait reçu dans l'échange (`F…`) |
 | `get_coverage` | ce qui a été analysé ou non, éventuellement pour un périmètre (`scope`) |
 | `get_commit` | les faits Git d'un commit, sans contenu |
-| `get_diff` | les blocs modifiés d'un fichier touché par un commit, sur double consentement (ADR 0008) |
+| `get_diff` | les blocs modifiés d'un fichier touché par un commit, sur double consentement (ARCHITECTURE § 12.6) |
 | `verify_claim` | `CONFIRMED`, `REFUTED` ou `NOT_PROVEN` (avec sa raison) pour une affirmation structurée |
 
 ```http
@@ -302,13 +390,13 @@ POST /api/projects/{id}/taxo-query
   `NOT_ANALYSED`. La réfutation par un fait `ABSENCE` attend le premier analyseur qui en produit.
 - **`get_diff`** n'est proposé que si `MINIA_SOURCE_CONTEXT=diff`, et ne répond qu'avec
   `"consent": {"diff": true}` ; les refus de l'historique (`.env`, binaires, fichiers trop gros…) restent.
-- `diff_facts` (réservée par l'ADR, activée par TAXO-MINIA-09b) rend les faits qu'un commit introduit, modifie
+- `diff_facts` (réservée par le protocole, activée par TAXO-MINIA-09b) rend les faits qu'un commit introduit, modifie
   ou retire, d'après l'impact (comparaison avec le premier parent). Ce sont des changements, sans référence
   `F…`, avec la localisation de leurs preuves.
 - Les autres opérations réservées (`find_endpoint`, `find_callers`, `get_source`…) répondent `NOT_AVAILABLE`
   tant qu'aucun analyseur ne les nourrit.
 
-### Minia interroge Taxo (TAXO-MINIA-09, ADR 0009)
+### Minia interroge Taxo (TAXO-MINIA-09, ARCHITECTURE § 12)
 
 Dans « Interroger Taxo », Minia ne reçoit plus un paquet de faits fixe, quel que soit le fournisseur (Ollama,
 Claude, Gemini, Mistral) : elle **interroge Taxo**, une opération du protocole à la fois (`describe`, `find_facts`, `get_commit`…), et
@@ -364,7 +452,7 @@ depuis Taxo), **Interprétation Minia** (non vérifiée) et **Inconnu / non inte
 inventée par le modèle est écartée et signalée. Ce que Git sait du commit est toujours affiché, tiré de
 Git et non du modèle. Si Taxo n'a vu changer aucun fait et qu'aucun évaluateur n'a échoué, le modèle
 n'est pas appelé et Minia dit qu'elle ne sait pas (une zone non interprétée seule ne suffit pas). Aucune réponse n'est conservée, et une réponse n'est jamais
-enregistrée comme un fait (ADR 0004, règle 14). Minia est indépendante de Clochette.
+enregistrée comme un fait (ARCHITECTURE § 2, principe 5). Minia est indépendante de Clochette.
 
 Minia fonctionne avec un modèle servi par [Ollama](https://ollama.com), gratuit. `MINIA_OLLAMA_URL`
 peut viser un Ollama local ou distant : sans `MINIA_SOURCE_CONTEXT=diff` (voir TAXO-MINIA-02), Minia
@@ -396,7 +484,7 @@ API : `GET /api/minia/status` et `POST …/commits/{sha}/ask` avec `{"question":
 Le modèle est derrière l'interface `MiniaModel` : un adaptateur Claude pourra s'ajouter sans toucher au
 reste (`MINIA_PROVIDER=claude`, pas encore disponible).
 
-### Minia lit le diff d'un commit (TAXO-MINIA-02, ADR 0008)
+### Minia lit le diff d'un commit (TAXO-MINIA-02, ARCHITECTURE § 12.6)
 
 > Taxo établit. Git montre ce qui a changé. Minia lit les deux et explique.
 
@@ -469,7 +557,7 @@ quota atteint aussi.
 
 ### Minia Mistral (TAXO-MINIA-10)
 
-Quatrième fournisseur de Minia, même travail que les autres, mode exploration compris (ADR 0009). L'API de
+Quatrième fournisseur de Minia, même travail que les autres, mode exploration compris (ARCHITECTURE § 12). L'API de
 Mistral (La Plateforme) a un niveau gratuit pour tester.
 
 ```powershell
@@ -490,7 +578,7 @@ diff reste décoché par défaut. La réponse est contrainte par un schéma JSON
 signalée, une surcharge passagère (5xx) est réessayée deux fois avant tout texte, un quota atteint (429)
 jamais.
 
-### Clochette (SmolLM2-135M, expérimental, ADR 0006)
+### Clochette (SmolLM2-135M, expérimental, ARCHITECTURE § 13)
 
 Clochette est installée par l'étape `python -m app.hypotheses fetch` de la procédure ci-dessus : elle
 télécharge une seule fois la révision épinglée dans `TAXO_MODELS_DIR` (par défaut

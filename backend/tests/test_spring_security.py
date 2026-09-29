@@ -131,7 +131,7 @@ def test_each_readable_rule_is_an_observed_fact_with_its_line():
                           'route-pattern:/api/v1/**': 'symbol:java:com.example.security.PolicyManager',
                           'route-pattern:/**': 'authenticated()'}
     chains = {fact['qualifiers']['filter_chain'] for fact in output.facts}
-    assert chains == {'symbol:java:com.example.security.SecurityConfig#chain'}, 'chaque regle dit sa chaine de filtres'
+    assert chains == {'symbol:java:com.example.security.SecurityConfig#chain(HttpSecurity)'}, 'chaque regle dit sa chaine de filtres'
     evidence = facts(output, 'AUTHORIZED_BY')['route-pattern:/api/orgs/**']['evidence'][0]
     lines = config(RULES).splitlines()
     assert '"/api/orgs/**"' in lines[evidence['line_start'] - 1]
@@ -163,7 +163,7 @@ def test_an_unread_rule_blocks_every_conclusion_after_it_but_not_before():
     assert 'endpoint:POST /api/v1/auth/login' in facts(output, 'MATCHED_BY')
     assert 'endpoint:GET /health' not in facts(output, 'MATCHED_BY')
     assert {'endpoint:GET /health', 'endpoint:GET /api/v1/orgs/{orgCode}/users',
-            'symbol:java:com.example.security.SecurityConfig#chain'} <= gaps(output)
+            'symbol:java:com.example.security.SecurityConfig#chain(HttpSecurity)'} <= gaps(output)
     assert not any('Unknown' in fact['subject'] for fact in output.facts), 'un motif non lu n est pas invente'
 
 
@@ -197,7 +197,7 @@ def test_routes_the_endpoint_analysis_could_not_establish_stay_not_interpreted()
     public String hidden() { return ""; }
 ''')
     output = evaluate(files(**{'web/BrokenController.java': broken}))
-    assert 'symbol:java:com.example.web.BrokenController#hidden' in gaps(output)
+    assert 'symbol:java:com.example.web.BrokenController#hidden()' in gaps(output)
     assert output.status == EvaluationStatus.PARTIAL
 
 
@@ -294,6 +294,8 @@ def test_every_fact_satisfies_the_contract():
     assert execution.status == EvaluationStatus.PARTIAL, execution.error
     assert {fact['status'] for fact in execution.facts} == {'OBSERVED', 'INFERRED'}
     assert all(fact['produced_by']['catalog_id'] == 'spring-security' for fact in execution.facts)
+    assert {fact['produced_by']['catalog_version'] for fact in execution.facts} == {'2'}, \
+        'filter_chain porte une signature : schema d identite en version 2'
 
 
 def test_pattern_matching_has_three_outcomes():
@@ -309,7 +311,7 @@ def test_pattern_matching_has_three_outcomes():
     assert not rules.readable_pattern('api/**')
 
 
-def test_several_deployable_applications_forbid_any_route_conclusion():
+def test_an_application_that_does_not_establish_what_it_loads_forbids_any_route_conclusion():
     def application(name):
         return f'''package com.example.{name};
 
@@ -323,5 +325,36 @@ public class {name.capitalize()}Application {{
     assert not facts(output, 'PROTECTED_BY')
     assert 'endpoint:GET /health' in gaps(output), 'la chaine d une application ne vaut pas pour l autre'
     assert facts(output, 'AUTHORIZED_BY'), 'les regles lues restent des faits observes'
-    single = evaluate(files(**{'app/one/OneApplication.java': application('one')}))
-    assert 'endpoint:GET /health' in facts(single, 'PROTECTED_BY'), 'une seule application : on conclut'
+
+
+def test_an_established_application_attaches_its_routes_to_the_chains_it_loads():
+    boot = """package com.example;
+
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ShopApplication {
+}
+"""
+    imports = SPRING + 'import org.springframework.context.annotation.*;\n'
+    sources = files(**{'ShopApplication.java': boot, 'security/SecurityConfig.java': config(RULES, imports)})
+    output = evaluate({**sources, 'svc/build.gradle': ''})
+    health = facts(output, 'MATCHED_BY')['endpoint:GET /health']
+    assert 'SERVED_BY : endpoint:GET /health -> application:svc/src/main/java/com/example/ShopApplication.java' \
+           '#ShopApplication' in health['derivation']['premises']
+    assert 'endpoint:GET /health' in facts(output, 'PROTECTED_BY')
+
+
+def test_a_manager_built_by_a_method_of_the_configuration_is_the_one_that_decides():
+    extra = """
+    AuthorizationManager<RequestAuthorizationContext> policy() { return manager; }
+"""
+    source = config('                .anyRequest().access(policy())', extra=extra)
+    output = evaluate(files(security=None, **{'security/SecurityConfig.java': source}))
+    target = 'symbol:java:com.example.security.SecurityConfig#policy()'
+    assert facts(output, 'PROTECTED_BY')['endpoint:GET /health']['object'] == target
+    assert f'la décision de {target} n’est pas lue' in facts(output, 'PROTECTED_BY')['endpoint:GET /health'][
+        'derivation']['known_gaps']
+    unknown = config('                .anyRequest().access(elsewhere())')
+    assert not facts(evaluate(files(security=None, **{'security/SecurityConfig.java': unknown})), 'PROTECTED_BY'), \
+        'une methode absente du type (heritee, statique importee) ne se devine pas'

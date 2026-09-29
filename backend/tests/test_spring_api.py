@@ -92,15 +92,15 @@ def test_each_mapping_becomes_an_endpoint_handled_by_its_method():
     output = evaluate({f'{ROOT}/api/ApiPaths.java': PATHS, f'{ROOT}/api/users/UserController.java': CONTROLLER})
     base = '/api/v1/orgs/{orgCode}/users'
     assert handlers(output) == {
-        (f'endpoint:GET {base}', f'{USERS}#list'),
-        (f'endpoint:GET {base}/{{userId}}', f'{USERS}#get'),
-        (f'endpoint:POST {base}', f'{USERS}#create'),
-        (f'endpoint:POST {base}/import', f'{USERS}#create'),
-        (f'endpoint:PUT {base}/{{userId}}', f'{USERS}#update'),
-        (f'endpoint:PATCH {base}/{{userId}}', f'{USERS}#update'),
-        (f'endpoint:ANY {base}/ping', f'{USERS}#ping'),
+        (f'endpoint:GET {base}', f'{USERS}#list()'),
+        (f'endpoint:GET {base}/{{userId}}', f'{USERS}#get()'),
+        (f'endpoint:POST {base}', f'{USERS}#create()'),
+        (f'endpoint:POST {base}/import', f'{USERS}#create()'),
+        (f'endpoint:PUT {base}/{{userId}}', f'{USERS}#update()'),
+        (f'endpoint:PATCH {base}/{{userId}}', f'{USERS}#update()'),
+        (f'endpoint:ANY {base}/ping', f'{USERS}#ping()'),
     }, 'constante d un autre fichier, constante du type, concatenation, tableau, verbes, mapping sans chemin'
-    assert gaps(output) == {f'{USERS}#remove', f'{USERS}#export'}, 'jamais deviner : constante inconnue, propriete'
+    assert gaps(output) == {f'{USERS}#remove()', f'{USERS}#export()'}, 'jamais deviner : constante inconnue, propriete'
     assert output.status is EvaluationStatus.PARTIAL
     assert any('Unknown.PATH' in warning for warning in output.warnings)
     assert any('${users.export}' in warning for warning in output.warnings)
@@ -109,13 +109,13 @@ def test_each_mapping_becomes_an_endpoint_handled_by_its_method():
 def test_the_evidence_points_at_both_mappings_to_the_line():
     source = CONTROLLER.encode('utf-8')
     output = evaluate({f'{ROOT}/api/ApiPaths.java': PATHS, f'{ROOT}/api/users/UserController.java': source})
-    fact = next(item for item in output.facts if item['object'] == f'{USERS}#get')
+    fact = next(item for item in output.facts if item['object'] == f'{USERS}#get()')
     lines = CONTROLLER.split('\n')
     assert [item['line_start'] for item in fact['evidence']] == [
         lines.index('@RequestMapping(ApiPaths.ORGS + "/users")') + 1, lines.index('    @GetMapping(ONE)') + 1]
     for item in fact['evidence']:
         assert item['path'] == f'{ROOT}/api/users/UserController.java'
-        assert item['symbol'] == f'{USERS}#get'
+        assert item['symbol'] == f'{USERS}#get()'
         assert item['method'] == 'java.spring.request-mapping'
         assert item['content_hash'] == content_hash(source, item['line_start'], item['line_end'])
 
@@ -151,9 +151,9 @@ class OpsController {
     routes = 'package com.example.web;\ninterface Routes { String HEALTH = "/health"; }\n'
     output = evaluate({'src/main/java/Ops.java': source, 'src/main/java/Routes.java': routes})
     assert handlers(output) == {
-        ('endpoint:GET /ops/health', 'symbol:java:com.example.web.OpsController#health'),
-        ('endpoint:GET /ops/stop', 'symbol:java:com.example.web.OpsController#stop'),
-        ('endpoint:DELETE /cache/', 'symbol:java:com.example.web.OpsController.Inner#flush'),
+        ('endpoint:GET /ops/health', 'symbol:java:com.example.web.OpsController#health()'),
+        ('endpoint:GET /ops/stop', 'symbol:java:com.example.web.OpsController#stop()'),
+        ('endpoint:DELETE /cache/', 'symbol:java:com.example.web.OpsController.Inner#flush()'),
     }, 'constante d interface, verbe du type, import statique, type imbrique, / final garde'
     assert output.status is EvaluationStatus.SUCCESS
     assert gaps(output) == set()
@@ -201,7 +201,7 @@ class OwnerController implements OwnersApi, Serializable {
 '''
     output = evaluate({'src/main/java/PetController.java': generated, 'src/main/java/OwnersApi.java': api,
                        'src/main/java/OwnerController.java': owner})
-    assert handlers(output) == {('endpoint:GET /api/pets/count', 'symbol:java:com.example.web.PetController#count')}, \
+    assert handlers(output) == {('endpoint:GET /api/pets/count', 'symbol:java:com.example.web.PetController#count()')}, \
         'ses propres mappings restent des faits'
     assert gaps(output) == {'symbol:java:com.example.web.PetController', 'symbol:java:com.example.web.OwnersApi',
                             'symbol:java:com.example.web.OwnerController'}
@@ -274,9 +274,9 @@ def test_the_impact_of_a_commit_names_the_endpoints_it_introduces_moves_and_remo
     spring = next(item for item in impact['evaluations'] if item['evaluator_id'] == 'taxo.spring-api')
     changes = {(item['change'], item['subject'], item['before'], item['after']) for item in spring['changes']}
     assert changes == {
-        ('MODIFIED', 'endpoint:GET /a', 'symbol:java:p.A#a', 'symbol:java:p.A#renamed'),
-        ('REMOVED', 'endpoint:GET /gone', 'symbol:java:p.A#g', None),
-        ('INTRODUCED', 'endpoint:POST /new', None, 'symbol:java:p.A#n'),
+        ('MODIFIED', 'endpoint:GET /a', 'symbol:java:p.A#a()', 'symbol:java:p.A#renamed()'),
+        ('REMOVED', 'endpoint:GET /gone', 'symbol:java:p.A#g()', None),
+        ('INTRODUCED', 'endpoint:POST /new', None, 'symbol:java:p.A#n()'),
     }
 
 
@@ -299,7 +299,7 @@ class Own extends Base { @GetMapping("/y") String y() { return ""; } }
 '''
     output = evaluate({'src/main/java/Base.java': base, 'src/main/java/Child.java': child,
                        'src/main/java/Own.java': own})
-    assert handlers(output) == {('endpoint:GET /own/y', 'symbol:java:com.example.Own#y')}, \
+    assert handlers(output) == {('endpoint:GET /own/y', 'symbol:java:com.example.Own#y()')}, \
         'sans mapping propre, le prefixe herite est inconnu : pas de /x ; un mapping propre prime sur l heritage'
     assert gaps(output) == {'symbol:java:com.example.Child', 'symbol:java:com.example.Own', 'symbol:java:com.example.Base'}
 
@@ -323,7 +323,7 @@ class Qualified { @org.springframework.web.bind.annotation.GetMapping("/yes") vo
 '''
     output = evaluate({'src/main/java/NotSpring.java': other, 'src/main/java/Shadowed.java': local,
                        'src/main/java/GetMapping.java': homemade, 'src/main/java/Qualified.java': qualified})
-    assert handlers(output) == {('endpoint:GET /yes', 'symbol:java:com.acme.api.Qualified#yes')}, \
+    assert handlers(output) == {('endpoint:GET /yes', 'symbol:java:com.acme.api.Qualified#yes()')}, \
         'un import explicite ou un type du meme paquetage masque Spring ; un nom qualifie de Spring compte'
     assert gaps(output) == set()
     assert output.status is EvaluationStatus.SUCCESS
@@ -341,5 +341,101 @@ class Users { @GetMapping void list() {} }
 '''
     output = evaluate({'src/main/java/Users.java': controller, 'src/main/java/Routes.java': routes,
                        'src/main/java/Api.java': api, 'src/main/java/Base.java': prefix})
-    assert handlers(output) == {('endpoint:GET /api/v1/users', 'symbol:java:com.example.api.Users#list')}
+    assert handlers(output) == {('endpoint:GET /api/v1/users', 'symbol:java:com.example.api.Users#list()')}
     assert output.status is EvaluationStatus.SUCCESS
+
+
+@pytest.mark.parametrize('parameters, expected', [
+    ('String name', 'String'),
+    ('final @NotNull String name', 'String'),
+    ('String[] a', 'String[]'),
+    ('String a[]', 'String[]'),
+    ('int[] a[]', 'int[][]'),
+    ('String... a', 'String[]'),
+    ('int[]... a', 'int[][]'),
+    ('List<String> a', 'List'),
+    ('Map<K, List<V>> m', 'Map'),
+    ('Map.Entry<K, V> e', 'Map.Entry'),
+    ('java.util.List a', 'java.util.List'),
+    ('T t', 'T'),
+    ('@A int @B [] x', 'int[]'),
+    ('C this, int x', 'int'),
+    ('int a, long b', 'int,long'),
+    ('', ''),
+])
+def test_a_method_is_named_by_its_normalized_syntactic_signature(parameters, expected):
+    source = f'class C {{ @M void m({parameters}) {{}} }}'.encode('utf-8')
+    method = syntax.parse('C.java', source).types[0].methods[0]
+    assert method.signature == f'm({expected})'
+
+
+def test_a_constructor_is_named_init():
+    source = b'class C { @M C(int x) {} }'
+    assert syntax.parse('C.java', source).types[0].methods[0].signature == '<init>(int)'
+
+
+def test_overloads_handling_two_endpoints_are_two_symbols():
+    controller = '''package com.example;
+import org.springframework.web.bind.annotation.*;
+@RestController
+class Items {
+    @GetMapping("/items") String list() { return ""; }
+    @GetMapping("/items/by-name") String list(@RequestParam String name) { return ""; }
+}
+'''
+    output = evaluate({f'{ROOT}/Items.java': controller})
+    assert handlers(output) == {('endpoint:GET /items', 'symbol:java:com.example.Items#list()'),
+                                ('endpoint:GET /items/by-name', 'symbol:java:com.example.Items#list(String)')}
+
+
+def test_two_declarations_sharing_a_signature_never_share_a_fact():
+    controller = '''package com.example;
+import org.springframework.web.bind.annotation.*;
+@RestController
+class Items {
+    @GetMapping("/a") String find(java.util.List ids) { return ""; }
+    @GetMapping("/b") String find(java.util.List<String> ids) { return ""; }
+    @GetMapping("/c") String other() { return ""; }
+}
+'''
+    output = evaluate({f'{ROOT}/Items.java': controller})
+    assert handlers(output) == {('endpoint:GET /c', 'symbol:java:com.example.Items#other()')}
+    assert 'symbol:java:com.example.Items#find' in gaps(output)
+    assert any('ambiguë' in warning for warning in output.warnings)
+
+
+def test_the_catalog_names_its_identity_schema():
+    assert SpringApiEvaluator.catalog.catalog_version == '2'
+    assert syntax.IDENTITY_SCHEMA == 'java-symbol-syntactic/1'
+
+
+def test_a_commit_that_touches_no_controller_changes_no_endpoint(make_repo, git, tmp_path):
+    controller = 'package p;\nimport org.springframework.web.bind.annotation.*;\n@RestController\nclass A {\n    @GetMapping("/a") void a(String x) {}\n}\n'
+    repo = make_repo({'src/main/java/A.java': controller, 'README.md': 'v1\n'}, 'first')
+    (repo / 'README.md').write_text('v2\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'docs')
+    sha = git(repo, 'rev-parse', 'HEAD')
+    app = create_app(f'sqlite:///{tmp_path / "same.db"}', [repo])
+    Base.metadata.create_all(app.state.engine)
+    with TestClient(app) as client:
+        project = client.post('/api/projects', json={'name': 'Same', 'path': str(repo)}).json()
+        impact = client.get(f'/api/projects/{project["id"]}/history/commits/{sha}/impact').json()
+    spring = next(item for item in impact['evaluations'] if item['evaluator_id'] == 'taxo.spring-api')
+    assert spring['comparable'] is True
+    assert spring['changes'] == []
+    assert spring['unchanged_count'] == 1, 'les deux cotes sont evalues avec le meme schema d identite'
+
+
+def test_overloads_differing_by_package_stay_distinct():
+    controller = '''package com.example;
+import org.springframework.web.bind.annotation.*;
+@RestController
+class Items {
+    @GetMapping("/a") String find(com.a.Foo foo) { return ""; }
+    @GetMapping("/b") String find(com.b.Foo foo) { return ""; }
+}
+'''
+    output = evaluate({f'{ROOT}/Items.java': controller})
+    assert handlers(output) == {('endpoint:GET /a', 'symbol:java:com.example.Items#find(com.a.Foo)'),
+                                ('endpoint:GET /b', 'symbol:java:com.example.Items#find(com.b.Foo)')}

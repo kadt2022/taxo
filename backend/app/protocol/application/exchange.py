@@ -1,4 +1,4 @@
-"""Protocole Taxo, operations v1 (TAXO-QUERY-02, ADR 0009).
+"""Protocole Taxo, operations v1 (TAXO-QUERY-02, ARCHITECTURE § 12).
 
 Un echange est ouvert sur un projet et sa derniere analyse : l'instantane est fixe a l'ouverture et ne
 change plus. Chaque operation est en lecture seule, deterministe, et repond dans l'enveloppe commune.
@@ -6,7 +6,7 @@ Les faits recoivent une reference courte (`F1`…), leurs preuves aussi (`E1`…
 seules les references effectivement transmises existent.
 
 Le protocole ne connait ni langage, ni framework, ni projet : il interroge des relations et des
-references du contrat (ADR 0002). Ce que sait chaque analyseur vient de son catalogue.
+references du contrat (ARCHITECTURE § 5). Ce que sait chaque analyseur vient de son catalogue.
 """
 import json
 import logging
@@ -37,7 +37,7 @@ MAX_ARGUMENT_LENGTH = 1000
 
 NATURES = ('ASSERTION', 'ABSENCE', 'COVERAGE')
 V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'get_diff', 'verify_claim')
-# Operations reservees de l'ADR 0009 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
+# Operations reservees d'ARCHITECTURE § 12 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
 # commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01).
 ACTIVATED = ('diff_facts',)
 OPERATIONS = V1 + ACTIVATED
@@ -58,7 +58,7 @@ _ARGUMENTS = {
 }
 _LOCATION = ('path', 'line_start', 'line_end', 'symbol', 'method', 'object')
 _COMMIT = re.compile(r'[0-9a-f]{7,64}')
-# Syntaxe reservee type:cle : une valeur qui la prend est toujours lue comme une reference (ADR 0002).
+# Syntaxe reservee type:cle : une valeur qui la prend est toujours lue comme une reference (ARCHITECTURE § 5).
 _REFERENCE_SYNTAX = re.compile(r'[a-z][a-z0-9-]*:')
 _HISTORY = 'HAS_COMMIT'
 _UNREADABLE = ('NOT_INTERPRETED', 'READ_ERROR')
@@ -96,7 +96,7 @@ def _no_other(arguments, allowed):
 
 
 def _claim_object(relation, target):
-    """L'objet d'une affirmation doit etre du type que la relation admet (ADR 0002, vocabulaire v1)."""
+    """L'objet d'une affirmation doit etre du type que la relation admet (ARCHITECTURE § 5, vocabulaire v1)."""
     _, targets, _ = RELATIONS[relation]
     if bool(targets) != (target is not None):
         raise OperationError(INVALID_ARGUMENT, f'{relation} {"exige" if targets else "n’a pas"} d’objet.')
@@ -172,7 +172,7 @@ class Exchange:
         self.diff_allowed = service.source_context == 'diff'
         self.diff_consent = bool(diff_consent) and self.diff_allowed
         self.budget, self.used, self.calls = budget, 0, 0
-        # Ce que l'echange a deja transmis du diff : les limites de l'ADR 0008 valent pour tout l'echange.
+        # Ce que l'echange a deja transmis du diff : les limites d'ARCHITECTURE § 12.6 valent pour tout l'echange.
         self.diff_files = self.diff_lines = self.diff_bytes = 0
         self.refs = References()
         evaluations = scan.result.get('evaluations', [])
@@ -401,7 +401,7 @@ class Exchange:
         if not self._query(subject=reference, relation='CHANGES', object=f'file:{path}'):
             raise OperationError(OUT_OF_SCOPE, 'Ce fichier n’est pas touché par ce commit.')
         if generated(path):
-            # Fichier produit par un outil (ADR 0008) : son contenu n'est pas lu.
+            # Fichier produit par un outil (ARCHITECTURE § 12.6) : son contenu n'est pas lu.
             response = self._response('get_diff', self._envelope_coverage(_HISTORY), max_bytes, commit=reference,
                                       path=path)
             response.not_sent({'what': 'diff', 'reason': GENERATED})

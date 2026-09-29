@@ -9,6 +9,7 @@ import {panelKey, ProjectNav, ProjectOverview, technologiesOf, type Scan} from '
 import {AnalysisDetails} from './details';
 import {EVALUATORS, label} from './vocabulary';
 import {AskTaxo} from './query';
+import {RoutesPanel} from './routes';
 import {apiUrl} from './api';
 import {openStream} from './sse';
 import {AnalysisProgress, Working, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
@@ -171,6 +172,7 @@ function App(){
       {legacyFacts.length>0&&<details className="evidence-files"><summary>Fichiers justificatifs ({legacyFacts.length})</summary><div className="table-wrap"><table><thead><tr><th>Technologie</th><th>Fichier justificatif</th><th>Détection</th></tr></thead><tbody>{legacyFacts.map(f=><tr key={f.technology+f.file}><td>{f.technology}</td><td><code>{f.file}</code></td><td>{f.method==='manifest'?'Manifeste':'Nom de fichier'}</td></tr>)}</tbody></table></div></details>}
       </section>
       <AnalysisDetails scan={shown}/>
+      {!running&&<RoutesPanel key={panelKey('routes',selected)} base={`/projects/${selected}`} scanId={shown.id} request={request}/>}
     </>:!running&&<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
     {selected&&!loading&&scan&&<AskTaxo key={panelKey('ask',selected)} base={`/projects/${selected}`} request={request} minia={minia}/>}
     {selected&&!loading&&<HistoryPanel key={panelKey('history',selected)} projectId={selected} minia={minia}/>}

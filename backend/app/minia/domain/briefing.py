@@ -1,6 +1,6 @@
 """Ce que Minia recoit : le commit vu par Git, les faits changes, leurs preuves et la couverture.
 
-Aucun code, sauf un choix explicite (TAXO-MINIA-02, ADR 0008) : le diff du commit, limite aux blocs
+Aucun code, sauf un choix explicite (TAXO-MINIA-02, ARCHITECTURE § 12.6) : le diff du commit, limite aux blocs
 modifies, est alors joint comme contexte a interpreter, jamais comme un fait.
 
 Chaque fait recoit une reference courte (F1, F2...) : Minia cite ces references, et seul Taxo affiche

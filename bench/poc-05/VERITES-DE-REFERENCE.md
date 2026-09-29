@@ -48,6 +48,15 @@ indépendants.
 
 - Les règles antérieures ne la capturent pas (`SecurityConfig:49-81`). `/api/orgs/**` (`:77`) vise
   un deuxième segment `orgs`, alors qu'ici c'est `v1`.
+- **Chaîne de filtres.** `TakiboIamBootApplication` charge aussi la chaîne du serveur d'autorisation,
+  placée avant (`@Order(1)`, `takibo-authorization-server/.../springauthserver/config/TakiboAuthorizationServerConfiguration.java:24-40`). Elle ne s'applique qu'aux requêtes que capture
+  `securityMatcher(endpointsMatcher)` (`:29-32`), c'est-à-dire aux points d'entrée du protocole
+  OAuth2 du serveur d'autorisation. Les réglages n'y changent que l'émetteur (`:51-55`), donc ces
+  points d'entrée gardent leurs chemins par défaut (`/oauth2/…`, `/.well-known/…`, `/connect/…`,
+  `/userinfo`), dont aucun ne capture `/api/v1/…`. La requête passe donc à la chaîne de
+  `SecurityConfig`, sans `securityMatcher` (`SecurityConfig:36`). Portée de cette preuve : la liste
+  des chemins par défaut vient de la bibliothèque (`spring-boot-starter-security-oauth2-authorization-server`,
+  Spring Boot `4.0.3`, `build.gradle:2`), pas du dépôt ; elle est citée, pas lue dans TAKIBO.
 - Méthode : `ReadableUserQueryController#list`. Mapping de classe `:31`, `@GetMapping` `:39`,
   méthode `:46` (`takibo-identity-core/.../interfaces/rest/api/ReadableUserQueryController.java`).
 - L'application qui sert la route est `TakiboIamBootApplication` (voir Q5).

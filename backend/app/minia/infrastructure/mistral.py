@@ -1,7 +1,7 @@
 """Adaptateur Mistral de Minia (API La Plateforme de Mistral AI, REST).
 
 Minia Mistral fait le meme travail que les autres fournisseurs : memes consignes, meme contexte borne, meme
-reponse validee par Taxo, et le mode exploration (ADR 0009). Mistral est un service distant
+reponse validee par Taxo, et le mode exploration (ARCHITECTURE § 12). Mistral est un service distant
 (`remote = True`) : ce que Minia recoit quitte la machine de Taxo. Au niveau gratuit, Mistral peut en outre
 utiliser les donnees envoyees pour entrainer ses modeles (`data_use = True`) : le portail le dit, et le diff
 reste decoche par defaut.
@@ -47,7 +47,7 @@ _FAILED = {'error'}
 class MistralModel:
     provider = 'mistral'
     remote = True
-    # Sait mener l'exploration de MINIA-09 : demander les operations de Taxo une par une (ADR 0009).
+    # Sait mener l'exploration de MINIA-09 : demander les operations de Taxo une par une (ARCHITECTURE § 12).
     explores = True
 
     def __init__(self, model_name, tier=FREE, api_key=None, transport=None, timeout=300.0,

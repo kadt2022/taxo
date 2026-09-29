@@ -1,4 +1,4 @@
-"""ADR 0006 : l'hypothese statistique n'est pas un fait, et ses poids restent hors du depot."""
+"""ARCHITECTURE § 13 : l'hypothese statistique n'est pas un fait, et ses poids restent hors du depot."""
 import hashlib
 import json
 import subprocess

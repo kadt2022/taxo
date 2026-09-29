@@ -1,6 +1,6 @@
 """Ce que Taxo comprend d'un commit : les faits introduits, retires ou modifies entre deux instantanes.
 
-La comparaison porte sur l'identite canonique des faits (ADR 0002) : une preuve qui se deplace ne change
+La comparaison porte sur l'identite canonique des faits (ARCHITECTURE § 5) : une preuve qui se deplace ne change
 pas un fait. Les couvertures ne sont pas des changements ; elles disent ce qui reste non interprete.
 """
 INTRODUCED, REMOVED, MODIFIED = 'INTRODUCED', 'REMOVED', 'MODIFIED'
@@ -26,6 +26,19 @@ def _change(change, before=None, after=None):
     if 'derivation' in fact:
         result['derivation'] = fact['derivation']
     return result
+
+
+def same_schema(before, after):
+    """Vrai si deux listes de faits viennent des memes catalogues, dans les memes versions.
+
+    Une version de catalogue fixe la forme des references (TAXO-ID-01 : `#list` devient `#list(String)`).
+    Comparer deux versions ferait passer un changement de Taxo pour un changement massif du logiciel :
+    une telle comparaison est declaree non comparable, jamais calculee. Une liste vide ne dit rien."""
+    def catalogs(facts):
+        return {(fact['produced_by'].get('catalog_id'), fact['produced_by'].get('catalog_version'))
+                for fact in facts if 'produced_by' in fact}
+    older, newer = catalogs(before), catalogs(after)
+    return not older or not newer or older == newer
 
 
 def unknowns(coverage):

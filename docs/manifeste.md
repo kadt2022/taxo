@@ -1,6 +1,6 @@
 # Manifeste Taxo
 
-*Révisé le 2026-09-17.*
+*Révisé le 2026-09-17 ; § 11 renvoyé au document cible le 2026-09-29.*
 
 *Ce document applique à Taxo la discipline que Taxo impose au logiciel : ce qui est construit est dit construit, ce qui est visé est dit visé, ce qui est inconnu est dit inconnu, et toute promesse importante doit pouvoir être mise à l'épreuve.*
 
@@ -469,64 +469,10 @@ Le parallélisme ne doit jamais détruire le déterminisme.
 
 ## 11. Où nous en sommes
 
-*État au 2026-09-19.*
-
-### Construit
-
-- contrat du fait, identité canonique, suite de conformité ;
-- snapshots Git par commit, lecture déterministe du dépôt ;
-- exécution d'évaluateurs : identité, version, catalogue, statuts, couverture déclarée séparée ;
-- Evidence, provenance, Coverage ;
-- Inventory v0 ;
-- résumé d'exécution borné dans la console.
-
-Les récits 01A, 01B, 01C, ARCH-01 et 01D sont fusionnés. 01E, 01F, 01G et 01I sont rédigés et non
-ouverts. Le vocabulaire Fait / Tuile / Maille / Contexte est figé par l'ADR 0005, et le lot TILES
-est rédigé sans être ouvert : il suppose les faits de TAXO-04 et TAXO-05.
-
-### Limites mesurées
-
-Les premières simulations ont montré que :
-
-- Taxo répond parfaitement aux questions de dénombrement et d'ancrage qu'il sait réellement traiter ;
-- les faits complets ne sont pas encore une mémoire persistée exploitable ;
-- l'Inventory produit principalement des faits peu chers ;
-- les données déjà lues peuvent encore être réduites ou jetées ;
-- l'agent peut inventer silencieusement lorsqu'une capacité manque ;
-- la frontière des capacités doit donc devenir explicitement interrogeable.
-
-### Jalon immédiat
-
-**TAXO-POC-01.** Une route réelle du banc doit être établie jusqu'à son évaluateur de politique,
-contre une vérité de référence écrite avant tout évaluateur, avec :
-
-- faits observés ;
-- faits inférés ;
-- prémisses ;
-- preuves ;
-- snapshot ;
-- couverture ;
-- limites.
-
-### Trajectoire après preuve
-
-Si ce premier fait cher est démontré :
-
-```text
-mémoire persistante minimale
-        ↓
-MCP minimal
-        ↓
-benchmark reproductible
-        ↓
-historique Git / lineage
-        ↓
-diff de faits
-        ↓
-évaluateurs Spring / Security étendus
-```
-
-La plateforme vient après la confiance.
+L'état des capacités est tenu à un seul endroit : [ARCHITECTURE § 16](ARCHITECTURE.md). La suite
+proposée est dans [le plan](backlog/PLAN.md), et les défauts mesurés dans
+[leur file](backlog/DEFAUTS-MESURES.md). Ce manifeste dit ce que Taxo vise ; il ne répète pas ce qui
+est livré, pour ne jamais le contredire.
 
 ---
 

@@ -146,7 +146,7 @@ class AuthorizationChainPoc:
             endpoint.reference(), 'PROTECTED_BY', f'symbol:{type_name}',
             premises=[f'MATCHED_BY : {endpoint.reference()} -> {reference}',
                       f'AUTHORIZED_BY : {reference} -> symbol:{type_name}'],
-            rule='PROTECTED_BY prend appui sur MATCHED_BY puis AUTHORIZED_BY (ADR 0002)',
+            rule='PROTECTED_BY prend appui sur MATCHED_BY puis AUTHORIZED_BY (ARCHITECTURE § 5)',
             checked=['HANDLED_BY ne peut jamais servir de premisse a PROTECTED_BY'],
             gaps=['la decision elle-meme ne vient pas du code'],
             evidence=[evidence, self._evidence(snapshot, path, text, declaration, declaration,
@@ -209,7 +209,7 @@ class AuthorizationChainPoc:
 
     @staticmethod
     def _assertion(subject, relation, object_reference, evidence):
-        """`PERMITS_ALL` est la seule relation du catalogue sans objet (ADR 0002)."""
+        """`PERMITS_ALL` est la seule relation du catalogue sans objet (ARCHITECTURE § 5)."""
         fact = {'contract_version': 1, 'kind': 'ASSERTION', 'status': 'OBSERVED',
                 'validity': 'VALID', 'subject': subject, 'relation': relation,
                 'qualifiers': {}, 'evidence': evidence}
