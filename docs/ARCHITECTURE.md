@@ -502,6 +502,7 @@ a pas de hiérarchie « Tuile statique, puis dynamique, puis adaptative ».
 | Relations | liste explicite, validée contre le vocabulaire et les catalogues des évaluateurs exécutés |
 | Sens | entrant **ou** sortant ; le sens combiné est une extension ultérieure |
 | Profondeur | expansion maximale depuis l'ancre |
+| Priorité | ordre des relations, puis ordre stable des voisins ; il décide ce qui est retenu quand un budget coupe. Par défaut : l'ordre de la liste des relations |
 | Budgets de sortie | nœuds, arêtes, octets sérialisés |
 | Budget de travail | voisins examinés au plus |
 | Reprise | position compatible avec l'analyse et les paramètres |
@@ -562,7 +563,11 @@ Règles :
 1. **Un profil est fermé, déclaré et versionné** : une liste nommée de relations, un sens, une
    profondeur et un ordre de priorité. Il n'est jamais du texte libre, et Taxo n'interprète aucune
    intention : il applique le profil choisi par le consommateur.
-2. **La Tuile rend les paramètres résolus.** Toute Tuile adaptative peut être rejouée en mode explicite.
+2. **La Tuile rend les paramètres résolus**, priorité comprise (§ 9.1) : relations, sens, profondeur,
+   priorité, budgets, version du profil et version du moteur de voisinage. Rejouée en mode explicite avec
+   ces paramètres sur la même analyse, elle donne la même sélection, dans le même ordre. Un profil ne
+   contient rien que le mode explicite ne sache exprimer ; ce contrat est fixé et testé avant le premier
+   profil.
 3. **Déterminisme** : même analyse, même ancre, même profil, même budget donnent la même Tuile, dans le
    même ordre.
 4. **Chaque élément dit pourquoi il est là** : chemin et règle du profil.
@@ -579,7 +584,21 @@ Premiers profils possibles avec les faits existants :
 | --- | --- | --- |
 | `security/1` | `HANDLED_BY`, `SERVED_BY`, `MATCHED_BY`, `AUTHORIZED_BY`, `PROTECTED_BY` | une route |
 | `structure/1` | `CONTAINS`, `DEPENDS_ON`, `BUILT_FROM` | un module, une application |
-| `commit-impact/1` | `CHANGES` → fichiers → routes traitées → application → protection | un commit (sens combiné : après la première tranche) |
+| `commit-impact/1` | `CHANGES` → fichiers → routes traitées → application → protection | un commit ; **prérequis manquant**, voir ci-dessous |
+
+`security/1` et `structure/1` ne suivent que des relations produites aujourd'hui. `commit-impact/1` n'est
+pas encore parcourable : `CHANGES` mène à un `file:`, mais aucune relation ne relie un fichier aux
+symboles qu'il déclare, donc aux routes qu'ils traitent (le fichier n'apparaît que dans les **preuves**
+de `HANDLED_BY`). Deux voies, à trancher avant ce profil :
+
+- une relation parcourable fichier → symbole déclaré, produite par le lecteur de langage, ajoutée au
+  vocabulaire (§ 5.6) et à son catalogue ;
+- ou une **recherche distincte par les preuves** (« faits dont une preuve est dans ce fichier »), rendue
+  comme telle : ce n'est pas une arête de la Maille, et la Tuile la présente comme un saut de recherche,
+  jamais comme un lien établi (§ 11).
+
+Il demande aussi le sens combiné (sortant depuis le commit, entrant vers les routes), prévu après la
+première tranche.
 
 Un profil `performance` (service, repository, SQL, appels externes) n'a pas encore de relations derrière
 lui : il rendrait une frontière de contexte.
@@ -689,16 +708,23 @@ phrase, et rend un verdict :
 | Verdict | Exige |
 | --- | --- |
 | `CONFIRMED` | le ou les faits, leur statut et leurs preuves ; pour un `INFERRED`, prémisses et règle (« Confirmée par Taxo, par déduction ») |
-| `REFUTED` | une `ABSENCE` couvrante (motif, périmètre, méthode), ou un fait incompatible sur une relation déclarée exclusive |
+| `REFUTED` | un fait incompatible sur une relation déclarée exclusive (aujourd'hui `AUTHORED_BY`, `WRITTEN_IN`). La réfutation par une `ABSENCE` couvrante (motif, périmètre, méthode) est **À construire** : aucun évaluateur livré ne produit d'`ABSENCE`, et la correspondance entre un motif d'absence et une affirmation sera fixée avec le premier qui en produira |
 | `NOT_PROVEN` | une raison : `NOT_FOUND_IN_ANALYSED_SCOPE`, `NOT_INTERPRETED`, `NOT_ANALYSED` |
 
 `NOT_PROVEN` n'est jamais `REFUTED`. Le vérificateur n'est pas un prouveur général. Une résolution
 incomplète relève du diagnostic, pas d'un quatrième verdict.
 
-La réponse de Minia est une suite d'**énoncés typés** : `claim` (phrase et affirmation structurée,
-toujours affichée avec son verdict), `interpretation` (toujours « non vérifié »), `unknown`. Taxo vérifie
-tous les `claim` avant l'affichage ; un texte hors énoncés n'est pas affiché. **Aucune phrase ne peut
-apparaître comme établie sans verdict de Taxo.**
+Ce que Minia rend dépend du mode (§ 12.5) :
+
+- **exploration** : une suite d'**énoncés typés** : `claim` (phrase et affirmation structurée, toujours
+  affichée avec son verdict), `interpretation` (toujours « non vérifié »), `unknown`. Taxo vérifie tous
+  les `claim` avant l'affichage ; un texte hors énoncés n'est pas affiché ;
+- **paquet** : un texte, des références citées et ce qui reste inconnu. Taxo valide les références (une
+  référence qu'il n'a pas transmise est écartée et signalée) et affiche les faits cités, les siens ; il
+  ne vérifie pas le texte, qui est affiché comme une **interprétation non vérifiée**, jamais comme un
+  énoncé établi.
+
+Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans verdict de Taxo**.
 
 ### 12.5 Budget, boucle et transparence
 
@@ -861,3 +887,6 @@ règles normatives des ADR 0001 à 0012, supprimés du dépôt. Décisions :
 - Graphe, Chemin, Arbre et Forêt entrent au vocabulaire ;
 - une intention est un profil fermé, jamais interprété par Taxo ;
 - les opérations d'une Tuile s'ajoutent à `taxo-query/1` ; il n'y a pas de second protocole.
+- relecture avant fusion : la réfutation par `ABSENCE` et la vérification du texte en mode paquet ne
+  sont plus présentées comme existantes ; la priorité devient un paramètre explicite, pour que toute
+  Tuile adaptative soit rejouable ; `commit-impact/1` annonce son raccord manquant.

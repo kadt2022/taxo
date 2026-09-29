@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-09-29 (document cible unique ; une seule séquence active)
+Mise à jour : 2026-09-29 (document cible unique ; une seule séquence proposée)
 Référence : [ARCHITECTURE.md](../ARCHITECTURE.md), seul document d'architecture. Les ADR 0001 à 0012
 et les récits TAXO-TILES-01 à 03 y sont fondus (§ 18) ; leur texte reste dans l'historique Git.
 
@@ -11,21 +11,27 @@ ses unités déployables, ses routes, ce qui les protège, et ce qui change entr
 sait pas interpréter, il le dit, avec sa raison. Minia explique et propose ; Taxo vérifie. Le détail
 de ce qui est livré est dans [ARCHITECTURE § 16](../ARCHITECTURE.md).
 
-## Séquence active
+## Séquence proposée
 
-Une seule file. Chaque étape suppose la précédente mergée ; l'ordre ne change que par une décision
-consignée ci-dessous.
+Une seule file de référence. **L'ordre est une recommandation, pas un ordre acté** : il se décide
+étape par étape et chaque arbitrage est consigné ci-dessous. Ce n'est pas non plus une chaîne de
+dépendances : les étapes 4 et 6 ne dépendent techniquement ni de Minia ni du banc et peuvent avancer
+en parallèle des étapes 1 et 2 si la priorité le demande.
 
-| # | Étape | Résultat attendu | Référence |
-| --- | --- | --- | --- |
-| 1 | **Questions libres sur les routes et la sécurité** | Minia répond sur les routes, les applications et les protections avec le protocole existant ; chaque réponse expose ses limites (non interprété, non analysé) | § 12 |
-| 2 | **Banc POC-05** | versions de Taxo et du modèle, questions, vérités établies à la main sans Taxo, budgets : figés avant la campagne, puis mesurés (#48). Aucune modification de Taxo pendant la campagne | § 17 |
-| 3 | **Décision Tuile sur critères d'usage** | trancher TAXO-01I sur un objectif précis : voisinage réutilisable pour l'API et la navigation humaine, apport à Minia mesuré séparément | § 9, [01I](TAXO-01I-voisinage-et-projectabilite.md) |
-| 4 | **Première vue arborescente** | une racine, les relations déjà produites, renvois, preuves et frontière ; réutilise le voisinage | § 10 |
-| 5 | **E2 puis E3** | dépendances déclarées, puis changements de structure entre deux commits, validés sur des projets sans Spring | § 7.5 |
-| 6 | **Appels Java** | décision du § 14, migration du contrat et cas négatifs, puis le premier fragment | § 14 |
-| 7 | **E4 et Forêt** | un lecteur Python sous le même contrat ; la Forêt s'enrichit au rythme des faits produits | § 10.2 |
-| 8 | **Cache et invalidation** | seulement si les mesures le justifient | § 15 |
+| # | Étape | Résultat attendu | Dépend techniquement de | Référence |
+| --- | --- | --- | --- | --- |
+| 1 | **Questions libres sur les routes et la sécurité** | Minia répond sur les routes, les applications et les protections avec le protocole existant ; chaque réponse expose ses limites (non interprété, non analysé) | — | § 12 |
+| 2 | **Banc POC-05** | versions de Taxo et du modèle, questions, vérités établies à la main sans Taxo, budgets : figés avant la campagne, puis mesurés (#48). Aucune modification de Taxo pendant la campagne | 1 | § 17 |
+| 3 | **Décision Tuile sur critères d'usage** | objectif de TAXO-01I fixé : voisinage réutilisable pour l'API et la navigation humaine, apport à Minia mesuré séparément | — | § 9, [01I](TAXO-01I-voisinage-et-projectabilite.md) |
+| 4 | **Voisinage et Tuile explicite** | `get_neighborhood` en mode explicite (§ 9.1 à 9.4) : priorité, budgets, frontière à trois natures, reprise ; contrat de rejeu fixé et testé avant le premier profil adaptatif | 3 | § 9, § 12.3 |
+| 5 | **Première vue arborescente** | une racine, les relations déjà produites, renvois, preuves et frontière ; réutilise le voisinage | 4 | § 10 |
+| 6 | **E2 puis E3** | dépendances déclarées, puis changements de structure entre deux commits, validés sur des projets sans Spring | — | § 7.5 |
+| 7 | **Appels Java** | décision du § 14, migration du contrat et cas négatifs, puis le premier fragment | — | § 14 |
+| 8 | **E4 et Forêt** | un lecteur Python sous le même contrat ; la Forêt s'enrichit au rythme des faits produits | 5 | § 10.2 |
+| 9 | **Cache et invalidation** | seulement si les mesures le justifient | 4 | § 15 |
+
+Les profils adaptatifs (`security/1`, `structure/1`) viennent après l'étape 4 ; `commit-impact/1`
+attend en plus le raccord fichier → symbole (§ 9.5).
 
 La mesure suit le § 17 : exactitude, omissions, fausses affirmations, qualité des preuves, abstentions
 pertinentes, temps humain, latence, tokens et coût total. Taxo ne juge pas Taxo : la vérité de
@@ -43,12 +49,11 @@ La file détaillée est [DEFAUTS-MESURES.md](DEFAUTS-MESURES.md).
 | **D4** diff muet sur la protection | l'impact compare déjà les faits de sécurité ; à vérifier après l'étape 2 |
 | **D5** `anyRequest()` | lu par `taxo.spring-security` |
 | **D6** `ABSENCE` trop catégorique | propre au POC ; à respecter dès qu'une `ABSENCE` sera produite |
-| **D7** faits bruts trop gros | étapes 3 et 4 |
+| **D7** faits bruts trop gros | étapes 3 à 5 |
 
 ## Questions ouvertes
 
-- Limite connue avant le banc : les routes servies derrière une chaîne `securityMatcher(...)` non
-  résolue (serveur d'autorisation) restent sans conclusion de sécurité.
+- L'ordre de la séquence proposée, étape par étape.
 - Accepter ou non un dossier sans dépôt Git (refusé aujourd'hui par `NOT_A_GIT_REPOSITORY`).
 - Ce que « générique » recouvre exactement, au vu du corpus mesuré le 2026-09-19.
 
@@ -63,8 +68,12 @@ sources Sonar et exécution. Les récits de vision décrivent ces capacités ; i
 
 - [ARCHITECTURE.md](../ARCHITECTURE.md) remplace les douze ADR et les récits TILES. Il définit Nœud,
   Graphe, Maille, Chemin, Tuile, Tuile adaptative, Frontière, Arbre, Forêt et Contexte.
-- Le plan se réduit à la séquence active ci-dessus. L'étape 3 remplace un blocage fondé sur les seuls
-  tokens par des critères d'usage explicites.
+- Le plan se réduit à une séquence proposée, dont l'ordre reste à décider étape par étape.
+- La Tuile est jugée sur des critères d'usage explicites : utilité pour l'humain et pour l'API, évaluée
+  séparément des économies de tokens (étape 3).
+- La limite `securityMatcher(...)` non résolue (serveur d'autorisation) n'est pas corrigée avant le
+  banc : la version mesurée la déclare, et l'abstention correcte est la réponse attendue sur ces routes.
+  Une correction ultérieure donnera lieu à une autre campagne.
 
 **2026-09-27 (TAXO-UI-02, page Routes)**
 
