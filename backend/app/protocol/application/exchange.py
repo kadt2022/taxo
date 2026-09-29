@@ -22,6 +22,7 @@ from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INTERNAL, INVALID_AR
                                           NO_CONSENT, NOT_AVAILABLE, OUT_OF_SCOPE, PROTOCOL, OperationError,
                                           Response, error)
 from app.protocol.domain.verdict import Analyzer, contains, judge
+from app.neighborhood.application.query import neighborhood
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ NATURES = ('ASSERTION', 'ABSENCE', 'COVERAGE')
 V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'get_diff', 'verify_claim')
 # Operations reservees d'ARCHITECTURE § 12 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
 # commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01).
-ACTIVATED = ('diff_facts',)
+ACTIVATED = ('diff_facts', 'get_neighborhood')
 OPERATIONS = V1 + ACTIVATED
 RESERVED = ('find_endpoint', 'trace_access_control', 'find_callers', 'find_callees', 'find_dependencies',
             'find_configuration', 'get_source')
@@ -55,6 +56,11 @@ _ARGUMENTS = {
     'get_diff': {**_COMMIT_ARGUMENT, 'path': 'chemin d’un fichier touche'},
     'verify_claim': _CLAIM_ARGUMENTS,
     'diff_facts': _COMMIT_ARGUMENT,
+    'get_neighborhood': {'analysis': 'identifiant de l’analyse', 'root': 'reference',
+                         'follow': 'liste de relations', 'direction': 'INCOMING|OUTGOING',
+                         'depth': '1 (première tranche)', 'priority': 'ordre de follow (facultatif)',
+                         'max_nodes': '1..200', 'max_edges': '1..200', 'max_work': '1..1000',
+                         'continuation': 'reprise du même voisinage (facultatif)'},
 }
 _LOCATION = ('path', 'line_start', 'line_end', 'symbol', 'method', 'object')
 _COMMIT = re.compile(r'[0-9a-f]{7,64}')
@@ -155,10 +161,11 @@ class TaxoQuery:
         self.catalogs = {item.evaluator_id: frozenset(item.catalog.relations) for item in analyzers}
         self.source_context = source_context
 
-    def open(self, project_id, diff_consent=False, max_bytes=None):
+    def open(self, project_id, diff_consent=False, max_bytes=None, analysis_id=None):
         project = require_project(self.projects, project_id)
-        analyses = self.scans.list(project_id)
-        if not analyses:
+        analyses = ([self.scans.get(project_id, analysis_id)] if analysis_id is not None
+                    else self.scans.list(project_id))
+        if not analyses or analyses[0] is None:
             raise QueryError(NO_ANALYSIS, "Aucune analyse globale pour ce projet : lancez-la d'abord.")
         budget = max(MIN_EXCHANGE_BYTES, min(max_bytes or DEFAULT_EXCHANGE_BYTES, MAX_EXCHANGE_BYTES))
         return Exchange(self, project.id, analyses[0], diff_consent, budget)
@@ -219,10 +226,11 @@ class Exchange:
                             'relation': relation}]
 
     def _history_available(self):
-        return any(_HISTORY in item.relations and not item.failed for item in self.analyzers())
+        return any(item.get('status') != 'FAILED' and _HISTORY in self.service.catalogs.get(
+            item['evaluator_id'], frozenset(item.get('relations', {}))) for item in self.evaluations)
 
     def available(self):
-        operations = ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'verify_claim']
+        operations = ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'verify_claim', 'get_neighborhood']
         if self._history_available():
             operations += ['get_commit', 'diff_facts']
             if self.diff_allowed:
@@ -307,6 +315,9 @@ class Exchange:
         return min(requested or DEFAULT_OPERATION_BYTES, MAX_OPERATION_BYTES, remaining)
 
     # --- Operations ----------------------------------------------------------------------------------
+
+    def get_neighborhood(self, arguments, max_bytes):
+        return neighborhood(self, arguments, max_bytes)
 
     def describe(self, arguments, max_bytes):
         _no_other(arguments, ())

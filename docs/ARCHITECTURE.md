@@ -32,9 +32,8 @@ justifications et les limites de chacune de ses conclusions.
   dépendances, données, configuration, tests, évolution). C'est une trajectoire, pas une couverture déjà
   disponible. Un framework inconnu limite les conclusions spécialisées ; il n'empêche pas les analyses
   générales de fonctionner.
-- **TAKIBO est un terrain d'essai.** Aucun nom de classe, rôle, chemin, règle métier ou organisation de
-  TAKIBO ne devient une règle du socle. Le moteur ne nomme jamais un projet analysé (test
-  d'architecture).
+- **Le moteur est indépendant des projets analysés.** Aucun nom de classe, rôle, chemin ou règle
+  métier d’un dépôt particulier ne devient une règle du socle. Les tests utilisent des fixtures génériques.
 
 ### Frontière de la promesse
 
@@ -481,7 +480,7 @@ contractuel complet. `scans.result` ne garde que des résumés bornés. Lecture 
 stockage. Un autre moteur ne se justifierait que par une limite mesurée. Les dépendances d'invalidation
 entre projections sont des métadonnées techniques ; elles ne redéfinissent pas la Maille.
 
-## 9. Tuile et Tuile adaptative (À construire)
+## 9. Tuile et Tuile adaptative (première tranche explicite implémentée)
 
 Une Tuile est une projection bornée de la Maille autour d'une ancre. Elle a toujours deux dimensions
 **indépendantes** :
@@ -493,6 +492,34 @@ Tuile = instantané  (QUEL logiciel : analyse, commit)
 
 Une Tuile peut décrire un commit ancien ; son adaptation au consommateur ne dépend pas de sa date. Il n'y
 a pas de hiérarchie « Tuile statique, puis dynamique, puis adaptative ».
+
+### Première tranche implémentée : voisinage explicite à un saut
+
+`get_neighborhood` lit uniquement les faits persistés de l’analyse indiquée. Le protocole accepte
+`analysis` dans l’enveloppe d’échange pour la sélectionner ; l’opération répète cet identifiant.
+Les accès entrants et sortants sont indexés. Les preuves restent accessibles par `get_evidence`
+dans le même échange. Les relations gardent leur orientation, y compris en parcours entrant.
+
+Cette tranche accepte uniquement `depth: 1`. Toute profondeur supérieure et le sens combiné sont
+refusés. Les voisins non développés portent une frontière de profondeur avec décompte `UNKNOWN`.
+La couverture est un résumé explicitement nommé `ANALYSIS_SUMMARY` ; une lacune est signalée
+à l’échelle de l’analyse, sans prétendre la localiser exactement dans cette Tuile. La couverture
+locale détaillée et le parcours multi-niveaux restent à construire.
+
+La priorité ordonne les relations ; les voisins sont départagés par référence canonique UTF-16,
+identité du fait puis empreinte de l’occurrence. `max_work` compte les requêtes d’adjacence, y compris
+les réponses vides ; l’existence de l’ancre utilise au plus deux recherches indexées supplémentaires.
+Les nœuds, arêtes, octets et frontières sont bornés. Les comptes omis restent `UNKNOWN` sauf si une
+arête non transmise a effectivement été lue (`AT_LEAST: 1`). Une enveloppe trop grande est refusée.
+
+Une continuation reprend après la dernière occurrence rendue, dans un seul voisinage. Elle est
+liée à l’analyse, au moteur, à l’ancre, aux relations, au sens et à la priorité ; les budgets de page
+peuvent changer, notamment pour transmettre un fait trop grand pour la page précédente. Elle est un
+repère de sélection, jamais une autorisation. Un changement d’analyse invalide la reprise.
+`ADJACENCY_COMPLETE` signifie que les relations demandées à cette ancre ont été parcourues ; cela
+ne signifie ni que les voisins ont été développés ni que le logiciel est entièrement connu.
+
+Les paragraphes suivants décrivent aussi la cible multi-niveaux et les profils, encore absents.
 
 ### 9.1 Entrée (mode explicite)
 
@@ -692,7 +719,7 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 | `get_diff` | blocs modifiés d'un fichier touché, sous double consentement | Existant |
 | `verify_claim` | verdict sur une affirmation structurée | Existant |
 | `diff_facts` | faits introduits, modifiés ou retirés par un commit | Existant |
-| `get_neighborhood` | une Tuile, explicite ou adaptative ; EXPAND par reprise | À construire (§ 9) |
+| `get_neighborhood` | voisinage explicite à un saut, avec reprise et preuves accessibles | Première tranche implémentée ; multi-niveaux et profils à construire (§ 9) |
 | `find_callers`, `find_callees`, `find_dependencies`, `find_configuration`, `trace_access_control`, `find_endpoint` | questions génériques | réservées, activées par les analyseurs |
 | `get_source` | code d'un **symbole**, jamais un fichier entier, sous son propre consentement | réservée |
 
@@ -781,8 +808,7 @@ Une **hypothèse** n'est pas un fait. Le contrat ne change pas : ni statut, ni p
 - **`CALLS`** : « le corps de A contient au moins un site d'appel dont une règle de résolution nommée
   sélectionne la déclaration B ». Statut **`INFERRED`** (la sélection est une déduction ; l'occurrence
   est la preuve). Vise la déclaration, jamais le corps exécuté. Une arête, plusieurs sites, une preuve de
-  rôle `call-site` par site. Migration : schéma, validateur, conformité, catalogues, et alignement ou
-  retrait du POC `authchain` qui produit des `CALLS` `OBSERVED`.
+  rôle `call-site` par site. Migration : schéma, validateur, conformité, catalogues et contrats des consommateurs.
 - **Premier fragment** : appel non qualifié sans argument `f()`, écrit directement dans le corps d'une
   méthode ou d'un constructeur de `T` (hors lambda, classe anonyme ou locale) ; `T` déclare une seule
   méthode `f`, privée, sans paramètre ; aucun type englobant ni supertype (tous dans les sources) ne
@@ -826,7 +852,8 @@ Une **hypothèse** n'est pas un fait. Le contrat ne change pas : ni statut, ni p
 | Applications Spring Boot, route → application → chaînes chargées | Existant (#50) |
 | Page Routes, raison exacte des zones non interprétées | Existant (#51) |
 | Protocole `taxo-query/1`, verdicts, Minia (exploration et paquet) | Existants |
-| Voisinage générique, Tuile, Tuile adaptative, `get_neighborhood` | À construire |
+| `get_neighborhood` explicite à un saut, budgets et reprise | Première tranche implémentée après le commit de référence |
+| Voisinage multi-niveaux, couverture locale détaillée, profils adaptatifs | À construire |
 | Arbres et Forêt | Proposé |
 | Cache, déduplication, invalidation incrémentale | Proposé |
 | `CALLS` Java | Proposé (§ 14) |
@@ -835,7 +862,6 @@ Une **hypothèse** n'est pas un fait. Le contrat ne change pas : ni statut, ni p
 | Lecteur Python (E4) | À construire |
 | Questions libres routes et sécurité dans le portail | À construire |
 | Hypothèses statistiques | Proposé, non branché |
-| Banc POC-05 | préparé (PR #48), non exécuté |
 
 ## 17. Critères transversaux d'acceptation
 

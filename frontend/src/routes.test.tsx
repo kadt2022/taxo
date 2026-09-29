@@ -3,22 +3,22 @@ import {describe, expect, it} from 'vitest';
 import {applicationName, chainName, filterRoutes, loadRoutes, RoutesPanel, RoutesView, proofText, protectionText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow, type RoutesResult} from './routes';
 
 const admin:RouteRow={endpoint:'endpoint:GET /api/admin/users', verb:'GET', path:'/api/admin/users', state:'PROTECTED',
-  handlers:[{subject:'endpoint:GET /api/admin/users', relation:'HANDLED_BY', object:'symbol:java:com.takibo.adp.test.controller.TestController#adminUsers(Authentication)',
+  handlers:[{subject:'endpoint:GET /api/admin/users', relation:'HANDLED_BY', object:'symbol:java:com.example.adp.test.controller.TestController#adminUsers(Authentication)',
     status:'OBSERVED', evidence:[{path:'TestController.java', line_start:48, line_end:48}]}],
   applications:[{subject:'endpoint:GET /api/admin/users', relation:'SERVED_BY', status:'INFERRED',
-    object:'application:takibo-adp-test/src/main/java/com/takibo/adp/test/AdpTestApplication.java#AdpTestApplication',
-    derivation:{premises:['BUILT_FROM : application:… -> module:takibo-adp-test'], rule:'spring-boot.application-loads-controller', counter_examples_checked:[], known_gaps:[]}}],
+    object:'application:example-adp-test/src/main/java/com/example/adp/test/AdpTestApplication.java#AdpTestApplication',
+    derivation:{premises:['BUILT_FROM : application:… -> module:example-adp-test'], rule:'spring-boot.application-loads-controller', counter_examples_checked:[], known_gaps:[]}}],
   matched:[{subject:'endpoint:GET /api/admin/users', relation:'MATCHED_BY', object:'route-pattern:/**', status:'INFERRED',
-    qualifiers:{filter_chain:'symbol:java:com.takibo.adp.test.config.TestSecurityConfig#securityFilterChain(HttpSecurity)'},
+    qualifiers:{filter_chain:'symbol:java:com.example.adp.test.config.TestSecurityConfig#securityFilterChain(HttpSecurity)'},
     derivation:{premises:['SERVED_BY : …'], rule:'spring-security.first-matching-pattern',
       counter_examples_checked:['SecurityConfig : non chargée (hors du classpath)'], known_gaps:[]}}],
-  rules:[{subject:'route-pattern:/**', relation:'AUTHORIZED_BY', object:'symbol:java:com.takibo.adp.test.config.TestSecurityConfig#adpAuthorizationManager()', status:'OBSERVED'}],
+  rules:[{subject:'route-pattern:/**', relation:'AUTHORIZED_BY', object:'symbol:java:com.example.adp.test.config.TestSecurityConfig#adpAuthorizationManager()', status:'OBSERVED'}],
   protections:[{subject:'endpoint:GET /api/admin/users', relation:'PROTECTED_BY', status:'INFERRED',
-    object:'symbol:java:com.takibo.adp.test.config.TestSecurityConfig#adpAuthorizationManager()'}],
+    object:'symbol:java:com.example.adp.test.config.TestSecurityConfig#adpAuthorizationManager()'}],
   gaps:[]};
 const debug:RouteRow={...admin, endpoint:'endpoint:GET /debug/secure/secret', path:'/debug/secure/secret', state:'NOT_INTERPRETED',
   applications:[], matched:[], rules:[], protections:[],
-  gaps:[{subject:'endpoint:GET /debug/secure/secret', type:'NOT_INTERPRETED', evaluator:'taxo.spring-boot', reason:'servie peut-être par TakiboIamBootApplication (condition @Profile : chargement non établi)'}]};
+  gaps:[{subject:'endpoint:GET /debug/secure/secret', type:'NOT_INTERPRETED', evaluator:'taxo.spring-boot', reason:'servie peut-être par DemoApplication (condition @Profile : chargement non établi)'}]};
 const open:RouteRow={...admin, endpoint:'endpoint:GET /api/health', path:'/api/health', state:'PERMITS_ALL', protections:[],
   rules:[{subject:'route-pattern:/api/health', relation:'PERMITS_ALL', status:'OBSERVED'}]};
 

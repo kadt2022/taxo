@@ -3,7 +3,7 @@ import {describe, expect, it} from 'vitest';
 import {gaps, gitFile, MiniaChoice, MiniaView, modelLabel, providerLabel, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
-  parent:'a'.repeat(40), project:{id:'p-1', name:'Takibo-IAM'}, files_not_sent:0,
+  parent:'a'.repeat(40), project:{id:'p-1', name:'Demo-IAM'}, files_not_sent:0,
   git:{sha:'b'.repeat(40), parent:'a'.repeat(40), author:'Pi', authored_at:'2026-09-25T00:00:00Z', subject:'Termine SEC-TMS-01',
     files:[{status:'RENAMED', path:'docs/terminer/R1.md', old_path:'docs/backlog/R1.md'}, {status:'MODIFIED', path:'Security.java', old_path:null}]},
   model:{configured:true, provider:'ollama', model:'qwen2.5:3b'},
@@ -36,7 +36,7 @@ describe('gaps', ()=>{
 
 describe('named et gitFile', ()=>{
   it('désigne le dépôt par le nom du projet', ()=>{
-    expect(named('repository:p-1', answer.project)).toBe('dépôt Takibo-IAM');
+    expect(named('repository:p-1', answer.project)).toBe('dépôt Demo-IAM');
     expect(named('file:A', answer.project)).toBe('file:A');
     expect(named(null, answer.project)).toBeNull();
   });
@@ -57,7 +57,7 @@ describe('MiniaView', ()=>{
   it('nomme le type de changement et le projet', ()=>{
     const html=renderToStaticMarkup(<MiniaView answer={{...answer, facts:[{...answer.facts[0], change:'REMOVED', subject:'repository:p-1'}]}}/>);
     expect(html).toContain('<strong>Retiré</strong>');
-    expect(html).toContain('dépôt Takibo-IAM');
+    expect(html).toContain('dépôt Demo-IAM');
     expect(html).toContain('docs/backlog/R1.md → docs/terminer/R1.md (renommé)');
   });
   it('sépare le fait Taxo, l’interprétation et l’inconnu', ()=>{
@@ -93,7 +93,7 @@ describe('sentence', ()=>{
     const fact=answer.facts[0];
     expect(sentence(fact, answer.project)).toBe('routes /api/** est autorisé par : symbole permitAll → symbole hasRole');
     expect(sentence({...fact, subject:'repository:p-1', relation:'USES_TECHNOLOGY', before:null, after:'technology:react'}, answer.project))
-      .toBe('dépôt Takibo-IAM utilise technologie react');
+      .toBe('dépôt Demo-IAM utilise technologie react');
     expect(sentence({...fact, relation:'DECLARED_BY', before:'file:pom.xml', after:null}, answer.project))
       .toBe('routes /api/** est déclarée dans pom.xml');
     expect(sentence({...fact, relation:null, kind:'ASSERTION', before:null, after:null}, answer.project)).toBe('routes /api/** assertion');

@@ -11,13 +11,13 @@
   },
   "snapshot": {
     "repository": "taxo",
-    "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "mode": "COMMIT"
   },
   "evidence": [
     {
       "repository": "taxo",
-      "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "path": "README.md",
       "method": "inventory.file",
       "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

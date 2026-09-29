@@ -63,7 +63,7 @@ def test_evaluation_engine_has_no_concrete_evaluator_dependency():
 
 
 ANALYSED_PROJECT_NAMES = ('orgboundaryfilter', 'policybasedauthorizationmanager',
-                          'portail-math', 'takibo', 'takibu')
+                          'fixture-only-project', 'example-customer')
 
 
 def supplies_vector_values(relative):
@@ -94,11 +94,11 @@ def test_the_engine_never_names_an_analysed_project():
     assert violations == []
 
 
-def test_the_engine_never_imports_the_throwaway_poc():
-    """Le POC a le droit d'importer le moteur ; le moteur ne doit pas le connaitre."""
+def test_the_engine_never_imports_experimental_packages():
+    """Les packages experimentaux ne font pas partie du produit."""
     violations = [f'{path.relative_to(APP)} importe {name}'
                   for path in APP.rglob('*.py')
-                  for name in imports(path) if name.split('.')[0] == 'poc']
+                  for name in imports(path) if name.split('.')[0] in {'poc', 'lab', 'bench'}]
     assert violations == []
 
 

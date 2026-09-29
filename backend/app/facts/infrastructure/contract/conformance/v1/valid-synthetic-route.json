@@ -1,0 +1,43 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "subject": "endpoint:POST /api/items",
+  "relation": "HANDLED_BY",
+  "object": "symbol:java:com.example.ItemController#create",
+  "qualifiers": {},
+  "snapshot": {
+    "repository": "synthetic-project",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "COMMIT"
+  },
+  "evidence": [
+    {
+      "repository": "synthetic-project",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "src/ItemController.java",
+      "line_start": 1,
+      "line_end": 1,
+      "method": "java.spring.request-mapping",
+      "content_hash": "sha256:e572e6909dc1009ab4aa7c5d91981d25944f3623ebbebec0a0902b3b31e179cb"
+    },
+    {
+      "repository": "synthetic-project",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "src/ItemController.java",
+      "line_start": 2,
+      "line_end": 2,
+      "method": "java.spring.request-mapping",
+      "content_hash": "sha256:ae1e50ed883c0b290ec2067d311c94a0ac769de627cde7dbb6535ae9beb2d63b"
+    }
+  ],
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "spring-api",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "spring-api-rules",
+    "catalog_version": "1"
+  }
+}
