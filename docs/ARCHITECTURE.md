@@ -875,7 +875,7 @@ Les renvois « ADR 00xx » du code et des récits pointent désormais ici :
 | ADR 0011 — appels, sites et candidats | § 14 |
 | ADR 0012 — structure et unités déployables | § 7.5, § 7.6 |
 | TAXO-TILES-01, 02, 03 | § 9, § 10, § 15 |
-| Épique TAXO-01, récits 01A à 01G, ARCH-01, CI-01, ID-01, E1, MINIA-01, UI-02 (livrés ou remplacés) | § 3, § 5, § 7, § 8, § 12, § 16 |
+| Épique TAXO-01, récits 01A à 01G, ARCH-01, CI-01, ID-01, E1, MINIA-01, UI-02 (archivés) | § 3, § 5, § 7, § 8, § 12, § 16 ; exigences non réalisées : [PLAN](backlog/PLAN.md) |
 
 ## 19. Historique
 
