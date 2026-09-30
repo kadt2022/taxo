@@ -172,7 +172,8 @@ def test_status_change_keeps_the_identity(memory):
     memory.analysis('b', human['snapshot'])
     memory.store.add('b', human['produced_by']['producer_id'], [human])
     assert memory.count(FactIdentityRow) == 1
-    assert memory.store.query('a') == [inferred] and memory.store.query('b') == [human]
+    assert memory.store.query('a') == [inferred]
+    assert memory.store.query('b') == [human]
     with Session(memory.engine) as db:
         assert db.scalar(select(FactOccurrenceRow.execution).where(FactOccurrenceRow.scan_id == 'b')) is None
 
@@ -181,51 +182,70 @@ def test_status_change_keeps_the_identity(memory):
                          ids=['unknown-execution', 'other-catalog', 'other-version'])
 def test_fact_without_its_recorded_execution_is_refused_and_nothing_is_written(memory, produced):
     memory.analysis('a', executions=[execution()])
+    batch = [assertion('module:ok'), assertion(run=produced)]
     with pytest.raises(OccurrenceError):
-        memory.store.add('a', 'fixture', [assertion('module:ok'), assertion(run=produced)])
-    assert memory.count(FactOccurrenceRow) == memory.count(FactIdentityRow) == 0
+        memory.store.add('a', 'fixture', batch)
+    assert memory.count(FactOccurrenceRow) == 0
+    assert memory.count(FactIdentityRow) == 0
     assert memory.count(ProducerExecutionRow) == 1
 
 
 def test_add_never_creates_an_execution(memory):
     memory.analysis('a')
+    batch = [assertion()]
     with pytest.raises(OccurrenceError):
-        memory.store.add('a', 'fixture', [assertion()])
+        memory.store.add('a', 'fixture', batch)
     assert memory.count(ProducerExecutionRow) == 0
 
 
 def test_producer_must_be_the_one_recording(memory):
     memory.analysis('a', executions=[execution()])
+    batch = [assertion()]
     with pytest.raises(OccurrenceError):
-        memory.store.add('a', 'someone-else', [assertion()])
+        memory.store.add('a', 'someone-else', batch)
 
 
-def test_snapshot_and_evidence_must_be_those_of_the_analysis(memory):
+OTHER = {**SNAPSHOT, 'commit': 'c' * 40}
+
+
+def evidence_from_elsewhere():
+    fact = assertion()
+    fact['evidence'][0]['commit'] = OTHER['commit']
+    return fact
+
+
+def unknown_evidence_field():
+    fact = assertion()
+    fact['evidence'][0]['note'] = 'unknown'
+    return fact
+
+
+@pytest.mark.parametrize('make', [lambda: assertion(snapshot=OTHER), evidence_from_elsewhere, unknown_evidence_field],
+                         ids=['other-snapshot', 'evidence-from-elsewhere', 'unknown-evidence-field'])
+def test_fact_that_does_not_belong_or_cannot_be_kept_is_refused(memory, make):
     memory.analysis('a', executions=[execution()])
-    other = {**SNAPSHOT, 'commit': 'c' * 40}
+    batch = [make()]
     with pytest.raises(OccurrenceError):
-        memory.store.add('a', 'fixture', [assertion(snapshot=other)])
-    moved = assertion()
-    moved['evidence'][0]['commit'] = 'c' * 40
+        memory.store.add('a', 'fixture', batch)
+
+
+def test_an_analysis_keeps_its_snapshot(memory):
+    memory.analysis('a', executions=[execution()])
     with pytest.raises(OccurrenceError):
-        memory.store.add('a', 'fixture', [moved])
+        memory.store.record_snapshot('a', OTHER)
+
+
+def test_an_execution_keeps_its_provenance(memory):
+    memory.analysis('a', executions=[execution()])
+    changed = execution(version='2.0.0')
     with pytest.raises(OccurrenceError):
-        memory.store.record_snapshot('a', other)
-    with pytest.raises(OccurrenceError):
-        memory.store.record_execution('a', execution(version='2.0.0'))
+        memory.store.record_execution('a', changed)
 
 
 def test_facts_before_the_snapshot_are_refused(memory):
+    batch = [assertion()]
     with pytest.raises(OccurrenceError):
-        memory.store.add('nowhere', 'fixture', [assertion()])
-
-
-def test_fact_that_cannot_be_kept_without_loss_is_refused(memory):
-    memory.analysis('a', executions=[execution()])
-    extra = assertion()
-    extra['evidence'][0]['note'] = 'unknown'
-    with pytest.raises(OccurrenceError):
-        memory.store.add('a', 'fixture', [extra])
+        memory.store.add('nowhere', 'fixture', batch)
 
 
 def test_evidence_does_not_repeat_repository_or_commit(memory):
@@ -239,7 +259,8 @@ def test_same_spelling_whatever_came_first(memory):
         memory.analysis(scan, executions=[execution()])
         memory.store.add(scan, 'fixture', [fact])
     assert memory.count(FactIdentityRow) == 1
-    assert same(memory.store.query('a'), [one]) and same(memory.store.query('b'), [decimal])
+    assert same(memory.store.query('a'), [one])
+    assert same(memory.store.query('b'), [decimal])
 
 
 def test_identity_hash_is_the_contract_identity(memory):
@@ -251,11 +272,11 @@ def test_identity_hash_is_the_contract_identity(memory):
 
 
 def test_filters_compare_the_canonical_identity(memory):
-    decomposed = assertion('module:café')
+    decomposed = assertion('module:cafe\u0301')
     memory.analysis('a', executions=[execution()])
     memory.store.add('a', 'fixture', [decomposed])
-    assert memory.store.query('a', object='module:café') == [decomposed]
-    assert memory.store.query('a')[0]['object'] == 'module:café'
+    assert memory.store.query('a', object='module:caf\u00e9') == [decomposed]
+    assert memory.store.query('a')[0]['object'] == 'module:cafe\u0301'
 
 
 def test_concurrent_analyses_share_one_new_identity(memory):
@@ -274,7 +295,8 @@ def test_concurrent_analyses_share_one_new_identity(memory):
     for thread in threads:
         thread.join()
     assert errors == []
-    assert memory.count(FactIdentityRow) == 1 and memory.count(FactOccurrenceRow) == 4
+    assert memory.count(FactIdentityRow) == 1
+    assert memory.count(FactOccurrenceRow) == 4
 
 
 def test_evaluator_execution_names_its_catalog():

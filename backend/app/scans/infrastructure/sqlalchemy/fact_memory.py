@@ -15,17 +15,19 @@ from app.facts.domain.provenance import EXECUTABLE, ProducerExecution
 from app.platform.database.base import Base
 from app.scans.domain.occurrence import EVIDENCE_FIELDS, Occurrence, OccurrenceError, rebuild, split
 
+_SCAN = 'scans.id'
+
 
 class AnalysisSnapshotRow(Base):
     __tablename__ = 'analysis_snapshots'
-    scan_id = Column(String, ForeignKey('scans.id'), primary_key=True)
+    scan_id = Column(String, ForeignKey(_SCAN), primary_key=True)
     snapshot = Column(JSON, nullable=False)
 
 
 class ProducerExecutionRow(Base):
     __tablename__ = 'producer_executions'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    scan_id = Column(String, ForeignKey('scans.id'), nullable=False)
+    scan_id = Column(String, ForeignKey(_SCAN), nullable=False)
     execution_id = Column(String, nullable=False)
     producer_type = Column(String, nullable=False)
     producer_id = Column(String, nullable=False)
@@ -55,7 +57,7 @@ class FactIdentityRow(Base):
 class FactOccurrenceRow(Base):
     __tablename__ = 'fact_occurrences'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    scan_id = Column(String, ForeignKey('scans.id'), nullable=False)
+    scan_id = Column(String, ForeignKey(_SCAN), nullable=False)
     identity_hash = Column(String(71), ForeignKey('fact_identities.identity_hash'), nullable=False)
     execution = Column(Integer, ForeignKey('producer_executions.id'))
     human_producer_id = Column(String)

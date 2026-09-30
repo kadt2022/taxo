@@ -54,6 +54,19 @@ def _stated(identity):
     return {key: value for key, value in identity.items() if key != 'producer_id'}
 
 
+def _evidence_of(fact, snapshot):
+    if 'evidence' not in fact:
+        return None
+    evidence = []
+    for item in fact['evidence']:
+        if item.get('repository') != snapshot['repository'] or item.get('commit') != snapshot['commit']:
+            raise OccurrenceError("Une preuve ne vient pas de l'instantané de l'analyse.")
+        if not set(item) <= {'repository', 'commit', *EVIDENCE_FIELDS}:
+            raise OccurrenceError('Une preuve porte un champ que la mémoire ne sait pas conserver.')
+        evidence.append({key: value for key, value in item.items() if key not in ('repository', 'commit')})
+    return tuple(evidence)
+
+
 def split(fact, snapshot):
     if not isinstance(fact, dict) or fact.get('kind') not in _IDENTITY_FIELDS:
         raise OccurrenceError('Nature de fait inconnue.')
@@ -64,16 +77,7 @@ def split(fact, snapshot):
     # Stored in its RFC 8785 form, so the shared row never depends on which fact came first.
     identity = json.loads(rfc8785.dumps(canonical_identity(fact)))
     raw = _identity_values(fact)
-    evidence = None
-    if 'evidence' in fact:
-        evidence = []
-        for item in fact['evidence']:
-            if item.get('repository') != snapshot['repository'] or item.get('commit') != snapshot['commit']:
-                raise OccurrenceError("Une preuve ne vient pas de l'instantané de l'analyse.")
-            if not set(item) <= {'repository', 'commit', *EVIDENCE_FIELDS}:
-                raise OccurrenceError('Une preuve porte un champ que la mémoire ne sait pas conserver.')
-            evidence.append({key: value for key, value in item.items() if key not in ('repository', 'commit')})
-        evidence = tuple(evidence)
+    evidence = _evidence_of(fact, snapshot)
     details = {key: value for key, value in fact.items() if key not in _OCCURRENCE_FIELDS and key not in raw}
     occurrence = Occurrence(identity_hash(identity), identity, None if same(raw, _stated(identity)) else raw,
                             fact.get('status'), fact.get('validity'), evidence, details)
