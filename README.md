@@ -100,13 +100,17 @@ choisir de commits à montrer. La liste des commits est une consultation distinc
 demande, avec un nombre de commits explicite : aucune fenêtre n'est imposée par défaut. Le plafond de 100 commits par consultation borne le coût d'une requête ; ce n'est
 pas une valeur par défaut.
 
-### Une vue humaine du projet (TAXO-UI-01)
+### Une vue humaine du projet (TAXO-UI-01, TAXO-UI-03)
 
-Après l'analyse globale, le portail présente d'abord ce que Taxo a compris du projet : une vue d'ensemble
-(technologies, fichiers analysés, historique Git) et, pour ce que Taxo ne sait pas encore déterminer
-(architecture, API, sécurité), la mention « Non analysé » : une absence d'information n'est jamais
-présentée comme un résultat. La navigation ne propose que les sections réellement disponibles
-(Vue d'ensemble, Technologies, Routes, Historique). Le vocabulaire du contrat de faits est traduit dans la couche
+Après l'analyse globale, le portail présente d'abord ce que Taxo a compris du projet : technologies,
+fichiers analysés, historique Git, architecture (modules, dépendances entre modules, applications),
+API, sécurité (routes protégées, ouvertes à tous, non interprétées, sans conclusion) et limites de
+l'analyse. Chaque carte donne des comptes tirés des faits, jamais un pourcentage, et renvoie à la section
+qui la détaille. Ce que Taxo ne sait pas encore déterminer (les données, par exemple) porte la mention
+« Non analysé » : une absence d'information n'est jamais présentée comme un résultat. La section
+« Limites de l'analyse » liste, par analyseur, les zones non lues ou non interprétées, avec des exemples.
+La navigation ne propose que les sections réellement disponibles
+(Vue d'ensemble, Technologies, Limites, Routes, Historique). Le vocabulaire du contrat de faits est traduit dans la couche
 de présentation (`frontend/src/vocabulary.ts`), sans rien renommer côté backend. Évaluateurs, versions,
 identifiants d'exécution, couverture et relations restent consultables sous « Détails de l'analyse ».
 

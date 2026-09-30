@@ -99,6 +99,8 @@ header .primary{padding:12px 20px}
 .card-unknown strong{color:var(--muted);font-weight:550;font-size:17px}
 .card-failed{border-color:#efc4bb}.card-failed .card-icon{background:var(--danger-soft);stroke:var(--danger)}.card-failed strong{color:var(--danger)}
 .card-failed .badge{background:var(--danger-soft);color:var(--danger)}
+.card-link{display:inline-block;margin-top:12px;font-size:13px;font-weight:600;color:var(--brand-3);text-decoration:none}
+.card-link:hover{text-decoration:underline}
 .card-partial{border-color:#efd9ad}.card-partial .card-icon{background:var(--warn-soft);stroke:var(--warn)}
 
 /* ——— Sections ——— */
