@@ -1,7 +1,8 @@
 # TAXO-01E — Mémoire versionnée des faits
 
 Statut : rédigé le 2026-09-30. Tranches A, B et C livrées : Taxo écrit et lit la mémoire
-versionnée. Reste à publier la mesure de la migration 004 sur une base réelle. Suite : la comparaison
+versionnée. Migration réelle validée : 43 analyses, 1 124 370 occurrences, 731 295
+identités, 1 120 793 preuves, 905 s. Mesure de taille : encore à compléter. Suite : la comparaison
 persistée (01F), puis les Tuiles.
 
 Source de vérité : [ARCHITECTURE § 5.2, § 5.5, § 8 et § 15](../ARCHITECTURE.md). En cas de divergence,
