@@ -134,7 +134,6 @@ function App(){
   const [scans,setScans]=useState<Scan[]>([]), [scanId,setScanId]=useState('');
   const [name,setName]=useState(''), [path,setPath]=useState(''), [error,setError]=useState('');
   const [busy,setBusy]=useState(false), [loading,setLoading]=useState(true);
-  const project=projects.find(p=>p.id===selected);
   const scan=scans.find(s=>s.id===scanId) ?? scans[0];
   useEffect(()=>{request<Project[]>('/projects').then(p=>{setProjects(p);setSelected(p[0]?.id??'');}).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);
   useEffect(()=>{
@@ -164,11 +163,11 @@ function App(){
     <nav aria-label="Projets">{projects.map(p=><button type="button" disabled={busy} aria-current={selected===p.id?'page':undefined} className={selected===p.id?'selected':''} key={p.id} onClick={()=>{setError('');setSelected(p.id);}}>{p.name}<span>↗</span></button>)}</nav>
     <details className="add-project" open={projects.length===0||undefined}><summary>Ajouter un projet</summary><form onSubmit={add}><label>Nom<input required maxLength={120} value={name} onChange={e=>setName(e.target.value)} placeholder="Mon application"/></label><label>Dossier local<input required value={path} onChange={e=>setPath(e.target.value)} placeholder="D:\MonProjet"/></label><button type="submit" className="secondary" disabled={busy||loading}>Enregistrer le projet</button></form></details>
     <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
-    <main><header className="toolbar"><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?<Working text="Analyse en cours"/>:'Lancer l’analyse globale'}</button></header>
+    <main><header className="page-head"><div className="page-title"><span className="page-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg></span><h1>Vue d’ensemble</h1></div><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?<Working text="Analyse en cours"/>:'Lancer l’analyse globale'}</button></header>
     {error&&<div role="alert" className="error">{error}</div>}
     {run&&run.status!=='done'&&<AnalysisProgress run={run}/>}
     {loading?<p role="status">Chargement…</p>:shown?<>
-      <ProjectOverview scan={shown} pending={running?pendingEvaluators(run):undefined} routes={routes?.scanId===shown.id?routes.counts:undefined} project={project}/>
+      <ProjectOverview scan={shown} pending={running?pendingEvaluators(run):undefined} routes={routes?.scanId===shown.id?routes.counts:undefined}/>
       <section className="results" id="technologies"><div className="section-heading"><div><h2>Technologies</h2><p>Reconnues par les noms de fichiers et les dépendances déclarées ; une dépendance déclarée ne prouve pas qu’elle est utilisée.</p></div><label>Analyse du<select value={shown.id} onChange={e=>setScanId(e.target.value)}>{scans.map(s=><option key={s.id} value={s.id}>{new Date(s.created_at).toLocaleString('fr-CA')}</option>)}</select></label></div>
       {technologies.length?<div className="tags">{technologies.map(t=><span key={t}>{t}</span>)}</div>:<p className="empty">Aucune technologie reconnue dans ce dossier.</p>}
       {legacyFacts.length>0&&<details className="evidence-files"><summary>Fichiers justificatifs ({legacyFacts.length})</summary><div className="table-wrap"><table><thead><tr><th>Technologie</th><th>Fichier justificatif</th><th>Détection</th></tr></thead><tbody>{legacyFacts.map(f=><tr key={f.technology+f.file}><td>{f.technology}</td><td><code>{f.file}</code></td><td>{f.method==='manifest'?'Manifeste':'Nom de fichier'}</td></tr>)}</tbody></table></div></details>}

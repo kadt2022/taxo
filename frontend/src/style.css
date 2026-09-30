@@ -70,7 +70,13 @@ header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
 h1{font-size:clamp(28px,3vw,38px);font-weight:700;letter-spacing:-.025em;line-height:1.15;margin:0 0 10px;overflow-wrap:anywhere}
 .path{display:inline-block;font-family:var(--mono),monospace;font-size:12.5px;color:var(--text-2);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 12px;overflow-wrap:anywhere;margin:0}
 header .primary{padding:12px 20px}
-.toolbar{justify-content:flex-end;margin-bottom:12px}
+.page-head{align-items:center;padding:14px 16px 14px 18px;margin-bottom:18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow)}
+.page-title{display:flex;align-items:center;gap:14px;min-width:0}
+.page-icon{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--brand);color:var(--accent)}
+.page-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8}
+.page-head h1{font-size:22px;margin:0;letter-spacing:-.015em}
+.page-head .primary{padding:11px 20px;border-radius:var(--r)}
+@media (max-width:560px){.page-head{flex-wrap:wrap;gap:12px}.page-head .primary{width:100%}}
 
 
 .error{background:var(--danger-soft);color:var(--danger);border:1px solid #f3cfc8;padding:12px 14px;border-radius:var(--r-sm);margin-bottom:18px;font-size:14px}
@@ -79,20 +85,7 @@ header .primary{padding:12px 20px}
 /* ——— Vue d'ensemble ——— */
 .overview{margin-bottom:32px;scroll-margin-top:70px}
 .overview h2{font-size:20px;margin:0 0 16px}
-.outcome{display:inline-flex;align-items:center;gap:9px;font-size:14px;font-weight:600;margin:0 0 20px;padding:6px 14px 6px 12px;border-radius:var(--r-pill);background:var(--ok-soft);color:var(--ok)}
-.outcome::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px rgba(31,122,69,.15)}
-.outcome-partial{background:var(--warn-soft);color:var(--warn)}
-.outcome-failed{background:var(--danger-soft);color:var(--danger)}
 .cards{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}
-.overview-head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:20px;flex-wrap:wrap}
-.overview-head h2{font-size:30px;letter-spacing:-.02em;margin:0 0 6px}
-.overview-head p:not(.outcome){margin:0 0 14px;color:var(--muted);font-size:15px}
-.overview-head .outcome{margin:0}
-.overview-meta{display:flex;margin:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm)}
-.overview-meta div{padding:12px 20px;border-left:1px solid var(--border)}
-.overview-meta div:first-child{border-left:0}
-.overview-meta dt{font-size:12px;color:var(--muted);margin-bottom:4px}
-.overview-meta dd{margin:0;font-weight:650;font-size:14px;white-space:nowrap}
 /* Plus hautes que larges tant qu'elles sont cote a cote ; une rangee garde une seule hauteur. */
 .overview .card{display:flex;flex-direction:column;min-height:250px;padding:16px 16px 14px}
 .overview .card h3{font-size:13px;letter-spacing:0;text-transform:none;color:var(--text);font-weight:650;gap:8px;margin-bottom:12px}
@@ -335,7 +328,8 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
 .step-running .step-label{font-weight:600}
 .step-detail{grid-column:2;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .step-failed .step-detail{color:var(--warn)}
-.outcome-running{background:var(--accent-soft);color:var(--brand-3)}
+.refresh-note{display:inline-flex;align-items:center;gap:9px;margin:0 0 14px;padding:6px 14px 6px 12px;border-radius:var(--r-pill);background:var(--accent-soft);color:var(--brand-3);font-size:14px;font-weight:600}
+.refresh-note::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;animation:taxo-pulse 1.2s ease-in-out infinite}
 .is-refreshing .cards{position:relative}
 .card-stale{opacity:.62;border-style:dashed}
 .card-stale h3::after{content:"Mise à jour…";margin-left:auto;font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--brand-3);background:var(--accent-soft);border-radius:var(--r-pill);padding:2px 8px}

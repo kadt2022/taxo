@@ -165,29 +165,6 @@ export function overviewCards(scan:Scan, routes?:RouteCounts):Card[]{
   ];
 }
 
-/** L'instantane analyse, dit en clair : commit et moment de l'analyse. */
-export function analysedAt(scan:Scan){
-  const snapshot=scan.snapshot??scan.evaluation_summary?.snapshot;
-  return {commit:snapshot?.commit.slice(0,12)??'', working:snapshot?.mode==='WORKING_TREE',
-    date:scan.created_at?new Date(scan.created_at).toLocaleString('fr-CA', {dateStyle:'medium', timeStyle:'short'}):''};
-}
-
-/** Resultat de l'analyse, dit en une phrase ; les avertissements deviennent des points a verifier. */
-export function outcome(scan:Scan){
-  const evaluations=evaluationsOf(scan);
-  // Un avertissement de l'inventaire figure aussi dans scan.warnings : les resumes font foi, l'ancien champ sert de repli.
-  const points=evaluations.length?evaluations.reduce((total,item)=>total+item.warning_count,0):new Set(scan.warnings??[]).size;
-  const state=evaluations.some(item=>item.status==='FAILED')?'Analyse terminée, une partie a échoué'
-    :evaluations.some(item=>item.status==='PARTIAL')?'Analyse terminée, en partie':'Analyse terminée';
-  return points?`${state} · ${count(points)} point${points>1?'s':''} à vérifier`:state;
-}
-
-/** Tonalite du resultat : succes, partiel ou echec, pour la pastille qui l'accompagne. */
-export function outcomeState(scan:Scan){
-  const statuses=evaluationsOf(scan).map(item=>item.status);
-  return statuses.includes('FAILED')?'failed':statuses.includes('PARTIAL')?'partial':'ok';
-}
-
 /** Cle d'un panneau propre a un projet : unique parmi ses voisins, sinon React duplique le panneau a chaque changement. */
 export const panelKey=(panel:string, projectId:string)=>`${panel}:${projectId}`;
 
@@ -218,25 +195,11 @@ export function CardBar({segments}:Readonly<{segments:Segment[]}>){
   </div>;
 }
 
-export function ProjectOverview({scan, pending, routes, project}:Readonly<{scan:Scan; pending?:string[]; routes?:RouteCounts;
-  project?:{name:string}}>){
+export function ProjectOverview({scan, pending, routes}:Readonly<{scan:Scan; pending?:string[]; routes?:RouteCounts}>){
   const refreshing=pending!==undefined;
   const stale=(id:string)=>refreshing&&(CARD_SOURCES[id]??[]).some(source=>pending.includes(source));
-  const at=analysedAt(scan);
   return <section className={`overview${refreshing?' is-refreshing':''}`} id="vue-ensemble" aria-label="Vue d’ensemble" aria-busy={refreshing}>
-    <div className="overview-head">
-      <div>
-        <h2>Vue d’ensemble</h2>
-        <p>Ce que Taxo a établi sur ce logiciel, preuves à l’appui, et ce qu’il ne sait pas encore.</p>
-        {refreshing?<p className="outcome outcome-running" role="status">Nouvelle analyse en cours…</p>
-          :<p className={`outcome outcome-${outcomeState(scan)}`} role="status">{outcome(scan)}</p>}
-      </div>
-      <dl className="overview-meta">
-        <div><dt>Dépôt</dt><dd>{project?.name??(scan.snapshot?.repository??'')}</dd></div>
-        <div><dt>Commit</dt><dd><code>{at.commit||'—'}</code>{at.working&&<span className="muted"> · dossier de travail</span>}</dd></div>
-        <div><dt>Analyse</dt><dd>{at.date||'—'}</dd></div>
-      </dl>
-    </div>
+    {refreshing&&<p className="refresh-note" role="status">Nouvelle analyse en cours…</p>}
     <div className="cards">
       {overviewCards(scan, routes).map(card=><article key={card.id} className={`card card-${card.state}${stale(card.id)?' card-stale':''}`} aria-label={card.title}>
         <h3><CardIcon id={card.id}/>{card.title}{BADGES[card.state]&&<span className="badge">{BADGES[card.state]}</span>}</h3>

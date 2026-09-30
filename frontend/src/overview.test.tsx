@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {analysedAt, AnalysisLimits, CardBar, CardIcon, gapsOf, panelKey, evaluationsOf, outcomeState, routeCounts, shortList, outcome, overviewCards, ProjectOverview, type EvaluationSummary, type Scan} from './overview';
+import {AnalysisLimits, CardBar, CardIcon, gapsOf, panelKey, evaluationsOf, routeCounts, shortList, overviewCards, ProjectOverview, type EvaluationSummary, type Scan} from './overview';
 import type {RouteRow} from './routes';
 import {AnalysisDetails, EvaluationPanel, warningsOf} from './details';
 import {label, reference, RELATIONS} from './vocabulary';
@@ -162,39 +162,17 @@ describe('CardIcon', ()=>{
   });
 });
 
-describe('outcome et sections', ()=>{
-  it('résume l’analyse en une phrase', ()=>{
-    expect(outcome(scan)).toBe('Analyse terminée');
-    expect(outcome({...scan, evaluations:[inventory, {...git, status:'PARTIAL', warning_count:1}]})).toBe('Analyse terminée, en partie · 1 point à vérifier');
-    expect(outcome({...scan, warnings:['manifeste illisible'], evaluations:[{...inventory, warning_count:1}, {...git, status:'FAILED', warning_count:1}]}))
-      .toBe('Analyse terminée, une partie a échoué · 2 points à vérifier');
-    expect(outcome({id:'old', created_at:'', warnings:['a','a','b']})).toBe('Analyse terminée · 2 points à vérifier');
-  });
-  it('donne la tonalité du résultat', ()=>{
-    expect(outcomeState(scan)).toBe('ok');
-    expect(outcomeState({...scan, evaluations:[inventory, {...git, status:'PARTIAL'}]})).toBe('partial');
-    expect(outcomeState({...scan, evaluations:[inventory, {...git, status:'FAILED'}]})).toBe('failed');
-  });
-});
-
 describe('ProjectOverview', ()=>{
-  it('présente le projet sans vocabulaire interne', ()=>{
-    const html=renderToStaticMarkup(<ProjectOverview scan={scan} project={{name:'Démo'}}/>);
-    expect(html).toContain('Vue d’ensemble');
-    expect(html).toContain('<dd>Démo</dd>');
-    expect(html).toContain('<code>aaaaaaaaaaaa</code>');
+  it('présente les cartes sans vocabulaire interne', ()=>{
+    const html=renderToStaticMarkup(<ProjectOverview scan={scan}/>);
+    expect(html).toContain('id="vue-ensemble"');
     expect(html).toContain('Java · React');
     expect(html).not.toMatch(/evaluator_id|execution_id|taxo\.git|NOT_INTERPRETED|HAS_COMMIT|fact_count|Faits/);
     expect(html).toContain('class="card card-unknown"');
     expect(html).toContain('<a class="card-link" href="#historique">Voir l’historique <span aria-hidden="true">→</span></a>');
     const failed=renderToStaticMarkup(<ProjectOverview scan={{...scan, evaluations:[{...inventory, status:'PARTIAL'}, git]}}/>);
     expect(failed).toContain('<span class="badge">En partie</span>');
-    expect(failed).toContain('<dd>p-1</dd>');
-  });
-  it('dit un dossier de travail et une analyse sans instantané', ()=>{
-    expect(renderToStaticMarkup(<ProjectOverview scan={{...scan, snapshot:{...snapshot, mode:'WORKING_TREE'}}}/>)).toContain('dossier de travail');
-    expect(analysedAt({id:'x', created_at:''})).toEqual({commit:'', working:false, date:''});
-    expect(renderToStaticMarkup(<ProjectOverview scan={{id:'x', created_at:''}} pending={['taxo.inventory']}/>)).toContain('Nouvelle analyse en cours');
+    expect(renderToStaticMarkup(<ProjectOverview scan={{id:'x', created_at:''}} pending={['taxo.inventory']}/>)).toContain('aria-busy="true"');
   });
   it('dessine une répartition sans parts vides dans la barre', ()=>{
     const html=renderToStaticMarkup(<CardBar segments={[{label:'a', count:2, tone:'ok'}, {label:'b', count:0, tone:'warn'}]}/>);
