@@ -219,7 +219,9 @@ d'intégration.
   avec les exécutions. Au premier écart, la migration s'arrête et n'a rien détruit.
 - **`analysis_facts` est conservée** par 004. Le code bascule sur la nouvelle mémoire ; l'ancienne
   table reste une voie de comparaison et de récupération, au prix d'un surcoût disque temporaire.
-- Le retrait de `analysis_facts` est une migration 005 séparée, plus tard, hors de ce récit.
+- La migration 005 rattrape, avant la bascule, les analyses écrites dans `analysis_facts` après 004,
+  avec le même code et les mêmes vérifications.
+- Le retrait de `analysis_facts` est une migration séparée, plus tard, hors de ce récit.
 
 Critères :
 
@@ -235,18 +237,18 @@ occurrences           N                    N
 identités distinctes  (inconnu)            Y
 ratio N / Y           —                    …
 taille du nouveau stockage (tables, index)  …
-taille de analysis_facts (tables, index)    … (conservée jusqu'à 005)
+taille de analysis_facts (tables, index)    … (conservée jusqu'à son retrait)
 durée de migration    —                    …
 ```
 
 Le résultat est publié tel quel, même s'il est décevant. Le gain sur le fichier lui-même n'apparaît
-qu'après 005 (et `VACUUM` sous SQLite) ; 01E-C mesure le nouveau stockage seul.
+qu'après le retrait de `analysis_facts` (et `VACUUM` sous SQLite) ; 01E-C mesure le nouveau stockage seul.
 
 ## Hors périmètre
 
 - Comparaison depuis les faits enregistrés, `EVIDENCE_CHANGED`, changement de statut : 01F, juste après.
 - Moteur de validité (`STALE`, `REVALIDATION_REQUIRED`) et saisie de validations humaines.
-- Retrait de `analysis_facts` (migration 005, après bascule vérifiée).
+- Retrait de `analysis_facts` (migration ultérieure, après bascule vérifiée).
 - Suppression ou purge d'analyses, identités orphelines.
 - Cache et projections persistées.
 - Résumés de `scans.result`.

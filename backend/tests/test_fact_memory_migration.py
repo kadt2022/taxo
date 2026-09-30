@@ -222,6 +222,17 @@ def test_an_index_missing_after_an_interruption_is_created_on_resume(database):
     assert same(database.memory.query(FIRST), database.old.query(FIRST))
 
 
+def test_analyses_written_between_004_and_the_switch_are_caught_up(database):
+    database.analysis(FIRST, 'a')
+    database.alembic('upgrade', '004')
+    database.analysis(SECOND, 'c')  # still written into analysis_facts, as before the switch
+    assert database.memory.query(SECOND) == []
+    output = database.alembic('upgrade', 'head').stdout
+    assert 'analyse 1/2 : déjà migrée (reprise)' in output
+    for scan_id in (FIRST, SECOND):
+        assert same(database.memory.query(scan_id), database.old.query(scan_id))
+
+
 def test_downgrade_keeps_analysis_facts(database):
     database.analysis(FIRST, 'a')
     before = database.count(AnalysisFactRow)

@@ -2,7 +2,7 @@
 
 Stockage minimal : une ligne par fait, avec les colonnes qui servent a filtrer. Depuis TAXO-01E, Taxo
 ecrit et lit la memoire versionnee (fact_memory.py) ; cette table reste en secours, n'est plus alimentee,
-et sert de reference aux tests d'equivalence jusqu'a son retrait (migration 005).
+et sert de reference aux tests d'equivalence jusqu'a son retrait par une migration ulterieure.
 """
 import hashlib
 
