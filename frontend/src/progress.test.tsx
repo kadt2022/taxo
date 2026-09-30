@@ -109,7 +109,7 @@ describe('vues de progression', ()=>{
     const scan:Scan={id:'s', created_at:'', files_count:3, evaluations:[summary('taxo.inventory'), summary('taxo.git')]};
     const html=renderToStaticMarkup(<ProjectOverview scan={scan} pending={['taxo.git']}/>);
     expect(html).toContain('Nouvelle analyse en cours…');
-    expect(html).toContain('class="card card-known card-stale" aria-label="Historique"');
+    expect(html).toContain('class="card card-known card-stale" aria-label="Projet"');
     expect(html.match(/card-stale/g)).toHaveLength(1);
     expect(renderToStaticMarkup(<ProjectOverview scan={scan}/>)).not.toContain('Nouvelle analyse');
   });

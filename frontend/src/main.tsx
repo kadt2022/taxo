@@ -169,7 +169,7 @@ function App(){
     {error&&<div role="alert" className="error">{error}</div>}
     {run&&run.status!=='done'&&<AnalysisProgress run={run}/>}
     {loading?<p role="status">Chargement…</p>:shown?<>
-      <ProjectOverview scan={shown} pending={running?pendingEvaluators(run):undefined} routes={routes?.scanId===shown.id?routes.counts:undefined}/>
+      <ProjectOverview scan={shown} pending={running?pendingEvaluators(run):undefined} routes={routes?.scanId===shown.id?routes.counts:undefined} project={project}/>
       <section className="results" id="technologies"><div className="section-heading"><div><h2>Technologies</h2><p>Reconnues par les noms de fichiers et les dépendances déclarées ; une dépendance déclarée ne prouve pas qu’elle est utilisée.</p></div><label>Analyse du<select value={shown.id} onChange={e=>setScanId(e.target.value)}>{scans.map(s=><option key={s.id} value={s.id}>{new Date(s.created_at).toLocaleString('fr-CA')}</option>)}</select></label></div>
       {technologies.length?<div className="tags">{technologies.map(t=><span key={t}>{t}</span>)}</div>:<p className="empty">Aucune technologie reconnue dans ce dossier.</p>}
       {legacyFacts.length>0&&<details className="evidence-files"><summary>Fichiers justificatifs ({legacyFacts.length})</summary><div className="table-wrap"><table><thead><tr><th>Technologie</th><th>Fichier justificatif</th><th>Détection</th></tr></thead><tbody>{legacyFacts.map(f=><tr key={f.technology+f.file}><td>{f.technology}</td><td><code>{f.file}</code></td><td>{f.method==='manifest'?'Manifeste':'Nom de fichier'}</td></tr>)}</tbody></table></div></details>}

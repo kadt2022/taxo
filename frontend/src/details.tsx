@@ -58,7 +58,7 @@ export function warningsOf(scan:Scan){
 
 export function AnalysisDetails({scan}:Readonly<{scan:Scan}>){
   const warnings=warningsOf(scan);
-  return <details className="analysis-details">
+  return <details className="analysis-details" id="details">
     <summary>Détails de l’analyse</summary>
     <p className="muted">Ce que Taxo a exécuté pour produire cette vue : évaluateurs, versions, couverture, relations et avertissements.</p>
     {evaluationsOf(scan).map(summary=><EvaluationPanel key={summary.execution_id} summary={summary}/>)}

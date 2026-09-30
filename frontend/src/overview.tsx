@@ -18,12 +18,17 @@ export type Scan = {id:string; created_at:string; files_count?:number; commit?:s
   evaluation_summary?:EvaluationSummary; evaluations?:EvaluationSummary[]};
 
 export type CardState = 'known'|'partial'|'failed'|'unknown';
-export type Card = {id:string; title:string; value:string; detail:string; state:CardState; link?:{href:string; label:string}};
+/** Une part d'une repartition : chaque part est un compte de faits, jamais une estimation. */
+export type Segment = {label:string; count:number; tone:'ok'|'info'|'warn'|'muted'};
+/** Une carte : un chiffre et son unite, quelques lignes, une repartition eventuelle, un lien vers le detail. */
+export type Card = {id:string; title:string; state:CardState; value:string; unit?:string; lines:string[]; bar?:Segment[];
+  link?:{href:string; label:string}};
+type Body = Omit<Card,'id'|'title'>;
 
 // Carte -> evaluateur qui la nourrit : pendant une nouvelle analyse, une carte reste marquee tant que
 // son evaluateur n'a pas termine.
-export const CARD_SOURCES:Record<string,string>={technologies:'taxo.inventory', project:'taxo.inventory', history:'taxo.git',
-  architecture:'taxo.structure', api:'taxo.spring-api', security:'taxo.spring-security'};
+export const CARD_SOURCES:Record<string,string[]>={project:['taxo.inventory', 'taxo.git'],
+  architecture:['taxo.structure', 'taxo.spring-boot'], api:['taxo.spring-api'], security:['taxo.spring-security']};
 
 /** Toutes les executions de l'analyse ; une analyse ancienne n'a que le resume de l'inventaire. */
 export function evaluationsOf(scan:Scan):EvaluationSummary[]{
@@ -38,62 +43,93 @@ export function technologiesOf(scan:Scan){
 const count=(value:number)=>value.toLocaleString('fr-CA');
 /** « 1 module », « 3 modules » : le nombre et son nom, accordé. */
 const counted=(value:number, one:string, many:string)=>`${count(value)} ${value>1?many:one}`;
+/** Le nom seul, accordé au nombre : il accompagne le grand chiffre d'une carte. */
+const noun=(value:number, one:string, many:string)=>value>1?many:one;
 const SHOWN=4;
 /** Les premieres technologies, puis combien d'autres : la liste complete est dans la section Technologies. */
 export const shortList=(items:string[])=>items.length>SHOWN?`${items.slice(0,SHOWN).join(' · ')} · +${items.length-SHOWN} autres`:items.join(' · ');
-const NOT_YET=(what:string):Omit<Card,'id'|'title'>=>({value:'Non analysé', state:'unknown',
-  detail:`Taxo ne sait pas encore identifier ${what}. Rien n’est affirmé à ce sujet.`});
 
-function history(git:EvaluationSummary|undefined):Omit<Card,'id'|'title'>{
-  if(!git)return {value:'Non analysé', state:'unknown', detail:'Cette analyse n’a pas lu l’historique Git : relancez l’analyse globale.'};
-  if(git.status==='FAILED')return {value:'Non analysé', state:'failed', detail:'La lecture de l’historique Git a échoué : voir les détails de l’analyse.'};
-  const commits=counted(git.relations.HAS_COMMIT??0, 'commit analysé', 'commits analysés');
-  if(git.status==='PARTIAL')return {value:commits, state:'partial', detail:'Historique Git lu en partie : une partie n’a pas été analysée par Taxo.'};
-  return {value:commits, state:'known', detail:'Historique Git disponible : consultez-le dans la section Historique.'};
-}
-
+const UNKNOWN=(line:string):Body=>({value:'Non analysé', state:'unknown', lines:[line]});
+const FAILED=(line:string):Body=>({value:'Non analysé', state:'failed', lines:[line]});
+const stateOf=(summary:EvaluationSummary|undefined):CardState=>summary?.status==='PARTIAL'?'partial':'known';
 const UNREAD=new Set(['NOT_INTERPRETED', 'READ_ERROR']);
 
-/** Les modules et ce qui s'en construit, lus dans les fichiers de build (TAXO-E1) et les applications Spring Boot. */
-function architecture(structure:EvaluationSummary|undefined, boot:EvaluationSummary|undefined):Omit<Card,'id'|'title'>{
-  if(!structure)return {value:'Non analysé', state:'unknown', detail:'Cette analyse n’a pas lu la structure du dépôt : relancez l’analyse globale.'};
-  if(structure.status==='FAILED')return {value:'Non analysé', state:'failed', detail:'La lecture de la structure a échoué : voir les détails de l’analyse.'};
-  const modules=structure.relations.CONTAINS??0;
-  const parts=[counted(structure.relations.DEPENDS_ON??0, 'dépendance entre modules', 'dépendances entre modules')];
-  if(boot&&boot.status!=='FAILED')parts.push(counted(boot.relations.BUILT_FROM??0, 'application Spring Boot', 'applications Spring Boot'));
-  const services=structure.relations.BUILT_FROM??0;
-  if(services)parts.push(counted(services, 'service compose construit', 'services compose construits'));
-  const value=modules?counted(modules, 'module', 'modules'):'Aucun module déclaré';
-  const detail=`${parts.join(' · ')}. Lu dans les fichiers de build, sans rien exécuter.`;
-  const unread=structure.coverage.some(group=>UNREAD.has(group.coverage_type)&&group.count>0);
-  return {value, detail, state:structure.status==='PARTIAL'?'partial':'known',
-    ...(unread?{link:{href:'#limites', label:'Voir ce qui n’a pas été lu'}}:{})};
+/** Le projet : ses fichiers, ses modules et applications, son historique, ses technologies. */
+function project(scan:Scan, inventory:EvaluationSummary|undefined, structure:EvaluationSummary|undefined,
+  boot:EvaluationSummary|undefined, git:EvaluationSummary|undefined):Body{
+  const files=scan.files_count??0;
+  const lines:string[]=[];
+  if(structure&&structure.status!=='FAILED'){
+    const parts=[counted(structure.relations.CONTAINS??0, 'module', 'modules')];
+    if(boot&&boot.status!=='FAILED')parts.unshift(counted(boot.relations.BUILT_FROM??0, 'application', 'applications'));
+    lines.push(parts.join(' · '));
+  }
+  if(git?.status==='FAILED')lines.push('Historique Git : lecture échouée');
+  else if(git)lines.push(counted(git.relations.HAS_COMMIT??0, 'commit', 'commits'));
+  const technologies=technologiesOf(scan);
+  if(technologies.length)lines.push(shortList(technologies));
+  return {value:count(files), unit:`${noun(files, 'fichier analysé', 'fichiers analysés')}`, state:stateOf(inventory), lines,
+    ...(git&&git.status!=='FAILED'?{link:{href:'#historique', label:'Voir l’historique'}}:{})};
 }
 
-export type RouteCounts = Record<RouteState, number>;
-/** Les routes par etat etabli : chaque etat vient d'un fait, jamais d'une supposition. */
+/** Les routes par etat etabli, et ce qui les rend incompletes : tout vient des faits de la page Routes. */
+export type RouteCounts = Record<RouteState, number> & {reserved:number; missing:number};
 export function routeCounts(result:RoutesResult):RouteCounts{
-  const counts:RouteCounts={PROTECTED:0, PERMITS_ALL:0, NOT_INTERPRETED:0, NO_CONCLUSION:0};
-  for(const row of result.routes)counts[row.state]+=1;
+  const counts:RouteCounts={PROTECTED:0, PERMITS_ALL:0, NOT_INTERPRETED:0, NO_CONCLUSION:0, reserved:0, missing:result.unestablished.length};
+  for(const row of result.routes){
+    counts[row.state]+=1;
+    if(row.gaps.length)counts.reserved+=1;
+  }
   return counts;
 }
 
+/** Les routes relevees par l'evaluateur Spring API (TAXO-04) : une route est un endpoint et la methode qui le traite. */
+function api(spring:EvaluationSummary|undefined, routes:RouteCounts|undefined):Body{
+  if(!spring)return UNKNOWN('Cette analyse n’a pas cherché les routes : relancez l’analyse globale.');
+  if(spring.status==='FAILED')return FAILED('La recherche des routes a échoué : voir les détails de l’analyse.');
+  const total=spring.relations.HANDLED_BY??0;
+  const body:Body={value:count(total), unit:noun(total, 'route', 'routes'), state:stateOf(spring),
+    lines:[total?'Contrôleurs Spring MVC, chaque route prouvée à la ligne.':'Aucune route Spring MVC dans les sources Java.'],
+    link:{href:'#routes', label:'Explorer les routes'}};
+  if(!routes||!total)return body;
+  const bar:Segment[]=[{label:noun(total-routes.reserved, 'établie', 'établies'), count:total-routes.reserved, tone:'ok'},
+    {label:'avec réserve', count:routes.reserved, tone:'warn'}];
+  if(routes.missing)bar.push({label:noun(routes.missing, 'peut manquer', 'peuvent manquer'), count:routes.missing, tone:'muted'});
+  return {...body, bar, lines:[]};
+}
+
+/** Les modules et ce qui s'en construit, lus dans les fichiers de build (TAXO-E1) et les applications Spring Boot. */
+function architecture(structure:EvaluationSummary|undefined, boot:EvaluationSummary|undefined):Body{
+  if(!structure)return UNKNOWN('Cette analyse n’a pas lu la structure du dépôt : relancez l’analyse globale.');
+  if(structure.status==='FAILED')return FAILED('La lecture de la structure a échoué : voir les détails de l’analyse.');
+  const modules=structure.relations.CONTAINS??0;
+  const lines=[counted(structure.relations.DEPENDS_ON??0, 'dépendance', 'dépendances')];
+  if(boot&&boot.status!=='FAILED')lines.push(counted(boot.relations.BUILT_FROM??0, 'application Spring Boot', 'applications Spring Boot'));
+  const services=structure.relations.BUILT_FROM??0;
+  if(services)lines.push(counted(services, 'service compose', 'services compose'));
+  lines.push('Lu dans les fichiers de build, sans rien exécuter.');
+  return {value:count(modules), unit:noun(modules, 'module', 'modules'), state:stateOf(structure), lines,
+    link:{href:'#details', label:'Voir le détail'}};
+}
+
 /** Ce que Taxo etablit de la protection des routes ; sans le detail par route, il ne compte que les regles lues. */
-function security(spring:EvaluationSummary|undefined, routes:RouteCounts|undefined):Omit<Card,'id'|'title'>{
-  if(!spring)return {value:'Non analysé', state:'unknown', detail:'Cette analyse n’a pas lu la sécurité : relancez l’analyse globale.'};
-  if(spring.status==='FAILED')return {value:'Non analysé', state:'failed', detail:'La lecture de la sécurité a échoué : voir les détails de l’analyse.'};
-  const state=spring.status==='PARTIAL'?'partial':'known';
-  const link={href:'#routes', label:'Voir la protection de chaque route'};
+function security(spring:EvaluationSummary|undefined, routes:RouteCounts|undefined):Body{
+  if(!spring)return UNKNOWN('Cette analyse n’a pas lu la sécurité : relancez l’analyse globale.');
+  if(spring.status==='FAILED')return FAILED('La lecture de la sécurité a échoué : voir les détails de l’analyse.');
+  const link={href:'#routes', label:'Explorer la sécurité'};
   if(!routes){
     const rules=(spring.relations.AUTHORIZED_BY??0)+(spring.relations.PERMITS_ALL??0);
-    return {value:rules?counted(rules, 'règle de sécurité lue', 'règles de sécurité lues'):'Aucune règle de sécurité lue', state, link,
-      detail:'Le détail par route est dans la section Routes.'};
+    return {value:count(rules), unit:noun(rules, 'règle de sécurité lue', 'règles de sécurité lues'), state:stateOf(spring), link,
+      lines:['Le détail par route est dans la section Routes.']};
   }
-  const value=counted(routes.PROTECTED, 'route protégée', 'routes protégées');
-  const detail=[counted(routes.PERMITS_ALL, 'ouverte à tous (permitAll)', 'ouvertes à tous (permitAll)'),
-    counted(routes.NOT_INTERPRETED, 'non interprétée', 'non interprétées'), counted(routes.NO_CONCLUSION, 'sans conclusion', 'sans conclusion')]
-    .join(' · ');
-  return {value, state, link, detail:`${detail}. Une route n’est dite protégée que si un fait le prouve.`};
+  const undetermined=routes.NOT_INTERPRETED+routes.NO_CONCLUSION;
+  return {value:count(routes.PROTECTED), unit:noun(routes.PROTECTED, 'route protégée', 'routes protégées'), state:stateOf(spring), link,
+    // La barre dit deja chaque etat : une seule ligne, la somme de ce qui reste a determiner.
+    lines:undetermined?[`${counted(undetermined, 'route reste', 'routes restent')} à déterminer.`]:[],
+    bar:[{label:noun(routes.PROTECTED, 'protégée', 'protégées'), count:routes.PROTECTED, tone:'ok'},
+      {label:'permitAll()', count:routes.PERMITS_ALL, tone:'info'},
+      {label:noun(routes.NOT_INTERPRETED, 'non interprétée', 'non interprétées'), count:routes.NOT_INTERPRETED, tone:'warn'},
+      {label:'sans conclusion', count:routes.NO_CONCLUSION, tone:'muted'}]};
 }
 
 /** Les zones que Taxo n'a pas su lire ou interpreter, par analyseur : ce qu'il ne sait pas, dit en clair. */
@@ -104,59 +140,37 @@ export function gapsOf(scan:Scan):Gap[]{
     .sort((a,b)=>b.count-a.count||a.evaluator.localeCompare(b.evaluator));
 }
 
-function limits(scan:Scan):Omit<Card,'id'|'title'>{
-  if(!evaluationsOf(scan).length)return {value:'Non analysé', state:'unknown', detail:'Cette analyse ne détaille pas sa couverture : relancez l’analyse globale.'};
-  const total=gapsOf(scan).reduce((sum,gap)=>sum+gap.count,0);
-  if(!total)return {value:'Aucune zone non interprétée', state:'known', detail:'Tout ce que les analyseurs ont parcouru a été lu. Cela ne couvre que ce qu’ils savent analyser.'};
-  return {value:counted(total, 'zone non interprétée', 'zones non interprétées'), state:'known',
-    link:{href:'#limites', label:'Voir chaque zone'}, detail:'Chacune est dite avec l’analyseur concerné. Rien n’y est deviné.'};
+function limits(scan:Scan):Body{
+  if(!evaluationsOf(scan).length)return UNKNOWN('Cette analyse ne détaille pas sa couverture : relancez l’analyse globale.');
+  const gaps=gapsOf(scan);
+  const total=gaps.reduce((sum,gap)=>sum+gap.count,0);
+  const analysers=new Set(gaps.map(gap=>gap.evaluator)).size;
+  return {value:count(total), unit:noun(total, 'zone non interprétée', 'zones non interprétées'), state:'known',
+    lines:[total?`chez ${counted(analysers, 'analyseur', 'analyseurs')}, chacune avec sa raison.`
+      :'Tout ce que les analyseurs ont parcouru a été lu. Cela ne couvre que ce qu’ils savent analyser.'],
+    link:{href:'#limites', label:'Voir les limites'}};
 }
-
-/** Les routes relevees par l'evaluateur Spring API (TAXO-04) : une route est un endpoint et la methode qui le traite. */
-function api(spring:EvaluationSummary|undefined):Omit<Card,'id'|'title'>{
-  if(!spring)return {value:'Non analysé', state:'unknown', detail:'Cette analyse n’a pas cherché les routes : relancez l’analyse globale.'};
-  if(spring.status==='FAILED')return {value:'Non analysé', state:'failed', detail:'La recherche des routes a échoué : voir les détails de l’analyse.'};
-  const routes=spring.relations.HANDLED_BY??0;
-  const plural=routes>1?'s':'';
-  let value='Aucune route Spring';
-  if(routes)value=`${count(routes)} route${plural} Spring relevée${plural}`;
-  if(spring.status==='PARTIAL')return {value, state:'partial',
-    detail:'Certaines routes n’ont pas pu être interprétées : voir les points à vérifier. Rien n’est deviné.'};
-  return {value, state:'known', detail:routes?'Contrôleurs Spring MVC, chaque route prouvée à la ligne (tests exclus).'
-    :'Aucune route Spring MVC trouvée dans les sources Java (tests exclus).'};
-}
-
-function source(scan:Scan){
-  const snapshot=scan.snapshot??scan.evaluation_summary?.snapshot;
-  if(!snapshot)return 'Fichiers du dossier analysé.';
-  const commit=snapshot.commit.slice(0,12);
-  if(snapshot.mode==='COMMIT')return `Contenu du commit ${commit}.`;
-  return `Dossier de travail au commit ${commit}${snapshot.dirty?', modifications non commitées incluses':''}.`;
-}
-
-/** Un lien vers la section qui detaille la carte, seulement si Taxo y a quelque chose a montrer. */
-const linked=(card:Omit<Card,'id'|'title'>, href:string, text:string)=>
-  card.state==='known'||card.state==='partial'?{...card, link:{href, label:text}}:card;
 
 /** Les cartes de la vue d'ensemble, toujours dans le meme ordre. */
 export function overviewCards(scan:Scan, routes?:RouteCounts):Card[]{
   const evaluations=evaluationsOf(scan);
   const find=(id:string)=>evaluations.find(item=>item.evaluator_id===id);
-  const inventory=find('taxo.inventory'), git=find('taxo.git'), spring=find('taxo.spring-api');
-  const technologies=technologiesOf(scan);
+  const structure=find('taxo.structure'), boot=find('taxo.spring-boot');
   return [
-    {id:'technologies', title:'Technologies', state:'known',
-      value:technologies.length?shortList(technologies):'Aucune technologie reconnue',
-      detail:technologies.length?'Reconnues par les noms de fichiers et les dépendances déclarées.':'Aucun fichier ni aucune dépendance déclarée ne correspond à une technologie que Taxo connaît.'},
-    {id:'project', title:'Projet', state:inventory?.status==='PARTIAL'?'partial':'known',
-      value:`${count(scan.files_count??0)} fichiers analysés`, detail:source(scan)},
-    {id:'history', title:'Historique', ...linked(history(git), '#historique', 'Consulter les commits')},
-    {id:'architecture', title:'Architecture', ...architecture(find('taxo.structure'), find('taxo.spring-boot'))},
-    {id:'api', title:'API', ...linked(api(spring), '#routes', 'Voir les routes')},
+    {id:'project', title:'Projet', ...project(scan, find('taxo.inventory'), structure, boot, find('taxo.git'))},
+    {id:'api', title:'API', ...api(find('taxo.spring-api'), routes)},
+    {id:'architecture', title:'Architecture', ...architecture(structure, boot)},
     {id:'security', title:'Sécurité', ...security(find('taxo.spring-security'), routes)},
-    {id:'data', title:'Données', ...NOT_YET('les entités ni les bases de données')},
-    {id:'limits', title:'Limites de l’analyse', ...limits(scan)},
+    {id:'data', title:'Données', ...UNKNOWN('Taxo ne sait pas encore identifier les entités ni les bases de données. Rien n’est affirmé à ce sujet.')},
+    {id:'limits', title:'Limites', ...limits(scan)},
   ];
+}
+
+/** L'instantane analyse, dit en clair : commit et moment de l'analyse. */
+export function analysedAt(scan:Scan){
+  const snapshot=scan.snapshot??scan.evaluation_summary?.snapshot;
+  return {commit:snapshot?.commit.slice(0,12)??'', working:snapshot?.mode==='WORKING_TREE',
+    date:scan.created_at?new Date(scan.created_at).toLocaleString('fr-CA', {dateStyle:'medium', timeStyle:'short'}):''};
 }
 
 /** Resultat de l'analyse, dit en une phrase ; les avertissements deviennent des points a verifier. */
@@ -206,21 +220,45 @@ export function CardIcon({id}:Readonly<{id:string}>){
   return <svg className="card-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={ICONS[id]??ICONS.project}/></svg>;
 }
 
-const BADGES:Record<CardState,string|null>={known:null, partial:'En partie', failed:'Échec', unknown:'Non analysé'};
+const BADGES:Record<CardState,string|null>={known:null, partial:'En partie', failed:'Échec', unknown:null};
 
-export function ProjectOverview({scan, pending, routes}:Readonly<{scan:Scan; pending?:string[]; routes?:RouteCounts}>){
+/** Une repartition en barre, avec sa legende : les parts vides restent dans la legende, pas dans la barre. */
+export function CardBar({segments}:Readonly<{segments:Segment[]}>){
+  const total=segments.reduce((sum,item)=>sum+item.count,0);
+  return <div className="card-split">
+    {total>0&&<div className="card-bar" aria-hidden="true">{segments.filter(item=>item.count).map(item=>
+      <span key={item.label} className={`tone-${item.tone}`} style={{flexGrow:item.count}}/>)}</div>}
+    <ul>{segments.map(item=><li key={item.label}><span className={`dot tone-${item.tone}`} aria-hidden="true"/>{count(item.count)} {item.label}</li>)}</ul>
+  </div>;
+}
+
+export function ProjectOverview({scan, pending, routes, project}:Readonly<{scan:Scan; pending?:string[]; routes?:RouteCounts;
+  project?:{name:string}}>){
   const refreshing=pending!==undefined;
-  const stale=(id:string)=>refreshing&&pending.includes(CARD_SOURCES[id]);
+  const stale=(id:string)=>refreshing&&(CARD_SOURCES[id]??[]).some(source=>pending.includes(source));
+  const at=analysedAt(scan);
   return <section className={`overview${refreshing?' is-refreshing':''}`} id="vue-ensemble" aria-label="Vue d’ensemble" aria-busy={refreshing}>
-    {refreshing?<p className="outcome outcome-running" role="status">Nouvelle analyse en cours…</p>
-      :<p className={`outcome outcome-${outcomeState(scan)}`} role="status">{outcome(scan)}</p>}
-    <h2>Vue d’ensemble</h2>
+    <div className="overview-head">
+      <div>
+        <h2>Vue d’ensemble</h2>
+        <p>Ce que Taxo a établi sur ce logiciel, preuves à l’appui, et ce qu’il ne sait pas encore.</p>
+        {refreshing?<p className="outcome outcome-running" role="status">Nouvelle analyse en cours…</p>
+          :<p className={`outcome outcome-${outcomeState(scan)}`} role="status">{outcome(scan)}</p>}
+      </div>
+      <dl className="overview-meta">
+        <div><dt>Dépôt</dt><dd>{project?.name??(scan.snapshot?.repository??'')}</dd></div>
+        <div><dt>Commit</dt><dd><code>{at.commit||'—'}</code>{at.working&&<span className="muted"> · dossier de travail</span>}</dd></div>
+        <div><dt>Analyse</dt><dd>{at.date||'—'}</dd></div>
+      </dl>
+    </div>
     <div className="cards">
       {overviewCards(scan, routes).map(card=><article key={card.id} className={`card card-${card.state}${stale(card.id)?' card-stale':''}`} aria-label={card.title}>
-        <h3><CardIcon id={card.id}/>{card.title}{BADGES[card.state]&&card.value!==BADGES[card.state]&&<span className="badge">{BADGES[card.state]}</span>}</h3>
-        <strong>{card.value}</strong>
-        <p>{card.detail}</p>
-        {card.link&&<a className="card-link" href={card.link.href}>{card.link.label} →</a>}
+        <h3><CardIcon id={card.id}/>{card.title}{BADGES[card.state]&&<span className="badge">{BADGES[card.state]}</span>}</h3>
+        <strong className="card-value">{card.value}</strong>
+        {card.unit&&<span className="card-unit">{card.unit}</span>}
+        {card.bar&&<CardBar segments={card.bar}/>}
+        {card.lines.map(line=><p key={line}>{line}</p>)}
+        {card.link&&<a className="card-link" href={card.link.href}>{card.link.label} <span aria-hidden="true">→</span></a>}
       </article>)}
     </div>
   </section>;
