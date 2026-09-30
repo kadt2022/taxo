@@ -50,7 +50,8 @@ def _resume(token, binding, count):
         values = json.loads(base64.b64decode(token + '=' * (-len(token) % 4), altchars=b'-_', validate=True))
         valid = (isinstance(values, list) and len(values) == 3 and values[0] == binding
                  and type(values[1]) is int and 0 <= values[1] < count
-                 and isinstance(values[2], str) and len(values[2]) <= 10000)
+                 and isinstance(values[2], str) and (values[2] == '' or
+                     (values[2].isascii() and values[2].isdigit() and len(values[2]) <= 19)))
     except (ValueError, UnicodeError):
         valid = False
     if not valid:
@@ -81,9 +82,11 @@ def neighborhood(exchange, arguments, max_bytes):
               (('max_nodes', 30, 200), ('max_edges', 60, 200), ('max_work', 100, 1000))}
     parameters = {'root': root, 'follow': relations, 'priority': priority, 'direction': direction,
                   'depth': depth}
-    binding = hashlib.sha256(json.dumps([VERSION, exchange.snapshot, parameters], sort_keys=True).encode()).hexdigest()
-    position, after = _resume(arguments.get('continuation'), binding, len(priority))
     store = exchange.service.facts
+    revision = store.revision(exchange.scan.id)
+    binding = hashlib.sha256(json.dumps([VERSION, exchange.snapshot, parameters, revision],
+                                        sort_keys=True).encode()).hexdigest()
+    position, after = _resume(arguments.get('continuation'), binding, len(priority))
     nodes, selected, refs, work = [root], [], [], 0
     known = store.has_reference(exchange.scan.id, root)
     coverage, frontier = [], []
@@ -119,7 +122,7 @@ def neighborhood(exchange, arguments, max_bytes):
                                                           else {'kind': 'UNKNOWN'}),
                                'continuation': continuation})
         response = Response('get_neighborhood', exchange.snapshot, coverage, max_bytes,
-                            engine_version=VERSION, parameters=parameters,
+                            engine_version=VERSION, parameters=parameters, facts_revision=revision,
                             bounds={**limits, 'max_bytes': max_bytes},
                             consumed={'nodes': len(nodes), 'edges': len(selected), 'work': work},
                             anchor={'reference': root, 'known': known}, nodes=list(nodes),
@@ -181,6 +184,10 @@ def neighborhood(exchange, arguments, max_bytes):
             result = candidate
         else:
             result = render('ADJACENCY_COMPLETE', position, after)
+    if store.revision(exchange.scan.id) != revision:
+        for ref in reversed(refs):
+            exchange.refs.forget(ref)
+        _invalid('Les faits de cette analyse ont changé pendant le parcours ; recommencer sans reprise.')
     if not fits(result):
         for ref in reversed(refs):
             exchange.refs.forget(ref)

@@ -154,3 +154,78 @@ def test_http_analysis_pinning(taxo):
         'arguments': {'analysis': analysis, 'root': root, 'follow': ['CONTAINS'], 'direction': 'OUTGOING'}}]})
     assert response.status_code == 200 and response.json()['responses'][0]['items']
     assert client.post(url, json={'analysis': 'foreign', 'requests': [{'operation': 'describe'}]}).status_code == 409
+
+
+def test_long_unicode_references_keep_canonical_order_and_resume(graph):
+    store, opened, _, _ = graph
+    # Long and varied: compression must not be relied on to fit a database index.
+    root = 'module:' + ''.join(chr(0x4e00 + i) for i in range(850))
+    prefix = 'module:' + ''.join(chr(0x5000 + i) for i in range(850))
+    targets = [prefix + suffix for suffix in ('z', '\U00010000', '\ue000', '')]
+    store.add('analysis-1', 'fixture', [fact(target, subject=root) for target in targets])
+    expected = sorted(targets, key=lambda value: value.encode('utf-16-be'))
+    pages = [ask(opened(), root=root, max_edges=2, max_bytes=32_000)]
+    while pages[-1]['continuation'] is not None:
+        assert len(pages) <= len(targets)
+        pages.append(ask(opened(), root=root, continuation=pages[-1]['continuation'], max_bytes=32_000))
+    assert [item['fact']['object'] for page in pages for item in page['items']] == expected
+    assert store.has_reference('analysis-1', root)
+    assert store.neighbor('analysis-1', targets[0], 'DEPENDS_ON', 'INCOMING')[1]['subject'] == root
+
+
+def test_fact_append_invalidates_continuation_and_reorders_new_selection(graph):
+    store, opened, _, _ = graph
+    store.add('analysis-1', 'fixture', [fact('module:b'), fact('module:c')])
+    first = ask(opened(), max_edges=1)
+    store.add('analysis-1', 'fixture', [fact('module:a')])
+    refused = ask(opened(), continuation=first['continuation'])
+    assert refused['error']['code'] == 'INVALID_ARGUMENT'
+    fresh = ask(opened())
+    assert fresh['facts_revision'] > first['facts_revision']
+    assert [item['fact']['object'] for item in fresh['items']] == ['module:a', 'module:b', 'module:c']
+
+
+def test_fact_append_during_selection_refuses_mixed_page(graph, monkeypatch):
+    store, opened, _, _ = graph
+    store.add('analysis-1', 'fixture', [fact()])
+    neighbor = store.neighbor
+    def mutate(*args, **kwargs):
+        result = neighbor(*args, **kwargs)
+        store.add('analysis-1', 'fixture', [fact('module:a')])
+        return result
+    monkeypatch.setattr(store, 'neighbor', mutate)
+    exchange = opened()
+    assert ask(exchange, max_edges=1)['error']['code'] == 'INVALID_ARGUMENT'
+    assert not exchange.refs.facts
+
+
+def test_reference_hash_collision_never_returns_another_anchor(graph, monkeypatch):
+    from app.scans.infrastructure.sqlalchemy import fact_store
+    monkeypatch.setattr(fact_store, '_reference_hash', lambda reference: '0' * 64)
+    store, opened, _, _ = graph
+    store.add('analysis-1', 'fixture', [fact('module:a', subject='module:other'), fact('module:b')])
+    result = ask(opened())
+    assert [item['fact']['object'] for item in result['items']] == ['module:b']
+    assert not store.has_reference('analysis-1', 'module:missing')
+
+
+def test_frozen_migration_order_matches_v1_without_application_imports():
+    import ast
+    import importlib.util
+    from pathlib import Path
+    from app.scans.domain.fact_order import adjacency_keys
+    path = Path(__file__).parents[1] / 'migrations/versions/003_adjacency.py'
+    tree = ast.parse(path.read_text())
+    assert not any(isinstance(node, ast.ImportFrom) and (node.module or '').startswith('app.')
+                   for node in ast.walk(tree))
+    spec = importlib.util.spec_from_file_location('migration003', path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    samples = [fact('module:e\u0301'),
+               {'kind': 'ABSENCE', 'pattern': {'relation': 'CALLS'}, 'method': 'fixture',
+                'scope': {'include': ['module:b', 'module:a', 'module:b'], 'exclude': []}},
+               {'kind': 'COVERAGE', 'subject': ROOT, 'coverage_type': 'ANALYSED',
+                'scope': {'include': ['module:\U00010000', 'module:\ue000']},
+                'produced_by': {'producer_id': 'fixture'}}]
+    for sample in samples:
+        assert migration._keys(sample) == adjacency_keys(sample)

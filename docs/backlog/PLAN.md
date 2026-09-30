@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-09-29. Référence : [ARCHITECTURE.md](../ARCHITECTURE.md).
+Mise à jour : 2026-09-30. Référence : [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Priorité active
 
@@ -16,6 +16,19 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
 
 Les hypothèses statistiques restent hors de cette séquence. Un résultat d’évaluation d’un agent
 ne bloque pas le développement des capacités humaines et API.
+
+## Validation indépendante
+
+**Taxo ne juge pas Taxo** : les résultats attendus viennent de fixtures dont la vérité est établie
+indépendamment du moteur, avec des preuves vérifiables. Les anciens POC sont retirés ; mesurer
+la qualité, les coûts et l’utilité du produit reste nécessaire. Des évaluations génériques d’agents
+restent possibles, sans conditionner la navigation humaine ni l’API. Le choix de leurs protocoles
+et budgets devra être explicite ; ce nettoyage ne décide pas de leur résultat.
+
+Recommandation à confirmer : juger les Tuiles sur leurs critères d’usage humain/API et mesurer
+les économies de tokens séparément.
+La limite `securityMatcher(...)` reste suivie. Le retrait de l’ancien banc ne décide pas du calendrier
+de sa correction et ne transforme pas l’abstention de Taxo en vérité de référence.
 
 ## Limites suivies
 

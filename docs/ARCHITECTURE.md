@@ -508,14 +508,24 @@ locale détaillée et le parcours multi-niveaux restent à construire.
 
 La priorité ordonne les relations ; les voisins sont départagés par référence canonique UTF-16,
 identité du fait puis empreinte de l’occurrence. `max_work` compte les requêtes d’adjacence, y compris
-les réponses vides ; l’existence de l’ancre utilise au plus deux recherches indexées supplémentaires.
+les réponses vides ; l’existence de l’ancre utilise au plus deux recherches indexées supplémentaires,
+et deux lectures indexées contrôlent la génération de faits au début et à la fin de la requête.
+L’ordre est matérialisé en rangs à l’enregistrement. Les index portent des empreintes d’ancre et des
+rangs de taille fixe ; les références complètes et les clés canoniques restent hors des index.
+La référence originale est aussi comparée pour éviter de confondre deux ancres en cas de collision.
+L’ajout de faits recalcule les rangs de l’analyse dans la même transaction : ce coût de tri et de
+réécriture est à l’ingestion, pas au parcours, et devra être mesuré sur les grandes analyses.
 Les nœuds, arêtes, octets et frontières sont bornés. Les comptes omis restent `UNKNOWN` sauf si une
 arête non transmise a effectivement été lue (`AT_LEAST: 1`). Une enveloppe trop grande est refusée.
 
 Une continuation reprend après la dernière occurrence rendue, dans un seul voisinage. Elle est
 liée à l’analyse, au moteur, à l’ancre, aux relations, au sens et à la priorité ; les budgets de page
 peuvent changer, notamment pour transmettre un fait trop grand pour la page précédente. Elle est un
-repère de sélection, jamais une autorisation. Un changement d’analyse invalide la reprise.
+repère de sélection, jamais une autorisation. Un changement d’analyse ou un ajout de faits à cette
+analyse invalide la reprise. `facts_revision` indique cette génération locale au stockage, pas une
+identité portable de la Maille. Une modification détectée pendant le parcours fait refuser la réponse.
+La déduplication des nœuds est **locale à chaque page** ; une reprise repart de l’ancre et peut
+renvoyer un voisin déjà vu. Le client fusionne les nœuds par référence entre pages.
 `ADJACENCY_COMPLETE` signifie que les relations demandées à cette ancre ont été parcourues ; cela
 ne signifie ni que les voisins ont été développés ni que le logiciel est entièrement connu.
 

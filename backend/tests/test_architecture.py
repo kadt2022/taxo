@@ -62,36 +62,63 @@ def test_evaluation_engine_has_no_concrete_evaluator_dependency():
         assert 'app.evaluators' not in source
 
 
-ANALYSED_PROJECT_NAMES = ('orgboundaryfilter', 'policybasedauthorizationmanager',
-                          'fixture-only-project', 'example-customer')
+def project_identity_branches(source):
+    """Detect direct/aliased repository identity in evaluator control flow.
 
-
-def supplies_vector_values(relative):
-    """Un vecteur de conformite porte des valeurs de test ; son manifeste est structurel."""
-    return 'conformance' in relative.parts and relative.name != 'manifest.json'
-
-
-def test_the_engine_never_names_an_analysed_project():
-    """Un projet analyse fournit des donnees, jamais du vocabulaire au moteur.
-
-    Un nom de projet ne peut apparaitre que dans les valeurs d'un vecteur de
-    conformite. Tout le reste de `app/` est structurel — nom de fichier, code,
-    documentation, schema du contrat et manifeste de la suite compris.
+    This is a focused AST guard, not a claim to detect every possible hard-coded
+    customer rule (indirect calls and dynamically constructed names need review).
+    Identity may be emitted in provenance; it must not choose extraction rules.
     """
+    tree = ast.parse(source)
+    aliases = set()
+
+    def depends(node):
+        return any((isinstance(child, ast.Attribute) and child.attr == 'repository')
+                   or (isinstance(child, ast.Name) and child.id in aliases)
+                   for child in ast.walk(node))
+
+    assignments = [node for node in ast.walk(tree) if isinstance(node, (ast.Assign, ast.AnnAssign))]
+    changed = True
+    while changed:
+        before = set(aliases)
+        for node in assignments:
+            if isinstance(node.value, (ast.Name, ast.Attribute, ast.JoinedStr, ast.BinOp)) and depends(node.value):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                aliases.update(child.id for target in targets for child in ast.walk(target)
+                               if isinstance(child, ast.Name))
+        changed = aliases != before
+    return [node.lineno for node in ast.walk(tree)
+            if isinstance(node, (ast.If, ast.IfExp, ast.While)) and depends(node.test)]
+
+
+def test_evaluators_do_not_branch_on_repository_identity():
     violations = []
-    for path in APP.rglob('*'):
-        if not path.is_file() or '__pycache__' in path.parts:
-            continue
-        relative = path.relative_to(APP)
-        location = str(relative).lower()
-        violations += [f"{relative} est nomme d'apres {name}"
-                       for name in ANALYSED_PROJECT_NAMES if name in location]
-        if supplies_vector_values(relative):
-            continue
-        content = path.read_text(encoding='utf-8', errors='ignore').lower()
-        violations += [f'{relative} nomme {name}'
-                       for name in ANALYSED_PROJECT_NAMES if name in content]
+    for capability in ('evaluations', 'evaluators'):
+        for path in (APP / capability).rglob('*.py'):
+            violations.extend((str(path.relative_to(APP)), line)
+                              for line in project_identity_branches(path.read_text(encoding='utf-8')))
     assert violations == []
+
+
+@pytest.mark.parametrize('condition', [
+    'snapshot.repository == "arbitrary-name"',
+    'repository.startswith("any-prefix")',
+    'alias in {"another-name"}',
+])
+def test_project_identity_guard_detects_injected_special_cases(condition):
+    source = f'repository = snapshot.repository\nalias = repository\nif {condition}:\n    special_case()'
+    assert project_identity_branches(source) == [3]
+    assert project_identity_branches('evidence = {"repository": snapshot.repository}') == []
+
+
+def test_inventory_classification_is_independent_of_repository_identity():
+    results = []
+    for repository in ('synthetic-alpha', 'synthetic-beta'):
+        snapshot = Snapshot(repository, 'a' * 40, COMMIT,
+                            (SnapshotFile('package.json', 31), SnapshotFile('App.tsx', 1)),
+                            content=MemoryContent())
+        results.append(RunEvaluator()(InventoryEvaluator(), snapshot).legacy['facts'])
+    assert results[0] == results[1]
 
 
 def test_the_engine_never_imports_experimental_packages():
