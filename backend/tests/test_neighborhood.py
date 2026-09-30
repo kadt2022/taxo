@@ -58,7 +58,8 @@ def test_priority_orientation_cycles_replay_and_proof_access(graph):
     result = ask(exchange, **args)
     assert [x['fact']['object'] for x in result['items']] == ['module:a', ROOT, 'module:z', 'module:b']
     assert result['nodes'].count(ROOT) == 1
-    assert result['stop_reason'] == 'ADJACENCY_COMPLETE' and result['continuation'] is None
+    assert result['stop_reason'] == 'ADJACENCY_COMPLETE'
+    assert result['continuation'] is None
     assert ask(opened(), **args) == result
     inverse = ask(opened(), root='module:a', direction='INCOMING')
     assert [(x['fact']['subject'], x['fact']['object']) for x in inverse['items']] == [(ROOT, 'module:a')]
@@ -84,7 +85,8 @@ def test_node_and_byte_cuts_retain_the_refused_edge(graph):
     store, opened, _, _ = graph
     store.add('analysis-1', 'fixture', [fact('module:a'), fact('module:b')])
     limited = ask(opened(), max_nodes=1)
-    assert limited['items'] == [] and limited['stop_reason'] == 'NODES'
+    assert limited['items'] == []
+    assert limited['stop_reason'] == 'NODES'
     assert limited['frontier'][-1]['count'] == {'kind': 'AT_LEAST', 'value': 1}
     assert len(ask(opened(), continuation=limited['continuation'])['items']) == 2
     assert ask(opened(), max_bytes=100)['error']['code'] == 'BUDGET_EXHAUSTED'
@@ -102,12 +104,14 @@ def test_work_empty_context_knowledge_and_analysis_boundaries(graph):
     store.add('analysis-1', 'fixture', [fact()])
     store.add('analysis-2', 'fixture', [fact('module:foreign')])
     result = ask(opened(), follow=['CONTAINS', 'DEPENDS_ON'], max_work=1)
-    assert result['items'] == [] and result['stop_reason'] == 'WORK'
+    assert result['items'] == []
+    assert result['stop_reason'] == 'WORK'
     resumed = ask(opened(), follow=['CONTAINS', 'DEPENDS_ON'], continuation=result['continuation'])
     assert [x['fact']['object'] for x in resumed['items']] == ['module:child']
     assert ask(opened(), root='module:missing')['stop_reason'] == 'ROOT_UNKNOWN'
     empty = ask(opened(), follow=['CONTAINS'])
-    assert empty['items'] == [] and empty['anchor']['known']
+    assert empty['items'] == []
+    assert empty['anchor']['known']
     assert not any(x['nature'] == 'CONTEXT' for x in empty['frontier'])
     assert ask(opened(), follow=['CALLS'])['frontier'][0]['nature'] == 'CONTEXT'
     evaluation['coverage'].append({'coverage_type': 'NOT_INTERPRETED', 'count': 10, 'subjects': ['file:x']})
@@ -152,7 +156,8 @@ def test_http_analysis_pinning(taxo):
     root = listed['responses'][0]['items'][0]['fact']['subject']
     response = client.post(url, json={'analysis': analysis, 'requests': [{'operation': 'get_neighborhood',
         'arguments': {'analysis': analysis, 'root': root, 'follow': ['CONTAINS'], 'direction': 'OUTGOING'}}]})
-    assert response.status_code == 200 and response.json()['responses'][0]['items']
+    assert response.status_code == 200
+    assert response.json()['responses'][0]['items']
     assert client.post(url, json={'analysis': 'foreign', 'requests': [{'operation': 'describe'}]}).status_code == 409
 
 

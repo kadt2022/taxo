@@ -52,14 +52,14 @@ def _resume(token, binding, count):
                  and type(values[1]) is int and 0 <= values[1] < count
                  and isinstance(values[2], str) and (values[2] == '' or
                      (values[2].isascii() and values[2].isdigit() and len(values[2]) <= 19)))
-    except (ValueError, UnicodeError):
+    except ValueError:
         valid = False
     if not valid:
         _invalid('Reprise incompatible avec l’analyse, l’ancre, le sens ou la priorité.')
     return values[1], values[2]
 
 
-def neighborhood(exchange, arguments, max_bytes):
+def _arguments(exchange, arguments):
     if set(arguments) - _FIELDS:
         _invalid('Argument de voisinage inconnu.')
     if arguments.get('analysis') != exchange.scan.id:
@@ -82,13 +82,10 @@ def neighborhood(exchange, arguments, max_bytes):
               (('max_nodes', 30, 200), ('max_edges', 60, 200), ('max_work', 100, 1000))}
     parameters = {'root': root, 'follow': relations, 'priority': priority, 'direction': direction,
                   'depth': depth}
-    store = exchange.service.facts
-    revision = store.revision(exchange.scan.id)
-    binding = hashlib.sha256(json.dumps([VERSION, exchange.snapshot, parameters, revision],
-                                        sort_keys=True).encode()).hexdigest()
-    position, after = _resume(arguments.get('continuation'), binding, len(priority))
-    nodes, selected, refs, work = [root], [], [], 0
-    known = store.has_reference(exchange.scan.id, root)
+    return parameters, limits
+
+
+def _coverage(exchange, root, relations, priority):
     coverage, frontier = [], []
     capabilities = set()
     for evaluation in exchange.evaluations:
@@ -109,87 +106,123 @@ def neighborhood(exchange, arguments, max_bytes):
             frontier.append({'nature': 'CONTEXT', 'node': root, 'relation': relation,
                              'reason': 'NO_ANALYZER', 'count': {'kind': 'UNKNOWN'}})
 
-    def render(reason, pos, key, found=False):
-        boundaries = list(frontier)
-        for node in nodes[1:]:
+    return coverage, frontier, capabilities
+
+
+class _Neighborhood:
+    """Selection state for one page; rendering never advances the cursor."""
+
+    def __init__(self, exchange, parameters, limits, token, max_bytes):
+        self.exchange = exchange
+        self.parameters = parameters
+        self.limits = limits
+        self.max_bytes = max_bytes
+        self.root = parameters['root']
+        self.priority = parameters['priority']
+        self.direction = parameters['direction']
+        self.store = exchange.service.facts
+        self.revision = self.store.revision(exchange.scan.id)
+        self.binding = hashlib.sha256(json.dumps(
+            [VERSION, exchange.snapshot, parameters, self.revision], sort_keys=True).encode()).hexdigest()
+        self.position, self.after = _resume(token, self.binding, len(self.priority))
+        self.nodes, self.selected, self.refs, self.work = [self.root], [], [], 0
+        self.known = self.store.has_reference(exchange.scan.id, self.root)
+        self.coverage, self.frontier, self.capabilities = _coverage(
+            exchange, self.root, parameters['follow'], self.priority)
+
+    def render(self, reason, *, position=None, key=None, found=False):
+        position = self.position if position is None else position
+        key = self.after if key is None else key
+        boundaries = list(self.frontier)
+        for node in self.nodes[1:]:
             boundaries.append({'nature': 'SELECTION', 'node': node, 'reason': 'DEPTH',
                                'count': {'kind': 'UNKNOWN'}})
         continuation = None
-        if pos < len(priority) and reason != 'ROOT_UNKNOWN':
-            continuation = _cursor(binding, pos, key)
-            boundaries.append({'nature': 'SELECTION', 'node': root, 'relation': priority[pos],
+        if position < len(self.priority) and reason != 'ROOT_UNKNOWN':
+            continuation = _cursor(self.binding, position, key)
+            boundaries.append({'nature': 'SELECTION', 'node': self.root, 'relation': self.priority[position],
                                'reason': reason, 'count': ({'kind': 'AT_LEAST', 'value': 1} if found
                                                           else {'kind': 'UNKNOWN'}),
                                'continuation': continuation})
-        response = Response('get_neighborhood', exchange.snapshot, coverage, max_bytes,
-                            engine_version=VERSION, parameters=parameters, facts_revision=revision,
-                            bounds={**limits, 'max_bytes': max_bytes},
-                            consumed={'nodes': len(nodes), 'edges': len(selected), 'work': work},
-                            anchor={'reference': root, 'known': known}, nodes=list(nodes),
+        response = Response('get_neighborhood', self.exchange.snapshot, self.coverage, self.max_bytes,
+                            engine_version=VERSION, parameters=self.parameters, facts_revision=self.revision,
+                            bounds={**self.limits, 'max_bytes': self.max_bytes},
+                            consumed={'nodes': len(self.nodes), 'edges': len(self.selected), 'work': self.work},
+                            anchor={'reference': self.root, 'known': self.known}, nodes=list(self.nodes),
                             frontier=boundaries, stop_reason=reason, continuation=continuation)
-        response.envelope['items'] = list(selected)
+        response.envelope['items'] = list(self.selected)
         return response
 
-    def fits(response):
-        return size(response.close()) <= max_bytes
+    def fits(self, response):
+        return size(response.close()) <= self.max_bytes
 
-    if not known:
-        result = render('ROOT_UNKNOWN', len(priority), '')
-    else:
-        result = render('WORK', position, after)
-        if not fits(result):
-            raise OperationError(BUDGET_EXHAUSTED, 'Le budget ne contient pas l’enveloppe et sa frontière.')
-        while position < len(priority):
-            if work >= limits['max_work']:
-                result = render('WORK', position, after)
-                break
-            if len(selected) >= limits['max_edges']:
-                result = render('EDGES', position, after)
-                break
-            relation = priority[position]
-            if relation not in capabilities:
-                position, after = position + 1, ''
-                continue
-            work += 1  # Includes empty lookups: the work cap bounds database requests, too.
-            adjacent = store.neighbor(exchange.scan.id, root, relation, direction, after)
-            if adjacent is None:
-                position, after = position + 1, ''
-                result = render('ADJACENCY_COMPLETE', position, after)
-                continue
-            key, fact = adjacent
-            # The index is a projection of persisted assertions, never a source of new facts.
-            neighbor = fact.get('object') if direction == 'OUTGOING' else fact['subject']
-            new_node = is_reference(neighbor) if isinstance(neighbor, str) else False
-            new_node = new_node and neighbor not in nodes
-            if new_node and len(nodes) == limits['max_nodes']:
-                result = render('NODES', position, after, True)
-                break
-            ref, created = exchange.refs.fact(fact)
-            selected.append({'ref': ref, 'fact': {k: v for k, v in fact.items() if k != 'evidence'},
-                             'evidence_count': len(fact.get('evidence', []))})
+    def _accept(self, key, fact):
+        # The index projects persisted assertions; it never invents a relation.
+        neighbor = fact.get('object') if self.direction == 'OUTGOING' else fact['subject']
+        new_node = isinstance(neighbor, str) and is_reference(neighbor) and neighbor not in self.nodes
+        if new_node and len(self.nodes) == self.limits['max_nodes']:
+            return self.render('NODES', found=True)
+        ref, created = self.exchange.refs.fact(fact)
+        self.selected.append({'ref': ref, 'fact': {k: v for k, v in fact.items() if k != 'evidence'},
+                              'evidence_count': len(fact.get('evidence', []))})
+        if new_node:
+            self.nodes.append(neighbor)
+        if not self.fits(self.render('BYTES', key=key)):
+            self.selected.pop()
             if new_node:
-                nodes.append(neighbor)
-            candidate = render('BYTES', position, key)
-            if not fits(candidate):
-                selected.pop()
-                if new_node:
-                    nodes.pop()
-                if created:
-                    exchange.refs.forget(ref)
-                result = render('BYTES', position, after, True)
-                break
+                self.nodes.pop()
             if created:
-                refs.append(ref)
-            after = key
-            result = candidate
+                self.exchange.refs.forget(ref)
+            return self.render('BYTES', found=True)
+        if created:
+            self.refs.append(ref)
+        self.after = key
+        return None
+
+    def _next_relation(self):
+        self.position += 1
+        self.after = ''
+
+    def _walk(self):
+        while self.position < len(self.priority):
+            if self.work >= self.limits['max_work']:
+                return self.render('WORK')
+            if len(self.selected) >= self.limits['max_edges']:
+                return self.render('EDGES')
+            relation = self.priority[self.position]
+            if relation not in self.capabilities:
+                self._next_relation()
+                continue
+            self.work += 1  # Empty adjacency lookups consume work as well.
+            adjacent = self.store.neighbor(self.exchange.scan.id, self.root, relation, self.direction, self.after)
+            if adjacent is None:
+                self._next_relation()
+                continue
+            stopped = self._accept(*adjacent)
+            if stopped is not None:
+                return stopped
+        return self.render('ADJACENCY_COMPLETE')
+
+    def _forget_refs(self):
+        for ref in reversed(self.refs):
+            self.exchange.refs.forget(ref)
+
+    def run(self):
+        if not self.known:
+            result = self.render('ROOT_UNKNOWN', position=len(self.priority), key='')
         else:
-            result = render('ADJACENCY_COMPLETE', position, after)
-    if store.revision(exchange.scan.id) != revision:
-        for ref in reversed(refs):
-            exchange.refs.forget(ref)
-        _invalid('Les faits de cette analyse ont changé pendant le parcours ; recommencer sans reprise.')
-    if not fits(result):
-        for ref in reversed(refs):
-            exchange.refs.forget(ref)
-        raise OperationError(BUDGET_EXHAUSTED, 'Le budget ne contient pas la réponse et sa frontière.')
-    return result
+            if not self.fits(self.render('WORK')):
+                raise OperationError(BUDGET_EXHAUSTED, 'Le budget ne contient pas l’enveloppe et sa frontière.')
+            result = self._walk()
+        if self.store.revision(self.exchange.scan.id) != self.revision:
+            self._forget_refs()
+            _invalid('Les faits de cette analyse ont changé pendant le parcours ; recommencer sans reprise.')
+        if not self.fits(result):
+            self._forget_refs()
+            raise OperationError(BUDGET_EXHAUSTED, 'Le budget ne contient pas la réponse et sa frontière.')
+        return result
+
+
+def neighborhood(exchange, arguments, max_bytes):
+    parameters, limits = _arguments(exchange, arguments)
+    return _Neighborhood(exchange, parameters, limits, arguments.get('continuation'), max_bytes).run()
