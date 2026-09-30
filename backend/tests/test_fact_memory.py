@@ -143,6 +143,43 @@ def test_any_iterable_of_facts_is_written_once(stores):
     assert stores.store.query(scan) == facts
 
 
+def mixed_batch(size=1200):
+    """Assertions with one to three proofs, and coverage without any, interleaved."""
+    batch = []
+    for index in range(size):
+        if index % 4 == 3:
+            coverage = {'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED', 'validity': 'VALID',
+                        'subject': f'file:src/F{index}.java', 'coverage_type': 'ANALYSED',
+                        'scope': {'include': [f'file:src/F{index}.java']}, 'snapshot': dict(SNAPSHOT),
+                        'produced_by': execution().produced_by()}
+            validate_fact(coverage)
+            batch.append(coverage)
+            continue
+        fact = assertion(f'module:m{(index * 7919) % size:05}', line=index + 1)
+        fact['evidence'] += [{**fact['evidence'][0], 'line_start': index + 1 + extra, 'line_end': index + 1 + extra}
+                             for extra in range(1, index % 3 + 1)]
+        batch.append(fact)
+    return batch
+
+
+def test_a_large_batch_keeps_submission_order_and_each_evidence(stores):
+    scan = stores.analysis('analysis', executions=[execution()])
+    batch = mixed_batch()
+    stores.store.add(scan, 'fixture', batch)
+    assert same(stores.store.query(scan), batch)
+    later = mixed_batch(50)[::-1]
+    stores.store.add(scan, 'fixture', later)
+    assert same(stores.store.query(scan), batch + later)
+
+
+def test_references_have_no_length_limit(stores):
+    long = 'module:' + 'x' * 6000
+    scan = stores.analysis('analysis', executions=[execution()])
+    fact = assertion(long)
+    stores.store.add(scan, 'fixture', [fact])
+    assert stores.store.query(scan, object=long) == [fact]
+
+
 # ——— Versioned memory ———
 
 def test_same_fact_in_two_analyses_is_one_identity_and_two_occurrences(memory):

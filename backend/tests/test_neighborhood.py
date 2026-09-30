@@ -139,7 +139,7 @@ def test_migration_backfill_and_downgrade_preserve_existing_facts(tmp_path):
                         'VALUES (:scan,:eval,:kind,:subject,:relation,:object,:fact)'),
                    {'scan': 'analysis-1', 'eval': 'fixture', 'kind': 'ASSERTION', 'subject': ROOT,
                     'relation': 'DEPENDS_ON', 'object': 'module:child', 'fact': json.dumps(fact())})
-    migrate('upgrade', 'head')
+    migrate('upgrade', '003')
     assert SqlAlchemyAnalysisFacts(engine).neighbor('analysis-1', ROOT, 'DEPENDS_ON', 'OUTGOING')[1] == fact()
     migrate('downgrade', '002')
     with engine.connect() as db:
@@ -164,7 +164,7 @@ def test_migration_resumes_after_an_interrupted_run(tmp_path):
         db.execute(text('ALTER TABLE analysis_facts ADD COLUMN outgoing_key TEXT'))
         db.execute(text('ALTER TABLE analysis_facts ADD COLUMN incoming_key TEXT'))
         db.execute(text('CREATE INDEX ix_analysis_facts_outgoing ON analysis_facts (scan_id, outgoing_key)'))
-    output = migrate('upgrade', 'head').stdout
+    output = migrate('upgrade', '003').stdout
     assert 'Colonne outgoing_key deja presente' in output
     assert '1/1 faits repris' in output
     assert SqlAlchemyAnalysisFacts(engine).neighbor('analysis-1', ROOT, 'DEPENDS_ON', 'OUTGOING')[1] == fact()

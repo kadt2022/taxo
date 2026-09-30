@@ -58,9 +58,9 @@ class FactIdentityRow(Base):
     relation = Column(String)
     object = Column(Text)
     identity = Column(JSON, nullable=False)
-    __table_args__ = (Index('ix_fact_identities_subject', 'subject'),
-                      Index('ix_fact_identities_object', 'object'),
-                      Index('ix_fact_identities_relation', 'relation', 'kind'))
+    # No B-tree on subject or object: references have no length limit, and a PostgreSQL index entry has
+    # one. Filters run within one analysis, from its occurrences; traversal uses fixed-size digests.
+    __table_args__ = (Index('ix_fact_identities_relation', 'relation', 'kind'),)
 
 
 class FactOccurrenceRow(Base):
@@ -233,18 +233,21 @@ class SqlAlchemyFactMemory:
                     {'identity_hash': key, 'kind': identity['kind'], 'subject': identity.get('subject'),
                      'relation': identity.get('relation'), 'object': identity.get('object'), 'identity': identity}
                     for key, identity in identities.items()])
-            anchors = []
-            for fact, occurrence, (execution, human) in prepared:
-                anchors.append(_anchors(fact))
-                row = FactOccurrenceRow(scan_id=scan_id, identity_hash=occurrence.identity_hash, execution=execution,
-                                        human_producer_id=human, status=occurrence.status,
-                                        validity=occurrence.validity, raw_identity=occurrence.raw_identity,
-                                        details=occurrence.details or None,
-                                        has_evidence=occurrence.evidence is not None, **anchors[-1])
-                db.add(row)
-                db.flush()
-                db.add_all(FactEvidenceRow(occurrence=row.id, position=position, **item)
-                           for position, item in enumerate(occurrence.evidence or ()))
+            # One flush per table for the whole batch. The session keeps each row object bound to the id
+            # it receives, and inserts the rows in the order they were added: submission order, which
+            # query() gives back through the occurrence id.
+            anchors = [_anchors(fact) for fact, _, _ in prepared]
+            rows = [FactOccurrenceRow(scan_id=scan_id, identity_hash=occurrence.identity_hash, execution=execution,
+                                      human_producer_id=human, status=occurrence.status,
+                                      validity=occurrence.validity, raw_identity=occurrence.raw_identity,
+                                      details=occurrence.details or None,
+                                      has_evidence=occurrence.evidence is not None, **anchor)
+                    for (_, occurrence, (execution, human)), anchor in zip(prepared, anchors)]
+            db.add_all(rows)
+            db.flush()
+            db.add_all(FactEvidenceRow(occurrence=row.id, position=position, **item)
+                       for row, (_, occurrence, _) in zip(rows, prepared)
+                       for position, item in enumerate(occurrence.evidence or ()))
             db.flush()
             _rank_adjacencies(db, scan_id, anchors)
             db.commit()
