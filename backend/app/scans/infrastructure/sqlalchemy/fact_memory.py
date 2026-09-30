@@ -112,10 +112,10 @@ def _producer(fact, evaluator_id, executions):
 def _spelled(occurrence, canonical, name, value):
     """Same spelling as submitted: the canonical form when it was kept as is, the raw one otherwise."""
     if not isinstance(value, str):
-        return (canonical == value,)
-    return (canonical == unicodedata.normalize('NFC', value),
-            or_(and_(occurrence.raw_identity.is_(None), canonical == value),
-                occurrence.raw_identity[name].as_string() == value))
+        return canonical == value
+    return and_(canonical == unicodedata.normalize('NFC', value),
+                or_(and_(occurrence.raw_identity.is_(None), canonical == value),
+                    occurrence.raw_identity[name].as_string() == value))
 
 
 class SqlAlchemyFactMemory:
@@ -179,7 +179,7 @@ class SqlAlchemyFactMemory:
                                         == filters['evaluator_id'])
         for name in ('kind', 'subject', 'relation', 'object'):
             if filters.get(name) is not None:
-                statement = statement.where(*_spelled(occurrence, getattr(identity, name), name, filters[name]))
+                statement = statement.where(_spelled(occurrence, getattr(identity, name), name, filters[name]))
         with Session(self.engine) as db:
             recorded = db.get(AnalysisSnapshotRow, scan_id)
             rows = db.execute(statement.order_by(occurrence.id)).all()
