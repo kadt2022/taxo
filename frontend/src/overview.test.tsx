@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {AnalysisLimits, CardIcon, gapsOf, panelKey, evaluationsOf, outcomeState, routeCounts, shortList, outcome, overviewCards, ProjectNav, ProjectOverview, sections, type EvaluationSummary, type Scan} from './overview';
+import {AnalysisLimits, CardBar, CardIcon, gapsOf, panelKey, evaluationsOf, routeCounts, shortList, overviewCards, ProjectOverview, type EvaluationSummary, type Scan} from './overview';
 import type {RouteRow} from './routes';
 import {AnalysisDetails, EvaluationPanel, warningsOf} from './details';
 import {label, reference, RELATIONS} from './vocabulary';
@@ -20,52 +20,50 @@ const scan:Scan={id:'s1', created_at:'2026-09-25T10:00:02Z', files_count:753, sn
 const card=(value:Scan, id:string)=>overviewCards(value).find(item=>item.id===id)!;
 
 describe('overviewCards', ()=>{
-  it('décrit le projet à partir de ce que Taxo a produit', ()=>{
-    expect(card(scan,'technologies').value).toBe('Java · React');
-    expect(card(scan,'project').value).toBe(`${(753).toLocaleString('fr-CA')} fichiers analysés`);
-    expect(card(scan,'project').detail).toBe('Contenu du commit aaaaaaaaaaaa.');
-    expect(card(scan,'history')).toMatchObject({value:`${(1234).toLocaleString('fr-CA')} commits analysés`, state:'known'});
+  it('présente six cartes, toujours dans le même ordre, avec Git au premier rang', ()=>{
+    expect(overviewCards(scan).map(item=>item.id)).toEqual(['project','git','api','architecture','security','data']);
+  });
+  it('garde la carte Projet centrée sur l’inventaire', ()=>{
+    expect(card(scan,'project')).toMatchObject({value:(753).toLocaleString('fr-CA'), unit:'fichiers analysés', state:'known'});
+    expect(card(scan,'project').lines).toEqual(['2 technologies reconnues']);
+    expect(card(scan,'project').link).toEqual({href:'#technologies', label:'Voir les technologies'});
+    expect(card({...scan, files_count:1},'project').unit).toBe('fichier analysé');
+    expect(card({...scan, evaluations:[{...inventory, status:'PARTIAL'}]},'project').state).toBe('known');
+    expect(card({...scan, facts:[], evaluations:[inventory]},'project').lines).toEqual([]);
+    expect(card({id:'x', created_at:''},'project').value).toBe('0');
+    expect(evaluationsOf({id:'x', created_at:''})).toEqual([]);
+  });
+  it('donne à Git sa propre carte', ()=>{
+    expect(card(scan,'git')).toMatchObject({value:(1234).toLocaleString('fr-CA'), unit:'commits lus', state:'known'});
+    expect(card(scan,'git').link).toEqual({href:'#historique', label:'Voir l’historique'});
+    expect(card({...scan, evaluations:[inventory]},'git')).toMatchObject({value:'Non analysé', state:'unknown'});
+    expect(card({...scan, evaluations:[inventory, {...git, status:'FAILED'}]},'git')).toMatchObject({value:'Non analysé', state:'failed'});
   });
   it('ne transforme jamais une absence d’information en résultat', ()=>{
-    for(const id of ['architecture','api','security'])expect(card(scan,id)).toMatchObject({value:'Non analysé', state:'unknown'});
-    expect(card(scan,'api').detail).toContain('relancez l’analyse globale');
-    expect(card(scan,'security').detail).toContain('relancez l’analyse globale');
-    expect(card(scan,'architecture').detail).toContain('relancez l’analyse globale');
-    expect(card(scan,'data')).toMatchObject({value:'Non analysé', state:'unknown'});
-    expect(card(scan,'data').detail).toContain('Rien n’est affirmé');
+    for(const id of ['architecture','api','security','data'])expect(card(scan,id)).toMatchObject({value:'Non analysé', state:'unknown'});
     expect(card(scan,'api').link).toBeUndefined();
-    const old:Scan={...scan, evaluations:undefined};
-    expect(card(old,'history')).toMatchObject({value:'Non analysé', state:'unknown'});
-    expect(card({...scan, evaluations:[inventory, {...git, status:'FAILED'}]},'history')).toMatchObject({value:'Non analysé', state:'failed'});
-    expect(card({...scan, evaluations:[inventory, {...git, status:'PARTIAL'}]},'history').state).toBe('partial');
-    expect(card({...scan, evaluations:[inventory, {...git, relations:{HAS_COMMIT:1}}]},'history').value).toBe('1 commit analysé');
-  });
-  it('distingue « aucune technologie reconnue » d’une analyse absente', ()=>{
-    expect(card({...scan, facts:[]},'technologies').value).toBe('Aucune technologie reconnue');
-    expect(card({...scan, evaluations:[{...inventory, status:'PARTIAL'}]},'project').state).toBe('partial');
-  });
-  it('lit la source d’une analyse du dossier de travail ou ancienne', ()=>{
-    expect(card({...scan, snapshot:{...snapshot, mode:'WORKING_TREE', dirty:true}},'project').detail)
-      .toBe('Dossier de travail au commit aaaaaaaaaaaa, modifications non commitées incluses.');
-    expect(card({...scan, snapshot:{...snapshot, mode:'WORKING_TREE'}},'project').detail).toBe('Dossier de travail au commit aaaaaaaaaaaa.');
-    expect(card({id:'x', created_at:'', snapshot:null},'project')).toMatchObject({value:'0 fichiers analysés', detail:'Fichiers du dossier analysé.'});
-    expect(evaluationsOf({id:'x', created_at:''})).toEqual([]);
+    expect(card(scan,'data').lines[0]).toContain('Aucun analyseur de données');
   });
 });
 
 describe('carte API (TAXO-04)', ()=>{
   const spring=(extra:Partial<EvaluationSummary>)=>({...scan, evaluations:[inventory, git, summary('taxo.spring-api', extra)]});
-  it('compte les routes relevées par l’évaluateur Spring', ()=>{
-    expect(card(spring({relations:{HANDLED_BY:17}}),'api')).toMatchObject({value:'17 routes Spring relevées', state:'known'});
-    expect(card(spring({relations:{HANDLED_BY:1}}),'api').value).toBe('1 route Spring relevée');
-    expect(card(spring({relations:{HANDLED_BY:17}}),'api').detail).toContain('prouvée à la ligne');
+  it('montre seulement les routes effectivement relevées', ()=>{
+    expect(card(spring({relations:{HANDLED_BY:17}}),'api')).toMatchObject({value:'17', unit:'routes relevées', state:'known'});
+    expect(card(spring({relations:{HANDLED_BY:1}}),'api').unit).toBe('route relevée');
+    expect(card(spring({relations:{HANDLED_BY:17}}),'api').lines).toEqual([]);
+    expect(card(spring({relations:{HANDLED_BY:17}}),'api').link?.href).toBe('#routes');
   });
-  it('dit une absence analysée, une analyse partielle ou en échec, sans rien deviner', ()=>{
-    expect(card(spring({}),'api')).toMatchObject({value:'Aucune route Spring', state:'known'});
-    expect(card(spring({}),'api').detail).toBe('Aucune route Spring MVC trouvée dans les sources Java (tests exclus).');
-    expect(card(spring({}),'api').detail).not.toContain('contrôleur');
-    expect(card(spring({status:'PARTIAL', relations:{HANDLED_BY:1}}),'api')).toMatchObject({value:'1 route Spring relevée', state:'partial'});
-    expect(card(spring({status:'PARTIAL'}),'api').detail).toContain('Rien n’est deviné');
+  it('ne remet pas les réserves dans la carte de synthèse', ()=>{
+    const counts={PROTECTED:3, PERMITS_ALL:1, NOT_INTERPRETED:1, NO_CONCLUSION:0, reserved:2, missing:1};
+    const value=overviewCards(spring({relations:{HANDLED_BY:5}}), counts).find(item=>item.id==='api')!;
+    expect(value).toMatchObject({value:'5', unit:'routes relevées'});
+    expect(value.bar).toBeUndefined();
+    expect(value.lines).toEqual([]);
+  });
+  it('dit zéro si zéro route a été relevée et distingue un échec', ()=>{
+    expect(card(spring({}),'api')).toMatchObject({value:'0', unit:'route relevée', state:'known'});
+    expect(card(spring({status:'PARTIAL', relations:{HANDLED_BY:1}}),'api').state).toBe('known');
     expect(card(spring({status:'FAILED'}),'api')).toMatchObject({value:'Non analysé', state:'failed'});
   });
 });
@@ -74,42 +72,38 @@ describe('carte Architecture (TAXO-E1)', ()=>{
   const structure=(extra:Partial<EvaluationSummary>)=>summary('taxo.structure', extra);
   const boot=summary('taxo.spring-boot', {relations:{BUILT_FROM:2, SERVED_BY:30}});
   const with_=(...items:EvaluationSummary[])=>({...scan, evaluations:[inventory, git, ...items]});
-  it('compte les modules, leurs dépendances et ce qui s’en construit', ()=>{
-    const value=card(with_(structure({relations:{CONTAINS:18, DEPENDS_ON:37, BUILT_FROM:1},
-      coverage:[{coverage_type:'NOT_INTERPRETED', count:1, subjects:['file:build.gradle']}]}), boot),'architecture');
-    expect(value).toMatchObject({value:'18 modules', state:'known'});
-    expect(value.detail).toBe('37 dépendances entre modules · 2 applications Spring Boot · 1 service compose construit. Lu dans les fichiers de build, sans rien exécuter.');
-    expect(value.link?.href).toBe('#limites');
+  it('reste concise : modules, dépendances et applications', ()=>{
+    const value=card(with_(structure({relations:{CONTAINS:18, DEPENDS_ON:37, BUILT_FROM:1}}), boot),'architecture');
+    expect(value).toMatchObject({value:'18', unit:'modules détectés', state:'known'});
+    expect(value.lines).toEqual(['37 dépendances', '2 applications Spring Boot']);
+    expect(value.link).toEqual({href:'#details', label:'Explorer l’architecture'});
   });
-  it('accorde au singulier et dit un dépôt sans module', ()=>{
-    expect(card(with_(structure({relations:{CONTAINS:1, DEPENDS_ON:1}})),'architecture'))
-      .toMatchObject({value:'1 module', detail:'1 dépendance entre modules. Lu dans les fichiers de build, sans rien exécuter.'});
-    expect(card(with_(structure({})),'architecture').value).toBe('Aucun module déclaré');
-    expect(card(with_(structure({}), {...boot, status:'FAILED'}),'architecture').detail).not.toContain('Spring Boot');
-    expect(card(with_(structure({relations:{CONTAINS:2}})),'architecture').link).toBeUndefined();
-  });
-  it('dit une lecture partielle ou en échec', ()=>{
-    expect(card(with_(structure({status:'PARTIAL', relations:{CONTAINS:3}})),'architecture').state).toBe('partial');
+  it('accorde au singulier et ne transforme pas PARTIAL en badge éditorial', ()=>{
+    expect(card(with_(structure({relations:{CONTAINS:1, DEPENDS_ON:1}})),'architecture')).toMatchObject({value:'1', unit:'module détecté'});
+    expect(card(with_(structure({status:'PARTIAL', relations:{CONTAINS:3}})),'architecture').state).toBe('known');
     expect(card(with_(structure({status:'FAILED'})),'architecture')).toMatchObject({value:'Non analysé', state:'failed'});
   });
 });
 
 describe('carte Sécurité (TAXO-05)', ()=>{
   const spring=(extra:Partial<EvaluationSummary>)=>({...scan, evaluations:[inventory, git, summary('taxo.spring-security', extra)]});
-  const row=(state:RouteRow['state']):RouteRow=>({endpoint:`endpoint:GET /${state}`, verb:'GET', path:`/${state}`, state,
-    handlers:[], applications:[], matched:[], rules:[], protections:[], gaps:[]});
-  const counts=routeCounts({routes:[row('PROTECTED'), row('PROTECTED'), row('PERMITS_ALL'), row('NOT_INTERPRETED'), row('NO_CONCLUSION')], unestablished:[]});
-  it('compte les routes par état établi', ()=>{
-    expect(counts).toEqual({PROTECTED:2, PERMITS_ALL:1, NOT_INTERPRETED:1, NO_CONCLUSION:1});
+  const row=(state:RouteRow['state'], gaps=0):RouteRow=>({endpoint:`endpoint:GET /${state}${gaps}`, verb:'GET', path:`/${state}${gaps}`, state,
+    handlers:[], applications:[], matched:[], rules:[], protections:[],
+    gaps:Array.from({length:gaps}, ()=>({subject:'s', type:'NOT_INTERPRETED', reason:'r', evaluator:'e'}))});
+  const counts=routeCounts({routes:[row('PROTECTED'), row('PROTECTED', 1), row('PERMITS_ALL'), row('NOT_INTERPRETED', 2), row('NO_CONCLUSION')],
+    unestablished:[{subject:'x', type:'NOT_INTERPRETED', reason:'r', evaluator:'e'}]});
+  it('résume les routes examinées sans transformer les limites en résultat principal', ()=>{
+    expect(counts).toEqual({PROTECTED:2, PERMITS_ALL:1, NOT_INTERPRETED:1, NO_CONCLUSION:1, reserved:2, missing:1});
     const value=overviewCards(spring({}), counts).find(item=>item.id==='security')!;
-    expect(value).toMatchObject({value:'2 routes protégées', state:'known'});
-    expect(value.detail).toBe('1 ouverte à tous (permitAll) · 1 non interprétée · 1 sans conclusion. Une route n’est dite protégée que si un fait le prouve.');
-    expect(value.link).toEqual({href:'#routes', label:'Voir la protection de chaque route'});
+    expect(value).toMatchObject({value:'5', unit:'routes examinées', state:'known'});
+    expect(value.lines).toEqual(['3 statuts de sécurité établis']);
+    expect(value.bar).toBeUndefined();
+    expect(value.link).toEqual({href:'#routes', label:'Explorer la sécurité'});
   });
-  it('sans le détail par route, ne compte que les règles lues', ()=>{
-    expect(card(spring({relations:{AUTHORIZED_BY:3, PERMITS_ALL:2}}),'security')).toMatchObject({value:'5 règles de sécurité lues', state:'known'});
-    expect(card(spring({relations:{PERMITS_ALL:1}}),'security').value).toBe('1 règle de sécurité lue');
-    expect(card(spring({status:'PARTIAL'}),'security')).toMatchObject({value:'Aucune règle de sécurité lue', state:'partial'});
+  it('sans détail par route, montre seulement les règles effectivement lues', ()=>{
+    expect(card(spring({relations:{AUTHORIZED_BY:3, PERMITS_ALL:2}}),'security')).toMatchObject({value:'5', unit:'règles de sécurité lues'});
+    expect(card(spring({relations:{PERMITS_ALL:1}}),'security').unit).toBe('règle de sécurité lue');
+    expect(card(spring({status:'PARTIAL'}),'security')).toMatchObject({value:'0', state:'known'});
     expect(card(spring({status:'FAILED'}),'security')).toMatchObject({value:'Non analysé', state:'failed'});
   });
 });
@@ -121,13 +115,9 @@ describe('limites de l’analyse', ()=>{
   it('liste les zones non lues par analyseur, les plus nombreuses d’abord', ()=>{
     expect(gapsOf(limited).map(gap=>[gap.evaluator, gap.type, gap.count])).toEqual([
       ['taxo.spring-api','NOT_INTERPRETED',9], ['taxo.inventory','NOT_INTERPRETED',7], ['taxo.spring-api','READ_ERROR',1]]);
-    expect(card(limited,'limits')).toMatchObject({value:'17 zones non interprétées', state:'known'});
-    expect(card(limited,'limits').link?.href).toBe('#limites');
   });
   it('dit l’absence de zone et l’absence de couverture', ()=>{
     const clean={...scan, evaluations:[{...inventory, coverage:[]}]};
-    expect(card(clean,'limits').value).toBe('Aucune zone non interprétée');
-    expect(card({...scan, evaluations:undefined, evaluation_summary:undefined},'limits')).toMatchObject({value:'Non analysé', state:'unknown'});
     expect(renderToStaticMarkup(<AnalysisLimits scan={clean}/>)).toContain('Aucune zone non interprétée parmi ce que les analyseurs savent lire.');
     expect(renderToStaticMarkup(<AnalysisLimits scan={{id:'x', created_at:''}}/>)).toContain('ne détaille pas sa couverture');
   });
@@ -140,15 +130,19 @@ describe('limites de l’analyse', ()=>{
     expect(html).toContain('+ 8 autres');
     expect(html).not.toContain('NOT_INTERPRETED');
   });
+  it('résume les limites sous les cartes, sans en faire une septième carte', ()=>{
+    const html=renderToStaticMarkup(<ProjectOverview scan={limited}/>);
+    expect(html).toContain('17 limites signalées');
+    expect(html).toContain('2 analyseurs concernés');
+    expect(html).toContain('href="#limites"');
+    expect(html).not.toContain('aria-label="Limites"');
+  });
 });
 
 describe('shortList', ()=>{
   it('abrège une longue liste sans rien inventer', ()=>{
     expect(shortList(['A','B','C','D'])).toBe('A · B · C · D');
     expect(shortList(['A','B','C','D','E','F'])).toBe('A · B · C · D · +2 autres');
-  });
-  it('montre d’abord ce que Taxo sait', ()=>{
-    expect(overviewCards(scan).map(item=>item.id)).toEqual(['technologies','project','history','architecture','api','security','data','limits']);
   });
 });
 
@@ -159,45 +153,29 @@ describe('CardIcon', ()=>{
   });
 });
 
-describe('outcome et sections', ()=>{
-  it('résume l’analyse en une phrase', ()=>{
-    expect(outcome(scan)).toBe('Analyse terminée');
-    expect(outcome({...scan, evaluations:[inventory, {...git, status:'PARTIAL', warning_count:1}]})).toBe('Analyse terminée, en partie · 1 point à vérifier');
-    expect(outcome({...scan, warnings:['manifeste illisible'], evaluations:[{...inventory, warning_count:1}, {...git, status:'FAILED', warning_count:1}]}))
-      .toBe('Analyse terminée, une partie a échoué · 2 points à vérifier');
-    expect(outcome({id:'old', created_at:'', warnings:['a','a','b']})).toBe('Analyse terminée · 2 points à vérifier');
-  });
-  it('donne la tonalité du résultat', ()=>{
-    expect(outcomeState(scan)).toBe('ok');
-    expect(outcomeState({...scan, evaluations:[inventory, {...git, status:'PARTIAL'}]})).toBe('partial');
-    expect(outcomeState({...scan, evaluations:[inventory, {...git, status:'FAILED'}]})).toBe('failed');
-  });
-  it('ne propose que les sections réellement disponibles', ()=>{
-    expect(sections(scan).map(item=>item.label)).toEqual(['Vue d’ensemble', 'Technologies', 'Limites', 'Routes', 'Historique']);
-    expect(sections(undefined).map(item=>item.id)).toEqual(['historique']);
-    const nav=renderToStaticMarkup(<ProjectNav scan={scan}/>);
-    expect(nav).toContain('href="#historique"');
-    expect(nav).not.toMatch(/Evaluator|Sécurité|Architecture/);
-  });
-});
-
 describe('ProjectOverview', ()=>{
-  it('présente le projet sans vocabulaire interne', ()=>{
+  it('présente des cartes de résultat, sans badge « En partie » ni vocabulaire interne', ()=>{
     const html=renderToStaticMarkup(<ProjectOverview scan={scan}/>);
-    expect(html).toContain('Vue d’ensemble');
-    expect(html).toContain('Java · React');
-    expect(html).not.toMatch(/evaluator_id|execution_id|taxo\.git|NOT_INTERPRETED|HAS_COMMIT|fact_count|Faits/);
+    expect(html).toContain('id="vue-ensemble"');
+    expect(html).toContain('2 technologies reconnues');
+    expect(html).toContain('Git');
+    expect(html).not.toMatch(/En partie|evaluator_id|execution_id|taxo\.git|NOT_INTERPRETED|HAS_COMMIT|fact_count|Faits/);
     expect(html).toContain('class="card card-unknown"');
-    const failed=renderToStaticMarkup(<ProjectOverview scan={{...scan, evaluations:[inventory, {...git, status:'PARTIAL'}]}}/>);
-    expect(failed).toContain('<span class="badge">En partie</span>');
-    expect(html).toContain('<a class="card-link" href="#historique">Consulter les commits →</a>');
+    expect(html).toContain('<a class="card-link" href="#historique">Voir l’historique <span aria-hidden="true">→</span></a>');
+    expect(renderToStaticMarkup(<ProjectOverview scan={{id:'x', created_at:''}} pending={['taxo.inventory']}/>)).toContain('aria-busy="true"');
+  });
+  it('garde le composant de répartition disponible pour les vues détaillées', ()=>{
+    const html=renderToStaticMarkup(<CardBar segments={[{label:'a', count:2, tone:'ok'}, {label:'b', count:0, tone:'warn'}]}/>);
+    expect(html.match(/tone-warn/g)).toHaveLength(1);
+    expect(html).toContain('flex-grow:2');
+    expect(renderToStaticMarkup(<CardBar segments={[{label:'a', count:0, tone:'ok'}]}/>)).not.toContain('card-bar');
   });
 });
 
 describe('AnalysisDetails', ()=>{
   it('garde tous les détails techniques, repliés, avec leur libellé humain', ()=>{
     const html=renderToStaticMarkup(<AnalysisDetails scan={{...scan, warnings:['Fichier illisible : x', 'Fichier illisible : x']}}/>);
-    expect(html).toMatch(/^<details class="analysis-details"><summary>Détails de l’analyse<\/summary>/);
+    expect(html).toMatch(/^<details class="analysis-details" id="details"><summary>Détails de l’analyse<\/summary>/);
     for(const text of ['exec-taxo.inventory', 'exec-taxo.git', 'taxo.inventory', 'Historique Git', 'Inventaire du code',
       'Non analysé par Taxo', 'NOT_INTERPRETED', 'Fichiers modifiés', 'CHANGES', 'Éléments identifiés', 'Points à vérifier', 'Terminée'])
       expect(html).toContain(text);

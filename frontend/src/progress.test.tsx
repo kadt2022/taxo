@@ -100,7 +100,7 @@ describe('vues de progression', ()=>{
     const html=renderToStaticMarkup(<AnalysisProgress run={run}/>);
     expect(html).toContain('<p class="progress-title"><span>Analyse en cours<span class="animated-dots" aria-hidden="true"></span></span></p>');
     expect(html).toContain('Inventaire du code…');
-    expect(html).toContain('0 / 2 analyses terminées');
+    expect(html).not.toContain('analyses terminées');
     expect(html).not.toMatch(/%|taxo\.git/);
     expect(renderToStaticMarkup(<AnalysisProgress run={{...run, status:'failed', message:'Échec'}}/>)).toContain('Analyse interrompue');
     expect(renderToStaticMarkup(<AnalysisProgress run={{...startRun(), status:'done'}}/>)).toContain('Analyse terminée');
@@ -109,7 +109,7 @@ describe('vues de progression', ()=>{
     const scan:Scan={id:'s', created_at:'', files_count:3, evaluations:[summary('taxo.inventory'), summary('taxo.git')]};
     const html=renderToStaticMarkup(<ProjectOverview scan={scan} pending={['taxo.git']}/>);
     expect(html).toContain('Nouvelle analyse en cours…');
-    expect(html).toContain('class="card card-known card-stale" aria-label="Historique"');
+    expect(html).toContain('class="card card-known card-stale" aria-label="Git"');
     expect(html.match(/card-stale/g)).toHaveLength(1);
     expect(renderToStaticMarkup(<ProjectOverview scan={scan}/>)).not.toContain('Nouvelle analyse');
   });
