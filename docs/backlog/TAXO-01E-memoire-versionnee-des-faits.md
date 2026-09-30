@@ -58,25 +58,27 @@ Séparer la seule identité ne ferait gagner que les champs d'identité. Un gain
 ranger **au niveau de l'analyse** ce qui y est constant (instantané, exécutions des producteurs) et de
 reconstruire le fait contractuel à la lecture. Cette reconstruction devient la garantie centrale du récit.
 
-## Modèle cible (conceptuel)
+## Modèle cible (décidé)
 
 ```text
-FACT_IDENTITY                          ANALYSIS_CONTEXT (existant : scans, à compléter)
+FACT_IDENTITY                          ANALYSIS (existant : scans, à compléter)
 ─────────────────────                  ─────────────────────────────
 identity_hash  PK                      analysis_id
 kind                                   snapshot (repository, commit, mode…)
-subject, relation, object              executions des producteurs
-qualifiers / pattern / scope / method    (producer_id, version, catalog, execution_id)
-coverage_type, producer_id (couverture)
-        1                                      1
-        │ N                                    │ N
-        ▼                                      ▼
-FACT_OCCURRENCE ─────────────────────────────────
-occurrence_id
-analysis_id, identity_hash
+subject, relation, object                      │ 1
+qualifiers / pattern / scope / method          │ N
+coverage_type, producer_id (couverture)        ▼
+        1                              PRODUCER_EXECUTION
+        │ N                            ─────────────────────────────
+        ▼                              analysis_id, execution_id
+FACT_OCCURRENCE ──────────────────────►producer_type (EVALUATOR | PROJECTION)
+occurrence_id                          producer_id, producer_version
+analysis_id, identity_hash             catalog_id?, catalog_version?
 status, validity
-producer (renvoi vers l'exécution de l'analyse)
-derivation / validation / reason
+producteur : exécution (EVALUATOR, PROJECTION)
+          ou producer_id + validation (HUMAN)
+derivation / reason
+subject_hash, object_hash
 outgoing_rank, incoming_rank     ← le rang appartient à l'occurrence dans une analyse
         │ 1
         │ N
@@ -85,19 +87,37 @@ EVIDENCE (propre à l'occurrence)
 path, line_start, line_end, symbol, method, content_hash | object
 ```
 
-- Le **rang** de parcours appartient à l'occurrence dans une analyse, jamais à l'identité globale.
-- `repository` et `commit` des preuves sont ceux de l'instantané (§ 5.5) : ils sont restitués depuis
-  l'analyse, pas répétés par preuve.
-- Les noms de tables et colonnes sont à fixer dans 01E-A ; ce schéma dit ce qui dépend de quoi.
+Les noms exacts de tables et de colonnes sont fixés dans 01E-A ; ce schéma dit ce qui dépend de quoi.
+
+### Décisions
+
+1. **Preuves propres à chaque occurrence**, jamais partagées entre analyses dans 01E. Une preuve peut
+   se déplacer (ligne 87 → 91) sans que l'identité change : 01F en aura besoin pour signaler
+   `EVIDENCE_CHANGED`. `repository` et `commit` ne sont pas stockés par preuve ; le validateur
+   garantit qu'ils sont ceux de l'instantané, et la lecture les restitue depuis l'analyse. Aucune
+   déduplication des preuves avant mesure.
+2. **Provenance par `PRODUCER_EXECUTION`**, générique pour `EVALUATOR` et `PROJECTION`, repérée par
+   `execution_id`. Le schéma n'impose pas « une exécution par évaluateur et par analyse » : c'est vrai
+   dans `RunScan` aujourd'hui, ce n'est pas une règle de la mémoire. Un fait `EVALUATOR` ou
+   `PROJECTION` dont `produced_by` (type, identifiant, version, `execution_id`, catalogue) ne
+   correspond à aucune exécution connue de l'analyse est **refusé à l'écriture** : ni réparé, ni gardé
+   comme provenance orpheline. C'est une intégrité de mémoire, pas une interprétation.
+3. **`HUMAN` sans exécution.** Le contrat ne lui donne ni `execution_id`, ni version, ni catalogue :
+   l'occurrence porte directement `producer_id` et `validation`. Aucune fausse exécution d'évaluateur.
+4. **Pas de clés d'ordre en texte.** `outgoing_key` et `incoming_key` ne sont pas persistées. Restent
+   persistés : `subject_hash`, `object_hash`, `outgoing_rank`, `incoming_rank`. La clé canonique
+   (référence, `identity_hash`, empreinte d'occurrence) est une valeur de calcul, recalculée de façon
+   déterministe à l'ingestion ou à la réindexation. Le coût du reclassement est mesuré.
 
 ## Invariants (normatifs)
 
 1. **Restitution exacte.** Pour toute analyse, `query` rend des faits égaux (égalité JSON) à ceux
    soumis à `add`, dans le même ordre. Aucun champ inventé, perdu ou normalisé autrement.
-2. **Aucun changement observable de `get_neighborhood`** pour une même analyse : même ordre, mêmes faits,
-   mêmes preuves, mêmes frontières, mêmes continuations. Seule exception admise : une nouvelle version
-   de continuation si la représentation l'impose. Une ancienne continuation est alors refusée par une
-   erreur explicite, jamais réinterprétée.
+2. **Aucun changement observable de `get_neighborhood`** pour une même analyse : mêmes nœuds, faits,
+   ordre, preuves, frontières, consommation de budget et motif d'arrêt ; mêmes comportements de
+   pagination et de reprise. `facts_revision` et le jeton de continuation peuvent changer de
+   représentation ou de version, à sémantique égale. Une continuation d'une version antérieure est
+   refusée par une erreur explicite, jamais réinterprétée.
 3. **Port inchangé.** `add`, `query`, `revision`, `has_reference`, `neighbor` gardent leur signature et
    leur sens. Le voisinage ignore s'il lit `analysis_facts` ou identités et occurrences.
 4. **Une occurrence appartient à une seule analyse.** Aucune fusion entre analyses : une comparaison
@@ -125,10 +145,14 @@ stockage actuel ; la nouvelle implémentation du port existe à côté et n'est 
 Critères :
 
 - même fait dans deux analyses : une identité, deux occurrences ;
-- réexécution sur le même instantané : aucune nouvelle identité, de nouvelles occurrences ;
+- réanalyse du même instantané : aucune nouvelle identité ; chaque nouvelle analyse ou exécution
+  conserve sa propre occurrence, avec sa provenance ;
 - preuve déplacée (ligne 87 → 91) : même identité, occurrences distinctes, chacune avec sa preuve ;
 - nouvelle version de producteur : même identité, occurrences distinctes par leur `produced_by` ;
 - `INFERRED` puis `HUMAN_VALIDATED` au niveau du stockage : même identité, statuts distincts ;
+- fait `EVALUATOR` ou `PROJECTION` sans exécution connue dans l'analyse : refusé, rien n'est écrit ;
+- fait `HUMAN` : conservé sans exécution, avec son `producer_id` et sa `validation` ;
+- aucune preuve stockée avec `repository` ou `commit` ; la restitution les reprend de l'instantané ;
 - deux écritures concurrentes d'une même nouvelle identité : une seule identité, aucune erreur ;
 - restitution exacte sur tous les cas valides de la suite de conformité du contrat et sur des analyses
   synthétiques complètes (inventaire, Git, Java, sécurité, structure, applications).
@@ -137,28 +161,35 @@ Critères :
 
 - `neighbor`, `has_reference`, `revision` et les rangs sur le nouveau modèle.
 - `revision` reste une génération croissante propre à l'analyse, lue par un index de taille fixe.
-- Les clés d'ordre ne sont conservées que si la mesure le justifie : elles sont reconstructibles.
+- Rangs recalculés à l'ingestion depuis la clé canonique, sans la persister.
 
 Critères :
 
-- sur des fixtures synthétiques, `get_neighborhood` donne des réponses identiques octet pour octet
-  entre les deux implémentations, pour chaque direction, priorité, budget et page de reprise ;
+- sur des fixtures synthétiques, `get_neighborhood` donne, entre les deux implémentations et pour
+  chaque direction, priorité, budget et page de reprise, les mêmes nœuds, faits, ordre, preuves,
+  frontières, consommation et motif d'arrêt ; seules `facts_revision` et la représentation du jeton
+  de continuation peuvent différer ;
+- coût du classement mesuré sur une analyse synthétique volumineuse ;
 - aucun chargement complet d'une adjacence : un voisin est lu par l'index, comme aujourd'hui ;
 - une continuation émise avant une nouvelle écriture dans l'analyse reste refusée comme aujourd'hui.
 
-### 01E-C — Migration des données et mesure du gain
+### 01E-C — Migration des données, bascule et mesure du gain
 
-- Migration 004 : reprend `analysis_facts` par lots, calcule les identités avec une copie figée de
-  la fonction v1 (comme 003), reste reprenable après interruption et affiche sa progression.
-- Vérification avant suppression : pour chaque analyse, mêmes comptes et restitution exacte. En cas
-  d'écart, la migration s'arrête sans rien supprimer.
-- Branchement de la nouvelle implémentation, retrait de `analysis_facts`.
+- Migration 004 : crée le nouveau stockage, reprend `analysis_facts` par lots, calcule les identités
+  avec une copie figée de la fonction v1 (comme 003), reste reprenable après interruption et affiche
+  sa progression.
+- Vérification : pour chaque analyse, mêmes comptes et restitution exacte ; provenance cohérente
+  avec les exécutions. Au premier écart, la migration s'arrête et n'a rien détruit.
+- **`analysis_facts` est conservée** par 004. Le code bascule sur la nouvelle mémoire ; l'ancienne
+  table reste une voie de comparaison et de récupération, au prix d'un surcoût disque temporaire.
+- Le retrait de `analysis_facts` est une migration 005 séparée, plus tard, hors de ce récit.
 
 Critères :
 
 - une analyse faite avant la migration donne, après, les mêmes faits, les mêmes pages et le même
   voisinage ;
 - migration interrompue puis relancée : même résultat qu'une migration d'un seul trait ;
+- donnée ancienne incohérente (provenance sans exécution) : arrêt avant toute destruction, cas nommé ;
 - mesure publiée dans la PR, sur une fixture synthétique et sur la base locale (comptes seulement) :
 
 ```text
@@ -166,31 +197,19 @@ Critères :
 occurrences           N                    N
 identités distinctes  (inconnu)            Y
 ratio N / Y           —                    …
-taille des tables     …                    …
-taille des index      …                    …
-taille du fichier     …                    … (après VACUUM pour SQLite)
+taille du nouveau stockage (tables, index)  …
+taille de analysis_facts (tables, index)    … (conservée jusqu'à 005)
 durée de migration    —                    …
 ```
 
-Le résultat est publié tel quel, même s'il est décevant. Sous SQLite, la place libérée ne revient au
-fichier qu'après `VACUUM` ; l'exécuter automatiquement ou non est à décider dans cette tranche.
+Le résultat est publié tel quel, même s'il est décevant. Le gain sur le fichier lui-même n'apparaît
+qu'après 005 (et `VACUUM` sous SQLite) ; 01E-C mesure le nouveau stockage seul.
 
 ## Hors périmètre
 
 - Comparaison depuis les faits enregistrés, `EVIDENCE_CHANGED`, changement de statut : 01F, juste après.
 - Moteur de validité (`STALE`, `REVALIDATION_REQUIRED`) et saisie de validations humaines.
+- Retrait de `analysis_facts` (migration 005, après bascule vérifiée).
 - Suppression ou purge d'analyses, identités orphelines.
 - Cache et projections persistées.
 - Résumés de `scans.result`.
-
-## Questions à trancher dans 01E-A, avant le code
-
-1. Preuves : propres à chaque occurrence (simple) ou partagées entre analyses quand elles sont
-   identiques hors instantané (gain plus grand, lecture plus complexe) ? Recommandation : propres à
-   l'occurrence ; le partage ne vient que si la mesure de 01E-C le justifie.
-2. Exécutions des producteurs : une ligne par analyse et par évaluateur, renvoyée par chaque
-   occurrence ? Un fait dont le `produced_by` ne correspondrait à aucune exécution de l'analyse est-il
-   refusé ou conservé tel quel ?
-3. Faits produits par une projection ou une personne : leur `produced_by` n'a pas d'exécution
-   d'évaluateur ; où vivent-ils ?
-4. Clés d'ordre en texte : les garder, ou recalculer les rangs à l'ingestion seulement ?

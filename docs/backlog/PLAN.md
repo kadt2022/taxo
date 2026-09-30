@@ -53,7 +53,7 @@ l'historique Git.
 | Origine | Exigence non réalisée | Situation actuelle | Devenir |
 | --- | --- | --- | --- |
 | 01E | Mémoire versionnée : un fait existe une fois, chaque exécution ajoute une **occurrence** (exécution, instantané, provenance) ; identité stable indexée | les faits sont stockés par analyse, une ligne par fait, sans occurrence ni identité indexée (`scans/infrastructure/sqlalchemy/fact_store.py` le dit lui-même) | planifiée : [TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md), tranche A |
-| 01E | Réexécution sur le même instantané sans doublon ; deux versions de producteur distinguées par leurs occurrences | chaque analyse enregistre ses propres faits | planifiée : TAXO-01E, tranche A |
+| 01E | Une réanalyse du même instantané ne crée pas de nouvelle identité ; chaque nouvelle analyse ou exécution conserve sa propre occurrence ; deux versions de producteur distinguées par leurs occurrences | chaque analyse enregistre ses propres faits | planifiée : TAXO-01E, tranche A |
 | 01F | Comparer deux instantanés **depuis les faits persistés**, sans relire le dépôt | l'impact d'un commit réexécute les évaluateurs sur le parent et sur le commit (`history/application/queries.py`) | planifiée juste après TAXO-01E (étape 4) |
 | 01F | `EVIDENCE_CHANGED` : un fait dont seule la preuve se déplace reste inchangé, et ce déplacement est signalé à part avec les deux preuves | le fait est compté inchangé, sans signal distinct (`history/domain/impact.py`) | planifiée avec la comparaison persistée (étape 4) |
 | 01F | Changement de statut à identité constante signalé | compté inchangé (ARCHITECTURE § 5.2) | planifiée avec la comparaison persistée (étape 4) |
