@@ -147,9 +147,9 @@ describe('vocabulaire', ()=>{
     expect(label(RELATIONS,'NOUVELLE')).toBe('NOUVELLE');
   });
   it('dit une référence en clair', ()=>{
-    const project={id:'p-1', name:'Takibo'};
+    const project={id:'p-1', name:'Demo'};
     expect(reference(null)).toBeNull();
-    expect(reference('repository:p-1',project)).toBe('dépôt Takibo');
+    expect(reference('repository:p-1',project)).toBe('dépôt Demo');
     expect(reference('repository:autre')).toBe('dépôt autre');
     expect(reference('commit:'+'c'.repeat(40))).toBe('commit cccccccccccc');
     expect(reference('file:src/App.java')).toBe('src/App.java');

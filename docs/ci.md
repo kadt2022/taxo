@@ -1,7 +1,6 @@
 # Integration continue Taxo
 
-Recit : TAXO-CI-01. Le workflow `.github/workflows/taxo-ci.yml` s'inspire de
-Takibo CI : taches separees, caches, rapports conserves en cas d'echec et statut
+Recit : TAXO-CI-01. Le workflow `.github/workflows/taxo-ci.yml` utilise des taches separees, caches, rapports conserves en cas d'echec et statut
 final unique. Il est adapte a Python 3.12, Node.js 24 et PostgreSQL 17 de Taxo.
 
 ## Declenchement et controles
@@ -67,7 +66,7 @@ Secrets du depot, lus uniquement par **Taxo Sonar Analysis** :
 - `SONAR_ORGANIZATION`
 
 Dans un contexte de confiance, un secret manquant fait echouer l'analyse avec un
-message explicite. Les secrets et parametres de Takibo ne sont pas reutilises.
+message explicite. Les secrets sont propres au projet.
 
 ## Protection de main
 

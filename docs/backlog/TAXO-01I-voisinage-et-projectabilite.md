@@ -1,13 +1,19 @@
 # TAXO-01I — Voisinage borné : la première Tuile
 
-Statut : rédigé le 2026-09-17, révisé le 2026-09-29. Étape 4 de la séquence proposée
+Statut : rédigé le 2026-09-17, révisé le 2026-09-29. Priorité active du plan
 ([PLAN](PLAN.md)), sur les faits existants.
 
 Source de vérité : [ARCHITECTURE § 9](../ARCHITECTURE.md). En cas de divergence, le document cible
 prévaut.
 
 Dépend de : stockage des faits par analyse, lecture filtrée et identité des méthodes, tous livrés.
-Étalon : [TAXO-POC-01](TAXO-POC-01-verite-de-reference-chaine-autorisation.md). Vocabulaire : ARCHITECTURE § 4.
+Vocabulaire : ARCHITECTURE § 4. Validation : fixtures synthétiques de graphes et de projets.
+
+## Première tranche implémentée
+
+Voisinage à un saut, orientation entrante ou sortante, priorité des relations, budgets nœuds/arêtes/
+octets/travail, reprise indexée et preuves accessibles. La couverture reste un résumé de l’analyse.
+Les critères ci-dessous concernant plusieurs niveaux et la couverture locale détaillée restent ouverts.
 
 ## Pourquoi ce récit en premier
 
@@ -168,8 +174,7 @@ la PR qui l'introduit amende la section 5.
 4. **Graphe pur.** Sur de petites fixtures du moteur, sans évaluateur : cycles, boucles sur un nœud,
    nœud à fort degré, chemins multiples.
 
-La chaîne complète de TAXO-POC-01 jusqu'à `PolicyEvaluator` n'est **pas** un critère de ce récit :
-elle demande `CALLS`. Ici, elle s'arrête honnêtement à la frontière.
+Une chaîne nécessitant une relation non produite s’arrête à la frontière de contexte ; aucune relation n’est inventée pour une démonstration.
 
 ## Acceptation
 

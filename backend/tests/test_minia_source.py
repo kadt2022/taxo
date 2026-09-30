@@ -207,7 +207,7 @@ def test_code_is_sent_before_its_tests():
 
 
 @pytest.mark.parametrize('path, test', [
-    ('takibo-iam-boot/src/test/java/com/x/CorsAllowedOriginsTest.java', True), ('tests/test_x.py', True),
+    ('example-iam-boot/src/test/java/com/x/CorsAllowedOriginsTest.java', True), ('tests/test_x.py', True),
     ('web/a.spec.ts', True), ('pkg/x_test.go', True), ('src/UserServiceIT.java', True), ('__tests__/a.js', True),
     ('src/main/java/Cors.java', False), ('a/Contest.java', False), ('app/latest.py', False),
     ('Attestation.java', False)])

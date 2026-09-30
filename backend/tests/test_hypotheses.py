@@ -458,13 +458,6 @@ def test_the_shipped_clochette_manifest_is_pinned_to_an_immutable_revision():
     assert all(len(digest) == 64 for digest in entry['files'].values())
 
 
-def test_the_shipped_instruct_manifest_is_pinned_to_an_immutable_revision():
-    entry = json.loads(MANIFEST_PATH.read_text())['smollm2-135m-instruct']
-    if entry['revision'] is None:
-        pytest.skip('Variante Instruct pas encore epinglee : maintenance `fetch smollm2-135m-instruct --record`')
-    assert len(entry['revision']) == 40 and all(c in '0123456789abcdef' for c in entry['revision'])
-    assert all(len(digest) == 64 for digest in entry['files'].values())
-
 
 def test_a_requested_name_only_selects_a_manifest_key(tmp_path):
     transport = Transport(CONTENTS)

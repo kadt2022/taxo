@@ -10,13 +10,9 @@
 
 > **Taxo est un utilitaire de vérité logicielle : il transforme le code source en faits logiciels vérifiables, reproductibles, rattachés à leurs preuves, à leur périmètre et à un état précis du logiciel.**
 
-Taxo n'est pas d'abord une mémoire pour agents. Cette thèse a été mise à l'épreuve le 2026-09-19 sur
-quatre bancs : ces essais n'ont pas démontré de gain d'exactitude avec les configurations testées. Sur
-un dépôt réel, avec un modèle de premier plan, un agent muni des faits de Taxo n'a pas répondu plus
-juste qu'un agent qui lit le code. Cela justifie le repositionnement ; cela n'interdit pas de mesurer
-une approche nouvelle, qualité comprise. Le compte rendu est dans
-[le journal](../bench/JOURNAL-2026-09-19.md), et les défauts qu'il a révélés sont dans
-[les défauts mesurés](backlog/DEFAUTS-MESURES.md).
+Taxo sert la navigation humaine et les API. La valeur d’une intégration agent est évaluée séparément,
+sans conditionner ces usages. Les limites actuelles sont suivies dans
+[la file des capacités](backlog/DEFAUTS-MESURES.md).
 
 Taxo est un moteur d'intelligence logicielle : il construit, tient à jour et rend consultable ce
 qu'on peut tenir pour vrai d'un logiciel — ses modules, ses unités déployables, ses dépendances, ses
@@ -222,58 +218,15 @@ Par exemple, `DECLARED_BY` ne doit pas mélanger silencieusement une technologie
 
 ---
 
-## 6. Exemple de fait cher : l'autorisation dans TAKIBO
+## 6. Exemple de connaissance justifiée : la protection d’une route
 
-Le premier jalon de preuve n'est pas un exemple inventé.
+Une route peut être reliée à son handler (`HANDLED_BY`), au motif qui la sélectionne
+(`MATCHED_BY`) et à une politique (`AUTHORIZED_BY`, puis `PROTECTED_BY` si les prémisses
+sont établies). Chaque conclusion conserve ses preuves, son analyse et ses limites.
 
-Il s'appuie sur une route réelle déjà vérifiée :
-
-```text
-GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users
-→ ReadableUserQueryController#list
-→ SecurityConfig.java:85
-```
-
-La cible n'est pas une chaîne simplifiée, mais un ensemble de faits liés :
-
-```text
-endpoint:GET /api/v1/orgs/{orgCode}/spaces/{spaceCode}/users
-
-├─ HANDLED_BY
-│  → symbol:ReadableUserQueryController#list
-│  OBSERVED
-│
-├─ MATCHED_BY
-│  → route-pattern:...
-│  INFERRED
-│
-└─ PROTECTED_BY
-   → symbol:PolicyBasedAuthorizationManager
-   INFERRED
-   premises:
-     MATCHED_BY + AUTHORIZED_BY
-
-route-pattern:...
-└─ AUTHORIZED_BY
-   → symbol:PolicyBasedAuthorizationManager
-   OBSERVED
-
-symbol:PolicyBasedAuthorizationManager
-└─ CALLS
-   → symbol:PolicyEvaluator
-   OBSERVED
-```
-
-La valeur de Taxo n'est pas seulement de trouver les classes.
-
-Elle est d'établir :
-
-- les relations ;
-- les prémisses ;
-- les preuves ;
-- le commit ;
-- la couverture ;
-- les limites.
+La présence d’un handler ne prouve pas l’autorisation. Un appel vers une autre méthode
+ne peut être ajouté que par un évaluateur qui sait le résoudre. Les tests utilisent des
+petits dépôts synthétiques indépendants de toute application cliente.
 
 ---
 

@@ -5,7 +5,7 @@
   "validity": "VALID",
   "snapshot": {
     "repository": "taxo",
-    "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "mode": "COMMIT"
   },
   "produced_by": {
@@ -26,9 +26,9 @@
   "evidence": [
     {
       "repository": "taxo",
-      "commit": "80eb595f6d03eea67eb86eae4c7640f94bd3f94c",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "method": "git.log",
-      "object": "commit:80eb595f6d03eea67eb86eae4c7640f94bd3f94c"
+      "object": "commit:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     }
   ]
 }

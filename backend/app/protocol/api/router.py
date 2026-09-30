@@ -28,6 +28,7 @@ class Operation(BaseModel):
 
 class ExchangeRequest(BaseModel):
     protocol: str = Field(PROTOCOL, pattern=f'^{PROTOCOL}$')
+    analysis: str | None = Field(None, min_length=1, max_length=100)
     consent: Consent = Field(default_factory=Consent)
     max_bytes: int | None = Field(None, ge=MIN_EXCHANGE_BYTES, le=MAX_EXCHANGE_BYTES)
     requests: list[Operation] = Field(..., min_length=1, max_length=MAX_OPERATIONS)
@@ -38,7 +39,8 @@ def create_router(taxo_query):
 
     @router.post('/api/projects/{project_id}/taxo-query', responses=_ERRORS)
     def exchange(project_id: str, body: ExchangeRequest):
-        opened = taxo_query.open(project_id, diff_consent=body.consent.diff, max_bytes=body.max_bytes)
+        opened = taxo_query.open(project_id, diff_consent=body.consent.diff, max_bytes=body.max_bytes,
+                                analysis_id=body.analysis)
         responses = [opened.call(item.model_dump()) for item in body.requests]
         return {'protocol': PROTOCOL, 'snapshot': opened.snapshot,
                 'budget': {'max_bytes': opened.budget, 'used': opened.used}, 'responses': responses}

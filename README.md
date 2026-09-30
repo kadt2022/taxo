@@ -175,9 +175,6 @@ les faits changés par le commit dont une preuve porte sur ce fichier. Le lien e
 de lignes d'une preuve recouvre une ligne modifiée (elle est marquée ◆ dans le diff), `FILE` sinon. Il
 passe uniquement par les preuves, jamais par une lecture du texte. L'inventaire, seul évaluateur du
 produit aujourd'hui, prouve par fichier entier : ses liens sont donc `FILE`.
-L'impact sur les chaînes d'autorisation passe encore par le POC Spring, hors produit :
-`py -m poc.authchain.impact --root <dépôt> --commit <sha>` (résultat marqué `provisional`).
-
 ### Git, deuxième évaluateur (TAXO-EVAL-02, ARCHITECTURE § 7.2)
 
 L'analyse globale exécute tous les évaluateurs sur le même instantané. À côté de l'inventaire, Git
@@ -298,8 +295,7 @@ lire est déclaré non interprété sur son fichier :
 - un contexte de build calculé ou sans module.
 
 Un service à image externe (`image: postgres`) n'est ni un fait ni une lacune. L'impact d'un
-commit montre un module ajouté ou une dépendance ajoutée. Validé sur Taxo lui-même (deux modules,
-deux applications) et sur TAKIBO (18 modules Gradle, 37 dépendances).
+commit montre un module ajouté ou une dépendance ajoutée. Des fixtures génériques couvrent plusieurs systèmes de build et plusieurs applications.
 
 ### Applications Spring Boot et routes servies (TAXO-E1 tranche 2, ARCHITECTURE § 7.6)
 
@@ -324,11 +320,39 @@ n'est pas sur le classpath ne charge rien. Est déclaré non interprété, jamai
 - une annotation non résolue, une condition.
 
 Une chaîne hors du classpath est écartée sans réserve ; une chaîne hors du balayage l'est avec une
-lacune connue (XML, initialiseurs et `spring.main.sources` ne sont pas lus). Sur TAKIBO,
-`GET /api/admin/users` est servie par `AdpTestApplication`, protégée par
-`TestSecurityConfig#adpAuthorizationManager()`, et `SecurityConfig` est écartée : son module n'est pas
-sur le classpath de cette application. Les routes `/debug/secure/**` restent non interprétées :
-leur contrôleur est sous `@Profile`.
+lacune connue (XML, initialiseurs et `spring.main.sources` ne sont pas lus). Une route dont le contrôleur dépend d’un profil reste non interprétée tant que son chargement ne peut pas être établi.
+
+### Voisinage borné : première tranche de la Tuile
+
+Après une analyse, `get_neighborhood` retourne les relations autour d’une référence, sans relire
+les sources et sans Minia. Exemple de corps pour `POST /api/projects/{id}/taxo-query` :
+
+```json
+{
+  "analysis": "identifiant-de-l-analyse",
+  "requests": [{
+    "operation": "get_neighborhood",
+    "arguments": {
+      "analysis": "identifiant-de-l-analyse",
+      "root": "module:api",
+      "follow": ["DEPENDS_ON"],
+      "direction": "OUTGOING",
+      "depth": 1,
+      "max_nodes": 30,
+      "max_edges": 60,
+      "max_work": 100
+    },
+    "max_bytes": 12000
+  }]
+}
+```
+
+`INCOMING` remonte les relations sans en inverser les faits. La réponse donne l’ancre, les nœuds,
+les faits référencés, les budgets consommés, les frontières et une éventuelle `continuation`.
+`get_evidence` lit les preuves des références reçues dans le même échange. La reprise s’utilise avec
+les mêmes paramètres de sélection ; ses budgets peuvent augmenter. La couverture est un résumé
+à l’échelle de l’analyse. Le parcours multi-niveaux et les profils adaptatifs ne sont pas encore livrés.
+La migration Alembic `003` construit les index et les clés de parcours des faits déjà conservés.
 
 ### Interroger Taxo (TAXO-QUERY-01)
 
@@ -596,18 +620,12 @@ Docker, `TAXO_HYPOTHESES=smollm2-135m docker compose up` installe Clochette au p
 volume `taxo_models`, réutilisé ensuite. Exécuter le modèle demande en plus
 `pip install -r backend/requirements-hypotheses.txt`.
 
-Pour converser avec Clochette en local, à titre expérimental et hors produit (cache vérifié, chat
-template officiel, aucun téléchargement, aucune réponse ne devient un fait), le laboratoire utilise la
-variante `smollm2-135m-instruct`, distincte du modèle de base de TAXO-LAB-01 : depuis `backend`,
-`py -m app.hypotheses fetch smollm2-135m-instruct`, puis `py -m lab.clochette_chat`, après
-`py -m pip install -r requirements-hypotheses.txt`.
-
 Une hypothèse n'est pas un fait : elle n'entre jamais dans la mémoire et aucune API ne l'expose tant
 que TAXO-LAB-01 n'a pas conclu.
 
 Les scans sont synchrones et bornés à 50 000 fichiers dans cette version. Avant de traiter de gros dépôts : introduire une file durable, des workers isolés, des délais et une reprise après échec.
 
-Prochaines briques non implémentées : analyseurs JavaParser et TypeScript Compiler API, modèle de relations versionné, extraction des endpoints/DTO, comparaison sémantique, documentation générée, GitHub App et assistant IA. Aucun LLM n'est appelé.
+L’état des capacités et des travaux restants est tenu dans [ARCHITECTURE](docs/ARCHITECTURE.md) et [PLAN](docs/backlog/PLAN.md).
 
 Cette version est réservée à un poste local de confiance : pas d'authentification ni de gestion multi-utilisateur. Les ports Docker sont limités à localhost et les dépôts montés en lecture seule. Ne pas l'exposer publiquement telle quelle.
 
