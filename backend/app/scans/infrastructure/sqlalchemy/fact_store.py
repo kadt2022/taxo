@@ -1,7 +1,8 @@
 """Faits produits par une analyse globale, conserves pour etre interroges apres coup (TAXO-EVAL-02).
 
-Stockage minimal : une ligne par fait, avec les colonnes qui servent a filtrer. Ce n'est pas la memoire
-versionnee de TAXO-01E : les faits restent attaches a l'analyse qui les a produits.
+Stockage minimal : une ligne par fait, avec les colonnes qui servent a filtrer. Depuis TAXO-01E, Taxo
+ecrit et lit la memoire versionnee (fact_memory.py) ; cette table reste en secours, n'est plus alimentee,
+et sert de reference aux tests d'equivalence jusqu'a son retrait (migration 005).
 """
 import hashlib
 

@@ -14,7 +14,7 @@ from app.evaluators.spring_api.evaluator import SpringApiEvaluator
 from app.evaluators.spring_boot.evaluator import SpringBootEvaluator
 from app.evaluators.spring_security.evaluator import SpringSecurityEvaluator
 from app.evaluators.structure.evaluator import StructureEvaluator
-from app.scans.infrastructure.sqlalchemy.fact_store import SqlAlchemyAnalysisFacts
+from app.scans.infrastructure.sqlalchemy.fact_memory import SqlAlchemyFactMemory
 from app.evaluations.application.registry import EvaluatorRegistry
 from app.evaluations.application.run_evaluator import RunEvaluator
 from app.platform.api.health import router as health_router
@@ -74,10 +74,11 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     registry = EvaluatorRegistry([InventoryEvaluator(), GitEvaluator(), SpringApiEvaluator(), SpringBootEvaluator(),
                                   SpringSecurityEvaluator(), StructureEvaluator()])
     inventory = registry.get('taxo.inventory')
-    facts = SqlAlchemyAnalysisFacts(engine)
+    facts = SqlAlchemyFactMemory(engine)  # TAXO-01E ; analysis_facts reste en secours, plus alimentee
     # Analyse globale : chaque evaluateur observe l'instantane ; l'inventaire du code reste le principal.
     run = RunScan(projects, scans, paths, GitSnapshotReader(), inventory, RunEvaluator(),
-                  others=tuple(item for item in registry.all() if item is not inventory), facts=facts)
+                  others=tuple(item for item in registry.all() if item is not inventory), facts=facts,
+                  provenance=facts)
     # L'impact d'un commit compare le contenu de deux instantanes : l'historique Git n'y entre pas.
     history = ProjectHistory(projects, paths, GitHistoryReader(), GitSnapshotReader(),
                              registry.content(), RunEvaluator())
