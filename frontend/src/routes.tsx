@@ -150,13 +150,20 @@ export function RoutesView({result, error, text, filter, selected, onText, onFil
   </section>;
 }
 
-export function RoutesPanel({base, scanId, request}:Readonly<{base:string; scanId:string; request:Run}>){
+/** Affiche les routes chargees et les transmet, avec leur analyse, a qui les attend. */
+export function shared(show:(value:RoutesResult)=>void, scanId:string, onLoaded?:(scanId:string, value:RoutesResult)=>void){
+  return (value:RoutesResult)=>{show(value);onLoaded?.(scanId, value);};
+}
+
+/** `onLoaded` partage les routes chargees avec la vue d'ensemble : une seule lecture par analyse. */
+export function RoutesPanel({base, scanId, request, onLoaded}:Readonly<{base:string; scanId:string; request:Run;
+  onLoaded?:(scanId:string, value:RoutesResult)=>void}>){
   const [result,setResult]=useState<RoutesResult|null>(null), [error,setError]=useState('');
   const [text,setText]=useState(''), [filter,setFilter]=useState('ALL'), [selected,setSelected]=useState('');
   useEffect(()=>{
     setResult(null);setError('');setSelected('');
-    return loadRoutes(request, base, scanId, {onResult:setResult, onError:setError});
-  },[base, scanId, request]);
+    return loadRoutes(request, base, scanId, {onResult:shared(setResult, scanId, onLoaded), onError:setError});
+  },[base, scanId, request, onLoaded]);
   return <RoutesView result={result} error={error} text={text} filter={filter} selected={selected}
     onText={setText} onFilter={setFilter} onSelect={setSelected}/>;
 }

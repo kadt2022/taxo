@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {applicationName, chainName, filterRoutes, loadRoutes, RoutesPanel, RoutesView, proofText, protectionText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow, type RoutesResult} from './routes';
+import {applicationName, chainName, filterRoutes, loadRoutes, RoutesPanel, shared, RoutesView, proofText, protectionText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow, type RoutesResult} from './routes';
 
 const admin:RouteRow={endpoint:'endpoint:GET /api/admin/users', verb:'GET', path:'/api/admin/users', state:'PROTECTED',
   handlers:[{subject:'endpoint:GET /api/admin/users', relation:'HANDLED_BY', object:'symbol:java:com.example.adp.test.controller.TestController#adminUsers(Authentication)',
@@ -112,6 +112,14 @@ describe('réserves', ()=>{
     expect(detail).toContain('Limites connues');
     expect(detail).toContain('sécurité de méthode non interprétée');
     expect(renderToStaticMarkup(<RoutesTable routes={[reserved]} selected="" onSelect={()=>{}}/>)).toContain('avec réserve');
+  });
+  it('partage les routes chargées avec la vue d’ensemble', ()=>{
+    const shown:RoutesResult[]=[], passed:string[]=[];
+    const result:RoutesResult={routes:[], unestablished:[]};
+    shared(value=>shown.push(value), 's9', id=>passed.push(id))(result);
+    shared(value=>shown.push(value), 's10')(result);
+    expect(shown).toEqual([result, result]);
+    expect(passed).toEqual(['s9']);
   });
   it('commence par charger, sans rien affirmer', ()=>{
     const pending=()=>new Promise<never>(()=>{});

@@ -1,6 +1,7 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {CardIcon, panelKey, evaluationsOf, outcomeState, shortList, outcome, overviewCards, ProjectNav, ProjectOverview, sections, type EvaluationSummary, type Scan} from './overview';
+import {AnalysisLimits, CardIcon, gapsOf, panelKey, evaluationsOf, outcomeState, routeCounts, shortList, outcome, overviewCards, ProjectNav, ProjectOverview, sections, type EvaluationSummary, type Scan} from './overview';
+import type {RouteRow} from './routes';
 import {AnalysisDetails, EvaluationPanel, warningsOf} from './details';
 import {label, reference, RELATIONS} from './vocabulary';
 
@@ -28,11 +29,16 @@ describe('overviewCards', ()=>{
   it('ne transforme jamais une absence d’information en résultat', ()=>{
     for(const id of ['architecture','api','security'])expect(card(scan,id)).toMatchObject({value:'Non analysé', state:'unknown'});
     expect(card(scan,'api').detail).toContain('relancez l’analyse globale');
-    expect(card(scan,'security').detail).toContain('Rien n’est affirmé');
+    expect(card(scan,'security').detail).toContain('relancez l’analyse globale');
+    expect(card(scan,'architecture').detail).toContain('relancez l’analyse globale');
+    expect(card(scan,'data')).toMatchObject({value:'Non analysé', state:'unknown'});
+    expect(card(scan,'data').detail).toContain('Rien n’est affirmé');
+    expect(card(scan,'api').link).toBeUndefined();
     const old:Scan={...scan, evaluations:undefined};
     expect(card(old,'history')).toMatchObject({value:'Non analysé', state:'unknown'});
     expect(card({...scan, evaluations:[inventory, {...git, status:'FAILED'}]},'history')).toMatchObject({value:'Non analysé', state:'failed'});
     expect(card({...scan, evaluations:[inventory, {...git, status:'PARTIAL'}]},'history').state).toBe('partial');
+    expect(card({...scan, evaluations:[inventory, {...git, relations:{HAS_COMMIT:1}}]},'history').value).toBe('1 commit analysé');
   });
   it('distingue « aucune technologie reconnue » d’une analyse absente', ()=>{
     expect(card({...scan, facts:[]},'technologies').value).toBe('Aucune technologie reconnue');
@@ -64,13 +70,85 @@ describe('carte API (TAXO-04)', ()=>{
   });
 });
 
+describe('carte Architecture (TAXO-E1)', ()=>{
+  const structure=(extra:Partial<EvaluationSummary>)=>summary('taxo.structure', extra);
+  const boot=summary('taxo.spring-boot', {relations:{BUILT_FROM:2, SERVED_BY:30}});
+  const with_=(...items:EvaluationSummary[])=>({...scan, evaluations:[inventory, git, ...items]});
+  it('compte les modules, leurs dépendances et ce qui s’en construit', ()=>{
+    const value=card(with_(structure({relations:{CONTAINS:18, DEPENDS_ON:37, BUILT_FROM:1},
+      coverage:[{coverage_type:'NOT_INTERPRETED', count:1, subjects:['file:build.gradle']}]}), boot),'architecture');
+    expect(value).toMatchObject({value:'18 modules', state:'known'});
+    expect(value.detail).toBe('37 dépendances entre modules · 2 applications Spring Boot · 1 service compose construit. Lu dans les fichiers de build, sans rien exécuter.');
+    expect(value.link?.href).toBe('#limites');
+  });
+  it('accorde au singulier et dit un dépôt sans module', ()=>{
+    expect(card(with_(structure({relations:{CONTAINS:1, DEPENDS_ON:1}})),'architecture'))
+      .toMatchObject({value:'1 module', detail:'1 dépendance entre modules. Lu dans les fichiers de build, sans rien exécuter.'});
+    expect(card(with_(structure({})),'architecture').value).toBe('Aucun module déclaré');
+    expect(card(with_(structure({}), {...boot, status:'FAILED'}),'architecture').detail).not.toContain('Spring Boot');
+    expect(card(with_(structure({relations:{CONTAINS:2}})),'architecture').link).toBeUndefined();
+  });
+  it('dit une lecture partielle ou en échec', ()=>{
+    expect(card(with_(structure({status:'PARTIAL', relations:{CONTAINS:3}})),'architecture').state).toBe('partial');
+    expect(card(with_(structure({status:'FAILED'})),'architecture')).toMatchObject({value:'Non analysé', state:'failed'});
+  });
+});
+
+describe('carte Sécurité (TAXO-05)', ()=>{
+  const spring=(extra:Partial<EvaluationSummary>)=>({...scan, evaluations:[inventory, git, summary('taxo.spring-security', extra)]});
+  const row=(state:RouteRow['state']):RouteRow=>({endpoint:`endpoint:GET /${state}`, verb:'GET', path:`/${state}`, state,
+    handlers:[], applications:[], matched:[], rules:[], protections:[], gaps:[]});
+  const counts=routeCounts({routes:[row('PROTECTED'), row('PROTECTED'), row('PERMITS_ALL'), row('NOT_INTERPRETED'), row('NO_CONCLUSION')], unestablished:[]});
+  it('compte les routes par état établi', ()=>{
+    expect(counts).toEqual({PROTECTED:2, PERMITS_ALL:1, NOT_INTERPRETED:1, NO_CONCLUSION:1});
+    const value=overviewCards(spring({}), counts).find(item=>item.id==='security')!;
+    expect(value).toMatchObject({value:'2 routes protégées', state:'known'});
+    expect(value.detail).toBe('1 ouverte à tous (permitAll) · 1 non interprétée · 1 sans conclusion. Une route n’est dite protégée que si un fait le prouve.');
+    expect(value.link).toEqual({href:'#routes', label:'Voir la protection de chaque route'});
+  });
+  it('sans le détail par route, ne compte que les règles lues', ()=>{
+    expect(card(spring({relations:{AUTHORIZED_BY:3, PERMITS_ALL:2}}),'security')).toMatchObject({value:'5 règles de sécurité lues', state:'known'});
+    expect(card(spring({relations:{PERMITS_ALL:1}}),'security').value).toBe('1 règle de sécurité lue');
+    expect(card(spring({status:'PARTIAL'}),'security')).toMatchObject({value:'Aucune règle de sécurité lue', state:'partial'});
+    expect(card(spring({status:'FAILED'}),'security')).toMatchObject({value:'Non analysé', state:'failed'});
+  });
+});
+
+describe('limites de l’analyse', ()=>{
+  const spring=summary('taxo.spring-api', {coverage:[{coverage_type:'NOT_INTERPRETED', count:9, subjects:['symbol:java:a.B']},
+    {coverage_type:'READ_ERROR', count:1, subjects:['file:x.java']}, {coverage_type:'ANALYSED', count:40, subjects:[]}]});
+  const limited={...scan, evaluations:[inventory, git, spring]};
+  it('liste les zones non lues par analyseur, les plus nombreuses d’abord', ()=>{
+    expect(gapsOf(limited).map(gap=>[gap.evaluator, gap.type, gap.count])).toEqual([
+      ['taxo.spring-api','NOT_INTERPRETED',9], ['taxo.inventory','NOT_INTERPRETED',7], ['taxo.spring-api','READ_ERROR',1]]);
+    expect(card(limited,'limits')).toMatchObject({value:'17 zones non interprétées', state:'known'});
+    expect(card(limited,'limits').link?.href).toBe('#limites');
+  });
+  it('dit l’absence de zone et l’absence de couverture', ()=>{
+    const clean={...scan, evaluations:[{...inventory, coverage:[]}]};
+    expect(card(clean,'limits').value).toBe('Aucune zone non interprétée');
+    expect(card({...scan, evaluations:undefined, evaluation_summary:undefined},'limits')).toMatchObject({value:'Non analysé', state:'unknown'});
+    expect(renderToStaticMarkup(<AnalysisLimits scan={clean}/>)).toContain('Aucune zone non interprétée parmi ce que les analyseurs savent lire.');
+    expect(renderToStaticMarkup(<AnalysisLimits scan={{id:'x', created_at:''}}/>)).toContain('ne détaille pas sa couverture');
+  });
+  it('montre chaque zone en clair, avec des exemples', ()=>{
+    const html=renderToStaticMarkup(<AnalysisLimits scan={limited}/>);
+    expect(html).toContain('id="limites"');
+    expect(html).toContain('Endpoints Spring');
+    expect(html).toContain('Illisible');
+    expect(html).toContain('x.java');
+    expect(html).toContain('+ 8 autres');
+    expect(html).not.toContain('NOT_INTERPRETED');
+  });
+});
+
 describe('shortList', ()=>{
   it('abrège une longue liste sans rien inventer', ()=>{
     expect(shortList(['A','B','C','D'])).toBe('A · B · C · D');
     expect(shortList(['A','B','C','D','E','F'])).toBe('A · B · C · D · +2 autres');
   });
   it('montre d’abord ce que Taxo sait', ()=>{
-    expect(overviewCards(scan).map(item=>item.id)).toEqual(['technologies','project','history','architecture','api','security']);
+    expect(overviewCards(scan).map(item=>item.id)).toEqual(['technologies','project','history','architecture','api','security','data','limits']);
   });
 });
 
@@ -95,7 +173,7 @@ describe('outcome et sections', ()=>{
     expect(outcomeState({...scan, evaluations:[inventory, {...git, status:'FAILED'}]})).toBe('failed');
   });
   it('ne propose que les sections réellement disponibles', ()=>{
-    expect(sections(scan).map(item=>item.label)).toEqual(['Vue d’ensemble', 'Technologies', 'Routes', 'Historique']);
+    expect(sections(scan).map(item=>item.label)).toEqual(['Vue d’ensemble', 'Technologies', 'Limites', 'Routes', 'Historique']);
     expect(sections(undefined).map(item=>item.id)).toEqual(['historique']);
     const nav=renderToStaticMarkup(<ProjectNav scan={scan}/>);
     expect(nav).toContain('href="#historique"');
@@ -112,6 +190,7 @@ describe('ProjectOverview', ()=>{
     expect(html).toContain('class="card card-unknown"');
     const failed=renderToStaticMarkup(<ProjectOverview scan={{...scan, evaluations:[inventory, {...git, status:'PARTIAL'}]}}/>);
     expect(failed).toContain('<span class="badge">En partie</span>');
+    expect(html).toContain('<a class="card-link" href="#historique">Consulter les commits →</a>');
   });
 });
 
