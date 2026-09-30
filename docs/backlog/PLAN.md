@@ -7,12 +7,20 @@ Mise à jour : 2026-09-30. Référence : [ARCHITECTURE.md](../ARCHITECTURE.md).
 Développer la cible produit sur des fixtures synthétiques génériques, sans dépendance à un dépôt
 client ni à une expérimentation agent. La navigation et l’API sont utilisables sans Minia.
 
-1. Nettoyage du dépôt : retirer les démonstrateurs, les bancs spécifiques et leurs données.
-2. Voisinage et Tuile explicite : première tranche `get_neighborhood` à un saut implémentée,
-   avec budgets et reprise. Suite : couverture locale détaillée et parcours multi-niveaux. Contrat : [TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md).
-3. Première vue arborescente sur ce même moteur : preuves, frontières et renvois.
-4. Étendre les faits : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
-5. Profils adaptatifs et Forêt après le voisinage ; cache seulement si les mesures le justifient.
+1. ✅ Nettoyage du dépôt : démonstrateurs, bancs spécifiques et leurs données retirés.
+2. ✅ Première Tuile : `get_neighborhood` à un saut, avec budgets et reprise ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
+3. → **Mémoire versionnée des faits** : identité et occurrence séparées, en trois tranches
+   ([TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md)).
+4. Comparaison depuis les faits enregistrés (01F) : la preuve de l’utilité de 01E, comparer deux
+   analyses sans relire le dépôt.
+5. Tuile multi-niveaux et couverture locale détaillée ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
+6. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
+7. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
+8. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
+
+La mémoire versionnée passe avant la suite des Tuiles parce que la dette de stockage est constatée
+(une copie complète de chaque fait par analyse), pas parce que les Tuiles en dépendraient : elles
+lisent le port de stockage, pas ses tables. Le gain de place est un résultat à mesurer par 01E.
 
 Les hypothèses statistiques restent hors de cette séquence. Un résultat d’évaluation d’un agent
 ne bloque pas le développement des capacités humaines et API.
@@ -44,12 +52,12 @@ l'historique Git.
 
 | Origine | Exigence non réalisée | Situation actuelle | Devenir |
 | --- | --- | --- | --- |
-| 01E | Mémoire versionnée : un fait existe une fois, chaque exécution ajoute une **occurrence** (exécution, instantané, provenance) ; identité stable indexée | les faits sont stockés par analyse, une ligne par fait, sans occurrence ni identité indexée (`scans/infrastructure/sqlalchemy/fact_store.py` le dit lui-même) | reportée ; à trancher avant la comparaison sur faits persistés et avant le cache  |
-| 01E | Réexécution sur le même instantané sans doublon ; deux versions de producteur distinguées par leurs occurrences | chaque analyse enregistre ses propres faits | reportée, avec la ligne précédente |
-| 01F | Comparer deux instantanés **depuis les faits persistés**, sans relire le dépôt | l'impact d'un commit réexécute les évaluateurs sur le parent et sur le commit (`history/application/queries.py`) | reportée ; dépend des occurrences de 01E |
-| 01F | `EVIDENCE_CHANGED` : un fait dont seule la preuve se déplace reste inchangé, et ce déplacement est signalé à part avec les deux preuves | le fait est compté inchangé, sans signal distinct (`history/domain/impact.py`) | reportée |
-| 01F | Changement de statut à identité constante signalé | compté inchangé (ARCHITECTURE § 5.2) | reportée |
-| 01F | Banc Git scénarisé A, B, C, et deux versions d'évaluateur sur un même commit | « non comparable » est déclaré quand les catalogues diffèrent ; pas de banc scénarisé dédié | reportée |
+| 01E | Mémoire versionnée : un fait existe une fois, chaque exécution ajoute une **occurrence** (exécution, instantané, provenance) ; identité stable indexée | les faits sont stockés par analyse, une ligne par fait, sans occurrence ni identité indexée (`scans/infrastructure/sqlalchemy/fact_store.py` le dit lui-même) | planifiée : [TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md), tranche A |
+| 01E | Réexécution sur le même instantané sans doublon ; deux versions de producteur distinguées par leurs occurrences | chaque analyse enregistre ses propres faits | planifiée : TAXO-01E, tranche A |
+| 01F | Comparer deux instantanés **depuis les faits persistés**, sans relire le dépôt | l'impact d'un commit réexécute les évaluateurs sur le parent et sur le commit (`history/application/queries.py`) | planifiée juste après TAXO-01E (étape 4) |
+| 01F | `EVIDENCE_CHANGED` : un fait dont seule la preuve se déplace reste inchangé, et ce déplacement est signalé à part avec les deux preuves | le fait est compté inchangé, sans signal distinct (`history/domain/impact.py`) | planifiée avec la comparaison persistée (étape 4) |
+| 01F | Changement de statut à identité constante signalé | compté inchangé (ARCHITECTURE § 5.2) | planifiée avec la comparaison persistée (étape 4) |
+| 01F | Banc Git scénarisé A, B, C, et deux versions d'évaluateur sur un même commit | « non comparable » est déclaré quand les catalogues diffèrent ; pas de banc scénarisé dédié | planifiée avec la comparaison persistée (étape 4) |
 | 01G | Contrat de lecture complet et paginé (fait par identité, faits d'un instantané, validité) et vue de vérification fait par fait | lecture filtrée par protocole (`find_facts`, `get_evidence`, `get_coverage`) et pages du portail ; pas de pagination générale ni de vue par fait | reportée ; en partie couverte par le voisinage |
 | 01H (épique) | Validité : `STALE`, `REVALIDATION_REQUIRED`, et saisie de validations humaines (`HUMAN_VALIDATED`) | champs au contrat, aucun moteur ([ARCHITECTURE § 5.5 et § 6](../ARCHITECTURE.md)) | reportée, avec son premier usage |
 
@@ -58,3 +66,10 @@ l'historique Git.
 Le dépôt produit ne contient plus de code expérimental jetable ni de données d’une application
 cliente. Les anciens documents et expériences restent dans l’historique Git. Le travail actif
 porte sur l’implémentation de la cible, en conservant les exigences non réalisées ci-dessus.
+
+## Décision du 2026-09-30
+
+La mémoire versionnée (01E) passe avant la suite des Tuiles, suivie de la comparaison persistée (01F).
+Motif : la copie complète de chaque fait par analyse est constatée sur une base réelle (849 814
+occurrences pour 36 analyses). Le taux de déduplication n'est pas connu ; il sera mesuré et publié
+par 01E, même s'il déçoit. Le voisinage garde exactement son comportement observable.
