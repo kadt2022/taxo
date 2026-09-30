@@ -3,7 +3,9 @@
 Not wired yet: the application still uses `analysis_facts` until the migration of 01E-C. The whole
 `AnalysisFacts` port is implemented: `add`, `query` (01E-A) and the one-hop traversal `neighbor`,
 `has_reference`, `revision` (01E-B), with the order of `analysis_facts`. Ranks belong to the
-occurrence in its analysis; the ordering keys are computed at ingestion and never stored.
+occurrence in one adjacency (analysis, anchor, relation, direction): a batch ranks again only the
+adjacencies it touches (01E-B2). The ordering keys are computed from the identity row and a fixed
+occurrence fingerprint; they are never stored.
 
 Filters on kind, subject, relation and object compare the spelling of the submitted fact, as
 `analysis_facts` does: the migration of storage does not change what `query` means. The canonical
@@ -13,13 +15,13 @@ import hashlib
 import unicodedata
 
 from sqlalchemy import (JSON, BigInteger, Boolean, Column, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
-                        and_, bindparam, func, or_, select, update)
+                        and_, bindparam, func, or_, select, tuple_, update)
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
 from app.facts.domain.provenance import EXECUTABLE, ProducerExecution
 from app.platform.database.base import Base
-from app.scans.domain.fact_order import adjacency_keys
+from app.scans.domain.fact_order import occurrence_fingerprint, order_key
 from app.scans.domain.occurrence import EVIDENCE_FIELDS, Occurrence, OccurrenceError, rebuild, split
 
 _SCAN = 'scans.id'
@@ -77,6 +79,7 @@ class FactOccurrenceRow(Base):
     relation = Column(String)
     subject_hash = Column(String(64))
     object_hash = Column(String(64))
+    occurrence_hash = Column(String(64))
     outgoing_rank = Column(BigInteger)
     incoming_rank = Column(BigInteger)
     __table_args__ = (Index('ix_fact_occurrences_analysis', 'scan_id', 'id'),
@@ -129,12 +132,43 @@ def _anchors(fact):
     if fact['kind'] != 'ASSERTION':
         return {}
     return {'relation': fact.get('relation'), 'subject_hash': _reference_hash(fact.get('subject')),
-            'object_hash': _reference_hash(fact.get('object'))}
+            'object_hash': _reference_hash(fact.get('object')), 'occurrence_hash': occurrence_fingerprint(fact)}
 
 
-# (anchor field, anchor fingerprint, rank) of each traversal direction.
-_SIDES = {'OUTGOING': ('subject', FactOccurrenceRow.subject_hash, FactOccurrenceRow.outgoing_rank),
-          'INCOMING': ('object', FactOccurrenceRow.object_hash, FactOccurrenceRow.incoming_rank)}
+# (anchor field, anchor fingerprint, rank, neighbour field) of each traversal direction.
+_SIDES = {'OUTGOING': ('subject', FactOccurrenceRow.subject_hash, FactOccurrenceRow.outgoing_rank, 'object'),
+          'INCOMING': ('object', FactOccurrenceRow.object_hash, FactOccurrenceRow.incoming_rank, 'subject')}
+_GROUPS = 500
+
+
+def _adjacency_rows(db, scan_id, direction, groups):
+    """Occurrences of the given adjacencies only, with what their order needs and nothing else."""
+    _, fingerprint, _, neighbour = _SIDES[direction]
+    occurrence = FactOccurrenceRow
+    return db.execute(
+        select(occurrence.id, fingerprint.label('anchor'), occurrence.relation,
+               getattr(FactIdentityRow, neighbour).label('reference'), occurrence.identity_hash,
+               occurrence.occurrence_hash)
+        .join(FactIdentityRow, FactIdentityRow.identity_hash == occurrence.identity_hash)
+        .where(occurrence.scan_id == scan_id, tuple_(fingerprint, occurrence.relation).in_(groups))).all()
+
+
+def _rank_adjacencies(db, scan_id, anchors):
+    """Rank again, from 1, each adjacency touched by the batch; the others are not read."""
+    for direction, (_, fingerprint, rank, _) in _SIDES.items():
+        groups = sorted({(item[fingerprint.key], item['relation']) for item in anchors if item})
+        for start in range(0, len(groups), _GROUPS):
+            members = {}
+            for row in _adjacency_rows(db, scan_id, direction, groups[start:start + _GROUPS]):
+                members.setdefault((row.anchor, row.relation), []).append(row)
+            values = []
+            for adjacency in members.values():
+                # The identity row keeps the canonical (NFC) reference: the key of adjacency_keys.
+                adjacency.sort(key=lambda row: order_key(row.reference, row.identity_hash.removeprefix('sha256:'),
+                                                         row.occurrence_hash))
+                values += [{'_id': row.id, '_rank': position} for position, row in enumerate(adjacency, 1)]
+            db.execute(update(FactOccurrenceRow.__table__).where(FactOccurrenceRow.id == bindparam('_id'))
+                       .values({rank.key: bindparam('_rank')}), values)
 
 
 def _spelled(occurrence, canonical, name, value):
@@ -199,18 +233,20 @@ class SqlAlchemyFactMemory:
                     {'identity_hash': key, 'kind': identity['kind'], 'subject': identity.get('subject'),
                      'relation': identity.get('relation'), 'object': identity.get('object'), 'identity': identity}
                     for key, identity in identities.items()])
+            anchors = []
             for fact, occurrence, (execution, human) in prepared:
+                anchors.append(_anchors(fact))
                 row = FactOccurrenceRow(scan_id=scan_id, identity_hash=occurrence.identity_hash, execution=execution,
                                         human_producer_id=human, status=occurrence.status,
                                         validity=occurrence.validity, raw_identity=occurrence.raw_identity,
                                         details=occurrence.details or None,
-                                        has_evidence=occurrence.evidence is not None, **_anchors(fact))
+                                        has_evidence=occurrence.evidence is not None, **anchors[-1])
                 db.add(row)
                 db.flush()
                 db.add_all(FactEvidenceRow(occurrence=row.id, position=position, **item)
                            for position, item in enumerate(occurrence.evidence or ()))
             db.flush()
-            self._rank(db, scan_id, recorded.snapshot)
+            _rank_adjacencies(db, scan_id, anchors)
             db.commit()
 
     def query(self, scan_id, **filters):
@@ -227,7 +263,7 @@ class SqlAlchemyFactMemory:
 
     def neighbor(self, scan_id, root, relation, direction, after=''):
         """One indexed adjacent occurrence. Never materialize the complete adjacency."""
-        anchor, fingerprint, rank = _SIDES[direction]
+        anchor, fingerprint, rank, _ = _SIDES[direction]
         statement = (_facts_of(scan_id).add_columns(rank)
                      .where(fingerprint == _reference_hash(root), FactOccurrenceRow.relation == relation,
                             _spelled(FactOccurrenceRow, getattr(FactIdentityRow, anchor), anchor, root),
@@ -246,7 +282,7 @@ class SqlAlchemyFactMemory:
     def has_reference(self, scan_id, root):
         occurrence = FactOccurrenceRow
         with Session(self.engine) as db:
-            for anchor, fingerprint, _ in _SIDES.values():
+            for anchor, fingerprint, _, _ in _SIDES.values():
                 found = db.scalar(
                     select(occurrence.id).join(FactIdentityRow, FactIdentityRow.identity_hash == occurrence.identity_hash)
                     .where(occurrence.scan_id == scan_id, fingerprint == _reference_hash(root),
@@ -256,23 +292,12 @@ class SqlAlchemyFactMemory:
                     return True
         return False
 
-    def _rank(self, db, scan_id, snapshot):
-        """Same rule as `analysis_facts`: the whole analysis ranked again, in its canonical key order."""
-        keyed = [(row[0].id, *adjacency_keys(fact)) for row, fact in
-                 self._load(db, scan_id, _facts_of(scan_id).order_by(FactOccurrenceRow.id), snapshot)]
-        for position, side in ((1, 'outgoing'), (2, 'incoming')):
-            values = [{'_id': item[0], '_rank': rank}
-                      for rank, item in enumerate(sorted(keyed, key=lambda item: item[position]), 1)]
-            if values:
-                db.execute(update(FactOccurrenceRow.__table__).where(FactOccurrenceRow.id == bindparam('_id'))
-                           .values({f'{side}_rank': bindparam('_rank')}), values)
-
-    def _load(self, db, scan_id, statement, snapshot=None):
+    def _load(self, db, scan_id, statement):
         """(row, fact) for each selected occurrence, the fact rebuilt exactly as it was submitted."""
         rows = db.execute(statement).all()
         if not rows:
             return []
-        snapshot = snapshot or db.get(AnalysisSnapshotRow, scan_id).snapshot
+        snapshot = db.get(AnalysisSnapshotRow, scan_id).snapshot
         evidence = self._evidence(db, [row[0].id for row in rows if row[0].has_evidence])
         loaded = []
         for row in rows:

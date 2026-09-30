@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 from datetime import datetime, timezone
 
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.projects.infrastructure.sqlalchemy.project_repository import ProjectRow
@@ -301,6 +301,61 @@ def test_memory_writers_of_one_analysis_are_serialized(twin):
         after = found[0]
         walked.append(found[1]['object'])
     assert walked == [f'module:{index:03}' for index in range(120)]
+
+
+def walk(store, root, direction='OUTGOING', relation='DEPENDS_ON'):
+    found, after = [], ''
+    while (step := store.neighbor('analysis-1', root, relation, direction, after)) is not None:
+        after = step[0]
+        found.append(step[1]['object' if direction == 'OUTGOING' else 'subject'])
+    return found
+
+
+def test_memory_batch_ranks_only_the_adjacencies_it_touches(twin, monkeypatch):
+    store = twin.stores['fact_memory']
+    store.add('analysis-1', 'fixture', [edge(f'module:{index:03}') for index in range(200)]
+              + [edge('module:x', subject='module:other'), edge('module:y', 'CONTAINS', subject='module:other')])
+    read, statements = [], []
+    adjacency_rows = fact_memory._adjacency_rows
+
+    def spy(db, scan_id, direction, groups):
+        rows = adjacency_rows(db, scan_id, direction, groups)
+        read.extend((direction, row.anchor, row.relation) for row in rows)
+        return rows
+
+    monkeypatch.setattr(fact_memory, '_adjacency_rows', spy)
+    event.listen(twin.engines['fact_memory'], 'before_cursor_execute',
+                 lambda conn, cursor, sql, params, context, many: statements.append(sql))
+    store.add('analysis-1', 'fixture', [edge('module:w', subject='module:other')])
+    other, root = fact_memory._reference_hash('module:other'), fact_memory._reference_hash(ROOT)
+    assert ('OUTGOING', other, 'DEPENDS_ON') in read
+    assert len([item for item in read if item[0] == 'OUTGOING']) == 2  # module:x and module:w, never CONTAINS
+    assert not any(anchor == root for direction, anchor, _ in read if direction == 'OUTGOING')
+    assert not any('fact_evidence' in sql for sql in statements if sql.lstrip().startswith('SELECT'))
+    assert walk(store, 'module:other') == ['module:w', 'module:x']
+    assert walk(store, ROOT)[:2] == ['module:000', 'module:001']
+
+
+def test_memory_ranks_are_local_to_each_adjacency(twin):
+    store = twin.stores['fact_memory']
+    store.add('analysis-1', 'fixture', [edge('module:b'), edge('module:a', subject='module:other'), edge('module:a')])
+    with Session(twin.engines['fact_memory']) as db:
+        ranks = db.execute(select(fact_memory.FactOccurrenceRow.subject_hash,
+                                  fact_memory.FactOccurrenceRow.outgoing_rank)).all()
+    by_anchor = {}
+    for anchor, rank in ranks:
+        by_anchor.setdefault(anchor, []).append(rank)
+    assert sorted(sorted(values) for values in by_anchor.values()) == [[1], [1, 2]]
+
+
+def test_memory_colliding_anchors_keep_their_own_order(twin, monkeypatch):
+    monkeypatch.setattr(fact_memory, '_reference_hash', lambda reference: '0' * 64)
+    store = twin.stores['fact_memory']
+    store.add('analysis-1', 'fixture', [edge('module:c', subject='module:other'), edge('module:b'),
+                                        edge('module:a', subject='module:other'), edge('module:d')])
+    store.add('analysis-1', 'fixture', [edge('module:0', subject='module:other')])
+    assert walk(store, ROOT) == ['module:b', 'module:d']
+    assert walk(store, 'module:other') == ['module:0', 'module:a', 'module:c']
 
 
 def test_memory_reference_hash_collision_never_returns_another_anchor(twin, monkeypatch):
