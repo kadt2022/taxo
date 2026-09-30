@@ -154,6 +154,9 @@ stockage actuel ; la nouvelle implémentation du port existe à côté et n'est 
 - Tables d'identité, d'occurrence, de preuve, de contexte d'analyse et d'exécution ; nouvelle
   implémentation du port pour `add` et `query`.
 - Port ou cas d'usage distinct qui enregistre les `PRODUCER_EXECUTION` d'une analyse avant ses faits.
+- Les filtres de `query` (nature, sujet, relation, objet) comparent l'identité canonique (NFC) ; les
+  faits rendus gardent leur graphie d'origine. Un nombre garde aussi la sienne (`1` et `1.0` ont la
+  même identité mais sont restitués tels que soumis).
 - Une **suite de contrat du port** unique, exécutée sur l'implémentation actuelle et la nouvelle.
 
 Critères :

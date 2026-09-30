@@ -5,6 +5,7 @@ from typing import Any
 
 from app.evaluations.domain.evaluator import EvaluatorCatalog
 from app.evaluations.domain.status import EvaluationStatus
+from app.facts.domain.provenance import ProducerExecution
 from app.snapshots.domain.snapshot import Snapshot
 
 # Le resume reste borne : les premiers avertissements suffisent a expliquer un statut partiel ou en echec.
@@ -30,6 +31,11 @@ class EvaluatorExecution:
     def __post_init__(self):
         if not self.coverage:
             raise ValueError("Une exécution d'évaluateur doit déclarer sa couverture.")
+
+    def producer_execution(self):
+        """What the fact memory records before accepting this execution's facts."""
+        return ProducerExecution('EVALUATOR', self.evaluator_id, self.producer_version, self.execution_id,
+                                 self.catalog.catalog_id, self.catalog.catalog_version)
 
     def summary(self):
         coverage_counts = Counter()
