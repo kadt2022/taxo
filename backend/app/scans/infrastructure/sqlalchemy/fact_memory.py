@@ -1,21 +1,25 @@
 """Versioned fact memory: one identity per fact, one occurrence per analysis (TAXO-01E-A).
 
-Not wired yet: the application still uses `analysis_facts` until the migration of 01E-C. This
-implementation covers `add` and `query` of the `AnalysisFacts` port; traversal comes with 01E-B.
+Not wired yet: the application still uses `analysis_facts` until the migration of 01E-C. The whole
+`AnalysisFacts` port is implemented: `add`, `query` (01E-A) and the one-hop traversal `neighbor`,
+`has_reference`, `revision` (01E-B), with the order of `analysis_facts`. Ranks belong to the
+occurrence in its analysis; the ordering keys are computed at ingestion and never stored.
 
 Filters on kind, subject, relation and object compare the spelling of the submitted fact, as
 `analysis_facts` does: the migration of storage does not change what `query` means. The canonical
 (NFC) column narrows the search through its index; the submitted spelling decides.
 """
+import hashlib
 import unicodedata
 
-from sqlalchemy import (JSON, Boolean, Column, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
-                        and_, func, or_, select)
+from sqlalchemy import (JSON, BigInteger, Boolean, Column, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
+                        and_, bindparam, func, or_, select, update)
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
 from app.facts.domain.provenance import EXECUTABLE, ProducerExecution
 from app.platform.database.base import Base
+from app.scans.domain.fact_order import adjacency_keys
 from app.scans.domain.occurrence import EVIDENCE_FIELDS, Occurrence, OccurrenceError, rebuild, split
 
 _SCAN = 'scans.id'
@@ -69,8 +73,16 @@ class FactOccurrenceRow(Base):
     raw_identity = Column(JSON(none_as_null=True))
     details = Column(JSON(none_as_null=True))
     has_evidence = Column(Boolean, nullable=False)
+    # Traversal of assertions only: relation and anchors are left empty for absences and coverage.
+    relation = Column(String)
+    subject_hash = Column(String(64))
+    object_hash = Column(String(64))
+    outgoing_rank = Column(BigInteger)
+    incoming_rank = Column(BigInteger)
     __table_args__ = (Index('ix_fact_occurrences_analysis', 'scan_id', 'id'),
-                      Index('ix_fact_occurrences_identity', 'identity_hash', 'scan_id'))
+                      Index('ix_fact_occurrences_identity', 'identity_hash', 'scan_id'),
+                      Index('ix_fact_occurrences_outgoing', 'scan_id', 'subject_hash', 'relation', 'outgoing_rank'),
+                      Index('ix_fact_occurrences_incoming', 'scan_id', 'object_hash', 'relation', 'incoming_rank'))
 
 
 class FactEvidenceRow(Base):
@@ -109,6 +121,22 @@ def _producer(fact, evaluator_id, executions):
     return None, evaluator_id
 
 
+def _reference_hash(reference):
+    return hashlib.sha256((reference or '').encode()).hexdigest()
+
+
+def _anchors(fact):
+    if fact['kind'] != 'ASSERTION':
+        return {}
+    return {'relation': fact.get('relation'), 'subject_hash': _reference_hash(fact.get('subject')),
+            'object_hash': _reference_hash(fact.get('object'))}
+
+
+# (anchor field, anchor fingerprint, rank) of each traversal direction.
+_SIDES = {'OUTGOING': ('subject', FactOccurrenceRow.subject_hash, FactOccurrenceRow.outgoing_rank),
+          'INCOMING': ('object', FactOccurrenceRow.object_hash, FactOccurrenceRow.incoming_rank)}
+
+
 def _spelled(occurrence, canonical, name, value):
     """Same spelling as submitted: the canonical form when it was kept as is, the raw one otherwise."""
     if not isinstance(value, str):
@@ -116,6 +144,14 @@ def _spelled(occurrence, canonical, name, value):
     return and_(canonical == unicodedata.normalize('NFC', value),
                 or_(and_(occurrence.raw_identity.is_(None), canonical == value),
                     occurrence.raw_identity[name].as_string() == value))
+
+
+def _facts_of(scan_id):
+    occurrence, identity, execution = FactOccurrenceRow, FactIdentityRow, ProducerExecutionRow
+    return (select(occurrence, identity.identity, execution)
+            .join(identity, identity.identity_hash == occurrence.identity_hash)
+            .outerjoin(execution, execution.id == occurrence.execution)
+            .where(occurrence.scan_id == scan_id))
 
 
 class SqlAlchemyFactMemory:
@@ -156,24 +192,23 @@ class SqlAlchemyFactMemory:
                     {'identity_hash': key, 'kind': identity['kind'], 'subject': identity.get('subject'),
                      'relation': identity.get('relation'), 'object': identity.get('object'), 'identity': identity}
                     for key, identity in identities.items()])
-            for occurrence, (execution, human) in prepared:
+            for fact, (occurrence, (execution, human)) in zip(facts, prepared):
                 row = FactOccurrenceRow(scan_id=scan_id, identity_hash=occurrence.identity_hash, execution=execution,
                                         human_producer_id=human, status=occurrence.status,
                                         validity=occurrence.validity, raw_identity=occurrence.raw_identity,
                                         details=occurrence.details or None,
-                                        has_evidence=occurrence.evidence is not None)
+                                        has_evidence=occurrence.evidence is not None, **_anchors(fact))
                 db.add(row)
                 db.flush()
                 db.add_all(FactEvidenceRow(occurrence=row.id, position=position, **item)
                            for position, item in enumerate(occurrence.evidence or ()))
+            db.flush()
+            self._rank(db, scan_id, recorded.snapshot)
             db.commit()
 
     def query(self, scan_id, **filters):
         occurrence, identity, execution = FactOccurrenceRow, FactIdentityRow, ProducerExecutionRow
-        statement = (select(occurrence, identity.identity, execution)
-                     .join(identity, identity.identity_hash == occurrence.identity_hash)
-                     .outerjoin(execution, execution.id == occurrence.execution)
-                     .where(occurrence.scan_id == scan_id))
+        statement = _facts_of(scan_id)
         if filters.get('evaluator_id') is not None:
             statement = statement.where(func.coalesce(execution.producer_id, occurrence.human_producer_id)
                                         == filters['evaluator_id'])
@@ -181,15 +216,69 @@ class SqlAlchemyFactMemory:
             if filters.get(name) is not None:
                 statement = statement.where(_spelled(occurrence, getattr(identity, name), name, filters[name]))
         with Session(self.engine) as db:
-            recorded = db.get(AnalysisSnapshotRow, scan_id)
-            rows = db.execute(statement.order_by(occurrence.id)).all()
-            evidence = self._evidence(db, [row.id for row, _, _ in rows if row.has_evidence])
-        return [rebuild(Occurrence(row.identity_hash, stored, row.raw_identity, row.status, row.validity,
-                                   evidence.get(row.id, ()) if row.has_evidence else None, row.details or {}),
-                        recorded.snapshot,
-                        producer.execution().produced_by() if producer is not None
-                        else {'producer_type': 'HUMAN', 'producer_id': row.human_producer_id})
-                for row, stored, producer in rows]
+            return [fact for _, fact in self._load(db, scan_id, statement.order_by(occurrence.id))]
+
+    def neighbor(self, scan_id, root, relation, direction, after=''):
+        """One indexed adjacent occurrence. Never materialize the complete adjacency."""
+        anchor, fingerprint, rank = _SIDES[direction]
+        statement = (_facts_of(scan_id).add_columns(rank)
+                     .where(fingerprint == _reference_hash(root), FactOccurrenceRow.relation == relation,
+                            _spelled(FactOccurrenceRow, getattr(FactIdentityRow, anchor), anchor, root),
+                            rank > int(after or '0'))
+                     .order_by(rank).limit(1))
+        with Session(self.engine) as db:
+            found = self._load(db, scan_id, statement)
+        return (str(found[0][0][3]), found[0][1]) if found else None
+
+    def revision(self, scan_id):
+        """Append-only fact generation, read through a fixed-size index."""
+        with Session(self.engine) as db:
+            return db.scalar(select(FactOccurrenceRow.id).where(FactOccurrenceRow.scan_id == scan_id)
+                             .order_by(FactOccurrenceRow.id.desc()).limit(1)) or 0
+
+    def has_reference(self, scan_id, root):
+        occurrence = FactOccurrenceRow
+        with Session(self.engine) as db:
+            for anchor, fingerprint, _ in _SIDES.values():
+                found = db.scalar(
+                    select(occurrence.id).join(FactIdentityRow, FactIdentityRow.identity_hash == occurrence.identity_hash)
+                    .where(occurrence.scan_id == scan_id, fingerprint == _reference_hash(root),
+                           occurrence.relation.is_not(None),
+                           _spelled(occurrence, getattr(FactIdentityRow, anchor), anchor, root)).limit(1))
+                if found is not None:
+                    return True
+        return False
+
+    def _rank(self, db, scan_id, snapshot):
+        """Same rule as `analysis_facts`: the whole analysis ranked again, in its canonical key order."""
+        keyed = [(row[0].id, *adjacency_keys(fact)) for row, fact in
+                 self._load(db, scan_id, _facts_of(scan_id).order_by(FactOccurrenceRow.id), snapshot)]
+        for position, side in ((1, 'outgoing'), (2, 'incoming')):
+            values = [{'_id': item[0], '_rank': rank}
+                      for rank, item in enumerate(sorted(keyed, key=lambda item: item[position]), 1)]
+            if values:
+                db.execute(update(FactOccurrenceRow.__table__).where(FactOccurrenceRow.id == bindparam('_id'))
+                           .values({f'{side}_rank': bindparam('_rank')}), values)
+
+    def _load(self, db, scan_id, statement, snapshot=None):
+        """(row, fact) for each selected occurrence, the fact rebuilt exactly as it was submitted."""
+        rows = db.execute(statement).all()
+        if not rows:
+            return []
+        snapshot = snapshot or db.get(AnalysisSnapshotRow, scan_id).snapshot
+        evidence = self._evidence(db, [row[0].id for row in rows if row[0].has_evidence])
+        loaded = []
+        for row in rows:
+            occurrence, stored, producer = row[0], row[1], row[2]
+            fact = rebuild(Occurrence(occurrence.identity_hash, stored, occurrence.raw_identity, occurrence.status,
+                                      occurrence.validity,
+                                      evidence.get(occurrence.id, ()) if occurrence.has_evidence else None,
+                                      occurrence.details or {}),
+                           snapshot,
+                           producer.execution().produced_by() if producer is not None
+                           else {'producer_type': 'HUMAN', 'producer_id': occurrence.human_producer_id})
+            loaded.append((row, fact))
+        return loaded
 
     @staticmethod
     def _evidence(db, occurrences, batch=500):
