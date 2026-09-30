@@ -172,6 +172,14 @@ def test_a_large_batch_keeps_submission_order_and_each_evidence(stores):
     assert same(stores.store.query(scan), batch + later)
 
 
+def test_references_have_no_length_limit(stores):
+    long = 'module:' + 'x' * 6000
+    scan = stores.analysis('analysis', executions=[execution()])
+    fact = assertion(long)
+    stores.store.add(scan, 'fixture', [fact])
+    assert stores.store.query(scan, object=long) == [fact]
+
+
 # ——— Versioned memory ———
 
 def test_same_fact_in_two_analyses_is_one_identity_and_two_occurrences(memory):

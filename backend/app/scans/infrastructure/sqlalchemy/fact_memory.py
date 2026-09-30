@@ -58,9 +58,9 @@ class FactIdentityRow(Base):
     relation = Column(String)
     object = Column(Text)
     identity = Column(JSON, nullable=False)
-    __table_args__ = (Index('ix_fact_identities_subject', 'subject'),
-                      Index('ix_fact_identities_object', 'object'),
-                      Index('ix_fact_identities_relation', 'relation', 'kind'))
+    # No B-tree on subject or object: references have no length limit, and a PostgreSQL index entry has
+    # one. Filters run within one analysis, from its occurrences; traversal uses fixed-size digests.
+    __table_args__ = (Index('ix_fact_identities_relation', 'relation', 'kind'),)
 
 
 class FactOccurrenceRow(Base):

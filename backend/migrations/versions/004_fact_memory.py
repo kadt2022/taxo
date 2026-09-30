@@ -135,6 +135,17 @@ def _produced_by(execution):
 
 # ——— Schema ———
 
+# Only bounded columns: references stay out of B-trees (no length limit in the contract).
+_INDEXES = {
+    'fact_identities': (('ix_fact_identities_relation', ['relation', 'kind']),),
+    'fact_occurrences': (('ix_fact_occurrences_analysis', ['scan_id', 'id']),
+                         ('ix_fact_occurrences_identity', ['identity_hash', 'scan_id']),
+                         ('ix_fact_occurrences_outgoing', ['scan_id', 'subject_hash', 'relation', 'outgoing_rank']),
+                         ('ix_fact_occurrences_incoming', ['scan_id', 'object_hash', 'relation', 'incoming_rank'])),
+    'fact_evidence': (('ix_fact_evidence_occurrence', ['occurrence', 'position']),),
+}
+
+
 def _create_tables():
     existing = set(sa.inspect(op.get_bind()).get_table_names())
     if 'analysis_snapshots' not in existing:
@@ -157,9 +168,6 @@ def _create_tables():
                         sa.Column('kind', sa.String(), nullable=False),
                         sa.Column('subject', sa.Text()), sa.Column('relation', sa.String()),
                         sa.Column('object', sa.Text()), sa.Column('identity', sa.JSON(), nullable=False))
-        op.create_index('ix_fact_identities_subject', 'fact_identities', ['subject'])
-        op.create_index('ix_fact_identities_object', 'fact_identities', ['object'])
-        op.create_index('ix_fact_identities_relation', 'fact_identities', ['relation', 'kind'])
     if 'fact_occurrences' not in existing:
         op.create_table('fact_occurrences',
                         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
@@ -175,12 +183,6 @@ def _create_tables():
                         sa.Column('relation', sa.String()), sa.Column('subject_hash', sa.String(64)),
                         sa.Column('object_hash', sa.String(64)), sa.Column('occurrence_hash', sa.String(64)),
                         sa.Column('outgoing_rank', sa.BigInteger()), sa.Column('incoming_rank', sa.BigInteger()))
-        op.create_index('ix_fact_occurrences_analysis', 'fact_occurrences', ['scan_id', 'id'])
-        op.create_index('ix_fact_occurrences_identity', 'fact_occurrences', ['identity_hash', 'scan_id'])
-        op.create_index('ix_fact_occurrences_outgoing', 'fact_occurrences',
-                        ['scan_id', 'subject_hash', 'relation', 'outgoing_rank'])
-        op.create_index('ix_fact_occurrences_incoming', 'fact_occurrences',
-                        ['scan_id', 'object_hash', 'relation', 'incoming_rank'])
     if 'fact_evidence' not in existing:
         op.create_table('fact_evidence',
                         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
@@ -190,7 +192,13 @@ def _create_tables():
                         sa.Column('line_end', sa.Integer()), sa.Column('symbol', sa.Text()),
                         sa.Column('method', sa.String()), sa.Column('content_hash', sa.String()),
                         sa.Column('object', sa.String()))
-        op.create_index('ix_fact_evidence_occurrence', 'fact_evidence', ['occurrence', 'position'])
+    # Checked one by one: SQLite commits each DDL, so an interruption may leave a table without its indexes.
+    inspector = sa.inspect(op.get_bind())
+    for table, indexes in _INDEXES.items():
+        present = {index['name'] for index in inspector.get_indexes(table)}
+        for name, columns in indexes:
+            if name not in present:
+                op.create_index(name, table, columns)
 
 
 # Lightweight tables: the migration never depends on the application's models.

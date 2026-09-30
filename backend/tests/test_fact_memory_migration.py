@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 import pytest
-from sqlalchemy import create_engine, func, select, text, update
+from sqlalchemy import create_engine, func, inspect, select, text, update
 from sqlalchemy.orm import Session
 
 from app.facts.contract import validate_fact
@@ -54,7 +54,8 @@ def facts_of(commit, shift=0, weight=1):
     validate_fact(coverage)
     fixture = [edge('module:root', f'module:{index:02}') for index in reversed(range(12))]
     fixture += [edge('module:root', 'module:café', proofs=3), edge('module:a', 'module:root', 'CONTAINS'),
-                edge('module:root', 'module:root', qualifiers={'weight': weight}), coverage]
+                edge('module:root', 'module:root', qualifiers={'weight': weight}),
+                edge('module:' + 'l' * 6000, 'module:root'), coverage]
     others = [edge('module:b', 'module:root', producer=other), edge('module:b', 'module:café', producer=other)]
     return {'fixture': fixture, 'other': others}
 
@@ -206,6 +207,19 @@ def test_what_cannot_be_migrated_stops_before_writing_it(database, damage, reaso
     assert database.count(AnalysisFactRow) == before
     assert database.count(FactOccurrenceRow) == 0
     assert database.count(AnalysisSnapshotRow) == 0
+
+
+def test_an_index_missing_after_an_interruption_is_created_on_resume(database):
+    database.analysis(FIRST, 'a')
+    database.alembic('upgrade', 'head')
+    with database.engine.begin() as connection:
+        connection.execute(text('DROP INDEX ix_fact_occurrences_outgoing'))
+        connection.execute(text("UPDATE alembic_version SET version_num = '003'"))
+    resumed = database.alembic('upgrade', 'head').stdout
+    assert 'déjà migrée (reprise)' in resumed
+    assert 'ix_fact_occurrences_outgoing' in {index['name'] for index in inspect(database.engine).get_indexes(
+        'fact_occurrences')}
+    assert same(database.memory.query(FIRST), database.old.query(FIRST))
 
 
 def test_downgrade_keeps_analysis_facts(database):
