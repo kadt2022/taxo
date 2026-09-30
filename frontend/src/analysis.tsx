@@ -106,18 +106,19 @@ const MARKS:Record<StepState,string>={pending:'○', running:'●', done:'✓', 
 export const Working=({text}:Readonly<{text:string}>)=><span>{text}<span className="animated-dots" aria-hidden="true"/></span>;
 
 export function AnalysisProgress({run}:Readonly<{run:Run}>){
-  const evaluators=run.steps.filter(step=>step.id!==PREPARE&&step.id!==CONSOLIDATE);
-  const finished=evaluators.filter(step=>step.state==='done'||step.state==='failed').length;
+  const settled=run.steps.filter(step=>step.state==='done'||step.state==='failed').length;
+  const percent=run.status==='done'?100:run.steps.length?Math.round(100*settled/run.steps.length):0;
   const title=run.status==='running'?<Working text="Analyse en cours"/>:run.status==='done'?'Analyse terminée':'Analyse interrompue';
   return <section className={`progress progress-${run.status}`} aria-label="Progression de l’analyse" aria-live="polite">
-    <p className="progress-title">{title}</p>
+    <div className="progress-head"><p className="progress-title">{title}</p></div>
+    <p className="progress-hint">Taxo lit le projet sans l’exécuter, étape par étape.</p>
+    <div className="progress-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="Avancement de l’analyse"><span style={{transform:`scaleX(${percent/100})`}}/></div>
     <ol>{run.steps.map(step=><li key={step.id} className={`step step-${step.state}`}>
       <span className="step-mark" aria-hidden="true">{MARKS[step.state]}</span>
       <span className="step-label">{step.label}{step.state==='running'&&'…'}</span>
       {step.detail&&<span className="step-detail">{step.detail}</span>}
     </li>)}</ol>
     {run.message&&<p role="alert" className="error">{run.message}</p>}
-    {evaluators.length>0&&<p className="muted">{finished} / {evaluators.length} analyses terminées</p>}
   </section>;
 }
 

@@ -5,8 +5,9 @@ import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
 import {MiniaChoice, MiniaView, SourceConsent, sourceConsent, withProvider, type MiniaAnswer, type MiniaStatus} from './minia';
 import {ConsultForm} from './consult';
-import {AnalysisLimits, panelKey, ProjectNav, ProjectOverview, routeCounts, technologiesOf, type RouteCounts, type Scan} from './overview';
+import {AnalysisLimits, overviewCards, panelKey, ProjectOverview, routeCounts, technologiesOf, type RouteCounts, type Scan} from './overview';
 import {AnalysisDetails} from './details';
+import {ProjectPicker, ResultsNav, TopMenu, resultItemsOf, since, type Project} from './shell';
 import {EVALUATORS, label} from './vocabulary';
 import {AskTaxo} from './query';
 import {RoutesPanel} from './routes';
@@ -15,7 +16,6 @@ import {openStream} from './sse';
 import {AnalysisProgress, Working, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
 import {ask as askMinia, askButton, createStop, MiniaProgress, questionInit, startMinia, type MiniaLive, type MiniaStop} from './minia-live';
 
-type Project = {id:string; name:string; path:string};
 type Commit = {sha:string; parents:string[]; author:string; authored_at:string; subject:string};
 type ChangedFile = {path:string; status:string; old_path:string|null; additions:number|null; deletions:number|null; confidential:boolean};
 type CommitDetail = {commit:Commit; parent:string|null; files:ChangedFile[]};
@@ -134,7 +134,6 @@ function App(){
   const [scans,setScans]=useState<Scan[]>([]), [scanId,setScanId]=useState('');
   const [name,setName]=useState(''), [path,setPath]=useState(''), [error,setError]=useState('');
   const [busy,setBusy]=useState(false), [loading,setLoading]=useState(true);
-  const project=projects.find(p=>p.id===selected);
   const scan=scans.find(s=>s.id===scanId) ?? scans[0];
   useEffect(()=>{request<Project[]>('/projects').then(p=>{setProjects(p);setSelected(p[0]?.id??'');}).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);
   useEffect(()=>{
@@ -145,10 +144,11 @@ function App(){
   },[selected]);
   async function add(event:FormEvent){
     event.preventDefault();setBusy(true);setError('');
-    try{const p=await request<Project>('/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,path})});setProjects(past=>[...past,p]);setSelected(p.id);setName('');setPath('');}
+    try{const p=await request<Project>('/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,path})});setProjects(past=>[...past,p]);setSelected(p.id);setName('');setPath('');setAdding(false);setPickerOpen(false);}
     catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
   const [run,setRun]=useState<Run|null>(null);
+  const [pickerOpen,setPickerOpen]=useState(false), [adding,setAdding]=useState(false);
   // Les routes de l'analyse affichee, lues une fois par la section Routes et resumees dans la vue d'ensemble.
   const [routes,setRoutes]=useState<{scanId:string; counts:RouteCounts}|null>(null);
   const routesLoaded=useCallback((id:string, value:Parameters<typeof routeCounts>[0])=>setRoutes({scanId:id, counts:routeCounts(value)}),[]);
@@ -159,13 +159,19 @@ function App(){
   const shown=running?liveScan(scan,run):scan;
   const legacyFacts=shown?.facts??[];
   const technologies=shown?technologiesOf(shown):[];
+  const cards=shown?overviewCards(shown, routes?.scanId===shown.id?routes.counts:undefined):[];
+  const countOf=(id:string)=>{const card=cards.find(item=>item.id===id);return card&&card.state==='known'?card.value:undefined;};
+  const protectedRoutes=routes&&routes.scanId===shown?.id?routes.counts:undefined;
+  const resultItems=shown?resultItemsOf(technologies.length, countOf, protectedRoutes):[];
   return <div className="layout">
-    <aside><a className="brand" href="/"><svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="7"/><path d="M10 11h12M16 11v11"/></svg>Taxo<span>EXPLORATEUR LOGICIEL</span></a><h2>Projets <span>{projects.length}</span></h2>
-    <nav aria-label="Projets">{projects.map(p=><button type="button" disabled={busy} aria-current={selected===p.id?'page':undefined} className={selected===p.id?'selected':''} key={p.id} onClick={()=>{setError('');setSelected(p.id);}}>{p.name}<span>↗</span></button>)}</nav>
-    <details className="add-project" open={projects.length===0||undefined}><summary>Ajouter un projet</summary><form onSubmit={add}><label>Nom<input required maxLength={120} value={name} onChange={e=>setName(e.target.value)} placeholder="Mon application"/></label><label>Dossier local<input required value={path} onChange={e=>setPath(e.target.value)} placeholder="D:\MonProjet"/></label><button type="submit" className="secondary" disabled={busy||loading}>Enregistrer le projet</button></form></details>
+    <header className="page-head"><TopMenu canAnalyze={!!selected&&!busy&&!loading} analyze={analyze} addProject={()=>{setPickerOpen(true);setAdding(true);}}/>
+      <div className="head-actions"><ProjectPicker projects={projects} selected={selected} busy={busy} loading={loading} open={pickerOpen||projects.length===0&&!loading} setOpen={open=>{setPickerOpen(open);if(!open)setAdding(false);}}
+        adding={adding||projects.length===0} setAdding={setAdding} onSelect={id=>{setError('');setSelected(id);setPickerOpen(false);setAdding(false);}} status={shown?since(shown.created_at):''}
+        name={name} setName={setName} path={path} setPath={setPath} onSubmit={add}/><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?<Working text="Analyse en cours"/>:<>{"Lancer l’analyse globale"}<svg className="btn-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></>}</button></div></header>
+    <aside><a className="brand" href="/"><svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="7"/><path d="M10 11h12M16 11v11"/></svg>Taxo<span>EXPLORATEUR LOGICIEL</span></a>
+    {resultItems.length>0&&<ResultsNav items={resultItems}/>}
     <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
-    <main><header><div><p className="eyebrow">PROJET</p><h1>{project?.name??'Votre logiciel, à découvert.'}</h1><p className="path">{project?.path??'Ajoutez un dossier pour découvrir les technologies de votre projet.'}</p></div><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?<Working text="Analyse en cours"/>:'Lancer l’analyse globale'}</button></header>
-    {selected&&!loading&&<ProjectNav scan={scan}/>}
+    <main>
     {error&&<div role="alert" className="error">{error}</div>}
     {run&&run.status!=='done'&&<AnalysisProgress run={run}/>}
     {loading?<p role="status">Chargement…</p>:shown?<>
