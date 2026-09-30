@@ -1,7 +1,8 @@
 # TAXO-01I — Voisinage borné : la première Tuile
 
-Statut : rédigé le 2026-09-17, révisé le 2026-09-29. Priorité active du plan
-([PLAN](PLAN.md)), sur les faits existants.
+Statut : rédigé le 2026-09-17, révisé le 2026-09-30. Première tranche livrée ; la suite (plusieurs
+niveaux, couverture locale) vient après la mémoire versionnée et la comparaison persistée
+([PLAN](PLAN.md), étape 5).
 
 Source de vérité : [ARCHITECTURE § 9](../ARCHITECTURE.md). En cas de divergence, le document cible
 prévaut.
