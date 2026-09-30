@@ -3,13 +3,14 @@
 Not wired yet: the application still uses `analysis_facts` until the migration of 01E-C. This
 implementation covers `add` and `query` of the `AnalysisFacts` port; traversal comes with 01E-B.
 
-Filters on kind, subject, relation and object compare the canonical identity (NFC). The facts
-returned are those submitted, exactly, with their own spelling.
+Filters on kind, subject, relation and object compare the spelling of the submitted fact, as
+`analysis_facts` does: the migration of storage does not change what `query` means. The canonical
+(NFC) column narrows the search through its index; the submitted spelling decides.
 """
 import unicodedata
 
 from sqlalchemy import (JSON, Boolean, Column, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
-                        func, select)
+                        and_, func, or_, select)
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
@@ -65,8 +66,8 @@ class FactOccurrenceRow(Base):
     human_producer_id = Column(String)
     status = Column(String, nullable=False)
     validity = Column(String, nullable=False)
-    raw_identity = Column(JSON)
-    details = Column(JSON)
+    raw_identity = Column(JSON(none_as_null=True))
+    details = Column(JSON(none_as_null=True))
     has_evidence = Column(Boolean, nullable=False)
     __table_args__ = (Index('ix_fact_occurrences_analysis', 'scan_id', 'id'),
                       Index('ix_fact_occurrences_identity', 'identity_hash', 'scan_id'))
@@ -106,6 +107,15 @@ def _producer(fact, evaluator_id, executions):
     if produced_by != {'producer_type': 'HUMAN', 'producer_id': evaluator_id}:
         raise OccurrenceError('Producteur inconnu.')
     return None, evaluator_id
+
+
+def _spelled(occurrence, canonical, name, value):
+    """Same spelling as submitted: the canonical form when it was kept as is, the raw one otherwise."""
+    if not isinstance(value, str):
+        return (canonical == value,)
+    return (canonical == unicodedata.normalize('NFC', value),
+            or_(and_(occurrence.raw_identity.is_(None), canonical == value),
+                occurrence.raw_identity[name].as_string() == value))
 
 
 class SqlAlchemyFactMemory:
@@ -169,7 +179,7 @@ class SqlAlchemyFactMemory:
                                         == filters['evaluator_id'])
         for name in ('kind', 'subject', 'relation', 'object'):
             if filters.get(name) is not None:
-                statement = statement.where(getattr(identity, name) == unicodedata.normalize('NFC', filters[name]))
+                statement = statement.where(*_spelled(occurrence, getattr(identity, name), name, filters[name]))
         with Session(self.engine) as db:
             recorded = db.get(AnalysisSnapshotRow, scan_id)
             rows = db.execute(statement.order_by(occurrence.id)).all()

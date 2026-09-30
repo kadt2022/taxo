@@ -127,6 +127,17 @@ def test_query_filters_and_order(stores):
     assert stores.store.query('another-analysis') == []
 
 
+@pytest.mark.parametrize('spelling', ['module:cafe\u0301', 'module:caf\u00e9'], ids=['nfd', 'nfc'])
+def test_filters_compare_the_submitted_spelling(stores, spelling):
+    other = 'module:caf\u00e9' if spelling.endswith('\u0301') else 'module:cafe\u0301'
+    scan = stores.analysis('analysis', executions=[execution()])
+    fact = assertion(spelling)
+    stores.store.add(scan, 'fixture', [fact])
+    assert stores.store.query(scan, object=spelling) == [fact]
+    assert stores.store.query(scan, object=other) == []
+    assert stores.store.query(scan, subject='module:root', object=spelling) == [fact]
+
+
 # ——— Versioned memory ———
 
 def test_same_fact_in_two_analyses_is_one_identity_and_two_occurrences(memory):
@@ -269,21 +280,6 @@ def test_identity_hash_is_the_contract_identity(memory):
     memory.store.add('a', 'fixture', [fact])
     with Session(memory.engine) as db:
         assert db.scalar(select(FactIdentityRow.identity_hash)) == fact_identity(fact)
-
-
-def test_filters_compare_the_canonical_identity(memory):
-    decomposed = assertion('module:cafe\u0301')
-    memory.analysis('a', executions=[execution()])
-    memory.store.add('a', 'fixture', [decomposed])
-    assert memory.store.query('a', object='module:caf\u00e9') == [decomposed]
-    assert memory.store.query('a')[0]['object'] == 'module:cafe\u0301'
-
-
-def test_a_decomposed_filter_finds_the_composed_fact(memory):
-    composed = assertion('module:caf\u00e9')
-    memory.analysis('a', executions=[execution()])
-    memory.store.add('a', 'fixture', [composed])
-    assert memory.store.query('a', object='module:cafe\u0301') == [composed]
 
 
 def test_concurrent_analyses_share_one_new_identity(memory):
