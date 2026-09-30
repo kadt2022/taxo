@@ -145,7 +145,8 @@ Les noms exacts de tables et de colonnes sont fixés dans 01E-A ; ce schéma dit
 
 ## Tranches
 
-Chaque tranche est une PR. Tant que 01E-C n'est pas livrée, l'application continue d'utiliser le
+Ce récit est le seul : A, B et C sont ses tranches, et ce qui suit dans chacune sont des tâches, pas
+des récits. Tant que la bascule de 01E-C n'est pas livrée, l'application continue d'utiliser le
 stockage actuel ; la nouvelle implémentation du port existe à côté et n'est pas branchée.
 
 ### 01E-A — Identité persistée et occurrence
@@ -194,7 +195,17 @@ Critères :
 - aucun chargement complet d'une adjacence : un voisin est lu par l'index, comme aujourd'hui ;
 - une continuation émise avant une nouvelle écriture dans l'analyse reste refusée comme aujourd'hui.
 
+Tâches faites après la mesure de 01E-B, sans changer le comportement observable :
+
+- **classement local** : les rangs appartiennent à une adjacence (analyse, ancre, relation, sens) ; un
+  lot ne reclasse que les adjacences qu'il touche, sans reconstruire les faits ;
+- **insertion par lots** : occurrences puis preuves écrites en un passage par table.
+
 ### 01E-C — Migration des données, bascule et mesure du gain
+
+Deux PR, un seul récit : la première migre et vérifie sans rien brancher, la seconde bascule
+l'application. Un problème de transformation des données ne se confond pas avec un problème
+d'intégration.
 
 - Migration 004 : crée le nouveau stockage, reprend `analysis_facts` par lots, calcule les identités
   avec une copie figée de la fonction v1 (comme 003), reste reprenable après interruption et affiche
