@@ -4,6 +4,7 @@ import sqlalchemy as sa
 
 import hashlib
 import json
+import time
 import unicodedata
 import rfc8785
 
@@ -50,6 +51,22 @@ def _hash(reference):
     return hashlib.sha256((reference or '').encode()).hexdigest()
 
 
+_BATCH = 2000
+_INDEXES = ('ix_analysis_facts_revision', 'ix_analysis_facts_outgoing', 'ix_analysis_facts_incoming')
+
+
+def _say(message):
+    # Alembic ne configure pas de journal ici : la reprise se dit sur la sortie standard.
+    print(f'[migration 003] {message}', flush=True)
+
+
+def _progress(done, total, started):
+    if done == total or done % (_BATCH * 10) == 0:
+        rate = done / max(time.monotonic() - started, 1e-6)
+        rest = (total - done) / rate if rate else 0
+        _say(f'  {done}/{total} faits repris ({rate:.0f} par seconde, reste environ {rest:.0f} s).')
+
+
 revision = '003'
 down_revision = '002'
 
@@ -58,37 +75,60 @@ def upgrade():
     columns = [sa.Column('outgoing_key', sa.Text()), sa.Column('incoming_key', sa.Text()),
                sa.Column('subject_hash', sa.String(64)), sa.Column('object_hash', sa.String(64)),
                sa.Column('outgoing_rank', sa.BigInteger()), sa.Column('incoming_rank', sa.BigInteger())]
+    # SQLite valide chaque ALTER TABLE a part : une reprise interrompue laisse des colonnes deja ajoutees
+    # et la version a 002. La migration reprend donc la ou elle en etait au lieu d'echouer.
+    inspector = sa.inspect(op.get_bind())
+    existing = {column['name'] for column in inspector.get_columns('analysis_facts')}
     for col in columns:
-        op.add_column('analysis_facts', col)
+        if col.name not in existing:
+            op.add_column('analysis_facts', col)
+        else:
+            _say(f'Colonne {col.name} deja presente (reprise d une migration interrompue).')
+    for index in _INDEXES:
+        if index in {item['name'] for item in inspector.get_indexes('analysis_facts')}:
+            op.drop_index(index, 'analysis_facts')
     table = sa.table('analysis_facts', sa.column('id', sa.Integer), sa.column('scan_id', sa.String),
                      sa.column('fact', sa.JSON), *(sa.column(col.name, col.type) for col in columns))
     connection = op.get_bind()
-    last = 0
+    total = connection.scalar(sa.select(sa.func.count()).select_from(table)) or 0
+    _say(f'{total} faits enregistrés à reprendre (clés de parcours et empreintes).')
+    # Une écriture par lot, pas par fait : la reprise d'une grosse base reste de l'ordre de la minute.
+    keyed = table.update().where(table.c.id == sa.bindparam('_id')).values(
+        outgoing_key=sa.bindparam('_out'), incoming_key=sa.bindparam('_in'),
+        subject_hash=sa.bindparam('_subject'), object_hash=sa.bindparam('_object'))
+    last, done, started = 0, 0, time.monotonic()
     while True:
         rows = connection.execute(sa.select(table.c.id, table.c.fact).where(table.c.id > last)
-                                  .order_by(table.c.id).limit(500)).all()
+                                  .order_by(table.c.id).limit(_BATCH)).all()
         if not rows:
             break
+        values = []
         for identifier, fact in rows:
             outgoing, incoming = _keys(fact)
-            connection.execute(table.update().where(table.c.id == identifier)
-                               .values(outgoing_key=outgoing, incoming_key=incoming,
-                                       subject_hash=_hash(fact.get('subject')),
-                                       object_hash=_hash(fact.get('object'))))
-        last = rows[-1][0]
-    for scan_id in connection.scalars(sa.select(table.c.scan_id).distinct()).all():
+            values.append({'_id': identifier, '_out': outgoing, '_in': incoming,
+                           '_subject': _hash(fact.get('subject')), '_object': _hash(fact.get('object'))})
+        connection.execute(keyed, values)
+        last, done = rows[-1][0], done + len(rows)
+        _progress(done, total, started)
+    scans = connection.scalars(sa.select(table.c.scan_id).distinct()).all()
+    _say(f'Rangs de parcours : {len(scans)} analyses.')
+    ranked = {side: table.update().where(table.c.id == sa.bindparam('_id'))
+              .values({f'{side}_rank': sa.bindparam('_rank')}) for side in ('outgoing', 'incoming')}
+    for number, scan_id in enumerate(scans, 1):
         rows = connection.execute(sa.select(table.c.id, table.c.outgoing_key, table.c.incoming_key)
                                   .where(table.c.scan_id == scan_id)).all()
         for position, side in ((1, 'outgoing'), (2, 'incoming')):
             values = [{'_id': row.id, '_rank': rank} for rank, row in
                       enumerate(sorted(rows, key=lambda item: item[position]), 1)]
             if values:
-                connection.execute(table.update().where(table.c.id == sa.bindparam('_id'))
-                                   .values({f'{side}_rank': sa.bindparam('_rank')}), values)
+                connection.execute(ranked[side], values)
+        _say(f'  analyse {number}/{len(scans)} : {len(rows)} faits classés.')
+    _say('Création des index de parcours...')
     op.create_index('ix_analysis_facts_revision', 'analysis_facts', ['scan_id', 'id'])
     for side, anchor in (('outgoing', 'subject'), ('incoming', 'object')):
         op.create_index(f'ix_analysis_facts_{side}', 'analysis_facts',
                         ['scan_id', 'kind', f'{anchor}_hash', 'relation', f'{side}_rank'])
+    _say('Terminé.')
 
 
 def downgrade():
