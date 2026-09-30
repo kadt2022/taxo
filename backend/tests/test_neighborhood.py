@@ -147,6 +147,30 @@ def test_migration_backfill_and_downgrade_preserve_existing_facts(tmp_path):
     engine.dispose()
 
 
+def test_migration_resumes_after_an_interrupted_run(tmp_path):
+    """SQLite valide chaque ALTER TABLE : une migration coupee laisse des colonnes et un index, version 002."""
+    url = f'sqlite:///{tmp_path / "interrupted.db"}'
+    env = {**os.environ, 'DATABASE_URL': url}
+    def migrate(action, target):
+        return subprocess.run([sys.executable, '-m', 'alembic', action, target], check=True, env=env,
+                              capture_output=True, text=True)
+    migrate('upgrade', '002')
+    engine = create_engine(url)
+    with engine.begin() as db:
+        db.execute(text('INSERT INTO analysis_facts (scan_id,evaluator_id,kind,subject,relation,object,fact) '
+                        'VALUES (:scan,:eval,:kind,:subject,:relation,:object,:fact)'),
+                   {'scan': 'analysis-1', 'eval': 'fixture', 'kind': 'ASSERTION', 'subject': ROOT,
+                    'relation': 'DEPENDS_ON', 'object': 'module:child', 'fact': json.dumps(fact())})
+        db.execute(text('ALTER TABLE analysis_facts ADD COLUMN outgoing_key TEXT'))
+        db.execute(text('ALTER TABLE analysis_facts ADD COLUMN incoming_key TEXT'))
+        db.execute(text('CREATE INDEX ix_analysis_facts_outgoing ON analysis_facts (scan_id, outgoing_key)'))
+    output = migrate('upgrade', 'head').stdout
+    assert 'Colonne outgoing_key deja presente' in output
+    assert '1/1 faits repris' in output
+    assert SqlAlchemyAnalysisFacts(engine).neighbor('analysis-1', ROOT, 'DEPENDS_ON', 'OUTGOING')[1] == fact()
+    engine.dispose()
+
+
 def test_http_analysis_pinning(taxo):
     client, url, _ = taxo
     described = client.post(url, json={'requests': [{'operation': 'describe'}]}).json()

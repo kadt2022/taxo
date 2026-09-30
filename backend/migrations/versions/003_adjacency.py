@@ -52,6 +52,7 @@ def _hash(reference):
 
 
 _BATCH = 2000
+_INDEXES = ('ix_analysis_facts_revision', 'ix_analysis_facts_outgoing', 'ix_analysis_facts_incoming')
 
 
 def _say(message):
@@ -74,8 +75,18 @@ def upgrade():
     columns = [sa.Column('outgoing_key', sa.Text()), sa.Column('incoming_key', sa.Text()),
                sa.Column('subject_hash', sa.String(64)), sa.Column('object_hash', sa.String(64)),
                sa.Column('outgoing_rank', sa.BigInteger()), sa.Column('incoming_rank', sa.BigInteger())]
+    # SQLite valide chaque ALTER TABLE a part : une reprise interrompue laisse des colonnes deja ajoutees
+    # et la version a 002. La migration reprend donc la ou elle en etait au lieu d'echouer.
+    inspector = sa.inspect(op.get_bind())
+    existing = {column['name'] for column in inspector.get_columns('analysis_facts')}
     for col in columns:
-        op.add_column('analysis_facts', col)
+        if col.name not in existing:
+            op.add_column('analysis_facts', col)
+        else:
+            _say(f'Colonne {col.name} deja presente (reprise d une migration interrompue).')
+    for index in _INDEXES:
+        if index in {item['name'] for item in inspector.get_indexes('analysis_facts')}:
+            op.drop_index(index, 'analysis_facts')
     table = sa.table('analysis_facts', sa.column('id', sa.Integer), sa.column('scan_id', sa.String),
                      sa.column('fact', sa.JSON), *(sa.column(col.name, col.type) for col in columns))
     connection = op.get_bind()
