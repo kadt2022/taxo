@@ -1,6 +1,7 @@
 from typing import Protocol
 from app.evaluations.domain.evaluator import Evaluator
 from app.evaluations.domain.execution import EvaluatorExecution
+from app.facts.domain.provenance import ProducerExecution
 from app.scans.domain.scan import Scan
 from app.snapshots.domain.snapshot import Snapshot
 
@@ -16,6 +17,11 @@ class AnalysisFacts(Protocol):
     def has_reference(self, scan_id: str, root: str) -> bool: ...
     def neighbor(self, scan_id: str, root: str, relation: str, direction: str,
                  after: str = '') -> tuple[str, dict] | None: ...
+
+class AnalysisProvenance(Protocol):
+    """Recorded before the facts: their snapshot and producer executions are checked against it."""
+    def record_snapshot(self, scan_id: str, snapshot: dict) -> None: ...
+    def record_execution(self, scan_id: str, execution: ProducerExecution) -> None: ...
 
 class EvaluationRunner(Protocol):
     def __call__(self, evaluator: Evaluator, snapshot: Snapshot, progress=None) -> EvaluatorExecution: ...
