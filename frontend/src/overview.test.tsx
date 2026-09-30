@@ -107,9 +107,7 @@ describe('carte Sécurité (TAXO-05)', ()=>{
     expect(counts).toEqual({PROTECTED:2, PERMITS_ALL:1, NOT_INTERPRETED:1, NO_CONCLUSION:1, reserved:2, missing:1});
     const value=overviewCards(spring({}), counts).find(item=>item.id==='security')!;
     expect(value).toMatchObject({value:'2', unit:'routes protégées', state:'known'});
-    expect(value.lines).toEqual(['2 routes restent à déterminer.']);
-    expect(overviewCards(spring({}), {...counts, NOT_INTERPRETED:0, NO_CONCLUSION:0}).find(item=>item.id==='security')!.lines).toEqual([]);
-    expect(overviewCards(spring({}), {...counts, NOT_INTERPRETED:1, NO_CONCLUSION:0}).find(item=>item.id==='security')!.lines).toEqual(['1 route reste à déterminer.']);
+    expect(value.lines).toEqual([]);
     expect(value.bar?.map(item=>[item.label, item.count])).toEqual([['protégées',2], ['permitAll()',1], ['non interprétée',1], ['sans conclusion',1]]);
     expect(value.link).toEqual({href:'#routes', label:'Explorer la sécurité'});
   });

@@ -122,10 +122,9 @@ function security(spring:EvaluationSummary|undefined, routes:RouteCounts|undefin
     return {value:count(rules), unit:noun(rules, 'règle de sécurité lue', 'règles de sécurité lues'), state:stateOf(spring), link,
       lines:['Le détail par route est dans la section Routes.']};
   }
-  const undetermined=routes.NOT_INTERPRETED+routes.NO_CONCLUSION;
   return {value:count(routes.PROTECTED), unit:noun(routes.PROTECTED, 'route protégée', 'routes protégées'), state:stateOf(spring), link,
-    // La barre dit deja chaque etat : une seule ligne, la somme de ce qui reste a determiner.
-    lines:undetermined?[`${counted(undetermined, 'route reste', 'routes restent')} à déterminer.`]:[],
+    // La barre et sa legende disent deja chaque etat.
+    lines:[],
     bar:[{label:noun(routes.PROTECTED, 'protégée', 'protégées'), count:routes.PROTECTED, tone:'ok'},
       {label:'permitAll()', count:routes.PERMITS_ALL, tone:'info'},
       {label:noun(routes.NOT_INTERPRETED, 'non interprétée', 'non interprétées'), count:routes.NOT_INTERPRETED, tone:'warn'},
@@ -258,6 +257,7 @@ export function ProjectOverview({scan, pending, routes, project}:Readonly<{scan:
         {card.unit&&<span className="card-unit">{card.unit}</span>}
         {card.bar&&<CardBar segments={card.bar}/>}
         {card.lines.map(line=><p key={line}>{line}</p>)}
+        {card.link&&<span className="card-fill" aria-hidden="true"/>}
         {card.link&&<a className="card-link" href={card.link.href}>{card.link.label} <span aria-hidden="true">→</span></a>}
       </article>)}
     </div>
