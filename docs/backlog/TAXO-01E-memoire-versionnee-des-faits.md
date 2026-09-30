@@ -102,6 +102,18 @@ Les noms exacts de tables et de colonnes sont fixés dans 01E-A ; ce schéma dit
    `PROJECTION` dont `produced_by` (type, identifiant, version, `execution_id`, catalogue) ne
    correspond à aucune exécution connue de l'analyse est **refusé à l'écriture** : ni réparé, ni gardé
    comme provenance orpheline. C'est une intégrité de mémoire, pas une interprétation.
+
+   **Enregistrement préalable.** Le contexte d'analyse et les `PRODUCER_EXECUTION` sont enregistrés
+   indépendamment des occurrences, **avant** l'écriture des faits, par un port ou cas d'usage distinct,
+   depuis l'`EvaluatorExecution` (qui porte le catalogue, contrairement à `summary()`).
+   `AnalysisFacts.add()` garde sa signature et ne fabrique **jamais** une exécution à partir du
+   `produced_by` d'un fait : ce serait vérifier un fait contre lui-même.
+
+   ```text
+   RunEvaluator ─► EvaluatorExecution ─┬─► enregistrer PRODUCER_EXECUTION
+                                       └─► AnalysisFacts.add(...)
+                                              └─ vérifie produced_by contre l'exécution enregistrée
+   ```
 3. **`HUMAN` sans exécution.** Le contrat ne lui donne ni `execution_id`, ni version, ni catalogue :
    l'occurrence porte directement `producer_id` et `validation`. Aucune fausse exécution d'évaluateur.
 4. **Pas de clés d'ordre en texte.** `outgoing_key` et `incoming_key` ne sont pas persistées. Restent
@@ -138,8 +150,10 @@ stockage actuel ; la nouvelle implémentation du port existe à côté et n'est 
 
 ### 01E-A — Identité persistée et occurrence
 
-- Tables d'identité, d'occurrence, de preuve et de contexte d'analyse ; nouvelle implémentation du port
-  pour `add` et `query`.
+- Commence par le contrat de stockage et le modèle SQL, pas par la migration des données existantes.
+- Tables d'identité, d'occurrence, de preuve, de contexte d'analyse et d'exécution ; nouvelle
+  implémentation du port pour `add` et `query`.
+- Port ou cas d'usage distinct qui enregistre les `PRODUCER_EXECUTION` d'une analyse avant ses faits.
 - Une **suite de contrat du port** unique, exécutée sur l'implémentation actuelle et la nouvelle.
 
 Critères :
@@ -150,7 +164,9 @@ Critères :
 - preuve déplacée (ligne 87 → 91) : même identité, occurrences distinctes, chacune avec sa preuve ;
 - nouvelle version de producteur : même identité, occurrences distinctes par leur `produced_by` ;
 - `INFERRED` puis `HUMAN_VALIDATED` au niveau du stockage : même identité, statuts distincts ;
-- fait `EVALUATOR` ou `PROJECTION` sans exécution connue dans l'analyse : refusé, rien n'est écrit ;
+- fait `EVALUATOR` ou `PROJECTION` sans exécution enregistrée au préalable dans l'analyse, ou dont un
+  champ de `produced_by` (version, catalogue…) diffère de cette exécution : refusé, rien n'est écrit ;
+- `add()` appelé avant l'enregistrement de l'exécution : refusé, aucune exécution créée ;
 - fait `HUMAN` : conservé sans exécution, avec son `producer_id` et sa `validation` ;
 - aucune preuve stockée avec `repository` ou `commit` ; la restitution les reprend de l'instantané ;
 - deux écritures concurrentes d'une même nouvelle identité : une seule identité, aucune erreur ;
@@ -178,6 +194,10 @@ Critères :
 - Migration 004 : crée le nouveau stockage, reprend `analysis_facts` par lots, calcule les identités
   avec une copie figée de la fonction v1 (comme 003), reste reprenable après interruption et affiche
   sa progression.
+- Exécutions des anciennes analyses : `scans.result` n'a pas le catalogue. La migration les
+  reconstitue, seul cas où la provenance des faits sert de source : `execution_id`, évaluateur et
+  version doivent concorder avec le résumé de l'analyse, et tous les faits d'une même exécution doivent
+  porter le même catalogue. Sinon, arrêt.
 - Vérification : pour chaque analyse, mêmes comptes et restitution exacte ; provenance cohérente
   avec les exécutions. Au premier écart, la migration s'arrête et n'a rien détruit.
 - **`analysis_facts` est conservée** par 004. Le code bascule sur la nouvelle mémoire ; l'ancienne
