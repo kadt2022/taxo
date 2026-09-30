@@ -180,19 +180,26 @@ class SqlAlchemyFactMemory:
     def add(self, scan_id, evaluator_id, facts):
         """All or nothing: one refused fact and nothing of the batch is written."""
         with Session(self.engine) as db:
-            recorded = db.get(AnalysisSnapshotRow, scan_id)
-            if recorded is None:
+            # Serialize the writers of one analysis before reading it: ranks and rows commit together.
+            # A no-op UPDATE locks the row on PostgreSQL (as FOR UPDATE) and takes the write lock at once
+            # on SQLite, which ignores FOR UPDATE.
+            locked = db.execute(update(AnalysisSnapshotRow.__table__).where(AnalysisSnapshotRow.scan_id == scan_id)
+                                .values(scan_id=AnalysisSnapshotRow.scan_id))
+            if locked.rowcount == 0:
                 raise OccurrenceError("L'instantané de l'analyse n'est pas enregistré.")
+            recorded = db.get(AnalysisSnapshotRow, scan_id)
             executions = {row.execution_id: row for row in db.scalars(
                 select(ProducerExecutionRow).where(ProducerExecutionRow.scan_id == scan_id))}
-            prepared = [(split(fact, recorded.snapshot), _producer(fact, evaluator_id, executions)) for fact in facts]
-            identities = {occurrence.identity_hash: occurrence.identity for occurrence, _ in prepared}
+            # One pass over `facts`: any iterable is accepted, a generator included.
+            prepared = [(fact, split(fact, recorded.snapshot), _producer(fact, evaluator_id, executions))
+                        for fact in facts]
+            identities = {occurrence.identity_hash: occurrence.identity for _, occurrence, _ in prepared}
             if identities:
                 _insert_new_identities(db, [
                     {'identity_hash': key, 'kind': identity['kind'], 'subject': identity.get('subject'),
                      'relation': identity.get('relation'), 'object': identity.get('object'), 'identity': identity}
                     for key, identity in identities.items()])
-            for fact, (occurrence, (execution, human)) in zip(facts, prepared):
+            for fact, occurrence, (execution, human) in prepared:
                 row = FactOccurrenceRow(scan_id=scan_id, identity_hash=occurrence.identity_hash, execution=execution,
                                         human_producer_id=human, status=occurrence.status,
                                         validity=occurrence.validity, raw_identity=occurrence.raw_identity,

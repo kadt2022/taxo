@@ -10,10 +10,10 @@ from pathlib import Path
 import threading
 
 import pytest
-from sqlalchemy import create_engine, func, inspect, select
+from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session
 
-from app.bootstrap.database import Base
+from storage_engines import fresh_engine
 from app.facts.contract import fact_identity, validate_fact
 from app.facts.domain.provenance import ProducerExecution
 from app.projects.infrastructure.sqlalchemy.project_repository import ProjectRow
@@ -77,8 +77,7 @@ def producer_of(fact):
 
 @pytest.fixture(params=['analysis_facts', 'fact_memory'])
 def stores(request, tmp_path):
-    engine = create_engine(f'sqlite:///{tmp_path / "memory.db"}')
-    Base.metadata.create_all(engine)
+    engine = fresh_engine(tmp_path)
     store = SqlAlchemyAnalysisFacts(engine) if request.param == 'analysis_facts' else SqlAlchemyFactMemory(engine)
     yield Stores(engine, store)
     engine.dispose()
@@ -86,8 +85,7 @@ def stores(request, tmp_path):
 
 @pytest.fixture
 def memory(tmp_path):
-    engine = create_engine(f'sqlite:///{tmp_path / "memory.db"}')
-    Base.metadata.create_all(engine)
+    engine = fresh_engine(tmp_path)
     yield Stores(engine, SqlAlchemyFactMemory(engine))
     engine.dispose()
 
@@ -136,6 +134,13 @@ def test_filters_compare_the_submitted_spelling(stores, spelling):
     assert stores.store.query(scan, object=spelling) == [fact]
     assert stores.store.query(scan, object=other) == []
     assert stores.store.query(scan, subject='module:root', object=spelling) == [fact]
+
+
+def test_any_iterable_of_facts_is_written_once(stores):
+    scan = stores.analysis('analysis', executions=[execution()])
+    facts = [assertion('module:a'), assertion('module:b')]
+    stores.store.add(scan, 'fixture', (fact for fact in facts))
+    assert stores.store.query(scan) == facts
 
 
 # ——— Versioned memory ———

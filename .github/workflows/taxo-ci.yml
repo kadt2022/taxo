@@ -156,6 +156,11 @@ jobs:
         env:
           PYTHONPATH: .
         run: python ../.github/scripts/check_database.py
+      - name: Run fact memory suites on PostgreSQL
+        # Last step: these suites drop and recreate every table of the test database.
+        env:
+          TAXO_TEST_POSTGRES_URL: ${{ env.DATABASE_URL }}
+        run: python -m pytest -q tests/test_fact_memory.py tests/test_neighborhood_conformance.py
 
   containers:
     name: Taxo Docker Smoke

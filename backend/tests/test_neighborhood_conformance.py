@@ -6,13 +6,19 @@ the same nodes, facts, order, evidence, frontier, consumption, stop reason and p
 with the token its own storage issued.
 """
 import copy
+import threading
 import unicodedata
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import create_engine, event
+from datetime import datetime, timezone
 
-from app.bootstrap.database import Base
+from sqlalchemy import event
+from sqlalchemy.orm import Session
+
+from app.projects.infrastructure.sqlalchemy.project_repository import ProjectRow
+from app.scans.infrastructure.sqlalchemy.scan_repository import ScanRow
+from storage_engines import POSTGRES, fresh_engine
 from app.facts.contract import validate_fact
 from app.facts.domain.provenance import ProducerExecution
 from app.protocol.application.exchange import Exchange
@@ -46,14 +52,25 @@ def coverage(subject=ROOT):
     return fact
 
 
+def _analyses(engine):
+    """Project and analyses rows: PostgreSQL enforces the foreign keys."""
+    with Session(engine) as db:
+        if db.get(ProjectRow, 'project') is None:
+            db.add(ProjectRow(id='project', name='fixture', path='/fixture'))
+            db.add_all(ScanRow(id=scan, project_id='project', created_at=datetime.now(timezone.utc), result={})
+                       for scan in ('analysis-1', 'analysis-2'))
+            db.commit()
+
+
 class Twin:
     """The same analysis kept by both storages."""
 
     def __init__(self, tmp_path):
         self.stores, self.engines = {}, {}
+        shared = fresh_engine(tmp_path) if POSTGRES else None
         for name in STORAGES:
-            engine = create_engine(f'sqlite:///{tmp_path / f"{name}.db"}')
-            Base.metadata.create_all(engine)
+            engine = shared or fresh_engine(tmp_path, name)
+            _analyses(engine)
             store = SqlAlchemyAnalysisFacts(engine) if name == 'analysis_facts' else SqlAlchemyFactMemory(engine)
             if name == 'fact_memory':
                 for scan in ('analysis-1', 'analysis-2'):
@@ -120,7 +137,7 @@ def comparable(walk):
 def twin(tmp_path):
     pair = Twin(tmp_path)
     yield pair
-    for engine in pair.engines.values():
+    for engine in set(pair.engines.values()):
         engine.dispose()
 
 
@@ -164,6 +181,18 @@ def test_selection_budgets_and_resumption(twin, arguments):
     walk = twin.compare(follow=['CONTAINS', 'DEPENDS_ON'], **arguments)
     # With a single node allowed, every page stops before its first neighbour: the walk never ends.
     assert (walk[-1][0]['continuation'] is None) == (arguments.get('max_nodes') != 1)
+
+
+def test_a_neighbour_refused_by_max_nodes_is_not_lost(twin):
+    twin.add([edge('module:b'), edge('module:a')])
+    for name in STORAGES:
+        refused = twin.ask(twin.exchange(name), max_nodes=1)
+        assert refused['stop_reason'] == 'NODES'
+        assert refused['items'] == []
+        assert refused['continuation'] is not None
+        resumed = twin.ask(twin.exchange(name), continuation=refused['continuation'], max_nodes=3)
+        assert [item['fact']['object'] for item in resumed['items']] == ['module:a', 'module:b']
+        assert resumed['stop_reason'] == 'ADJACENCY_COMPLETE'
 
 
 def test_byte_budget_refused_and_cut(twin):
@@ -247,6 +276,31 @@ def test_memory_walk_never_loads_the_adjacency(twin):
                    and 'fact_evidence' not in sql.split('FROM', 1)[1].split()[0]]
     assert occurrences
     assert all('LIMIT' in sql for sql in occurrences)
+
+
+def test_memory_writers_of_one_analysis_are_serialized(twin):
+    store = twin.stores['fact_memory']
+    batches = [[edge(f'module:{index:03}', line=writer + 1) for index in range(writer, 120, 3)] for writer in range(3)]
+    start, errors = threading.Barrier(len(batches)), []
+
+    def write(batch):
+        start.wait()
+        try:
+            store.add('analysis-1', 'fixture', batch)
+        except Exception as error:  # reported by the assertion below
+            errors.append(error)
+
+    threads = [threading.Thread(target=write, args=(batch,)) for batch in batches]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+    walked, after = [], ''
+    while (found := store.neighbor('analysis-1', ROOT, 'DEPENDS_ON', 'OUTGOING', after)) is not None:
+        after = found[0]
+        walked.append(found[1]['object'])
+    assert walked == [f'module:{index:03}' for index in range(120)]
 
 
 def test_memory_reference_hash_collision_never_returns_another_anchor(twin, monkeypatch):
