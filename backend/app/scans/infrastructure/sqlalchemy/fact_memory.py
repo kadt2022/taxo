@@ -6,6 +6,8 @@ implementation covers `add` and `query` of the `AnalysisFacts` port; traversal c
 Filters on kind, subject, relation and object compare the canonical identity (NFC). The facts
 returned are those submitted, exactly, with their own spelling.
 """
+import unicodedata
+
 from sqlalchemy import (JSON, Boolean, Column, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
                         func, select)
 from sqlalchemy.dialects import postgresql, sqlite
@@ -167,7 +169,7 @@ class SqlAlchemyFactMemory:
                                         == filters['evaluator_id'])
         for name in ('kind', 'subject', 'relation', 'object'):
             if filters.get(name) is not None:
-                statement = statement.where(getattr(identity, name) == filters[name])
+                statement = statement.where(getattr(identity, name) == unicodedata.normalize('NFC', filters[name]))
         with Session(self.engine) as db:
             recorded = db.get(AnalysisSnapshotRow, scan_id)
             rows = db.execute(statement.order_by(occurrence.id)).all()

@@ -279,6 +279,13 @@ def test_filters_compare_the_canonical_identity(memory):
     assert memory.store.query('a')[0]['object'] == 'module:cafe\u0301'
 
 
+def test_a_decomposed_filter_finds_the_composed_fact(memory):
+    composed = assertion('module:caf\u00e9')
+    memory.analysis('a', executions=[execution()])
+    memory.store.add('a', 'fixture', [composed])
+    assert memory.store.query('a', object='module:cafe\u0301') == [composed]
+
+
 def test_concurrent_analyses_share_one_new_identity(memory):
     scans = [memory.analysis(f'scan-{index}', executions=[execution()]) for index in range(4)]
     errors = []
