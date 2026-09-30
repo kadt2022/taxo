@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {analysedAt, AnalysisLimits, CardBar, CardIcon, gapsOf, panelKey, evaluationsOf, outcomeState, routeCounts, shortList, outcome, overviewCards, ProjectNav, ProjectOverview, sections, type EvaluationSummary, type Scan} from './overview';
+import {analysedAt, AnalysisLimits, CardBar, CardIcon, gapsOf, panelKey, evaluationsOf, outcomeState, routeCounts, shortList, outcome, overviewCards, ProjectOverview, type EvaluationSummary, type Scan} from './overview';
 import type {RouteRow} from './routes';
 import {AnalysisDetails, EvaluationPanel, warningsOf} from './details';
 import {label, reference, RELATIONS} from './vocabulary';
@@ -174,13 +174,6 @@ describe('outcome et sections', ()=>{
     expect(outcomeState(scan)).toBe('ok');
     expect(outcomeState({...scan, evaluations:[inventory, {...git, status:'PARTIAL'}]})).toBe('partial');
     expect(outcomeState({...scan, evaluations:[inventory, {...git, status:'FAILED'}]})).toBe('failed');
-  });
-  it('ne propose que les sections réellement disponibles', ()=>{
-    expect(sections(scan).map(item=>item.label)).toEqual(['Vue d’ensemble', 'Technologies', 'Limites', 'Routes', 'Historique']);
-    expect(sections(undefined).map(item=>item.id)).toEqual(['historique']);
-    const nav=renderToStaticMarkup(<ProjectNav scan={scan}/>);
-    expect(nav).toContain('href="#historique"');
-    expect(nav).not.toMatch(/Evaluator|Sécurité|Architecture/);
   });
 });
 

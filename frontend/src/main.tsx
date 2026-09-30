@@ -5,7 +5,7 @@ import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
 import {MiniaChoice, MiniaView, SourceConsent, sourceConsent, withProvider, type MiniaAnswer, type MiniaStatus} from './minia';
 import {ConsultForm} from './consult';
-import {AnalysisLimits, panelKey, ProjectNav, ProjectOverview, routeCounts, technologiesOf, type RouteCounts, type Scan} from './overview';
+import {AnalysisLimits, panelKey, ProjectOverview, routeCounts, technologiesOf, type RouteCounts, type Scan} from './overview';
 import {AnalysisDetails} from './details';
 import {EVALUATORS, label} from './vocabulary';
 import {AskTaxo} from './query';
@@ -164,8 +164,7 @@ function App(){
     <nav aria-label="Projets">{projects.map(p=><button type="button" disabled={busy} aria-current={selected===p.id?'page':undefined} className={selected===p.id?'selected':''} key={p.id} onClick={()=>{setError('');setSelected(p.id);}}>{p.name}<span>↗</span></button>)}</nav>
     <details className="add-project" open={projects.length===0||undefined}><summary>Ajouter un projet</summary><form onSubmit={add}><label>Nom<input required maxLength={120} value={name} onChange={e=>setName(e.target.value)} placeholder="Mon application"/></label><label>Dossier local<input required value={path} onChange={e=>setPath(e.target.value)} placeholder="D:\MonProjet"/></label><button type="submit" className="secondary" disabled={busy||loading}>Enregistrer le projet</button></form></details>
     <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
-    <main><header><div><p className="eyebrow">PROJET</p><h1>{project?.name??'Votre logiciel, à découvert.'}</h1><p className="path">{project?.path??'Ajoutez un dossier pour découvrir les technologies de votre projet.'}</p></div><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?<Working text="Analyse en cours"/>:'Lancer l’analyse globale'}</button></header>
-    {selected&&!loading&&<ProjectNav scan={scan}/>}
+    <main><header className="toolbar"><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?<Working text="Analyse en cours"/>:'Lancer l’analyse globale'}</button></header>
     {error&&<div role="alert" className="error">{error}</div>}
     {run&&run.status!=='done'&&<AnalysisProgress run={run}/>}
     {loading?<p role="status">Chargement…</p>:shown?<>
