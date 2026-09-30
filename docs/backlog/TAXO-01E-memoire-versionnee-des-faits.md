@@ -244,6 +244,27 @@ durée de migration    —                    …
 Le résultat est publié tel quel, même s'il est décevant. Le gain sur le fichier lui-même n'apparaît
 qu'après le retrait de `analysis_facts` (et `VACUUM` sous SQLite) ; 01E-C mesure le nouveau stockage seul.
 
+## Mesure réelle de la migration 004 (2026-09-30)
+
+Base SQLite locale d'un utilisateur, 3,63 Go avant migration, 43 analyses. Résultat publié tel quel.
+
+```text
+analyses migrées et vérifiées   43, sans arrêt
+occurrences                     1 124 370 (chacune relue et comparée à son fait d'origine)
+identités distinctes              731 295
+ratio occurrences / identités        1,54
+preuves                         1 120 793
+durée                             905 s (plus grosse analyse : 531 751 faits en 488,8 s)
+tailles                          non mesurées : dbstat absent de ce SQLite
+```
+
+- Le modèle identité / occurrence tient sur un historique réel, pas seulement sur des fixtures.
+- Environ 35 % des occurrences répètent une identité déjà présente dans une autre analyse.
+- Le débit réel (environ 1 240 faits par seconde) est plus bas que sur le jeu synthétique (environ
+  4 000) : les faits réels sont plus gros.
+- La taille du nouveau stockage n'est pas encore connue. Le fichier contient temporairement l'ancien et
+  le nouveau stockage ; le gain ne se juge qu'après le retrait d'`analysis_facts` et un `VACUUM`.
+
 ## Hors périmètre
 
 - Comparaison depuis les faits enregistrés, `EVIDENCE_CHANGED`, changement de statut : 01F, juste après.
