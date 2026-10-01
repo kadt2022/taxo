@@ -1,7 +1,8 @@
 // Comparer deux analyses (TAXO-01F, tranche B). Le portail lit les deux reponses de l'API telles quelles :
 // aucune comparaison n'est calculee ici. Des comptes, jamais de pourcentage ; aucun impact suppose.
 import {type ReactNode, useEffect, useRef, useState} from 'react';
-import {EVALUATORS, ORIGINS, VALIDITIES, VERBS, label, premise, reference} from './vocabulary';
+import {type Sentence, entity, plain, premise, relation, subjectOf} from './sentences';
+import {EVALUATORS, ORIGINS, VALIDITIES, label, reference} from './vocabulary';
 
 type Request=<T>(path:string)=>Promise<T>;
 export type Side={id:string; created_at:string; snapshot?:{commit?:string; mode?:string; content_fingerprint?:string}|null};
@@ -37,11 +38,19 @@ export function sideLabel(side:Side){
 
 export const day=(value:string)=>{const moment=new Date(value);return Number.isNaN(moment.getTime())?value:moment.toLocaleString('fr-CA');};
 
-/** Le fait dit en clair : sujet, verbe, objet ; le depot par le nom du projet. */
-export function statement(fact:ComparedFact, project?:Project){
-  const said=(value?:string)=>reference(value??null, project);
-  if(fact.kind!=='ASSERTION')return [said(fact.subject), fact.kind.toLowerCase()].filter(Boolean).join(' · ');
-  return [said(fact.subject), label(VERBS, fact.relation??''), said(fact.object)].filter(Boolean).join(' ');
+/** Le fait dit en clair, par le rendu type de sa relation ; le depot par le nom du projet. */
+export function sentence(fact:ComparedFact, project?:Project):Sentence{
+  if(fact.kind!=='ASSERTION'||!fact.relation||!fact.subject||!fact.object)
+    return [[reference(fact.subject??null, project), fact.kind.toLowerCase()].filter(Boolean).join(' · ')];
+  return relation(fact.relation, entity(fact.subject), entity(fact.object), project);
+}
+
+export const statement=(fact:ComparedFact, project?:Project)=>plain(sentence(fact, project));
+
+/** Une phrase rendue : les noms (route, methode, motif, role) restent visibles tels quels. */
+export function Phrase({value}:Readonly<{value:Sentence}>){
+  return <span className="phrase">{value.map((item, index)=>typeof item==='string'?item
+    :<code key={`${index}:${item.code}`}>{item.code}</code>)}</span>;
 }
 
 /** Une preuve et l'empreinte du contenu cite : un fichier modifie aux memes lignes reste visible. */
@@ -74,7 +83,8 @@ function Technical({fact}:Readonly<{fact:ComparedFact}>){
   return <details className="technical"><summary>Voir les détails techniques</summary>
     <dl>
       <dt>Type</dt><dd>{fact.kind}{fact.relation?` · ${fact.relation}`:''}</dd>
-      <dt>Origine · validité</dt><dd>{fact.status} · {fact.validity}</dd>
+      <dt>Origine</dt><dd>{fact.status}</dd>
+      <dt>Validité</dt><dd>{fact.validity}</dd>
       {fact.subject&&<><dt>Sujet</dt><dd>{fact.subject}</dd></>}
       {fact.object&&<><dt>Objet</dt><dd>{fact.object}</dd></>}
       {fact.derivation&&<><dt>Règle</dt><dd>{fact.derivation.rule}</dd>
@@ -87,10 +97,10 @@ function Technical({fact}:Readonly<{fact:ComparedFact}>){
 /** Tout ce que dit une occurrence, tel quel : le fait, son statut, sa justification, ses preuves. Rien n'est compare ici. */
 function said(facts:ComparedFact[], project?:Project){
   return facts.map(fact=><div key={keyOf(fact)} className="said">
-    <span className="said-fact">{statement(fact, project)}</span>
+    <span className="said-fact"><Phrase value={sentence(fact, project)}/></span>
     <span className="state">{state(fact)}</span>
     {fact.derivation&&<><span className="said-label">Pourquoi Taxo arrive à cette conclusion</span>
-      <ul className="premises">{fact.derivation.premises.map(item=><li key={item}>{premise(item, project)}</li>)}</ul></>}
+      <ul className="premises">{fact.derivation.premises.map(item=><li key={item}><Phrase value={premise(item, project)}/></li>)}</ul></>}
     {(fact.evidence??[]).length>0&&<><span className="said-label">Preuves dans le code</span>
       <span className="proof">{joined(proofs([fact], proofWithContent))}</span></>}
     <Technical fact={fact}/>
@@ -99,15 +109,15 @@ function said(facts:ComparedFact[], project?:Project){
 
 /** Ce que montre chaque colonne Avant / Apres, selon la categorie. */
 const SIDES:Partial<Record<Category, (facts:ComparedFact[], project?:Project)=>ReactNode>>={
-  MODIFIED:(facts, project)=>reference(facts[0]?.object??null, project),
+  MODIFIED:(facts, project)=>facts.length?<Phrase value={sentence(facts[0], project)}/>:'—',
   EVIDENCE_CHANGED:facts=>joined(proofs(facts, proofWithContent)),
   STATUS_CHANGED:facts=>joined(facts.map(state)),
   OCCURRENCE_COUNT_CHANGED:apparitions,
   OCCURRENCES_CHANGED:said,
 };
 
-function heading(category:Category, fact:ComparedFact, project?:Project){
-  return category==='MODIFIED'?`${reference(fact.subject??null, project)} ${label(VERBS, fact.relation??'')}`:statement(fact, project);
+function heading(category:Category, fact:ComparedFact, project?:Project):Sentence{
+  return category==='MODIFIED'&&fact.subject?subjectOf(fact.subject, project):sentence(fact, project);
 }
 
 export function ChangeItem({category, item, project}:Readonly<{category:Category; item:ChangesPage['items'][number]; project?:Project}>){
@@ -115,9 +125,9 @@ export function ChangeItem({category, item, project}:Readonly<{category:Category
   const side=SIDES[category];
   const sign=CATEGORIES.find(entry=>entry.id===category);
   if(!side)return <li className={`change-row cat-${sign?.tone}`}><span className="change-sign" aria-hidden="true">{sign?.sign}</span>
-    <div><p className="change-fact">{statement(facts[0], project)}</p>
+    <div><p className="change-fact"><Phrase value={sentence(facts[0], project)}/></p>
       {proofs(facts).length>0&&<p className="change-proof"><span className="proof">{joined(proofs(facts))}</span></p>}</div></li>;
-  return <li className="change-pair"><p className="change-fact">{heading(category, facts[0], project)}</p>
+  return <li className="change-pair"><p className="change-fact"><Phrase value={heading(category, facts[0], project)}/></p>
     <dl className="change-sides"><div className="side-before"><dt><b>A</b>Avant</dt><dd>{side(item.before, project)}</dd></div>
       <div className="side-after"><dt><b>B</b>Après</dt><dd>{side(item.after, project)}</dd></div></dl></li>;
 }

@@ -16,9 +16,9 @@ describe('comparaison de deux analyses', ()=>{
   it('dit un fait en clair, le dépôt par le nom du projet', ()=>{
     expect(statement({kind:'ASSERTION', subject:'endpoint:GET /orders', relation:'HANDLED_BY',
       object:'symbol:java:com.acme.OrderController#get()', status:'OBSERVED', validity:'VALID'}))
-      .toBe('route GET /orders est traité par symbole java:com.acme.OrderController#get()');
+      .toBe('La requête GET /orders est traitée par OrderController.get().');
     expect(statement({kind:'ASSERTION', subject:'repository:p1', relation:'CONTAINS', object:'file:a.java',
-      status:'OBSERVED', validity:'VALID'}, {id:'p1', name:'Boutique'})).toBe('dépôt Boutique contient a.java');
+      status:'OBSERVED', validity:'VALID'}, {id:'p1', name:'Boutique'})).toBe('Le dépôt Boutique contient le fichier a.java.');
   });
 
   it('situe une preuve, et montre le contenu cité quand seules les lignes ne suffisent pas', ()=>{
@@ -57,11 +57,11 @@ describe('comparaison de deux analyses', ()=>{
       validity:'VALID', evidence:[{path:'build.gradle', line_start:1, line_end:1, content_hash:'sha256:aaaaaaaaaa'}]});
     const html=renderToStaticMarkup(<ul><ChangeItem category="OCCURRENCES_CHANGED"
       item={{before:[fact('module:caf\u00e9')], after:[fact('module:cafe\u0301')]}}/></ul>);
-    expect(html).toContain('module caf\u00e9');
-    expect(html).toContain('module cafe\u0301');
-    expect(html).toContain('Observé dans le code · À jour');
+    expect(html).toContain('module <code>caf\u00e9</code>');
+    expect(html).toContain('module <code>cafe\u0301</code>');
+    expect(html).toContain('Observé dans le code · Valide');
     expect(html).toContain('Voir les détails techniques');
-    expect(html).toContain('OBSERVED · VALID');
+    expect(html).toContain('<dt>Origine</dt><dd>OBSERVED</dd><dt>Validité</dt><dd>VALID</dd>');
   });
 
   it('dit pourquoi Taxo conclut, en clair, et garde les termes du moteur dans les détails', ()=>{
@@ -69,10 +69,10 @@ describe('comparaison de deux analyses', ()=>{
       validity:'VALID', derivation:{rule:'first-match', premises:['HANDLED_BY : endpoint:GET /orders -> symbol:java:com.acme.web.OrderController#get()']},
       produced_by:{producer_id:'taxo.spring-security', producer_version:'0.4.0'}};
     const html=renderToStaticMarkup(<ul><ChangeItem category="OCCURRENCES_CHANGED" item={{before:[fact], after:[fact]}}/></ul>);
-    expect(html).toContain('Déduit par Taxo · À jour');
+    expect(html).toContain('Déduit par Taxo · Valide');
     expect(html).toContain('Pourquoi Taxo arrive à cette conclusion');
-    expect(html).toContain('route GET /orders est traité par OrderController.get()');
-    expect(html).toContain('INFERRED · VALID');
+    expect(html).toContain('La requête <code>GET /orders</code> est traitée par <code>OrderController.get()</code>.');
+    expect(html).toContain('HANDLED_BY : endpoint:GET /orders -&gt; symbol:java:com.acme.web.OrderController#get()');
     expect(html).toContain('taxo.spring-security 0.4.0');
   });
 

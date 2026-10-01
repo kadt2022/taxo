@@ -67,8 +67,8 @@ describe('écran de comparaison', ()=>{
     await open(request);
     await click(button('Modifiés'));
     await flush();
-    expect(host.textContent).toContain('règle authenticated()');
-    expect(host.textContent).toContain('règle hasRole("USER")');
+    expect(host.textContent).toContain('La route GET /orders exige que l’utilisateur soit authentifié.');
+    expect(host.textContent).toContain('La route GET /orders exige le rôle USER.');
     await click(button('Afficher la suite'));
     await flush();
     expect(calls.at(-1)).toContain('cursor=k1');
@@ -87,7 +87,7 @@ describe('écran de comparaison', ()=>{
     await act(async()=>{late({items:[{before:[fact('policy-rule:old()')], after:[fact('policy-rule:new()')]}], next:'late'});});
     await flush();
     expect(host.textContent).toContain('Security.java:3');
-    expect(host.textContent).not.toContain('règle old()');
+    expect(host.textContent).not.toContain('old()');
     expect(button('Afficher la suite')).toBeUndefined();
   });
 

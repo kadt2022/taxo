@@ -55,34 +55,5 @@ export const ORIGINS:Record<string,string>={OBSERVED:'Observé dans le code', IN
   HUMAN_VALIDATED:'Validé par une personne'};
 
 /** Ou en est un fait : rien ne dit ici qu'une personne l'a confirme. */
-export const VALIDITIES:Record<string,string>={VALID:'À jour', STALE:'Périmé', REVALIDATION_REQUIRED:'À revérifier'};
+export const VALIDITIES:Record<string,string>={VALID:'Valide', STALE:'Périmé', REVALIDATION_REQUIRED:'À revérifier'};
 
-/** Une reference nommee court, pour une phrase : `OrderController.get()`, l'application par son nom. */
-export function named(value:string, project?:{id:string; name:string}){
-  if(value.startsWith('symbol:java:')){
-    const symbol=value.slice('symbol:java:'.length), hash=symbol.indexOf('#');
-    const owner=(hash<0?symbol:symbol.slice(0,hash)).split('.').pop();
-    return hash<0?owner:`${owner}.${symbol.slice(hash+1)}`;
-  }
-  if(value.startsWith('application:')&&value.includes('#'))return `application ${value.slice(value.lastIndexOf('#')+1)}`;
-  return reference(value, project)??value;
-}
-
-/**
- * Une premisse d'inference dite en clair. Les evaluateurs l'ecrivent `RELATION : sujet -> objet (precision)`,
- * `ligne N : motif -> regle` ou `application charge configuration` ; toute autre forme s'affiche telle quelle.
- */
-export function premise(text:string, project?:{id:string; name:string}){
-  const colon=text.indexOf(' : '), arrow=text.indexOf(' -> ');
-  if(colon>0&&arrow>colon){
-    const head=text.slice(0,colon), left=text.slice(colon+3, arrow);
-    let right=text.slice(arrow+4), detail='';
-    const open=right.lastIndexOf(' (');
-    if(open>0&&right.endsWith(')')){detail=` (${right.slice(open+2,-1)})`;right=right.slice(0,open);}
-    if(Object.hasOwn(VERBS, head))return `${named(left, project)} ${VERBS[head]} ${named(right, project)}${detail}`;
-    if(head.startsWith('ligne '))return `Règle de sécurité, ${head} : ${left} → ${right}${detail}`;
-  }
-  const loads=text.split(' charge ');
-  if(loads.length===2&&!loads[0].includes(' '))return `${named(loads[0], project)} charge ${named(loads[1], project)}`;
-  return text;
-}
