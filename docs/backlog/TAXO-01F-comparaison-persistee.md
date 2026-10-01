@@ -53,16 +53,22 @@ Pour un évaluateur comparable, avec I(A) et I(B) les identités de chaque analy
 | **Ajouté** | identité dans I(B) seulement, sauf si elle forme une modification |
 | **Disparu** | identité dans I(A) seulement, sauf si elle forme une modification |
 | **Modifié** | assertion de même sujet et même relation : exactement une disparue et une ajoutée (règle actuelle) |
-| **Preuve déplacée** (`EVIDENCE_CHANGED`) | même identité des deux côtés, preuves différentes (chemin, lignes, symbole, empreinte, méthode ; jamais le commit) ; les deux preuves sont rendues |
-| **Statut changé** | même identité, statut ou validité différent ; les deux valeurs sont rendues |
-| **Inchangé** | même identité, mêmes preuves, même statut, même validité ; compté, jamais listé |
+| **Inchangé** | même identité des deux côtés, quelles que soient ses preuves, son statut ou sa validité ; compté, jamais listé |
+| **Preuve déplacée** (`EVIDENCE_CHANGED`) | parmi les inchangés : preuves différentes (chemin, lignes, symbole, empreinte, méthode ; jamais le commit) ; les deux preuves sont rendues |
+| **Statut changé** | parmi les inchangés : statut ou validité différent ; les deux valeurs sont rendues |
 
-- Une identité inchangée dont seule la preuve se déplace **reste inchangée** comme fait. Le
-  déplacement est signalé à part.
+- L'inchangé se définit **au niveau de l'identité**. Un fait dont seule la preuve se déplace, ou dont
+  seul le statut change, compte parmi les inchangés **et** dans son signal à part. Les signaux ne
+  retirent rien au compte des inchangés.
 - **Non comparable** : si les catalogues d'un évaluateur diffèrent entre A et B, ses faits ne sont pas
   comparés. La réponse le dit, avec « cause possible : évolution du producteur ». Un changement de
   producteur n'est jamais présenté comme un changement du logiciel.
 - Un évaluateur présent d'un seul côté : non comparable, avec sa raison.
+- **Exécution en échec** : si l'exécution d'un évaluateur a échoué (`FAILED`) dans A ou dans B, ses
+  faits ne sont pas comparés. La raison est « exécution en échec dans A » (ou B), comme le fait déjà
+  l'impact actuel. Sinon, chaque fait de l'autre côté passerait à tort pour ajouté ou disparu. Une
+  exécution partielle (`PARTIAL`) reste comparable, avec ses zones inconnues rendues. Le statut vient
+  du résumé enregistré de l'analyse.
 - Les couvertures ne sont pas des changements. Les zones non interprétées de chaque côté sont rendues
   à part.
 - Les deux analyses doivent appartenir au même projet. Sinon, refus.
@@ -110,6 +116,11 @@ Un seul récit ; chaque tranche est une PR.
 
 - Si le commit et son parent ont chacun une analyse enregistrée, l'impact du commit est calculé par la
   tranche A, sans exécuter d'évaluateur.
+- **Choix des analyses, déterministe** : pour chaque commit, la plus récente analyse en mode `COMMIT`
+  de ce commit exact. Un commit analysé plusieurs fois donne toujours la même paire tant qu'aucune
+  nouvelle analyse n'est faite. La réponse nomme les deux analyses utilisées. L'API accepte aussi deux
+  identifiants d'analyse explicites. Les règles de comparabilité (catalogue, échec) s'appliquent
+  ensuite, évaluateur par évaluateur.
 - Sinon, le comportement actuel est conservé et la réponse dit qu'il a fallu relire le dépôt.
 
 ## Hors périmètre
