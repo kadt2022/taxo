@@ -183,10 +183,11 @@ function App(){
     <main>
     {error&&<div role="alert" className="error">{error}</div>}
     {run&&run.status!=='done'&&<AnalysisProgress run={run}/>}
-    {comparing&&selected?<ComparisonView base={`/projects/${selected}`} request={request} before={comparing.before} after={comparing.after}
+    {comparing&&selected&&<ComparisonView base={`/projects/${selected}`} request={request} before={comparing.before} after={comparing.after}
       onClose={()=>setComparing(null)} onSwap={()=>setComparing({before:comparing.after, after:comparing.before})}
-      project={projects.find(item=>item.id===selected)}/>
-    :loading?<p role="status">Chargement…</p>:shown?<>
+      project={projects.find(item=>item.id===selected)}/>}
+    {!comparing&&loading&&<output>Chargement…</output>}
+    {!comparing&&!loading&&(shown?<>
       <ProjectOverview scan={shown} pending={running?pendingEvaluators(run):undefined} routes={routes?.scanId===shown.id?routes.counts:undefined}/>
       {!running&&<CompareLauncher current={sideOf(shown)} others={scans.filter(other=>other.id!==shown.id).map(sideOf)}
         onCompare={other=>{const pair=[shown, scans.find(item=>item.id===other)!].sort((left, right)=>left.created_at.localeCompare(right.created_at));
@@ -198,7 +199,7 @@ function App(){
       <AnalysisLimits scan={shown}/>
       <AnalysisDetails scan={shown}/>
       {!running&&<RoutesPanel key={panelKey('routes',selected)} base={`/projects/${selected}`} scanId={shown.id} request={request} onLoaded={routesLoaded}/>}
-    </>:!running&&<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>}
+    </>:!running&&<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>)}
     {!comparing&&selected&&!loading&&scan&&<AskTaxo key={panelKey('ask',selected)} base={`/projects/${selected}`} request={request} minia={minia}/>}
     {!comparing&&selected&&!loading&&<HistoryPanel key={panelKey('history',selected)} projectId={selected} minia={minia}/>}
     </main>

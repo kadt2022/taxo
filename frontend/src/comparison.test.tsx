@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {CATEGORIES, CompareLauncher, ComparisonView, proof, proofWithContent, sideLabel, statement} from './comparison';
+import {CATEGORIES, ChangeItem, CompareLauncher, ComparisonView, proof, proofWithContent, sideLabel, statement} from './comparison';
 
 const commit={id:'a', created_at:'2026-10-01T10:00:00Z', snapshot:{commit:'3c4d5e6f7a8b9c0d', mode:'COMMIT'}};
 const tree={id:'b', created_at:'2026-10-01T11:00:00Z',
@@ -50,5 +50,25 @@ describe('comparaison de deux analyses', ()=>{
       onClose={()=>undefined} onSwap={()=>undefined}/>);
     expect(html).toContain('Comparaison en cours');
     expect(html).toContain('Inverser le sens');
+  });
+
+  it('montre tout ce que dit chaque côté quand le contenu change, y compris la graphie', ()=>{
+    const fact=(object:string)=>({kind:'ASSERTION', subject:'module:root', relation:'DEPENDS_ON', object, status:'OBSERVED',
+      validity:'VALID', evidence:[{path:'build.gradle', line_start:1, line_end:1, content_hash:'sha256:aaaaaaaaaa'}]});
+    const html=renderToStaticMarkup(<ul><ChangeItem category="OCCURRENCES_CHANGED"
+      item={{before:[fact('module:caf\u00e9')], after:[fact('module:cafe\u0301')]}}/></ul>);
+    expect(html).toContain('module caf\u00e9');
+    expect(html).toContain('module cafe\u0301');
+    expect(html).toContain('OBSERVED · VALID');
+  });
+
+  it('montre la preuve avant et après, avec le contenu cité', ()=>{
+    const fact=(line:number, content:string)=>({kind:'ASSERTION', subject:'endpoint:GET /users', relation:'HANDLED_BY',
+      object:'symbol:java:UserController#get()', status:'OBSERVED', validity:'VALID',
+      evidence:[{path:'UserController.java', line_start:line, line_end:line, content_hash:`sha256:${content}`}]});
+    const html=renderToStaticMarkup(<ul><ChangeItem category="EVIDENCE_CHANGED"
+      item={{before:[fact(87, '11111111aa')], after:[fact(91, '22222222bb')]}}/></ul>);
+    expect(html).toContain('UserController.java:87 · contenu 11111111');
+    expect(html).toContain('UserController.java:91 · contenu 22222222');
   });
 });

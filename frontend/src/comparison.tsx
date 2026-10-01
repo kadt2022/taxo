@@ -1,6 +1,6 @@
 // Comparer deux analyses (TAXO-01F, tranche B). Le portail lit les deux reponses de l'API telles quelles :
 // aucune comparaison n'est calculee ici. Des comptes, jamais de pourcentage ; aucun impact suppose.
-import {useEffect, useState} from 'react';
+import {type ReactNode, useEffect, useRef, useState} from 'react';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
 
 type Request=<T>(path:string)=>Promise<T>;
@@ -61,45 +61,65 @@ export function proof(evidence:Evidence){
 const proofs=(facts:ComparedFact[], show:(evidence:Evidence)=>string|null=proof)=>
   facts.flatMap(fact=>(fact.evidence??[]).map(show)).filter(Boolean);
 
-/** Ce que dit chaque cote, tel quel : justification, sinon preuves. Rien n'est compare ici. */
-function said(facts:ComparedFact[]){
-  return facts.map((fact, index)=><div key={index}>{fact.derivation
-    ?<ul className="premises">{fact.derivation.premises.map(premise=><li key={premise}>{premise}</li>)}</ul>
-    :<span>{proofs([fact]).join(' · ')||'—'}</span>}</div>);
+const keyOf=(value:unknown)=>JSON.stringify(value);
+const apparitions=(facts:ComparedFact[])=>`${facts.length} apparition${facts.length>1?'s':''}`;
+const joined=(values:(string|null)[])=>values.filter(Boolean).join(' · ')||'—';
+
+/** Tout ce que dit une occurrence, tel quel : le fait, son statut, sa justification, ses preuves. Rien n'est compare ici. */
+function said(facts:ComparedFact[], project?:Project){
+  return facts.map(fact=><div key={keyOf(fact)} className="said">
+    <span>{statement(fact, project)}</span>
+    <span>{fact.status} · {fact.validity}</span>
+    {fact.derivation&&<ul className="premises">{fact.derivation.premises.map(premise=><li key={premise}>{premise}</li>)}</ul>}
+    {(fact.evidence??[]).length>0&&<span>{joined(proofs([fact], proofWithContent))}</span>}
+  </div>);
 }
 
-function Item({category, item, project}:Readonly<{category:Category; item:ChangesPage['items'][number]; project?:Project}>){
-  const [first]=item.before.length?item.before:item.after;
-  if(category==='MODIFIED')return <li><p className="change-fact">{reference(item.before[0].subject??null, project)} {label(VERBS,item.before[0].relation??'')}</p>
-    <dl className="change-sides"><div><dt>Avant</dt><dd>{reference(item.before[0].object??null, project)}</dd></div><div><dt>Après</dt><dd>{reference(item.after[0].object??null, project)}</dd></div></dl></li>;
-  if(category==='ADDED'||category==='REMOVED')return <li><p className="change-fact">{statement(first, project)}</p>
-    {proofs(item.before.length?item.before:item.after).length>0&&<p className="change-proof">{proofs(item.before.length?item.before:item.after).join(' · ')}</p>}</li>;
-  if(category==='OCCURRENCES_CHANGED')return <li><p className="change-fact">{statement(first, project)}</p>
-    <dl className="change-sides"><div><dt>Avant</dt><dd>{said(item.before)}</dd></div><div><dt>Après</dt><dd>{said(item.after)}</dd></div></dl></li>;
-  const before=category==='STATUS_CHANGED'?item.before.map(fact=>`${fact.status} · ${fact.validity}`)
-    :category==='OCCURRENCE_COUNT_CHANGED'?[`${item.before.length} apparition${item.before.length>1?'s':''}`]:proofs(item.before, proofWithContent);
-  const after=category==='STATUS_CHANGED'?item.after.map(fact=>`${fact.status} · ${fact.validity}`)
-    :category==='OCCURRENCE_COUNT_CHANGED'?[`${item.after.length} apparition${item.after.length>1?'s':''}`]:proofs(item.after, proofWithContent);
-  return <li><p className="change-fact">{statement(first, project)}</p>
-    <dl className="change-sides"><div><dt>Avant</dt><dd>{before.join(' · ')||'—'}</dd></div><div><dt>Après</dt><dd>{after.join(' · ')||'—'}</dd></div></dl></li>;
+/** Ce que montre chaque colonne Avant / Apres, selon la categorie. */
+const SIDES:Partial<Record<Category, (facts:ComparedFact[], project?:Project)=>ReactNode>>={
+  MODIFIED:(facts, project)=>reference(facts[0]?.object??null, project),
+  EVIDENCE_CHANGED:facts=>joined(proofs(facts, proofWithContent)),
+  STATUS_CHANGED:facts=>joined(facts.map(fact=>`${fact.status} · ${fact.validity}`)),
+  OCCURRENCE_COUNT_CHANGED:apparitions,
+  OCCURRENCES_CHANGED:said,
+};
+
+function heading(category:Category, fact:ComparedFact, project?:Project){
+  return category==='MODIFIED'?`${reference(fact.subject??null, project)} ${label(VERBS, fact.relation??'')}`:statement(fact, project);
+}
+
+export function ChangeItem({category, item, project}:Readonly<{category:Category; item:ChangesPage['items'][number]; project?:Project}>){
+  const facts=item.before.length?item.before:item.after;
+  const side=SIDES[category];
+  if(!side)return <li><p className="change-fact">{statement(facts[0], project)}</p>
+    {proofs(facts).length>0&&<p className="change-proof">{joined(proofs(facts))}</p>}</li>;
+  return <li><p className="change-fact">{heading(category, facts[0], project)}</p>
+    <dl className="change-sides"><div><dt>Avant</dt><dd>{side(item.before, project)}</dd></div>
+      <div><dt>Après</dt><dd>{side(item.after, project)}</dd></div></dl></li>;
 }
 
 function EvaluatorChanges({base, request, summary, category, entry, project}:Readonly<{base:string; request:Request; summary:ComparisonSummary;
   category:Category; entry:EvaluatorEntry; project?:Project}>){
   const [items,setItems]=useState<ChangesPage['items']>([]), [next,setNext]=useState<string|null>(null);
   const [loading,setLoading]=useState(true), [error,setError]=useState('');
+  // Une reponse arrivee apres un changement de categorie ne doit jamais remplir la nouvelle liste.
+  const generation=useRef(0);
   function load(cursor:string|null){
+    const mine=cursor===null?++generation.current:generation.current;
     const query=new URLSearchParams({before:summary.before.id, after:summary.after.id, evaluator:entry.evaluator_id, category, limit:'20'});
     if(cursor)query.set('cursor', cursor);
-    setLoading(true);
-    request<ChangesPage>(`${base}/comparisons/changes?${query}`).then(page=>{setItems(past=>cursor?[...past,...page.items]:page.items);setNext(page.next);})
-      .catch(reason=>setError((reason as Error).message)).finally(()=>setLoading(false));
+    setLoading(true);setError('');
+    request<ChangesPage>(`${base}/comparisons/changes?${query}`)
+      .then(page=>{if(mine!==generation.current)return;setItems(past=>cursor?[...past,...page.items]:page.items);setNext(page.next);})
+      .catch(reason=>{if(mine===generation.current)setError((reason as Error).message);})
+      .finally(()=>{if(mine===generation.current)setLoading(false);});
   }
-  useEffect(()=>{setItems([]);load(null);},[category, entry.evaluator_id, summary.before.id, summary.after.id]);
+  useEffect(()=>{setItems([]);setNext(null);load(null);},[category, entry.evaluator_id, summary.before.id, summary.after.id]);
   return <section className="change-group"><h4>{label(EVALUATORS, entry.evaluator_id)} <span>{entry.counts?.[category]}</span></h4>
     {error&&<p role="alert" className="error">{error}</p>}
-    <ul className="change-list">{items.map((item, index)=><Item key={index} category={category} item={item} project={project}/>)}</ul>
-    {loading?<p role="status" className="muted">Chargement…</p>:next&&<button type="button" className="link more" onClick={()=>load(next)}>Afficher la suite</button>}
+    <ul className="change-list">{items.map(item=><ChangeItem key={keyOf(item)} category={category} item={item} project={project}/>)}</ul>
+    {loading&&<output className="muted">Chargement…</output>}
+    {!loading&&next&&<button type="button" className="link more" onClick={()=>load(next)}>Afficher la suite</button>}
   </section>;
 }
 
@@ -121,7 +141,7 @@ export function ComparisonView({base, request, before, after, onClose, onSwap, p
     <div className="comparison-bar"><button type="button" className="link" onClick={onClose}>← Vue d’ensemble</button>
       <button type="button" className="ghost" onClick={onSwap}>Inverser le sens</button></div>
     {error&&<div role="alert" className="error">{error}</div>}
-    {!summary&&!error&&<p role="status">Comparaison en cours…</p>}
+    {!summary&&!error&&<output>Comparaison en cours…</output>}
     {summary&&<>
       <header className="comparison-head">
         <div><span className="eyebrow">Analyse A</span><strong>{sideLabel(summary.before)}</strong><span>{day(summary.before.created_at)}</span></div>

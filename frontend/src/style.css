@@ -569,3 +569,5 @@ main section,main details,main [id]{scroll-margin-top:16px}
 .premises{margin:0;padding-left:16px;font-size:12px;line-height:1.5}
 .premises li{overflow-wrap:anywhere}
 .change-counts{max-width:640px}
+.said{display:flex;flex-direction:column;gap:2px}
+.said+.said{margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)}
