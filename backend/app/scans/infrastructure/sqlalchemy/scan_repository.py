@@ -1,7 +1,7 @@
 from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, select
 from sqlalchemy.orm import Session
 from app.platform.database.base import Base
-from app.scans.domain.scan import Scan
+from app.scans.domain.scan import COMPLETE, MEMORY, Scan, is_complete
 
 class ScanRow(Base):
     __tablename__ = 'scans'
@@ -19,14 +19,24 @@ class SqlAlchemyScanRepository:
         self.engine = engine
 
     def list(self, project_id):
+        """Analyses complètes seulement : une consolidation interrompue n'est pas une analyse."""
         with Session(self.engine) as db:
             return [_scan(row) for row in db.scalars(select(ScanRow).where(
-                ScanRow.project_id == project_id).order_by(ScanRow.created_at.desc()))]
+                ScanRow.project_id == project_id).order_by(ScanRow.created_at.desc())) if is_complete(row.result)]
 
     def get(self, project_id, scan_id):
         with Session(self.engine) as db:
             row = db.get(ScanRow, scan_id)
-            return _scan(row) if row is not None and row.project_id == project_id else None
+            found = row is not None and row.project_id == project_id and is_complete(row.result)
+            return _scan(row) if found else None
+
+    def complete(self, scan_id):
+        """La mémoire de l'analyse est entière : elle devient visible et comparable."""
+        with Session(self.engine) as db:
+            row = db.get(ScanRow, scan_id)
+            row.result = {**row.result, MEMORY: COMPLETE}
+            db.commit()
+            return _scan(row)
 
     def add(self, scan):
         with Session(self.engine) as db:
