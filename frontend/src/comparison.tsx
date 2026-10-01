@@ -1,7 +1,7 @@
 // Comparer deux analyses (TAXO-01F, tranche B). Le portail lit les deux reponses de l'API telles quelles :
 // aucune comparaison n'est calculee ici. Des comptes, jamais de pourcentage ; aucun impact suppose.
 import {type ReactNode, useEffect, useRef, useState} from 'react';
-import {EVALUATORS, VERBS, label, reference} from './vocabulary';
+import {EVALUATORS, ORIGINS, VALIDITIES, VERBS, label, premise, reference} from './vocabulary';
 
 type Request=<T>(path:string)=>Promise<T>;
 export type Side={id:string; created_at:string; snapshot?:{commit?:string; mode?:string; content_fingerprint?:string}|null};
@@ -13,7 +13,8 @@ export type Evidence={path?:string; line_start?:number; line_end?:number; symbol
   content_hash?:string};
 type Project={id:string; name:string};
 export type ComparedFact={kind:string; subject?:string; relation?:string; object?:string; status:string; validity:string;
-  evidence?:Evidence[]; derivation?:{rule:string; premises:string[]}};
+  evidence?:Evidence[]; derivation?:{rule:string; premises:string[]};
+  produced_by?:{producer_id?:string; producer_version?:string}};
 export type ChangesPage={items:{before:ComparedFact[]; after:ComparedFact[]}[]; next:string|null};
 
 export const CATEGORIES=[
@@ -65,14 +66,34 @@ const keyOf=(value:unknown)=>JSON.stringify(value);
 const apparitions=(facts:ComparedFact[])=>`${facts.length} apparition${facts.length>1?'s':''}`;
 const joined=(values:(string|null)[])=>values.filter(Boolean).join(' · ')||'—';
 
+/** Le statut d'un fait dit en clair ; les termes du contrat restent dans les details techniques. */
+export const state=(fact:ComparedFact)=>`${label(ORIGINS, fact.status)} · ${label(VALIDITIES, fact.validity)}`;
+
+/** Ce que le moteur a enregistre, tel quel, pour qui veut verifier. */
+function Technical({fact}:Readonly<{fact:ComparedFact}>){
+  return <details className="technical"><summary>Voir les détails techniques</summary>
+    <dl>
+      <dt>Type</dt><dd>{fact.kind}{fact.relation?` · ${fact.relation}`:''}</dd>
+      <dt>Origine · validité</dt><dd>{fact.status} · {fact.validity}</dd>
+      {fact.subject&&<><dt>Sujet</dt><dd>{fact.subject}</dd></>}
+      {fact.object&&<><dt>Objet</dt><dd>{fact.object}</dd></>}
+      {fact.derivation&&<><dt>Règle</dt><dd>{fact.derivation.rule}</dd>
+        <dt>Prémisses</dt><dd><ul>{fact.derivation.premises.map(item=><li key={item}>{item}</li>)}</ul></dd></>}
+      {fact.produced_by?.producer_id&&<><dt>Analyseur</dt>
+        <dd>{fact.produced_by.producer_id}{fact.produced_by.producer_version?` ${fact.produced_by.producer_version}`:''}</dd></>}
+    </dl></details>;
+}
+
 /** Tout ce que dit une occurrence, tel quel : le fait, son statut, sa justification, ses preuves. Rien n'est compare ici. */
 function said(facts:ComparedFact[], project?:Project){
   return facts.map(fact=><div key={keyOf(fact)} className="said">
     <span className="said-fact">{statement(fact, project)}</span>
-    <span className="state">{fact.status} · {fact.validity}</span>
-    {fact.derivation&&<><span className="said-label">Prémisses</span>
-      <ul className="premises">{fact.derivation.premises.map(premise=><li key={premise}>{premise}</li>)}</ul></>}
-    {(fact.evidence??[]).length>0&&<span className="proof">{joined(proofs([fact], proofWithContent))}</span>}
+    <span className="state">{state(fact)}</span>
+    {fact.derivation&&<><span className="said-label">Pourquoi Taxo arrive à cette conclusion</span>
+      <ul className="premises">{fact.derivation.premises.map(item=><li key={item}>{premise(item, project)}</li>)}</ul></>}
+    {(fact.evidence??[]).length>0&&<><span className="said-label">Preuves dans le code</span>
+      <span className="proof">{joined(proofs([fact], proofWithContent))}</span></>}
+    <Technical fact={fact}/>
   </div>);
 }
 
@@ -80,7 +101,7 @@ function said(facts:ComparedFact[], project?:Project){
 const SIDES:Partial<Record<Category, (facts:ComparedFact[], project?:Project)=>ReactNode>>={
   MODIFIED:(facts, project)=>reference(facts[0]?.object??null, project),
   EVIDENCE_CHANGED:facts=>joined(proofs(facts, proofWithContent)),
-  STATUS_CHANGED:facts=>joined(facts.map(fact=>`${fact.status} · ${fact.validity}`)),
+  STATUS_CHANGED:facts=>joined(facts.map(state)),
   OCCURRENCE_COUNT_CHANGED:apparitions,
   OCCURRENCES_CHANGED:said,
 };

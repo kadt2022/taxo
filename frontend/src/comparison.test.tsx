@@ -59,7 +59,21 @@ describe('comparaison de deux analyses', ()=>{
       item={{before:[fact('module:caf\u00e9')], after:[fact('module:cafe\u0301')]}}/></ul>);
     expect(html).toContain('module caf\u00e9');
     expect(html).toContain('module cafe\u0301');
+    expect(html).toContain('Observé dans le code · À jour');
+    expect(html).toContain('Voir les détails techniques');
     expect(html).toContain('OBSERVED · VALID');
+  });
+
+  it('dit pourquoi Taxo conclut, en clair, et garde les termes du moteur dans les détails', ()=>{
+    const fact={kind:'ASSERTION', subject:'endpoint:GET /orders', relation:'MATCHED_BY', object:'route-pattern:/**', status:'INFERRED',
+      validity:'VALID', derivation:{rule:'first-match', premises:['HANDLED_BY : endpoint:GET /orders -> symbol:java:com.acme.web.OrderController#get()']},
+      produced_by:{producer_id:'taxo.spring-security', producer_version:'0.4.0'}};
+    const html=renderToStaticMarkup(<ul><ChangeItem category="OCCURRENCES_CHANGED" item={{before:[fact], after:[fact]}}/></ul>);
+    expect(html).toContain('Déduit par Taxo · À jour');
+    expect(html).toContain('Pourquoi Taxo arrive à cette conclusion');
+    expect(html).toContain('route GET /orders est traité par OrderController.get()');
+    expect(html).toContain('INFERRED · VALID');
+    expect(html).toContain('taxo.spring-security 0.4.0');
   });
 
   it('montre la preuve avant et après, avec le contenu cité', ()=>{
