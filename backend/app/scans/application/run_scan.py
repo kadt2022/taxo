@@ -67,18 +67,24 @@ class RunScan:
         except (ValueError, OSError) as exc:
             raise ScanError(str(exc)) from exc
         listener('analysis.consolidating', {})
-        if self.provenance is not None:
-            # L'analyse reste incomplete tant que sa memoire n'est pas entierement ecrite (TAXO-01F).
-            result[MEMORY] = INCOMPLETE
-        scan = self.scans.add(Scan(scan_id or str(uuid4()), project_id, datetime.now(timezone.utc), result))
-        if self.provenance is not None:
-            # TAXO-01E : l'instantane et chaque execution sont enregistres avant les faits, verifies contre eux.
-            self.provenance.record_snapshot(scan.id, snapshot.reference())
+        return self._consolidate(Scan(scan_id or str(uuid4()), project_id, datetime.now(timezone.utc), result),
+                                 snapshot, executions)
+
+    def _consolidate(self, scan, snapshot, executions):
+        if self.provenance is None:
+            scan = self.scans.add(scan)
             for item in executions:
-                self.provenance.record_execution(scan.id, item.producer_execution())
+                self.facts.add(scan.id, item.evaluator_id, [*item.facts, *item.coverage])
+            return scan
+        # L'analyse reste incomplete tant que sa memoire n'est pas entierement ecrite (TAXO-01F).
+        scan = self.scans.add(Scan(scan.id, scan.project_id, scan.created_at, {**scan.result, MEMORY: INCOMPLETE}))
+        # TAXO-01E : l'instantane et chaque execution sont enregistres avant les faits, verifies contre eux.
+        self.provenance.record_snapshot(scan.id, snapshot.reference())
+        for item in executions:
+            self.provenance.record_execution(scan.id, item.producer_execution())
         for item in executions:
             self.facts.add(scan.id, item.evaluator_id, [*item.facts, *item.coverage])
-        return self.scans.complete(scan.id) if self.provenance is not None else scan
+        return self.scans.complete(scan.id)
 
     def _run(self, evaluator, snapshot, listener, main=False):
         evaluator_id = getattr(evaluator, 'evaluator_id', '')
