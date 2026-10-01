@@ -15,6 +15,9 @@ from app.evaluators.spring_boot.evaluator import SpringBootEvaluator
 from app.evaluators.spring_security.evaluator import SpringSecurityEvaluator
 from app.evaluators.structure.evaluator import StructureEvaluator
 from app.scans.infrastructure.sqlalchemy.fact_memory import SqlAlchemyFactMemory
+from app.scans.infrastructure.sqlalchemy.fact_comparison import SqlAlchemyComparisonStore
+from app.comparison.application.compare import CompareAnalyses
+from app.comparison.api.router import create_router as comparison_router
 from app.evaluations.application.registry import EvaluatorRegistry
 from app.evaluations.application.run_evaluator import RunEvaluator
 from app.platform.api.health import router as health_router
@@ -95,6 +98,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     # Analyse observable : lancee en tache de fond, ses evenements reels sont diffuses (TAXO-UX-02).
     api.include_router(scans_router(projects, scans, run, facts, AnalysisJobs(run, projects)))
     api.include_router(history_router(history))
+    api.include_router(comparison_router(CompareAnalyses(projects, scans, SqlAlchemyComparisonStore(engine))))
     # La requete selectionne parmi les faits conserves ; elle ne relit jamais le depot (TAXO-QUERY-01).
     query = ProjectQuery(projects, scans, facts)
     api.include_router(query_router(query))

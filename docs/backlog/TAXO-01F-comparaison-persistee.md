@@ -1,6 +1,7 @@
 # TAXO-01F — Comparer deux analyses depuis la mémoire, sans relire le dépôt
 
-Statut : rédigé le 2026-10-01. Priorité active du plan ([PLAN](PLAN.md)), après TAXO-01E.
+Statut : rédigé le 2026-10-01. Priorité active du plan ([PLAN](PLAN.md)), après TAXO-01E. Tranche A
+en cours : API de comparaison.
 
 Source de vérité : [ARCHITECTURE § 5.2, § 8 et § 15](../ARCHITECTURE.md). En cas de divergence, le
 document cible prévaut.
@@ -130,11 +131,17 @@ Un seul récit ; chaque tranche est une PR.
 - Retrait d'`analysis_facts`.
 - Explication des changements par Minia.
 
-## Questions à trancher avant la tranche A
+## Décisions (2026-10-01)
 
-1. Une même identité présente deux fois dans une analyse (deux producteurs, deux preuves) : comparer
-   les occurrences comme des multiensembles, ou signaler à part « nombre d'occurrences changé » ?
-2. Un changement de `producer_version` sans changement de catalogue : simple information, ou non
-   comparable ?
-3. Deux analyses en mode `WORKING_TREE` : comparables comme les autres, avec leur empreinte de contenu
-   affichée ?
+1. **Occurrences multiples** : pour une identité, les occurrences sont un multiensemble. Nombres
+   différents : `OCCURRENCE_COUNT_CHANGED` (2 → 3). Preuve et statut ne sont comparés occurrence par
+   occurrence que si chaque côté en a une seule. Nombres égaux mais plusieurs occurrences : si leurs
+   contenus diffèrent, `OCCURRENCES_CHANGED`, les deux côtés rendus. Aucun appariement arbitraire.
+2. **Même catalogue, nouvelle version de producteur** : comparable. La version est rendue comme
+   contexte de provenance, jamais comme changement du logiciel.
+3. **`WORKING_TREE`** : comparable, l'empreinte de contenu est affichée à la place du commit. Une
+   empreinte identique ne supprime pas la comparaison : ce sont deux analyses distinctes.
+4. **Analyses comparables** : seulement les analyses dont la mémoire est complète ; une consolidation
+   interrompue n'est jamais comparée.
+5. **Indépendance** : comparer A et B ne dépend pas de la taille d'une troisième analyse C. Toute
+   lecture passe par un index lié à A ou à B.
