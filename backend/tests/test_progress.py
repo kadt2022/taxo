@@ -165,7 +165,8 @@ def test_an_unexpected_crash_still_ends_the_stream_and_old_journals_are_released
     assert [event['type'] for event in job.follow()][-1] == 'analysis.failed'
     assert 'RuntimeError' in job.events[-1]['data']['message']
     [logged] = [record for record in caplog.records if record.name == 'taxo.analysis']
-    assert job.id in logged.getMessage() and logged.exc_info[1].args == ('panne',)
+    assert job.id in logged.getMessage()
+    assert logged.exc_info[1].args == ('panne',)
     monkeypatch.setattr(analysis_jobs, 'KEPT', 1)
     newer = jobs.start('p')
     list(newer.follow())
