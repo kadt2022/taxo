@@ -262,7 +262,7 @@ class SqlAlchemyFactMemory:
             if filters.get(name) is not None:
                 statement = statement.where(_spelled(occurrence, getattr(identity, name), name, filters[name]))
         with Session(self.engine) as db:
-            return [fact for _, fact in self._load(db, scan_id, statement.order_by(occurrence.id))]
+            return [fact for _, fact in self.load_rows(db, scan_id, statement.order_by(occurrence.id))]
 
     def neighbor(self, scan_id, root, relation, direction, after=''):
         """One indexed adjacent occurrence. Never materialize the complete adjacency."""
@@ -273,7 +273,7 @@ class SqlAlchemyFactMemory:
                             rank > int(after or '0'))
                      .order_by(rank).limit(1))
         with Session(self.engine) as db:
-            found = self._load(db, scan_id, statement)
+            found = self.load_rows(db, scan_id, statement)
         return (str(found[0][0][3]), found[0][1]) if found else None
 
     def revision(self, scan_id):
@@ -295,7 +295,7 @@ class SqlAlchemyFactMemory:
                     return True
         return False
 
-    def _load(self, db, scan_id, statement):
+    def load_rows(self, db, scan_id, statement):
         """(row, fact) for each selected occurrence, the fact rebuilt exactly as it was submitted."""
         rows = db.execute(statement).all()
         if not rows:
