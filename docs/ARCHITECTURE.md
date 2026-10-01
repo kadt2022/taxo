@@ -471,9 +471,13 @@ déterminent l'interprétation. La Maille ne se réduit pas à une liste de coup
   jamais deux Mailles.
 - Les projections restent reconstructibles depuis les faits.
 
-**Stockage (Existant)** : la table `analysis_facts` conserve les faits et couvertures de chaque analyse,
-avec des colonnes de filtrage (`evaluator_id`, `kind`, `subject`, `relation`, `object`) et le fait
-contractuel complet. `scans.result` ne garde que des résumés bornés. Lecture :
+**Stockage (Existant, TAXO-01E)** : la mémoire versionnée sépare l'identité d'un fait
+(`fact_identities`, une ligne par identité canonique v1) de ses occurrences (`fact_occurrences`, une par
+analyse), avec leurs preuves (`fact_evidence`), l'instantané de l'analyse (`analysis_snapshots`) et les
+exécutions des producteurs (`producer_executions`), enregistrés avant les faits. Chaque fait est rendu
+exactement tel qu'il a été soumis. Les rangs de parcours sont locaux à une adjacence. La table
+`analysis_facts` reste en secours après la migration 004 et n'est plus alimentée. `scans.result` ne
+garde que des résumés bornés. Lecture :
 `GET /api/projects/{id}/scans/{scan}/facts?evaluator=&kind=&subject=&relation=&object=`.
 
 **Navigation (À construire)** : accès entrants et sortants et index nécessaires au voisinage, sur ce
@@ -853,7 +857,7 @@ Une **hypothèse** n'est pas un fait. Le contrat ne change pas : ni statut, ni p
 | Capacité | État |
 | --- | --- |
 | Monolithe modulaire, contrat v1, conformité, instantanés, registre | Existant |
-| Stockage des faits par analyse et lecture filtrée | Existant |
+| Mémoire versionnée des faits (identité, occurrence) et lecture filtrée | Existant (TAXO-01E) |
 | Inventaire, Git | Existants |
 | Lecteur Java syntaxique, endpoints Spring | Existants, couverture bornée |
 | Sécurité Spring, déductions, limites | Existant (#45) |

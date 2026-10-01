@@ -1,7 +1,10 @@
 # TAXO-01E — Mémoire versionnée des faits
 
-Statut : rédigé le 2026-09-30. Priorité active du plan ([PLAN](PLAN.md)), avant la comparaison
-persistée (01F) et la suite des Tuiles.
+Statut : **TERMINÉ** le 2026-10-01. Tranches A, B et C livrées : Taxo écrit et lit la mémoire
+versionnée. Migration réelle validée : 43 analyses, 1 124 370 occurrences, 731 295 identités,
+1 120 793 preuves, 905 s. Taille : 1 498 Mo pour la mémoire versionnée, contre 3 586 Mo pour
+`analysis_facts`. Suite : la comparaison
+persistée (01F), puis les Tuiles.
 
 Source de vérité : [ARCHITECTURE § 5.2, § 5.5, § 8 et § 15](../ARCHITECTURE.md). En cas de divergence,
 le document cible prévaut.
@@ -218,7 +221,9 @@ d'intégration.
   avec les exécutions. Au premier écart, la migration s'arrête et n'a rien détruit.
 - **`analysis_facts` est conservée** par 004. Le code bascule sur la nouvelle mémoire ; l'ancienne
   table reste une voie de comparaison et de récupération, au prix d'un surcoût disque temporaire.
-- Le retrait de `analysis_facts` est une migration 005 séparée, plus tard, hors de ce récit.
+- La migration 005 rattrape, avant la bascule, les analyses écrites dans `analysis_facts` après 004,
+  avec le même code et les mêmes vérifications.
+- Le retrait de `analysis_facts` est une migration séparée, plus tard, hors de ce récit.
 
 Critères :
 
@@ -234,18 +239,57 @@ occurrences           N                    N
 identités distinctes  (inconnu)            Y
 ratio N / Y           —                    …
 taille du nouveau stockage (tables, index)  …
-taille de analysis_facts (tables, index)    … (conservée jusqu'à 005)
+taille de analysis_facts (tables, index)    … (conservée jusqu'à son retrait)
 durée de migration    —                    …
 ```
 
 Le résultat est publié tel quel, même s'il est décevant. Le gain sur le fichier lui-même n'apparaît
-qu'après 005 (et `VACUUM` sous SQLite) ; 01E-C mesure le nouveau stockage seul.
+qu'après le retrait de `analysis_facts` (et `VACUUM` sous SQLite) ; 01E-C mesure le nouveau stockage seul.
+
+## Mesure réelle de la migration 004 (2026-09-30)
+
+Base SQLite locale d'un utilisateur, 3,63 Go avant migration, 43 analyses. Résultat publié tel quel.
+
+```text
+analyses migrées et vérifiées   43, sans arrêt
+occurrences                     1 124 370 (chacune relue et comparée à son fait d'origine)
+identités distinctes              731 295
+ratio occurrences / identités        1,54
+preuves                         1 120 793
+durée                             905 s (plus grosse analyse : 531 751 faits en 488,8 s)
+tailles                          non mesurées par la migration : dbstat absent de ce SQLite
+```
+
+- Le modèle identité / occurrence tient sur un historique réel, pas seulement sur des fixtures.
+- Environ 35 % des occurrences répètent une identité déjà présente dans une autre analyse.
+- Le débit réel (environ 1 240 faits par seconde) est plus bas que sur le jeu synthétique (environ
+  4 000) : les faits réels sont plus gros.
+- Le fichier contient temporairement l'ancien et le nouveau stockage (5,21 Go sur le disque) : le gain
+  se juge sur des copies compactes, pas sur ce fichier.
+
+### Mesure de taille (2026-10-01)
+
+Mesurée sur des copies compactes (`VACUUM INTO`, puis suppression de l'un ou l'autre stockage), sans
+modifier la base, en 443 s :
+
+```text
+reste de la base (projets, analyses, résumés)        8 Mo
+ancien stockage analysis_facts                  3 586 Mo
+nouvelle mémoire versionnée                     1 498 Mo
+base compacte sans analysis_facts               1 507 Mo
+```
+
+- Pour les mêmes faits, la mémoire versionnée occupe 2 088 Mo de moins, soit environ 2,4 fois moins
+  de place qu'`analysis_facts`.
+- Mesure prise sur `main` avant la bascule : une analyse lancée après la migration 004 n'est comptée
+  que dans `analysis_facts`, jusqu'au rattrapage de 005.
+- Le gain deviendra effectif sur le disque au retrait d'`analysis_facts`, suivi d'un `VACUUM`.
 
 ## Hors périmètre
 
 - Comparaison depuis les faits enregistrés, `EVIDENCE_CHANGED`, changement de statut : 01F, juste après.
 - Moteur de validité (`STALE`, `REVALIDATION_REQUIRED`) et saisie de validations humaines.
-- Retrait de `analysis_facts` (migration 005, après bascule vérifiée).
+- Retrait de `analysis_facts` (migration ultérieure, après bascule vérifiée).
 - Suppression ou purge d'analyses, identités orphelines.
 - Cache et projections persistées.
 - Résumés de `scans.result`.

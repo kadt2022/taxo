@@ -9,8 +9,10 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
 
 1. ✅ Nettoyage du dépôt : démonstrateurs, bancs spécifiques et leurs données retirés.
 2. ✅ Première Tuile : `get_neighborhood` à un saut, avec budgets et reprise ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
-3. → **Mémoire versionnée des faits** : identité et occurrence séparées, en trois tranches
-   ([TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md)).
+3. ✅ **Mémoire versionnée des faits** : identité et occurrence séparées, Taxo basculé dessus
+   ([TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md)). Récit terminé :
+   migration réelle validée (43 analyses, 1 124 370 occurrences), 1 498 Mo contre 3 586 Mo pour
+   `analysis_facts`.
 4. Comparaison depuis les faits enregistrés (01F) : la preuve de l’utilité de 01E, comparer deux
    analyses sans relire le dépôt.
 5. Tuile multi-niveaux et couverture locale détaillée ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
@@ -52,8 +54,8 @@ l'historique Git.
 
 | Origine | Exigence non réalisée | Situation actuelle | Devenir |
 | --- | --- | --- | --- |
-| 01E | Mémoire versionnée : un fait existe une fois, chaque exécution ajoute une **occurrence** (exécution, instantané, provenance) ; identité stable indexée | les faits sont stockés par analyse, une ligne par fait, sans occurrence ni identité indexée (`scans/infrastructure/sqlalchemy/fact_store.py` le dit lui-même) | planifiée : [TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md), tranche A |
-| 01E | Une réanalyse du même instantané ne crée pas de nouvelle identité ; chaque nouvelle analyse ou exécution conserve sa propre occurrence ; deux versions de producteur distinguées par leurs occurrences | chaque analyse enregistre ses propres faits | planifiée : TAXO-01E, tranche A |
+| 01E | Mémoire versionnée : un fait existe une fois, chaque exécution ajoute une **occurrence** (exécution, instantané, provenance) ; identité stable indexée | les faits sont stockés par analyse, une ligne par fait, sans occurrence ni identité indexée (`scans/infrastructure/sqlalchemy/fact_store.py` le dit lui-même) | réalisée : [TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md) |
+| 01E | Une réanalyse du même instantané ne crée pas de nouvelle identité ; chaque nouvelle analyse ou exécution conserve sa propre occurrence ; deux versions de producteur distinguées par leurs occurrences | chaque analyse enregistre ses propres faits | réalisée : TAXO-01E |
 | 01F | Comparer deux instantanés **depuis les faits persistés**, sans relire le dépôt | l'impact d'un commit réexécute les évaluateurs sur le parent et sur le commit (`history/application/queries.py`) | planifiée juste après TAXO-01E (étape 4) |
 | 01F | `EVIDENCE_CHANGED` : un fait dont seule la preuve se déplace reste inchangé, et ce déplacement est signalé à part avec les deux preuves | le fait est compté inchangé, sans signal distinct (`history/domain/impact.py`) | planifiée avec la comparaison persistée (étape 4) |
 | 01F | Changement de statut à identité constante signalé | compté inchangé (ARCHITECTURE § 5.2) | planifiée avec la comparaison persistée (étape 4) |

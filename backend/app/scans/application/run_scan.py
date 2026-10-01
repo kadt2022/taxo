@@ -16,7 +16,7 @@ from app.snapshots.application.ports import SnapshotReader
 from app.snapshots.domain.mode import COMMIT, WORKING_TREE
 from app.snapshots.domain.errors import SnapshotError
 from app.scans.domain.scan import Scan, ScanError
-from .ports import AnalysisFacts, ScanRepository, EvaluationRunner
+from .ports import AnalysisFacts, AnalysisProvenance, ScanRepository, EvaluationRunner
 from app.evaluations.domain.evaluator import Evaluator
 from app.evaluations.domain.status import EvaluationStatus
 
@@ -37,11 +37,12 @@ class RunScan:
     def __init__(self, projects: ProjectRepository, scans: ScanRepository,
                  paths: ProjectPathResolver, snapshots: SnapshotReader, evaluator: Evaluator,
                  evaluator_runner: EvaluationRunner, others: tuple[Evaluator, ...] = (),
-                 facts: AnalysisFacts | None = None):
+                 facts: AnalysisFacts | None = None, provenance: AnalysisProvenance | None = None):
         self.projects, self.scans, self.paths = projects, scans, paths
         self.snapshots, self.evaluator, self.others = snapshots, evaluator, tuple(others)
         self.evaluator_runner = evaluator_runner
         self.facts = facts or _NoFactStore()
+        self.provenance = provenance
 
     def __call__(self, project_id, mode='commit', commit=None, listener=_nobody, scan_id=None):
         if mode not in MODES:
@@ -67,6 +68,11 @@ class RunScan:
             raise ScanError(str(exc)) from exc
         listener('analysis.consolidating', {})
         scan = self.scans.add(Scan(scan_id or str(uuid4()), project_id, datetime.now(timezone.utc), result))
+        if self.provenance is not None:
+            # TAXO-01E : l'instantane et chaque execution sont enregistres avant les faits, verifies contre eux.
+            self.provenance.record_snapshot(scan.id, snapshot.reference())
+            for item in executions:
+                self.provenance.record_execution(scan.id, item.producer_execution())
         for item in executions:
             self.facts.add(scan.id, item.evaluator_id, [*item.facts, *item.coverage])
         return scan
