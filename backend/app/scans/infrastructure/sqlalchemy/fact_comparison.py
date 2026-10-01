@@ -3,6 +3,8 @@
 Every read is bound to one of the two analyses: walked by (scan_id, id), looked up on the other side
 by (identity_hash, scan_id). The size of any other analysis never matters.
 """
+import json
+
 from sqlalchemy import and_, exists, false, or_, select
 from sqlalchemy.orm import Session, aliased
 
@@ -72,7 +74,7 @@ class SqlAlchemyComparisonStore:
     def _occurrences(db, condition, identity_hashes):
         occurrence = FactOccurrenceRow
         rows = db.execute(select(occurrence.id, occurrence.identity_hash, occurrence.status, occurrence.validity,
-                                 occurrence.has_evidence)
+                                 occurrence.has_evidence, occurrence.details, occurrence.raw_identity)
                           .where(condition, occurrence.identity_hash.in_(identity_hashes))
                           .order_by(occurrence.id)).all()
         evidence = {}
@@ -84,7 +86,8 @@ class SqlAlchemyComparisonStore:
         found = {}
         for row in rows:
             proofs = tuple(evidence.get(row.id, ())) if row.has_evidence else None
-            found.setdefault(row.identity_hash, []).append(Occurrence(row.id, row.status, row.validity, proofs))
+            content = json.dumps([row.details, row.raw_identity], sort_keys=True, ensure_ascii=False)
+            found.setdefault(row.identity_hash, []).append(Occurrence(row.id, row.status, row.validity, proofs, content))
         return found
 
     def common(self, before_id, after_id, producer_id):

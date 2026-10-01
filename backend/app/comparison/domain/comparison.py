@@ -39,6 +39,7 @@ class Occurrence:
     status: str
     validity: str
     evidence: tuple | None
+    content: str = ''  # everything else the occurrence says: derivation, validation, reason, spelling
 
 
 def comparability(before, after):
@@ -84,9 +85,12 @@ def signals(before, after):
             found.append(EVIDENCE_CHANGED)
         if (before[0].status, before[0].validity) != (after[0].status, after[0].validity):
             found.append(STATUS_CHANGED)
+        if before[0].content != after[0].content:
+            found.append(OCCURRENCES_CHANGED)
         return found
+
     def signature(occurrence):
-        return repr((occurrence.status, occurrence.validity, occurrence.evidence))
+        return repr((occurrence.status, occurrence.validity, occurrence.evidence, occurrence.content))
     if sorted(map(signature, before)) != sorted(map(signature, after)):
         return [OCCURRENCES_CHANGED]
     return []

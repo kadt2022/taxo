@@ -137,6 +137,12 @@ Un seul récit ; chaque tranche est une PR.
    différents : `OCCURRENCE_COUNT_CHANGED` (2 → 3). Preuve et statut ne sont comparés occurrence par
    occurrence que si chaque côté en a une seule. Nombres égaux mais plusieurs occurrences : si leurs
    contenus diffèrent, `OCCURRENCES_CHANGED`, les deux côtés rendus. Aucun appariement arbitraire.
+   Le contenu comparé comprend tout ce que dit l'occurrence (preuves, statut, validité, dérivation,
+   validation, raison, graphie) : une seule occurrence de chaque côté dont seul ce reste change est
+   aussi `OCCURRENCES_CHANGED`.
+6. **Pages** : une analyse complète ne change plus. Une comparaison calculée est gardée (les identités
+   de ses différences seulement, pour quelques comparaisons), et les pages suivantes ne relisent pas
+   les analyses.
 2. **Même catalogue, nouvelle version de producteur** : comparable. La version est rendue comme
    contexte de provenance, jamais comme changement du logiciel.
 3. **`WORKING_TREE`** : comparable, l'empreinte de contenu est affichée à la place du commit. Une

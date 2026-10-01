@@ -3,6 +3,9 @@
 No repository is read and no evaluator runs: only the recorded identities and occurrences of the two
 analyses are read. Counts first; each category then lists its facts, page by page.
 """
+import threading
+from collections import OrderedDict
+
 from app.comparison.domain.comparison import (ADDED, CATEGORIES, MODIFIED, REASONS, REMOVED, Side,
                                               comparability, pair_modified, signals)
 from app.projects.application.queries import require_project
@@ -10,6 +13,9 @@ from app.projects.domain.project import ProjectError
 
 UNCHANGED = 'UNCHANGED'
 MAX_PAGE = 200
+# A complete analysis never changes again: a computed comparison stays true. Only the identities of the
+# differences are kept (never whole analyses), for the few comparisons being browsed.
+KEPT_COMPARISONS = 8
 
 
 def _side(executions, statuses):
@@ -32,6 +38,7 @@ def _describe(scan):
 class CompareAnalyses:
     def __init__(self, projects, scans, store):
         self.projects, self.scans, self.store = projects, scans, store
+        self._kept, self._lock = OrderedDict(), threading.Lock()
 
     def _analyses(self, project_id, before_id, after_id):
         require_project(self.projects, project_id)
@@ -49,6 +56,19 @@ class CompareAnalyses:
         return producers
 
     def _compute(self, before, after, producer):
+        key = (before.id, after.id, producer)
+        with self._lock:
+            if key in self._kept:
+                self._kept.move_to_end(key)
+                return self._kept[key]
+        found = self._differences(before, after, producer)
+        with self._lock:
+            self._kept[key] = found
+            while len(self._kept) > KEPT_COMPARISONS:
+                self._kept.popitem(last=False)
+        return found
+
+    def _differences(self, before, after, producer):
         removed = self.store.only(before.id, after.id, producer)
         added = self.store.only(after.id, before.id, producer)
         removed, added, modified = pair_modified(removed, added)

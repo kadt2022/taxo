@@ -57,11 +57,13 @@ def compared(tmp_path):
     memory.add('before', 'fixture', [
         edge('a', 'module:kept'), edge('a', 'module:moved', line=1), edge('a', 'module:gone', subject='module:left'),
         edge('a', 'module:old', 'CONTAINS', subject='module:slot'), edge('a', 'module:twice'),
-        edge('a', 'module:twice', line=2), edge('a', 'module:aged', subject='module:aging')])
+        edge('a', 'module:twice', line=2), edge('a', 'module:aged', subject='module:aging'),
+        edge('a', 'module:caf\u00e9', subject='module:spelling')])
     memory.add('after', 'fixture', [
         edge('c', 'module:kept'), edge('c', 'module:moved', line=9), edge('c', 'module:new', subject='module:right'),
         edge('c', 'module:fresh', 'CONTAINS', subject='module:slot'), edge('c', 'module:twice'),
-        edge('c', 'module:aged', subject='module:aging', validity='STALE')])
+        edge('c', 'module:aged', subject='module:aging', validity='STALE'),
+        edge('c', 'module:cafe\u0301', subject='module:spelling')])
     compare = CompareAnalyses(SqlAlchemyProjectRepository(engine), SqlAlchemyScanRepository(engine),
                               SqlAlchemyComparisonStore(engine))
     yield compare
@@ -77,7 +79,7 @@ def test_every_category_is_counted_from_the_memory(compared):
     [entry] = compared.summary('project', 'before', 'after')['evaluators']
     assert entry['comparable']
     assert entry['counts'] == {'ADDED': 1, 'REMOVED': 1, 'MODIFIED': 1, 'EVIDENCE_CHANGED': 1, 'STATUS_CHANGED': 1,
-                               'OCCURRENCE_COUNT_CHANGED': 1, 'OCCURRENCES_CHANGED': 0, 'UNCHANGED': 4}
+                               'OCCURRENCE_COUNT_CHANGED': 1, 'OCCURRENCES_CHANGED': 1, 'UNCHANGED': 5}
 
 
 def test_each_category_lists_its_own_facts(compared):
@@ -102,3 +104,23 @@ def test_pages_follow_each_other_without_loss(compared):
         if cursor is None:
             break
     assert seen == ['module:gone']
+
+
+def test_a_change_of_occurrence_content_is_never_silent(compared):
+    """Same identity, other spelling of the object: the occurrence says something else."""
+    [spelled] = compared.changes('project', 'before', 'after', 'OCCURRENCES_CHANGED', 'fixture')['items']
+    assert (spelled['before'][0]['object'], spelled['after'][0]['object']) == ('module:caf\u00e9', 'module:cafe\u0301')
+
+
+def test_following_pages_never_read_the_analyses_again(compared, monkeypatch):
+    calls = []
+    for name in ('only', 'common'):
+        original = getattr(compared.store, name)
+        monkeypatch.setattr(compared.store, name,
+                            lambda *args, _original=original, _name=name: calls.append(_name) or _original(*args))
+    compared.summary('project', 'before', 'after')
+    first = len(calls)
+    for category in ('ADDED', 'REMOVED', 'EVIDENCE_CHANGED'):
+        compared.changes('project', 'before', 'after', category, 'fixture', limit=1)
+    assert first == 3
+    assert len(calls) == first
