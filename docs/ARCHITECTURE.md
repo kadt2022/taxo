@@ -476,7 +476,9 @@ déterminent l'interprétation. La Maille ne se réduit pas à une liste de coup
 analyse), avec leurs preuves (`fact_evidence`), l'instantané de l'analyse (`analysis_snapshots`) et les
 exécutions des producteurs (`producer_executions`), enregistrés avant les faits. Chaque fait est rendu
 exactement tel qu'il a été soumis. Les rangs de parcours sont locaux à une adjacence. La table
-`analysis_facts` reste en secours après la migration 004 et n'est plus alimentée. `scans.result` ne
+`analysis_facts` reste en secours après la migration 004 et n'est plus alimentée. Une analyse n'existe comme
+telle qu'une fois son instantané, ses exécutions et tous ses faits enregistrés (`memory: COMPLETE`) ;
+une consolidation interrompue reste en base, marquée `INCOMPLETE`, et n'est plus proposée. `scans.result` ne
 garde que des résumés bornés. Lecture :
 `GET /api/projects/{id}/scans/{scan}/facts?evaluator=&kind=&subject=&relation=&object=`.
 

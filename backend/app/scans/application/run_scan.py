@@ -15,7 +15,7 @@ from app.projects.application.ports import ProjectRepository, ProjectPathResolve
 from app.snapshots.application.ports import SnapshotReader
 from app.snapshots.domain.mode import COMMIT, WORKING_TREE
 from app.snapshots.domain.errors import SnapshotError
-from app.scans.domain.scan import Scan, ScanError
+from app.scans.domain.scan import INCOMPLETE, MEMORY, Scan, ScanError
 from .ports import AnalysisFacts, AnalysisProvenance, ScanRepository, EvaluationRunner
 from app.evaluations.domain.evaluator import Evaluator
 from app.evaluations.domain.status import EvaluationStatus
@@ -67,6 +67,9 @@ class RunScan:
         except (ValueError, OSError) as exc:
             raise ScanError(str(exc)) from exc
         listener('analysis.consolidating', {})
+        if self.provenance is not None:
+            # L'analyse reste incomplete tant que sa memoire n'est pas entierement ecrite (TAXO-01F).
+            result[MEMORY] = INCOMPLETE
         scan = self.scans.add(Scan(scan_id or str(uuid4()), project_id, datetime.now(timezone.utc), result))
         if self.provenance is not None:
             # TAXO-01E : l'instantane et chaque execution sont enregistres avant les faits, verifies contre eux.
@@ -75,7 +78,7 @@ class RunScan:
                 self.provenance.record_execution(scan.id, item.producer_execution())
         for item in executions:
             self.facts.add(scan.id, item.evaluator_id, [*item.facts, *item.coverage])
-        return scan
+        return self.scans.complete(scan.id) if self.provenance is not None else scan
 
     def _run(self, evaluator, snapshot, listener, main=False):
         evaluator_id = getattr(evaluator, 'evaluator_id', '')

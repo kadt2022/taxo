@@ -60,9 +60,13 @@ def facts_of(commit, shift=0, weight=1):
     return {'fixture': fixture, 'other': others}
 
 
-def summary(commit):
+def summary(commit, facts=None):
+    """The summary RunScan keeps: each execution, with the facts and coverage it announced."""
+    facts = facts or facts_of(commit)
     return {'evaluations': [{'execution_id': run.execution_id, 'evaluator_id': run.producer_id,
-                             'producer_version': run.producer_version, 'snapshot': snapshot(commit)}
+                             'producer_version': run.producer_version, 'snapshot': snapshot(commit),
+                             'fact_count': sum(fact['kind'] != 'COVERAGE' for fact in facts[run.producer_id]),
+                             'coverage_count': sum(fact['kind'] == 'COVERAGE' for fact in facts[run.producer_id])}
                             for run in runs(commit)]}
 
 
@@ -83,7 +87,7 @@ class Database:
             if db.get(ProjectRow, 'project') is None:
                 db.add(ProjectRow(id='project', name='fixture', path='/fixture'))
             db.add(ScanRow(id=scan_id, project_id='project', created_at=datetime.now(timezone.utc),
-                           result=summary(commit) if result is None else result))
+                           result=summary(commit, facts or None) if result is None else result))
             db.commit()
         for evaluator, batch in (facts or facts_of(commit)).items():
             self.old.add(scan_id, evaluator, batch)
@@ -231,6 +235,26 @@ def test_analyses_written_between_004_and_the_switch_are_caught_up(database):
     assert 'analyse 1/2 : déjà migrée (reprise)' in output
     for scan_id in (FIRST, SECOND):
         assert same(database.memory.query(scan_id), database.old.query(scan_id))
+
+
+def test_an_analysis_whose_memory_is_partial_is_kept_but_no_longer_offered(database):
+    from app.scans.infrastructure.sqlalchemy.scan_repository import SqlAlchemyScanRepository
+    database.analysis(FIRST, 'a')
+    announced = summary('c')
+    announced['evaluations'][0]['fact_count'] += 1  # one fact never reached the memory
+    database.analysis(SECOND, 'c', result=announced)
+    output = database.alembic('upgrade', 'head').stdout
+    assert '1 analyses complètes, 1 interrompues pendant la consolidation.' in output
+    assert f'{SECOND} (' in output
+    scans = SqlAlchemyScanRepository(database.engine)
+    assert [scan.id for scan in scans.list('project')] == [FIRST]
+    assert scans.get('project', SECOND) is None
+    assert scans.get('project', FIRST).result['memory'] == 'COMPLETE'
+    with Session(database.engine) as db:
+        assert db.get(ScanRow, SECOND).result['memory'] == 'INCOMPLETE'
+    database.alembic('downgrade', '005')
+    with Session(database.engine) as db:
+        assert 'memory' not in db.get(ScanRow, SECOND).result
 
 
 def test_downgrade_keeps_analysis_facts(database):

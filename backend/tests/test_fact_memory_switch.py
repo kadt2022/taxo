@@ -87,3 +87,30 @@ def test_a_second_analysis_of_the_same_commit_shares_its_identities(taxo):
     memory = SqlAlchemyFactMemory(engine)
     for evaluator, facts in submitted[second['id']].items():
         assert same(memory.query(second['id'], evaluator_id=evaluator), facts)
+
+
+def test_a_complete_analysis_says_so(taxo):
+    client, base, _, _ = taxo
+    assert client.post(f'{base}/scans').json()['memory'] == 'COMPLETE'
+
+
+def test_an_interrupted_consolidation_is_never_offered_as_an_analysis(taxo, monkeypatch):
+    from sqlalchemy.exc import OperationalError
+    from app.scans.infrastructure.sqlalchemy.scan_repository import ScanRow
+    client, base, engine, submitted = taxo
+    kept = client.post(f'{base}/scans').json()
+    add = SqlAlchemyFactMemory.add
+
+    def locked(self, scan_id, evaluator_id, facts):
+        if evaluator_id != 'taxo.inventory':
+            raise OperationalError('INSERT', {}, Exception('database is locked'))
+        return add(self, scan_id, evaluator_id, facts)
+
+    monkeypatch.setattr(SqlAlchemyFactMemory, 'add', locked)
+    with pytest.raises(OperationalError):
+        client.post(f'{base}/scans')
+    [interrupted] = [scan_id for scan_id in submitted if scan_id != kept['id']]
+    assert [scan['id'] for scan in client.get(f'{base}/scans').json()] == [kept['id']]
+    assert client.get(f'{base}/scans/{interrupted}/facts').status_code == 404
+    with Session(engine) as db:
+        assert db.get(ScanRow, interrupted).result['memory'] == 'INCOMPLETE'
