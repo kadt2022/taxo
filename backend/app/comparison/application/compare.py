@@ -91,19 +91,20 @@ class CompareAnalyses:
         reason = comparability(left, right)
         if reason is not None:
             raise ProjectError('INVALID_ARGUMENT', f'{producer} : {REASONS[reason]}')
-        entries = self._compute(before, after, producer)[category]
-        keyed = [(entry[0] if category == MODIFIED else entry, entry) for entry in entries]
-        page = [entry for key, entry in keyed if cursor is None or key > cursor][:max(1, min(limit, MAX_PAGE))]
-        old = [entry[0] if category == MODIFIED else entry for entry in page if category != ADDED]
-        new = [entry[1] if category == MODIFIED else entry for entry in page if category != REMOVED]
-        facts_before = self.store.facts(before.id, producer, old) if old else {}
-        facts_after = self.store.facts(after.id, producer, new) if new else {}
-        items = []
-        for entry in page:
-            left_hash, right_hash = entry if category == MODIFIED else (entry, entry)
-            items.append({'before': facts_before.get(left_hash, []) if category != ADDED else [],
-                          'after': facts_after.get(right_hash, []) if category != REMOVED else []})
-        last = page[-1] if page else None
-        more = last is not None and keyed[-1][1] != last
+        pairs = [_pair(category, entry) for entry in self._compute(before, after, producer)[category]]
+        remaining = [pair for pair in pairs if cursor is None or pair[0] > cursor]
+        page = remaining[:max(1, min(limit, MAX_PAGE))]
+        facts_before = self._facts(before, producer, [old for old, _ in page] if category != ADDED else [])
+        facts_after = self._facts(after, producer, [new for _, new in page] if category != REMOVED else [])
+        items = [{'before': facts_before.get(old, []), 'after': facts_after.get(new, [])} for old, new in page]
+        more = len(remaining) > len(page)
         return {'category': category, 'evaluator_id': producer, 'items': items,
-                'next': (last[0] if category == MODIFIED else last) if more else None}
+                'next': page[-1][0] if more else None}
+
+    def _facts(self, scan, producer, identity_hashes):
+        return self.store.facts(scan.id, producer, identity_hashes) if identity_hashes else {}
+
+
+def _pair(category, entry):
+    """(before identity, after identity) of a listed entry; the before side keys the page."""
+    return tuple(entry) if category == MODIFIED else (entry, entry)
