@@ -7,6 +7,7 @@ debut, ou reprend apres le dernier evenement recu : un navigateur qui se reconne
 Les journaux vivent dans la memoire du processus, comme il sied au monolithe (ARCHITECTURE § 3) : un deploiement a
 plusieurs instances devra les partager ou router un client vers l'instance qui a lance son analyse.
 """
+import logging
 import threading
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
@@ -18,6 +19,8 @@ from app.scans.domain.scan import ScanError
 from .run_scan import MODES
 
 TERMINAL = {'analysis.completed', 'analysis.failed'}
+# Le portail ne montre que le type d'une erreur inattendue ; la trace complete va dans la console du serveur.
+_log = logging.getLogger('taxo.analysis')
 KEPT = 50
 HEARTBEAT_SECONDS = 15.0
 
@@ -87,4 +90,5 @@ class AnalysisJobs:
         except (ScanError, ProjectError) as exc:
             job.emit('analysis.failed', {'message': str(exc)})
         except Exception as exc:  # noqa: BLE001 - l'observateur doit toujours apprendre la fin de l'analyse
+            _log.exception('Analyse %s interrompue par une erreur inattendue.', job.id)
             job.emit('analysis.failed', {'message': f"L'analyse s'est interrompue : {type(exc).__name__}."})

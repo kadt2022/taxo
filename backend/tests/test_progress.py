@@ -149,7 +149,7 @@ def test_an_evaluator_without_progress_support_runs_as_before(make_repo):
     assert execution.status.value == 'SUCCESS' and calls == []
 
 
-def test_an_unexpected_crash_still_ends_the_stream_and_old_journals_are_released(monkeypatch):
+def test_an_unexpected_crash_still_ends_the_stream_and_old_journals_are_released(monkeypatch, caplog):
     from app.projects.domain.project import Project, ProjectError
     from app.scans.application import analysis_jobs
 
@@ -164,6 +164,9 @@ def test_an_unexpected_crash_still_ends_the_stream_and_old_journals_are_released
     job = jobs.start('p')
     assert [event['type'] for event in job.follow()][-1] == 'analysis.failed'
     assert 'RuntimeError' in job.events[-1]['data']['message']
+    [logged] = [record for record in caplog.records if record.name == 'taxo.analysis']
+    assert job.id in logged.getMessage()
+    assert logged.exc_info[1].args == ('panne',)
     monkeypatch.setattr(analysis_jobs, 'KEPT', 1)
     newer = jobs.start('p')
     list(newer.follow())
