@@ -13,8 +13,8 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
    ([TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md)). Récit terminé :
    migration réelle validée (43 analyses, 1 124 370 occurrences), 1 498 Mo contre 3 586 Mo pour
    `analysis_facts`.
-4. Comparaison depuis les faits enregistrés (01F) : la preuve de l’utilité de 01E, comparer deux
-   analyses sans relire le dépôt.
+4. → **Comparaison depuis les faits enregistrés** : comparer deux analyses sans relire le dépôt
+   ([TAXO-01F](TAXO-01F-comparaison-persistee.md)).
 5. Tuile multi-niveaux et couverture locale détaillée ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
 6. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 7. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
@@ -56,10 +56,10 @@ l'historique Git.
 | --- | --- | --- | --- |
 | 01E | Mémoire versionnée : un fait existe une fois, chaque exécution ajoute une **occurrence** (exécution, instantané, provenance) ; identité stable indexée | les faits sont stockés par analyse, une ligne par fait, sans occurrence ni identité indexée (`scans/infrastructure/sqlalchemy/fact_store.py` le dit lui-même) | réalisée : [TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md) |
 | 01E | Une réanalyse du même instantané ne crée pas de nouvelle identité ; chaque nouvelle analyse ou exécution conserve sa propre occurrence ; deux versions de producteur distinguées par leurs occurrences | chaque analyse enregistre ses propres faits | réalisée : TAXO-01E |
-| 01F | Comparer deux instantanés **depuis les faits persistés**, sans relire le dépôt | l'impact d'un commit réexécute les évaluateurs sur le parent et sur le commit (`history/application/queries.py`) | planifiée juste après TAXO-01E (étape 4) |
-| 01F | `EVIDENCE_CHANGED` : un fait dont seule la preuve se déplace reste inchangé, et ce déplacement est signalé à part avec les deux preuves | le fait est compté inchangé, sans signal distinct (`history/domain/impact.py`) | planifiée avec la comparaison persistée (étape 4) |
-| 01F | Changement de statut à identité constante signalé | compté inchangé (ARCHITECTURE § 5.2) | planifiée avec la comparaison persistée (étape 4) |
-| 01F | Banc Git scénarisé A, B, C, et deux versions d'évaluateur sur un même commit | « non comparable » est déclaré quand les catalogues diffèrent ; pas de banc scénarisé dédié | planifiée avec la comparaison persistée (étape 4) |
+| 01F | Comparer deux instantanés **depuis les faits persistés**, sans relire le dépôt | l'impact d'un commit réexécute les évaluateurs sur le parent et sur le commit (`history/application/queries.py`) | planifiée : [TAXO-01F](TAXO-01F-comparaison-persistee.md), tranche A |
+| 01F | `EVIDENCE_CHANGED` : un fait dont seule la preuve se déplace reste inchangé, et ce déplacement est signalé à part avec les deux preuves | le fait est compté inchangé, sans signal distinct (`history/domain/impact.py`) | planifiée : TAXO-01F, tranche A |
+| 01F | Changement de statut à identité constante signalé | compté inchangé (ARCHITECTURE § 5.2) | planifiée : TAXO-01F, tranche A |
+| 01F | Banc Git scénarisé A, B, C, et deux versions d'évaluateur sur un même commit | « non comparable » est déclaré quand les catalogues diffèrent ; pas de banc scénarisé dédié | planifiée : TAXO-01F, tranche A |
 | 01G | Contrat de lecture complet et paginé (fait par identité, faits d'un instantané, validité) et vue de vérification fait par fait | lecture filtrée par protocole (`find_facts`, `get_evidence`, `get_coverage`) et pages du portail ; pas de pagination générale ni de vue par fait | reportée ; en partie couverte par le voisinage |
 | 01H (épique) | Validité : `STALE`, `REVALIDATION_REQUIRED`, et saisie de validations humaines (`HUMAN_VALIDATED`) | champs au contrat, aucun moteur ([ARCHITECTURE § 5.5 et § 6](../ARCHITECTURE.md)) | reportée, avec son premier usage |
 
