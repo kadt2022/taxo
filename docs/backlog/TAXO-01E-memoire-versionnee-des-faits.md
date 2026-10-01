@@ -1,8 +1,9 @@
 # TAXO-01E — Mémoire versionnée des faits
 
-Statut : rédigé le 2026-09-30. Tranches A, B et C livrées : Taxo écrit et lit la mémoire
-versionnée. Migration réelle validée : 43 analyses, 1 124 370 occurrences, 731 295
-identités, 1 120 793 preuves, 905 s. Mesure de taille : encore à compléter. Suite : la comparaison
+Statut : **TERMINÉ** le 2026-10-01. Tranches A, B et C livrées : Taxo écrit et lit la mémoire
+versionnée. Migration réelle validée : 43 analyses, 1 124 370 occurrences, 731 295 identités,
+1 120 793 preuves, 905 s. Taille : 1 498 Mo pour la mémoire versionnée, contre 3 586 Mo pour
+`analysis_facts`. Suite : la comparaison
 persistée (01F), puis les Tuiles.
 
 Source de vérité : [ARCHITECTURE § 5.2, § 5.5, § 8 et § 15](../ARCHITECTURE.md). En cas de divergence,
@@ -256,15 +257,33 @@ identités distinctes              731 295
 ratio occurrences / identités        1,54
 preuves                         1 120 793
 durée                             905 s (plus grosse analyse : 531 751 faits en 488,8 s)
-tailles                          non mesurées : dbstat absent de ce SQLite
+tailles                          non mesurées par la migration : dbstat absent de ce SQLite
 ```
 
 - Le modèle identité / occurrence tient sur un historique réel, pas seulement sur des fixtures.
 - Environ 35 % des occurrences répètent une identité déjà présente dans une autre analyse.
 - Le débit réel (environ 1 240 faits par seconde) est plus bas que sur le jeu synthétique (environ
   4 000) : les faits réels sont plus gros.
-- La taille du nouveau stockage n'est pas encore connue. Le fichier contient temporairement l'ancien et
-  le nouveau stockage ; le gain ne se juge qu'après le retrait d'`analysis_facts` et un `VACUUM`.
+- Le fichier contient temporairement l'ancien et le nouveau stockage (5,21 Go sur le disque) : le gain
+  se juge sur des copies compactes, pas sur ce fichier.
+
+### Mesure de taille (2026-10-01)
+
+Mesurée sur des copies compactes (`VACUUM INTO`, puis suppression de l'un ou l'autre stockage), sans
+modifier la base, en 443 s :
+
+```text
+reste de la base (projets, analyses, résumés)        8 Mo
+ancien stockage analysis_facts                  3 586 Mo
+nouvelle mémoire versionnée                     1 498 Mo
+base compacte sans analysis_facts               1 507 Mo
+```
+
+- Pour les mêmes faits, la mémoire versionnée occupe 2 088 Mo de moins, soit environ 2,4 fois moins
+  de place qu'`analysis_facts`.
+- Mesure prise sur `main` avant la bascule : une analyse lancée après la migration 004 n'est comptée
+  que dans `analysis_facts`, jusqu'au rattrapage de 005.
+- Le gain deviendra effectif sur le disque au retrait d'`analysis_facts`, suivi d'un `VACUUM`.
 
 ## Hors périmètre
 

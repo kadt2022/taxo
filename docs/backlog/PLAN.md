@@ -10,8 +10,9 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
 1. ✅ Nettoyage du dépôt : démonstrateurs, bancs spécifiques et leurs données retirés.
 2. ✅ Première Tuile : `get_neighborhood` à un saut, avec budgets et reprise ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
 3. ✅ **Mémoire versionnée des faits** : identité et occurrence séparées, Taxo basculé dessus
-   ([TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md)). Migration réelle validée
-   (43 analyses, 1 124 370 occurrences). Reste à compléter la mesure de taille du nouveau stockage.
+   ([TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md)). Récit terminé :
+   migration réelle validée (43 analyses, 1 124 370 occurrences), 1 498 Mo contre 3 586 Mo pour
+   `analysis_facts`.
 4. Comparaison depuis les faits enregistrés (01F) : la preuve de l’utilité de 01E, comparer deux
    analyses sans relire le dépôt.
 5. Tuile multi-niveaux et couverture locale détaillée ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
