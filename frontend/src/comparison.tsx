@@ -110,7 +110,11 @@ function EvaluatorChanges({base, request, summary, category, entry, project}:Rea
     if(cursor)query.set('cursor', cursor);
     setLoading(true);setError('');
     request<ChangesPage>(`${base}/comparisons/changes?${query}`)
-      .then(page=>{if(mine!==generation.current)return;setItems(past=>cursor?[...past,...page.items]:page.items);setNext(page.next);})
+      .then(page=>{
+        if(mine!==generation.current){return;}
+        setItems(past=>cursor?[...past,...page.items]:page.items);
+        setNext(page.next);
+      })
       .catch(reason=>{if(mine===generation.current)setError((reason as Error).message);})
       .finally(()=>{if(mine===generation.current)setLoading(false);});
   }
