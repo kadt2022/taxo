@@ -246,3 +246,27 @@ l'intérieur de l'échange.
 
 Chaque tranche est une PR réversible. Les sorties publiques (enveloppes, verdicts, comparaisons, erreurs)
 restent identiques : les tests existants sont la référence, et aucune attente n'est modifiée sans le dire.
+
+## 9. Preuve de non-régression
+
+Une tranche « comportement inchangé » le prouve en comparant les sorties publiques de Taxo avant et après,
+sur les mêmes scénarios. `backend/tests/test_behaviour_snapshot.py` les écrit, normalisées (identifiants,
+dates, empreintes) pour être déterministes. Il est désactivé par défaut : seul, il ne vérifie rien.
+
+Les huit scénarios couvrent un dépôt Java, Python ou mixte, avec ou sans langages enregistrés, catalogues
+nommés dans le résumé, contrat retiré, et le moteur d'avant COV-01. Pour chacun, deux analyses, avec
+`describe`, `verify_claim`, `get_coverage`, `find_facts`, `get_neighborhood`, `/coverage` et leur comparaison.
+
+```bash
+cd backend
+git worktree add /tmp/taxo-base origin/main            # la base de la PR
+cp tests/test_behaviour_snapshot.py /tmp/taxo-base/backend/tests/   # si la base ne l'a pas encore
+(cd /tmp/taxo-base/backend && TAXO_BEHAVIOUR_SNAPSHOT=/tmp/base.json python -m pytest -q tests/test_behaviour_snapshot.py)
+TAXO_BEHAVIOUR_SNAPSHOT=/tmp/branch.json python -m pytest -q tests/test_behaviour_snapshot.py
+cmp /tmp/base.json /tmp/branch.json && echo identique
+git worktree remove /tmp/taxo-base
+```
+
+Vérifié avant usage : trois exécutions sur la même base donnent un fichier identique, et une régression
+volontaire (la forme publique d'un contrat indépendant du langage, `[]` au lieu de `null`) change 224 lignes.
+Une tranche qui change un comportement voulu ne s'en sert pas : elle le dit, et ses tests le fixent.
