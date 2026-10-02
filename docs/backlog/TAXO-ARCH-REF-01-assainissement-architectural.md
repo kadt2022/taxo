@@ -215,7 +215,7 @@ l'intérieur de l'échange.
 
 | Tranche | Contenu | Comportement |
 | --- | --- | --- |
-| **A — Audit** | ce document ; deux tests qui exposent les divergences du § 3 (`tests/test_knowledge_divergences.py`, marqués `xfail(strict=True)` : ils échouent sur la divergence elle-même et obligeront à retirer la marque quand elle sera corrigée) ; mesures | inchangé |
+| **A — Audit** | ce document ; deux tests qui exposent les divergences du § 3 (`tests/test_knowledge_divergences.py`, seule l’assertion divergente est attendue en échec (`divergence`, équivalent strict d’`xfail`) : les étapes préalables restent vérifiées, et la marque devra être retirée quand la divergence sera corrigée) ; mesures | inchangé |
 | **C — Connaissance** | `Reads`, `CatalogContracts`, `AnalysisKnowledge`, chargeur ; consommateurs migrés un par un (verdict, enveloppe, voisinage, comparaison) | inchangé, y compris les deux divergences (paramètre explicite) |
 | **B — Protocole** | `call()` découpé, table d'opérations, collaborateur historique, interface étroite pour le voisinage, port des faits déclaré | inchangé |
 | **D — Comparaison** | `choices` séparé ; comparabilité via la connaissance | inchangé |

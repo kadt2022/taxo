@@ -1,8 +1,9 @@
 """TAXO-ARCH-REF-01, tranche A : deux divergences de la connaissance d'une analyse, trouvees par l'audit.
 
-Chaque test ecrit le comportement attendu et echoue aujourd'hui (`xfail(strict=True)`) : il n'est ni masque ni
-corrige dans une restructuration. Quand une correction dediee le fera passer, `strict` obligera a retirer la
-marque, et le test deviendra un garde-fou ordinaire.
+Chaque test ecrit le comportement attendu. Seule l'assertion divergente est attendue en echec (`divergence`) : les
+etapes qui la precedent restent des assertions ordinaires, et une regression y ferait echouer le test. La divergence
+n'est ni masquee ni corrigee dans une restructuration ; quand une correction dediee la fera disparaitre, `divergence`
+echouera a son tour, et la marque devra etre retiree : le test deviendra un garde-fou ordinaire.
 """
 import pytest
 from sqlalchemy import update
@@ -13,6 +14,12 @@ from app.scans.infrastructure.sqlalchemy.fact_memory import ProducerExecutionRow
 from test_coverage_bounds import HEALTH, PYTHON, legacy, taxo_on_fixture  # noqa: F401  (fixture partagee)
 
 
+def divergence(reason):
+    """L'assertion qu'il entoure echoue aujourd'hui, et elle seule ; si elle passe, c'est que la divergence est
+    corrigee : le test echoue pour obliger a retirer la marque (l'equivalent de `xfail(strict=True)`)."""
+    return pytest.raises(AssertionError, match=reason)
+
+
 def retire_contract(taxo, producer):
     """Le catalogue enregistre avec ces executions n'est plus connu de ce Taxo (version retiree)."""
     with Session(taxo.engine) as db:
@@ -21,8 +28,6 @@ def retire_contract(taxo, producer):
         db.commit()
 
 
-@pytest.mark.xfail(strict=True, reason='TAXO-ARCH-REF-01, divergence 1 : la comparaison tient un contrat inconnu '
-                                       'pour independant du langage, le verdict pour un contrat qui ne lit rien.')
 def test_an_unknown_contract_justifies_no_negative_conclusion_anywhere(taxo_on, git, monkeypatch):
     legacy(monkeypatch)
     taxo, root = taxo_on(PYTHON)
@@ -35,11 +40,11 @@ def test_an_unknown_contract_justifies_no_negative_conclusion_anywhere(taxo_on, 
     verdict, = taxo.ask(('verify_claim', HEALTH), analysis=after)
     assert verdict['reason'] == NOT_ANALYSED, 'le verdict ne tire rien d un contrat inconnu'
     compared = taxo.compare(before, after)['taxo.spring-api']
-    assert not compared['comparable'], 'la comparaison ne doit pas en tirer « aucun changement »'
+    # Divergence 1 : la comparaison tient un contrat inconnu pour independant du langage.
+    with divergence('aucun changement'):
+        assert not compared['comparable'], 'la comparaison ne doit pas en tirer « aucun changement »'
 
 
-@pytest.mark.xfail(strict=True, reason='TAXO-ARCH-REF-01, divergence 2 : le voisinage d une analyse anterieure '
-                                       'ne nomme pas les langages que verify_claim nomme, dans le meme echange.')
 def test_an_earlier_analysis_names_the_same_unread_languages_in_every_operation(taxo_on, monkeypatch):
     legacy(monkeypatch)
     taxo, _ = taxo_on(PYTHON)
@@ -50,4 +55,6 @@ def test_an_earlier_analysis_names_the_same_unread_languages_in_every_operation(
     named = sorted(entry['subject'] for entry in verdict['coverage'] if entry['type'] == 'NOT_ANALYSED' and entry['subject'])
     assert named == ['language:Python']
     frontier = [item for item in tile['frontier'] if item.get('reason') == 'NOT_ANALYSED']
-    assert [item['languages'] for item in frontier] == [['Python']], 'le voisinage dit la meme limite que le verdict'
+    # Divergence 2 : le voisinage d'une analyse anterieure ne nomme pas les langages que le verdict nomme.
+    with divergence('meme limite'):
+        assert [item['languages'] for item in frontier] == [['Python']], 'le voisinage dit la meme limite que le verdict'
