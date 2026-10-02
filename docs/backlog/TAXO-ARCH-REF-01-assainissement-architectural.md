@@ -1,7 +1,8 @@
 # TAXO-ARCH-REF-01 — Assainissement architectural et responsabilités
 
-Statut : tranche A (audit) rédigée le 2026-10-02, sur `main` à `08bb050` (après TAXO-COV-01 PR A). Aucun code
-modifié. Les frontières proposées attendent une décision avant toute restructuration.
+Statut : tranche A (audit) rédigée le 2026-10-02, sur `main` à `08bb050` (après TAXO-COV-01 PR A). Frontières
+validées le 2026-10-02, avec l'ordre A → C → B → D → E ; `_Neighborhood` et `RunScan` ne sont pas touchés. Les deux
+divergences sont corrigées par une PR dédiée avant la tranche C, jamais dans une restructuration.
 
 Règle absolue : à données identiques, mêmes faits, verdicts, comparaisons, enveloppes, limites, erreurs
 publiques, réponses API et déterminisme. Un défaut trouvé est documenté et exposé par un test, jamais corrigé
@@ -214,7 +215,7 @@ l'intérieur de l'échange.
 
 | Tranche | Contenu | Comportement |
 | --- | --- | --- |
-| **A — Audit** | ce document ; deux tests qui exposent les divergences du § 3 (marqués `xfail(strict=True)`, ils ne masquent rien) ; mesures | inchangé |
+| **A — Audit** | ce document ; deux tests qui exposent les divergences du § 3 (`tests/test_knowledge_divergences.py`, marqués `xfail(strict=True)` : ils échouent sur la divergence elle-même et obligeront à retirer la marque quand elle sera corrigée) ; mesures | inchangé |
 | **C — Connaissance** | `Reads`, `CatalogContracts`, `AnalysisKnowledge`, chargeur ; consommateurs migrés un par un (verdict, enveloppe, voisinage, comparaison) | inchangé, y compris les deux divergences (paramètre explicite) |
 | **B — Protocole** | `call()` découpé, table d'opérations, collaborateur historique, interface étroite pour le voisinage, port des faits déclaré | inchangé |
 | **D — Comparaison** | `choices` séparé ; comparabilité via la connaissance | inchangé |
