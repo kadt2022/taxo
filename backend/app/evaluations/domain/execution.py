@@ -54,6 +54,8 @@ class EvaluatorExecution:
             'execution_id': self.execution_id,
             'evaluator_id': self.evaluator_id,
             'producer_version': self.producer_version,
+            'catalog_id': self.catalog.catalog_id,
+            'catalog_version': self.catalog.catalog_version,
             'status': self.status.value,
             'started_at': self.started_at.isoformat(),
             'finished_at': self.finished_at.isoformat(),

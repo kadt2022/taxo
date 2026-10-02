@@ -98,7 +98,9 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     # Analyse observable : lancee en tache de fond, ses evenements reels sont diffuses (TAXO-UX-02).
     api.include_router(scans_router(projects, scans, run, facts, AnalysisJobs(run, projects)))
     api.include_router(history_router(history))
-    api.include_router(comparison_router(CompareAnalyses(projects, scans, SqlAlchemyComparisonStore(engine))))
+    api.include_router(comparison_router(CompareAnalyses(
+        projects, scans, SqlAlchemyComparisonStore(engine),
+        {(item.catalog.catalog_id, item.catalog.catalog_version): item.catalog.languages for item in registry.all()})))
     # La requete selectionne parmi les faits conserves ; elle ne relit jamais le depot (TAXO-QUERY-01).
     query = ProjectQuery(projects, scans, facts)
     api.include_router(query_router(query))

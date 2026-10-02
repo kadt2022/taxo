@@ -6,4 +6,5 @@ CATALOG = EvaluatorCatalog(
     catalog_version='1',
     relations=('AUTHORED_BY', 'CHANGES', 'CHILD_OF', 'HAS_COMMIT'),
     coverage_types=('ANALYSED', 'NOT_INTERPRETED'),
+    languages=None,  # TAXO-COV-01 : indépendant du langage
 )

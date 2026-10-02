@@ -11,6 +11,9 @@ class EvaluatorCatalog:
     catalog_version: str
     relations: tuple[str, ...] = ()
     coverage_types: tuple[str, ...] = ()
+    # Les langages lus pour produire ces relations, nommes comme l'inventaire les nomme (TAXO-COV-01).
+    # `None` : independant du langage (le depot, son historique). Les changer change le catalogue.
+    languages: tuple[str, ...] | None = None
 
     def __post_init__(self):
         if not self.catalog_id.strip() or not self.catalog_version.strip():
@@ -19,6 +22,8 @@ class EvaluatorCatalog:
             raise ValueError('Les relations du catalogue doivent être triées.')
         if tuple(sorted(self.coverage_types)) != self.coverage_types:
             raise ValueError('Les couvertures du catalogue doivent être triées.')
+        if self.languages is not None and (not self.languages or tuple(sorted(self.languages)) != self.languages):
+            raise ValueError('Les langages du catalogue sont triés ; None s’il n’en lit aucun en propre.')
 
 
 @dataclass(frozen=True)

@@ -15,22 +15,31 @@ CATEGORIES = (ADDED, REMOVED, MODIFIED, EVIDENCE_CHANGED, STATUS_CHANGED, OCCURR
 
 ABSENT_BEFORE, ABSENT_AFTER = 'ABSENT_BEFORE', 'ABSENT_AFTER'
 FAILED_BEFORE, FAILED_AFTER = 'FAILED_BEFORE', 'FAILED_AFTER'
+NOT_SUPPORTED_BEFORE, NOT_SUPPORTED_AFTER = 'NOT_SUPPORTED_BEFORE', 'NOT_SUPPORTED_AFTER'
 CATALOG_CHANGED = 'CATALOG_CHANGED'
 REASONS = {
     ABSENT_BEFORE: "Absent de l'analyse de départ.",
     ABSENT_AFTER: "Absent de l'analyse d'arrivée.",
     FAILED_BEFORE: "Exécution en échec dans l'analyse de départ : ses faits ne sont pas comparés.",
     FAILED_AFTER: "Exécution en échec dans l'analyse d'arrivée : ses faits ne sont pas comparés.",
+    NOT_SUPPORTED_BEFORE: ("Rien à lire pour cet analyseur dans l'analyse de départ : aucun fichier dans "
+                           "les langages qu'il lit. Ses faits ne sont pas comparés ; ce n'est pas une absence "
+                           "de changement."),
+    NOT_SUPPORTED_AFTER: ("Rien à lire pour cet analyseur dans l'analyse d'arrivée : aucun fichier dans "
+                          "les langages qu'il lit. Ses faits ne sont pas comparés ; ce n'est pas une absence "
+                          "de changement."),
     CATALOG_CHANGED: 'Catalogue différent. Cause possible : évolution du producteur, pas du logiciel.',
 }
 
 
 @dataclass(frozen=True)
 class Side:
-    """What one analysis says about one producer: its executions and whether one of them failed."""
+    """What one analysis says about one producer: its executions, whether one of them failed, and whether
+    it had anything to read (TAXO-COV-01: an unsupported side is never an absence of change)."""
     catalogs: frozenset
     versions: frozenset
     failed: bool
+    supported: bool = True
 
 
 @dataclass(frozen=True)
@@ -52,6 +61,10 @@ def comparability(before, after):
         return FAILED_BEFORE
     if after.failed:
         return FAILED_AFTER
+    if not before.supported:
+        return NOT_SUPPORTED_BEFORE
+    if not after.supported:
+        return NOT_SUPPORTED_AFTER
     if before.catalogs != after.catalogs:
         return CATALOG_CHANGED
     return None

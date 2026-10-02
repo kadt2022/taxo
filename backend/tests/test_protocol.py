@@ -98,10 +98,12 @@ def test_an_empty_answer_still_says_where_taxo_looked(taxo):
     assert (found['outcome'], found['items'], found['count']) == ('OK', [], 0)
     assert found['coverage'] == [{'subject': None, 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
                                   'relation': 'CALLS'}]
-    # L'evaluateur Spring a cherche partout : aucun endpoint, et la couverture dit ou il a cherche.
+    # TAXO-COV-01 : ce depot n'a aucune source Java. L'evaluateur Spring n'a rien lu et ne pretend plus avoir
+    # cherche partout : sa couverture dit que le depot est hors de son perimetre, et pourquoi.
     endpoints = one(client, url, 'find_facts', relation='HANDLED_BY')
     assert endpoints['items'] == []
-    assert [(item['type'], item['producer']) for item in endpoints['coverage']] == [('ANALYSED', 'taxo.spring-api')]
+    [spring] = endpoints['coverage']
+    assert (spring['type'], spring['producer'], spring['languages']) == ('OUT_OF_SCOPE', 'taxo.spring-api', ['Java'])
 
 
 @pytest.mark.parametrize('arguments', [{}, {'relation': 'INVENTED'}, {'subject': 'pas une reference'},
@@ -225,8 +227,9 @@ def test_verify_claim_says_when_no_analyzer_covers_the_dimension(taxo):
     assert (verdict['verdict'], verdict['reason'], verdict['items']) == (NOT_PROVEN, NOT_ANALYSED, [])
     protected = one(client, url, 'verify_claim', subject='endpoint:POST /items', relation='PROTECTED_BY',
                     object='policy-rule:R1')
-    assert (protected['verdict'], protected['reason']) == (NOT_PROVEN, 'NOT_FOUND_IN_ANALYSED_SCOPE'), \
-        'la securite est analysee : non trouve, jamais « non protege »'
+    # TAXO-COV-01 : sans source Java, la securite Spring n'a rien lu. Ce n'est ni « non protege », ni « non
+    # trouve dans le perimetre analyse » : ce test l'affirmait, c'etait le defaut corrige.
+    assert (protected['verdict'], protected['reason']) == (NOT_PROVEN, NOT_ANALYSED)
     wrong = one(client, url, 'verify_claim', subject='file:a.txt', relation='CHANGES', object='file:b.txt')
     assert wrong['error']['code'] == 'INVALID_ARGUMENT'
     no_object = one(client, url, 'verify_claim', subject='commit:' + '0' * 40, relation='CHANGES')

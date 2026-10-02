@@ -8,6 +8,7 @@ from collections import OrderedDict
 
 from app.comparison.domain.comparison import (ADDED, CATEGORIES, MODIFIED, REASONS, REMOVED, Side,
                                               comparability, pair_modified, signals)
+from app.evaluations.domain.capability import applicable
 from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
@@ -19,12 +20,15 @@ MAX_PAGE = 200
 KEPT_COMPARISONS = 8
 
 
-def _side(executions, statuses):
+def _side(executions, statuses, languages, present):
+    """`languages` : ce que lit le contrat de catalogue des executions (None : independant du langage)."""
     if executions is None:
         return None
     return Side(frozenset((item.catalog_id, item.catalog_version) for item in executions),
                 frozenset(item.producer_version for item in executions),
-                any(statuses.get(item.execution_id) == 'FAILED' for item in executions))
+                any(statuses.get(item.execution_id) == 'FAILED' for item in executions),
+                not any(statuses.get(item.execution_id) == 'UNSUPPORTED' for item in executions)
+                and applicable(languages, present))
 
 
 def _statuses(scan):
@@ -40,8 +44,10 @@ def _describe(scan):
 
 
 class CompareAnalyses:
-    def __init__(self, projects, scans, store):
+    def __init__(self, projects, scans, store, capabilities=None):
         self.projects, self.scans, self.store = projects, scans, store
+        # (catalog_id, catalog_version) -> langages lus (TAXO-COV-01) ; un contrat absent n'en declare aucun.
+        self.capabilities = capabilities or {}
         self._kept, self._lock = OrderedDict(), threading.Lock()
 
     def choices(self, project_id):
@@ -66,12 +72,29 @@ class CompareAnalyses:
             raise ProjectError('NOT_FOUND', 'Analyse introuvable pour ce projet, ou interrompue.')
         return found
 
-    def _producers(self, before, after):
+    def _languages(self, scan):
+        """Les langages de l'analyse : enregistres avec elle, ou relus dans ses faits si elle est anterieure."""
+        recorded = scan.result.get('languages')
+        return tuple(recorded) if recorded is not None else self.store.languages(scan.id)
+
+    def _read(self, executions):
+        """Les langages que lit le contrat de catalogue de ces executions ; None s'il n'en declare aucun."""
+        declared = [self.capabilities.get((item.catalog_id, item.catalog_version)) for item in executions or ()]
+        declared = [item for item in declared if item is not None]
+        return frozenset().union(*declared) if declared else None
+
+    def _producers(self, before, after, unread=None):
+        """Chaque producteur et ce que dit de lui chaque cote. `unread`, s'il est donne, recoit pour chaque
+        producteur les langages presents de chaque cote que son catalogue ne lit pas."""
         producers = {}
-        sides = ((before, self.store.producers(before.id)), (after, self.store.producers(after.id)))
-        for name in sorted({name for _, found in sides for name in found}):
-            versions = [_side(found.get(name), _statuses(scan)) for scan, found in sides]
-            producers[name] = versions
+        sides = [(scan, self.store.producers(scan.id), self._languages(scan)) for scan in (before, after)]
+        for name in sorted({name for _, found, _ in sides for name in found}):
+            producers[name] = [_side(found.get(name), _statuses(scan), self._read(found.get(name)), present)
+                               for scan, found, present in sides]
+            if unread is not None:
+                reads = [self._read(found.get(name)) for _, found, _ in sides]
+                unread[name] = {side: [] if read is None else sorted(set(present) - read)
+                                for side, read, (_, _, present) in zip(('before', 'after'), reads, sides)}
         return producers
 
     def _compute(self, before, after, producer):
@@ -108,11 +131,13 @@ class CompareAnalyses:
     def summary(self, project_id, before_id, after_id):
         before, after = self._analyses(project_id, before_id, after_id)
         evaluators, totals = [], dict.fromkeys((*CATEGORIES, UNCHANGED), 0)
-        for producer, (left, right) in self._producers(before, after).items():
+        unread = {}
+        for producer, (left, right) in self._producers(before, after, unread).items():
             reason = comparability(left, right)
             entry = {'evaluator_id': producer, 'comparable': reason is None,
                      'versions': {'before': sorted(left.versions) if left else [],
-                                  'after': sorted(right.versions) if right else []}}
+                                  'after': sorted(right.versions) if right else []},
+                     'not_analysed': unread[producer]}
             if reason is not None:
                 entry |= {'reason': reason, 'message': REASONS[reason]}
             else:

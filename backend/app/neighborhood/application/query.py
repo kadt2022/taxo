@@ -8,6 +8,7 @@ import hashlib
 import json
 
 from app.facts import is_reference
+from app.protocol.domain.verdict import Analyzer, not_analysed
 from app.facts.domain.fact import RELATIONS
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INVALID_ARGUMENT,
                                           OperationError, Response, size)
@@ -93,7 +94,9 @@ def _coverage(exchange, root, relations, priority):
         produced = exchange.service.catalogs.get(identifier, frozenset(evaluation.get('relations', {})))
         if not set(relations).intersection(produced):
             continue
-        capabilities.update(produced)
+        # TAXO-COV-01 : un analyseur qui n'avait rien a lire n'est pas une capacite de cette analyse.
+        if evaluation['status'] != 'UNSUPPORTED':
+            capabilities.update(produced)
         coverage.append({'producer': identifier, 'scope': 'ANALYSIS_SUMMARY',
                          'status': evaluation['status'], 'coverage': evaluation.get('coverage', [])})
         gaps = [item for item in evaluation.get('coverage', [])
@@ -105,8 +108,30 @@ def _coverage(exchange, root, relations, priority):
         if relation not in capabilities:
             frontier.append({'nature': 'CONTEXT', 'node': root, 'relation': relation,
                              'reason': 'NO_ANALYZER', 'count': {'kind': 'UNKNOWN'}})
+            continue
+        # Les langages presents qu'aucune execution capable n'a lus : ce qui s'y trouve est inconnu. Lus dans
+        # le resume de l'analyse, sans parcourir ses faits ; une analyse anterieure a TAXO-COV-01 ne les a pas.
+        present = exchange.scan.result.get('languages')
+        unread = present is not None and not_analysed(_summarized(exchange), relation, present)
+        if unread:
+            frontier.append({'nature': 'KNOWLEDGE', 'scope': 'ANALYSIS', 'relation': relation,
+                             'reason': 'NOT_ANALYSED', 'languages': list(unread), 'count': {'kind': 'UNKNOWN'}})
 
     return coverage, frontier, capabilities
+
+
+def _summarized(exchange):
+    """Les analyseurs tels que le resume de l'analyse les decrit : statut, relations, couvertures et
+    langages de leur contrat de catalogue (TAXO-COV-01)."""
+    found = []
+    for evaluation in exchange.evaluations:
+        identifier = evaluation['evaluator_id']
+        relations = exchange.service.catalogs.get(identifier, frozenset(evaluation.get('relations', {})))
+        coverage = tuple({'coverage_type': item['coverage_type']} for item in evaluation.get('coverage', []))
+        found.append(Analyzer(identifier, relations, evaluation['status'] == 'FAILED', coverage,
+                              exchange.service.languages_of(identifier, evaluation),
+                              evaluation['status'] == 'UNSUPPORTED'))
+    return found
 
 
 class _Neighborhood:

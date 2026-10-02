@@ -9,6 +9,7 @@ from sqlalchemy import and_, exists, false, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.comparison.domain.comparison import Occurrence
+from app.evaluations.domain.capability import LANGUAGE, WRITTEN_IN
 from app.scans.infrastructure.sqlalchemy.fact_memory import (EVIDENCE_FIELDS, FactEvidenceRow, FactIdentityRow,
                                                              FactOccurrenceRow, ProducerExecutionRow,
                                                              SqlAlchemyFactMemory, _facts_of)
@@ -128,6 +129,10 @@ class SqlAlchemyComparisonStore:
                 found |= {identity_hash: relation if kind == 'ASSERTION' and relation else kind
                           for identity_hash, kind, relation in rows}
         return found
+
+    def languages(self, scan_id):
+        return tuple(value[len(LANGUAGE):] for value in self.memory.objects(scan_id, WRITTEN_IN)
+                     if value and value.startswith(LANGUAGE))
 
     def unknown(self, scan_id):
         identity = FactIdentityRow
