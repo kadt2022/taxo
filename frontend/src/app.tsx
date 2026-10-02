@@ -3,7 +3,7 @@ import {useEffect, useState, type ReactNode} from 'react';
 import {type MiniaStatus} from './minia';
 import {AnalysisLimits, overviewCards, panelKey, routeCounts, technologiesOf, type Scan} from './overview';
 import {BrandMark, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
-import {AnalysisCommand} from './commands';
+import {AnalysisCommand, LaunchCard} from './commands';
 import {ProjectSwitcher} from './switcher';
 import {href, go, parse, useRoute, withProject} from './nav';
 import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, ProjectsPage, TechnologiesPage} from './pages';
@@ -80,7 +80,8 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     if(!selected||route.page==='projets')return projectsPage;
     switch(route.page){
     case 'analyses':return route.id?<AnalysisPage base={base} request={request} revision={revision} scan={scans.find(item=>item.id===route.id)}
-      displayed={scan?.id} onShow={show}/>:<AnalysesPage base={base} request={request} revision={revision} displayed={scan?.id}/>;
+      displayed={scan?.id} onShow={show}/>:<AnalysesPage base={base} request={request} revision={revision} displayed={scan?.id}
+      launch={<LaunchCard project={project} latest={latest} count={scans.length} run={run} canAnalyze={!busy&&!loading} onAnalyze={analyze}/>}/>;
     case 'comparaisons':return <ComparisonsPage base={base} request={request} route={route} project={project}/>;
     case 'historique':return history(selected, minia);
     case 'donnees':return <DataPage/>;
@@ -123,7 +124,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
     <main>
     {error&&<div role="alert" className="error">{error}</div>}
-    {run&&run.status!=='done'&&<AnalysisProgress run={run}/>}
+    {run&&run.status!=='done'&&!(route.page==='analyses'&&!route.id)&&<AnalysisProgress run={run}/>}
     {loading?<output>Chargement…</output>:page()}
     </main>
   </div>;

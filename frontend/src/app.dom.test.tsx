@@ -93,6 +93,9 @@ describe('une page par fonction', ()=>{
     await open('#/analyses');
     expect(current()).toContain('Analyses');
     expect(host.querySelectorAll('.analysis-list > li')).toHaveLength(2);
+    // La page Analyses s'ouvre sur son poste de lancement.
+    expect(host.querySelector('.analyses-page .launch .launch-button')?.textContent).toBe('Lancer l’analyse globale');
+    expect(host.querySelector('.launch')?.textContent).toContain('Analyser Boutique maintenant');
     expect(host.querySelector('a[href="#/comparaisons/choix?a=old"]')).not.toBeNull();
     await visit('#/analyses/old');
     expect(text()).toContain('message old');

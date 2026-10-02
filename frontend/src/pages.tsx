@@ -1,6 +1,6 @@
 // Les pages du portail (TAXO-UI-05) : Overview est un tableau de bord, chaque fonction a sa page. Rien n'est calcule ici
 // que le portail ne lise deja : les analyses, leurs resumes et leurs faits, tels que l'API les rend.
-import {useEffect, useState, type FormEvent} from 'react';
+import {useEffect, useState, type FormEvent, type ReactNode} from 'react';
 import {ComparisonView, day, proof, sentence, Phrase, sideLabel, type ComparedFact, type Side} from './comparison';
 import {AnalysisDetails} from './details';
 import {href, go, type Route} from './nav';
@@ -71,12 +71,14 @@ export function OverviewPage({scan, latest, pending, routes}:Readonly<{scan:Scan
 }
 
 /** Analyses : ce que Taxo a observe, et quand. Chaque analyse s'ouvre ou se compare. */
-export function AnalysesPage({base, request, revision, displayed}:Readonly<{base:string; request:Request; revision:string; displayed?:string}>){
+export function AnalysesPage({base, request, revision, displayed, launch}:Readonly<{base:string; request:Request; revision:string; displayed?:string;
+  launch?:ReactNode}>){
   const {choices, error}=useChoices(base, request, revision);
   const [search,setSearch]=useState<Search>(NO_SEARCH);
   const found=choices?.filter(choice=>matches(choice, search))??[];
   return <section className="page analyses-page" aria-label="Analyses">
     <PageHead title="Analyses" intro="Ce que Taxo a observé, et quand : chaque analyse terminée, reconnue par sa date puis par le code qu’elle a lu."/>
+    {launch}
     {error&&<div role="alert" className="error">{error}</div>}
     {!choices&&!error&&<output>Chargement des analyses…</output>}
     {choices&&<>

@@ -797,3 +797,48 @@ main section,main details,main [id]{scroll-margin-top:16px}
 .top-menu{margin-left:6px}
 @media(max-width:1000px){.top-brand{width:calc(232px - 20px)}}
 @media(max-width:900px){.top-brand{width:auto}.head-start{gap:14px}.top-menu{margin-left:0}}
+
+/* ——— Poste de lancement de la page Analyses (TAXO-UI-05) ——— */
+.launch{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:18px 22px;padding:22px 24px;border-radius:var(--r-lg);overflow:hidden;
+  background:radial-gradient(120% 140% at 0% 0%,#1d5345 0%,#12382f 55%,#0f3029 100%);color:#e9f1ea;box-shadow:0 18px 40px -22px rgba(8,30,25,.7)}
+.launch::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(115deg,rgba(255,255,255,.025) 0 2px,transparent 2px 14px)}
+.launch-mark{position:relative;z-index:1;display:grid;place-items:center;width:52px;height:52px;border-radius:14px;background:rgba(184,224,127,.14);box-shadow:inset 0 0 0 1px rgba(184,224,127,.35)}
+.launch-mark svg{width:20px;height:20px;fill:var(--accent)}
+.launch-spin{width:24px;height:24px;border-radius:50%;border:3px solid rgba(184,224,127,.25);border-top-color:var(--accent);animation:launch-turn .9s linear infinite}
+@keyframes launch-turn{to{transform:rotate(360deg)}}
+.launch-body{position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;min-width:0}
+.launch-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.launch h2{margin:0;color:#fff;font-size:20px;font-weight:700;letter-spacing:-.015em}
+.launch p{margin:0;font-size:13.5px;line-height:1.55;color:#bcd2c6;max-width:640px}
+.launch-meta{display:flex;flex-wrap:wrap;gap:6px 18px;list-style:none;margin:4px 0 0;padding:0;font-size:12.5px;color:#9fbdb1}
+.launch-meta li{display:inline-flex;align-items:center;gap:7px}
+.launch-meta i{width:6px;height:6px;border-radius:50%;background:#5fcf8a}
+.launch-meta code{color:#dbe8df;font-size:12px}
+.launch-button{position:relative;z-index:1;display:inline-flex;align-items:center;gap:10px;padding:13px 20px;border:0;border-radius:11px;background:var(--accent);color:var(--brand);font-size:15px;font-weight:700;white-space:nowrap;box-shadow:0 10px 24px -10px rgba(184,224,127,.65)}
+.launch-button svg{width:14px;height:14px;fill:currentColor}
+.launch-button:hover:not(:disabled){background:#c8ea94;transform:translateY(-1px)}
+.launch-button:disabled{background:rgba(255,255,255,.1);color:rgba(255,255,255,.6);box-shadow:none;opacity:1}
+.launch-track{display:flex;gap:4px;list-style:none;margin:8px 0 2px;padding:0;max-width:640px}
+.launch-track li{flex:1 1 0;height:6px;border-radius:3px;background:rgba(255,255,255,.12)}
+.launch-track .track-done{background:var(--accent)}
+.launch-track .track-running{background:linear-gradient(90deg,var(--accent),rgba(184,224,127,.25));animation:taxo-pulse 1.2s ease-in-out infinite}
+.launch-track .track-failed{background:#e0866f}
+.launch-status{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;max-width:640px}
+.launch-status strong{color:#fff;font-weight:600}
+.launch-count{color:#9fbdb1;font-variant-numeric:tabular-nums}
+.launch.is-failed .launch-eyebrow{color:#f0a48f}
+@media(max-width:760px){.launch{grid-template-columns:auto minmax(0,1fr)}.launch-button{grid-column:1/-1;justify-content:center}}
+@media(prefers-reduced-motion:reduce){.launch-spin,.launch-track .track-running{animation:none}}
+
+/* ——— Ascenseurs aux couleurs du portail ——— */
+*{scrollbar-width:thin;scrollbar-color:#c3cfc6 transparent}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:#c3cfc6;border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background-color:#9fb1a6}
+*::-webkit-scrollbar-button{display:none;width:0;height:0}
+*::-webkit-scrollbar-corner{background:transparent}
+aside,aside *{scrollbar-color:rgba(184,224,127,.28) transparent}
+aside::-webkit-scrollbar,aside *::-webkit-scrollbar{width:8px}
+aside::-webkit-scrollbar-thumb,aside *::-webkit-scrollbar-thumb{background-color:rgba(184,224,127,.22);border:2px solid transparent;background-clip:padding-box}
+aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{background-color:rgba(184,224,127,.45)}
