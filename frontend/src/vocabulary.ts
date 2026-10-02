@@ -49,3 +49,11 @@ export function reference(value:string|null, project?:{id:string; name:string}){
   const shown=type==='commit'?key.slice(0,12):key;
   return TYPES[type]?`${TYPES[type]} ${shown}`:shown;
 }
+
+/** D'ou vient un fait. Une validation humaine reste distincte de ce que Taxo deduit ou observe. */
+export const ORIGINS:Record<string,string>={OBSERVED:'Observé dans le code', INFERRED:'Déduit par Taxo',
+  HUMAN_VALIDATED:'Validé par une personne'};
+
+/** Ou en est un fait : rien ne dit ici qu'une personne l'a confirme. */
+export const VALIDITIES:Record<string,string>={VALID:'Valide', STALE:'Périmé', REVALIDATION_REQUIRED:'À revérifier'};
+
