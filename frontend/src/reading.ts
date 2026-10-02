@@ -62,5 +62,5 @@ export function useCoverage(request:Request, base:string, scanId:string|undefine
     return loadCoverage(request, base, scanId, {onResult:value=>setReading({scanId, value}), onError:()=>setReading(null)});
   },[base, scanId, running]);
   if(!shownId)return undefined;
-  return !running&&reading&&reading.scanId===shownId?reading.value:UNKNOWN_COVERAGE;
+  return !running&&reading?.scanId===shownId?reading.value:UNKNOWN_COVERAGE;
 }
