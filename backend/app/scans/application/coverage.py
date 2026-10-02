@@ -38,18 +38,21 @@ def analysis_coverage(project_id, scan_id, projects, scans, facts, contracts):
         raise ProjectError('NOT_FOUND', 'Analyse introuvable.')
     languages = _languages(scan, facts)
     evaluations = scan.result.get('evaluations') or []
-    recorded = None
-    entries = []
-    for item in evaluations:
-        key = (item.get('catalog_id'), item.get('catalog_version'))
-        if key[0] is None:
-            recorded = _recorded_contracts(scan, facts) if recorded is None else recorded
-            key = recorded.get(item['evaluator_id'], (None, None))
-        known = key in contracts
-        reads = contracts[key] if known else ()
-        entries.append({'evaluator_id': item['evaluator_id'], 'status': item.get('status'),
-                        'contract': 'KNOWN' if known else 'UNKNOWN',
-                        'reads': None if reads is None else sorted(reads),
-                        'unread': [] if reads is None else sorted(set(languages) - set(reads))})
+    # Un resume anterieur a TAXO-COV-01 ne nomme pas son catalogue : il est relu, une fois, dans les couvertures.
+    recorded = (_recorded_contracts(scan, facts)
+                if any(item.get('catalog_id') is None for item in evaluations) else {})
     return {'languages': list(languages), 'complete': languages_complete(scan.result.get('evaluation_summary')),
-            'evaluators': entries}
+            'evaluators': [_reading(item, languages, contracts, recorded) for item in evaluations]}
+
+
+def _reading(item, languages, contracts, recorded):
+    """Ce qu'un analyseur lit selon son contrat, et les langages presents qu'il n'a pas lus."""
+    key = (item.get('catalog_id'), item.get('catalog_version'))
+    if key[0] is None:
+        key = recorded.get(item['evaluator_id'], (None, None))
+    known = key in contracts
+    reads = contracts[key] if known else ()
+    return {'evaluator_id': item['evaluator_id'], 'status': item.get('status'),
+            'contract': 'KNOWN' if known else 'UNKNOWN',
+            'reads': None if reads is None else sorted(reads),
+            'unread': [] if reads is None else sorted(set(languages) - set(reads))}
