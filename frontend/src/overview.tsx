@@ -4,6 +4,7 @@
 import {href} from './nav';
 import {COVERAGE, EVALUATORS, label, reference} from './vocabulary';
 import type {RouteState, RoutesResult} from './routes';
+import {type AnalysisCoverage, type Reading, languages, readNothing, readingOf, unreadAnywhere} from './reading';
 
 export type SnapshotReference = {repository:string; commit:string; mode:'COMMIT'|'WORKING_TREE'; dirty?:boolean; content_fingerprint?:string};
 export type EvaluationSummary = {
@@ -59,7 +60,8 @@ function project(scan:Scan, inventory:EvaluationSummary|undefined):Body{
   if(inventory?.status==='FAILED')return FAILED('L’inventaire du projet a échoué : voir les détails de l’analyse.');
   const files=scan.files_count??0;
   const technologies=technologiesOf(scan);
-  return {value:count(files), unit:noun(files, 'fichier analysé', 'fichiers analysés'), state:'known',
+  // L'inventaire liste les fichiers ; le contenu de chacun n'est lu que par les analyseurs qui savent le lire.
+  return {value:count(files), unit:noun(files, 'fichier inventorié', 'fichiers inventoriés'), state:'known',
     lines:technologies.length?[counted(technologies.length, 'technologie reconnue', 'technologies reconnues')]:[],
     link:{href:href('technologies'), label:'Voir les technologies'}};
 }
@@ -84,22 +86,35 @@ export function routeCounts(result:RoutesResult):RouteCounts{
   return counts;
 }
 
+/** Un domaine dont l'analyseur n'a rien lu : « Non analysé », avec les langages qu'il aurait fallu lire (TAXO-COV-01). */
+function unread(what:string, reading:Reading|undefined):Body{
+  const missing=reading?.unread??[];
+  return UNKNOWN(missing.length?`${what} non cherchées en ${languages(missing)} : aucun analyseur de ce domaine ne lit ces langages.`
+    :`${what} non cherchées : aucun fichier dans les langages que son analyseur lit.`);
+}
+
+/** Ce qu'un domaine n'a pas lu, en une ligne, quand son analyseur a lu une partie des langages presents. */
+const partly=(reading:Reading|undefined)=>reading?.unread.length?[`Non analysé : ${languages(reading.unread)}`]:[];
+
 /** Les routes relevees par l'evaluateur Spring API (TAXO-04) : une route est un endpoint et la methode qui le traite. */
-function api(spring:EvaluationSummary|undefined, _routes:RouteCounts|undefined):Body{
+function api(spring:EvaluationSummary|undefined, _routes:RouteCounts|undefined, coverage?:AnalysisCoverage):Body{
   if(!spring)return UNKNOWN('Cette analyse n’a pas cherché les routes.');
   if(spring.status==='FAILED')return FAILED('La recherche des routes a échoué : voir les détails de l’analyse.');
+  const reading=readingOf(coverage, spring.evaluator_id);
+  if(readNothing(reading, coverage))return unread('Routes', reading);
   const total=spring.relations.HANDLED_BY??0;
-  return {value:count(total), unit:noun(total, 'route relevée', 'routes relevées'), state:'known', lines:[],
+  return {value:count(total), unit:noun(total, 'route relevée', 'routes relevées'), state:'known', lines:partly(reading),
     link:{href:href('routes'), label:'Explorer les routes'}};
 }
 
 /** Les modules et ce qui s'en construit, lus dans les fichiers de build (TAXO-E1) et les applications Spring Boot. */
-function architecture(structure:EvaluationSummary|undefined, boot:EvaluationSummary|undefined):Body{
+function architecture(structure:EvaluationSummary|undefined, boot:EvaluationSummary|undefined, coverage?:AnalysisCoverage):Body{
   if(!structure)return UNKNOWN('Cette analyse n’a pas lu la structure du dépôt : relancez l’analyse globale.');
   if(structure.status==='FAILED')return FAILED('La lecture de la structure a échoué : voir les détails de l’analyse.');
   const modules=structure.relations.CONTAINS??0;
   const lines=[counted(structure.relations.DEPENDS_ON??0, 'dépendance', 'dépendances')];
-  if(boot&&boot.status!=='FAILED')lines.push(counted(boot.relations.BUILT_FROM??0, 'application Spring Boot', 'applications Spring Boot'));
+  // Un analyseur qui n'a rien lu ne compte pas « 0 application » : il n'en a pas cherche (TAXO-COV-01).
+  if(boot&&boot.status!=='FAILED'&&!readNothing(readingOf(coverage, boot.evaluator_id), coverage))lines.push(counted(boot.relations.BUILT_FROM??0, 'application Spring Boot', 'applications Spring Boot'));
   const services=structure.relations.BUILT_FROM??0;
   if(services)lines.push(counted(services, 'service compose', 'services compose'));
   lines.push('Lu dans les fichiers de build, sans rien exécuter.');
@@ -108,18 +123,21 @@ function architecture(structure:EvaluationSummary|undefined, boot:EvaluationSumm
 }
 
 /** Ce que Taxo etablit de la protection des routes ; sans le detail par route, il ne compte que les regles lues. */
-function security(spring:EvaluationSummary|undefined, routes:RouteCounts|undefined):Body{
+function security(spring:EvaluationSummary|undefined, routes:RouteCounts|undefined, coverage?:AnalysisCoverage):Body{
   if(!spring)return UNKNOWN('Cette analyse n’a pas lu la sécurité.');
   if(spring.status==='FAILED')return FAILED('La lecture de la sécurité a échoué : voir les détails de l’analyse.');
+  const reading=readingOf(coverage, spring.evaluator_id);
+  if(readNothing(reading, coverage))return unread('Règles de sécurité', reading);
   const link={href:href('securite'), label:'Explorer la sécurité'};
   if(!routes){
     const rules=(spring.relations.AUTHORIZED_BY??0)+(spring.relations.PERMITS_ALL??0);
-    return {value:count(rules), unit:noun(rules, 'règle de sécurité lue', 'règles de sécurité lues'), state:'known', link, lines:[]};
+    return {value:count(rules), unit:noun(rules, 'règle de sécurité lue', 'règles de sécurité lues'), state:'known', link,
+      lines:partly(reading)};
   }
   const total=routes.PROTECTED+routes.PERMITS_ALL+routes.NOT_INTERPRETED+routes.NO_CONCLUSION;
   const established=routes.PROTECTED+routes.PERMITS_ALL;
   return {value:count(total), unit:noun(total, 'route examinée', 'routes examinées'), state:'known', link,
-    lines:[counted(established, 'statut de sécurité établi', 'statuts de sécurité établis')]};
+    lines:[counted(established, 'statut de sécurité établi', 'statuts de sécurité établis'), ...partly(reading)]};
 }
 
 /** Les zones que Taxo n'a pas su lire ou interpreter, par analyseur : ce qu'il ne sait pas, dit en clair. */
@@ -137,16 +155,16 @@ const PAGE_LINKS:Record<string,{href:string; label:string}>={project:{href:href(
   data:{href:href('donnees'), label:'Voir la page Données'}};
 
 /** Les cartes de la vue d'ensemble, toujours dans le meme ordre. */
-export function overviewCards(scan:Scan, routes?:RouteCounts):Card[]{
+export function overviewCards(scan:Scan, routes?:RouteCounts, coverage?:AnalysisCoverage):Card[]{
   const evaluations=evaluationsOf(scan);
   const find=(id:string)=>evaluations.find(item=>item.evaluator_id===id);
   const structure=find('taxo.structure'), boot=find('taxo.spring-boot');
   return [
     {id:'project', title:'Projet', ...project(scan, find('taxo.inventory'))},
     {id:'git', title:'Git', ...gitCard(find('taxo.git'))},
-    {id:'api', title:'API', ...api(find('taxo.spring-api'), routes)},
-    {id:'architecture', title:'Architecture', ...architecture(structure, boot)},
-    {id:'security', title:'Sécurité', ...security(find('taxo.spring-security'), routes)},
+    {id:'api', title:'API', ...api(find('taxo.spring-api'), routes, coverage)},
+    {id:'architecture', title:'Architecture', ...architecture(structure, boot, coverage)},
+    {id:'security', title:'Sécurité', ...security(find('taxo.spring-security'), routes, coverage)},
     {id:'data', title:'Données', ...UNKNOWN('Aucun analyseur de données n’est encore branché.')},
   ].map(card=>({...card, link:card.link??PAGE_LINKS[card.id]}));
 }
@@ -182,16 +200,19 @@ export function CardBar({segments}:Readonly<{segments:Segment[]}>){
   </div>;
 }
 
-export function ProjectOverview({scan, pending, routes}:Readonly<{scan:Scan; pending?:string[]; routes?:RouteCounts}>){
+export function ProjectOverview({scan, pending, routes, coverage}:Readonly<{scan:Scan; pending?:string[]; routes?:RouteCounts;
+  coverage?:AnalysisCoverage}>){
   const refreshing=pending!==undefined;
   const stale=(id:string)=>refreshing&&(CARD_SOURCES[id]??[]).some(source=>pending.includes(source));
   const gaps=gapsOf(scan);
   const gapCount=gaps.reduce((sum,gap)=>sum+gap.count,0);
   const analysers=new Set(gaps.map(gap=>gap.evaluator)).size;
+  // Un langage present qu'un analyseur ne lit pas est une limite, jamais « aucune limite » (TAXO-COV-01).
+  const missing=unreadAnywhere(coverage);
   return <section className={`overview${refreshing?' is-refreshing':''}`} id="vue-ensemble" aria-label="Vue d’ensemble" aria-busy={refreshing}>
     {refreshing&&<output className="refresh-note">Nouvelle analyse en cours…</output>}
     <div className="cards">
-      {overviewCards(scan, routes).map(card=><article key={card.id} className={`card card-${card.state}${stale(card.id)?' card-stale':''}`} aria-label={card.title}>
+      {overviewCards(scan, routes, coverage).map(card=><article key={card.id} className={`card card-${card.state}${stale(card.id)?' card-stale':''}`} aria-label={card.title}>
         <h3><CardIcon id={card.id}/>{card.title}{BADGES[card.state]&&<span className="badge">{BADGES[card.state]}</span>}</h3>
         <strong className="card-value">{card.value}</strong>
         {card.unit&&<span className="card-unit">{card.unit}</span>}
@@ -200,19 +221,34 @@ export function ProjectOverview({scan, pending, routes}:Readonly<{scan:Scan; pen
         {card.link&&<a className="card-link" href={card.link.href}>{card.link.label} <span aria-hidden="true">→</span></a>}
       </article>)}
     </div>
-    {evaluationsOf(scan).length>0&&<div className={`overview-limits${gapCount?' has-limits':''}`}>
-      <div><strong>{gapCount?counted(gapCount, 'limite signalée', 'limites signalées'):'Aucune limite signalée'}</strong>
-        <span>{gapCount?` · ${counted(analysers, 'analyseur concerné', 'analyseurs concernés')}`:' dans les périmètres parcourus'}</span></div>
+    {evaluationsOf(scan).length>0&&<div className={`overview-limits${gapCount||missing.length?' has-limits':''}`}>
+      <div><LimitsSummary gapCount={gapCount} analysers={analysers} missing={missing}/></div>
       <a href={href('limites')}>Voir les limites <span aria-hidden="true">→</span></a>
     </div>}
   </section>;
 }
 
+function LimitsSummary({gapCount, analysers, missing}:Readonly<{gapCount:number; analysers:number; missing:string[]}>){
+  const unreadText=`Non analysé : ${languages(missing)}`;
+  if(gapCount)return <><strong>{counted(gapCount, 'limite signalée', 'limites signalées')}</strong>
+    <span>{` · ${counted(analysers, 'analyseur concerné', 'analyseurs concernés')}`}{missing.length?` · ${unreadText}`:''}</span></>;
+  if(missing.length)return <><strong>{unreadText}</strong><span> · des langages présents que certains analyseurs ne lisent pas</span></>;
+  return <><strong>Aucune limite signalée</strong><span> dans les périmètres parcourus</span></>;
+}
+
 /** Ce que Taxo ne sait pas encore, par analyseur, avec des exemples : la liste complete est dans les details. */
-export function AnalysisLimits({scan}:Readonly<{scan:Scan}>){
+export function AnalysisLimits({scan, coverage}:Readonly<{scan:Scan; coverage?:AnalysisCoverage}>){
   const gaps=gapsOf(scan);
+  const unreadRows=(coverage?.evaluators??[]).filter(item=>item.unread.length>0||item.status==='UNSUPPORTED');
   return <section className="results limits" id="limites" aria-label="Limites de l’analyse">
     <div className="section-heading"><div><h2>Limites de l’analyse</h2><p>Les zones que Taxo n’a pas su lire ou interpréter, par analyseur. Une zone listée ici n’est ni absente ni sûre : Taxo n’en dit rien.</p></div></div>
+    {coverage&&!coverage.complete&&<p className="limits-note">L’inventaire n’a pas tout lu : des fichiers aux langages inconnus n’ont été lus par aucun analyseur.</p>}
+    {unreadRows.length>0&&<div className="table-wrap unread-languages"><table aria-label="Langages non analysés">
+      <caption>Langages présents qu’un analyseur ne lit pas : ce qu’il y aurait trouvé est inconnu, jamais absent.</caption>
+      <thead><tr><th>Analyseur</th><th>Lit</th><th>Non analysé</th></tr></thead><tbody>
+      {unreadRows.map(item=><tr key={item.evaluator_id}><td>{label(EVALUATORS,item.evaluator_id)}</td>
+        <td>{item.contract==='UNKNOWN'?'Contrat inconnu':languages(item.reads??[])}</td><td>{languages(item.unread)||'—'}</td></tr>)}
+    </tbody></table></div>}
     {gaps.length?<div className="table-wrap"><table><thead><tr><th>Analyseur</th><th>Nature</th><th>Nombre</th><th>Exemples</th></tr></thead><tbody>
       {gaps.map(gap=><tr key={gap.evaluator+gap.type}><td>{label(EVALUATORS,gap.evaluator)}</td><td>{label(COVERAGE,gap.type)}</td><td>{count(gap.count)}</td>
         <td>{gap.subjects.map(value=><code className="coverage-subject" key={value}>{reference(value)}</code>)}{gap.count>gap.subjects.length&&<span className="muted">+ {count(gap.count-gap.subjects.length)} autres</span>}</td></tr>)}

@@ -4,9 +4,11 @@
 export const EVALUATORS:Record<string,string>={'taxo.inventory':'Inventaire du code', 'taxo.git':'Historique Git', 'taxo.spring-api':'Endpoints Spring',
   'taxo.spring-boot':'Applications Spring Boot', 'taxo.spring-security':'Sécurité Spring', 'taxo.structure':'Structure du dépôt'};
 
-export const STATUSES:Record<string,string>={SUCCESS:'Terminée', PARTIAL:'Partielle', FAILED:'Échec'};
+export const STATUSES:Record<string,string>={SUCCESS:'Terminée', PARTIAL:'Partielle', FAILED:'Échec',
+  UNSUPPORTED:'Non pris en charge'};
 
-export const COVERAGE:Record<string,string>={ANALYSED:'Analysé', NOT_INTERPRETED:'Non analysé par Taxo', READ_ERROR:'Illisible'};
+export const COVERAGE:Record<string,string>={ANALYSED:'Analysé', NOT_INTERPRETED:'Non analysé par Taxo', READ_ERROR:'Illisible',
+  OUT_OF_SCOPE:'Hors de son périmètre'};
 
 export const METRICS:Record<string,string>={fact_count:'Éléments identifiés', coverage_count:'Zones de couverture',
   warning_count:'Points à vérifier', duration_seconds:'Durée'};

@@ -24,10 +24,10 @@ describe('overviewCards', ()=>{
     expect(overviewCards(scan).map(item=>item.id)).toEqual(['project','git','api','architecture','security','data']);
   });
   it('garde la carte Projet centrée sur l’inventaire', ()=>{
-    expect(card(scan,'project')).toMatchObject({value:(753).toLocaleString('fr-CA'), unit:'fichiers analysés', state:'known'});
+    expect(card(scan,'project')).toMatchObject({value:(753).toLocaleString('fr-CA'), unit:'fichiers inventoriés', state:'known'});
     expect(card(scan,'project').lines).toEqual(['2 technologies reconnues']);
     expect(card(scan,'project').link).toEqual({href:'#/technologies', label:'Voir les technologies'});
-    expect(card({...scan, files_count:1},'project').unit).toBe('fichier analysé');
+    expect(card({...scan, files_count:1},'project').unit).toBe('fichier inventorié');
     expect(card({...scan, evaluations:[{...inventory, status:'PARTIAL'}]},'project').state).toBe('known');
     expect(card({...scan, facts:[], evaluations:[inventory]},'project').lines).toEqual([]);
     expect(card({id:'x', created_at:''},'project').value).toBe('0');

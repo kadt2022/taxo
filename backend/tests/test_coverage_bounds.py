@@ -328,3 +328,56 @@ def test_a_partial_inventory_is_never_a_reason_to_refuse_a_comparison(taxo_on, g
     api = taxo.compare(before, taxo.analyse()['id'])['taxo.spring-api']
     assert api['comparable']
     assert api['relations']['HANDLED_BY']['ADDED'] == 1
+
+
+def coverage_of(taxo, scan_id):
+    response = taxo.client.get(f'{taxo.base}/scans/{scan_id}/coverage')
+    assert response.status_code == 200, response.text
+    found = response.json()
+    return found, {item['evaluator_id']: item for item in found['evaluators']}
+
+
+def test_the_portal_reads_what_each_analyzer_read(taxo_on):
+    """Restitution (PR B) : les langages de l'analyse, et pour chaque analyseur ce qu'il lit et n'a pas lu."""
+    taxo, _ = taxo_on({**repository(), **PYTHON})
+    found, by = coverage_of(taxo, taxo.analyse()['id'])
+    assert (found['languages'], found['complete']) == (['Java', 'Python'], True)
+    assert by['taxo.spring-api'] == {'evaluator_id': 'taxo.spring-api', 'status': 'SUCCESS', 'contract': 'KNOWN',
+                                     'reads': ['Java'], 'unread': ['Python']}
+    assert (by['taxo.git']['reads'], by['taxo.git']['unread']) == (None, [])
+    python, _ = taxo_on(PYTHON)
+    _, alone = coverage_of(python, python.analyse()['id'])
+    assert (alone['taxo.spring-security']['status'], alone['taxo.spring-security']['unread']) == ('UNSUPPORTED', ['Python'])
+
+
+def test_an_earlier_analysis_is_restituted_by_its_recorded_contract(taxo_on, monkeypatch):
+    legacy(monkeypatch)
+    taxo, _ = taxo_on(PYTHON)
+    scan = taxo.analyse()['id']
+    taxo.forget_languages(scan)
+    with Session(taxo.engine) as db:
+        # Avant TAXO-COV-01, le resume d'une execution ne nommait pas son catalogue : il est relu dans ses couvertures.
+        row = db.get(ScanRow, scan)
+        row.result = {**row.result, 'evaluations': [
+            {key: value for key, value in item.items() if key not in ('catalog_id', 'catalog_version')}
+            for item in row.result['evaluations']]}
+        db.commit()
+    found, by = coverage_of(taxo, scan)
+    assert found['languages'] == ['Python']
+    assert (by['taxo.spring-api']['status'], by['taxo.spring-api']['reads'], by['taxo.spring-api']['unread']) == \
+        ('SUCCESS', ['Java'], ['Python']), 'un SUCCESS sans rien a lire reste « Python non analyse »'
+
+
+def test_an_unknown_contract_reads_nothing_known_in_the_restitution(taxo_on):
+    taxo, _ = taxo_on(PYTHON)
+    scan = taxo.analyse()['id']
+    with Session(taxo.engine) as db:
+        row = db.get(ScanRow, scan)
+        row.result = {**row.result, 'evaluations': [
+            {**item, 'catalog_version': 'retiree'} if item['evaluator_id'] == 'taxo.git' else item
+            for item in row.result['evaluations']]}
+        db.commit()
+    _, by = coverage_of(taxo, scan)
+    assert by['taxo.git'] == {'evaluator_id': 'taxo.git', 'status': 'SUCCESS', 'contract': 'UNKNOWN',
+                              'reads': [], 'unread': ['Python']}
+    assert taxo.client.get(f'{taxo.base}/scans/inconnue/coverage').status_code == 404

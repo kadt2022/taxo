@@ -9,6 +9,7 @@ import {href, go, parse, useRoute, withProject} from './nav';
 import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, ProjectsPage, TechnologiesPage} from './pages';
 import {AskTaxo} from './query';
 import {loadRoutes, RoutesExplorer, type RoutesResult} from './routes';
+import {readNothing, readingOf, unreadBy, useCoverage} from './reading';
 import {apiUrl} from './api';
 import {openStream} from './sse';
 import {AnalysisProgress, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
@@ -67,10 +68,14 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
       onError:message=>setRoutes({scanId:scan.id, result:null, error:message})});
   },[base, scan?.id, running]);
   const mine=routes&&routes.scanId===shown?.id?routes:null;
+  // Ce que chaque analyseur a lu, pour l'analyse affichee (TAXO-COV-01) : une limite, jamais une absence.
+  const coverage=useCoverage(request, base, selected?scan?.id:undefined, shown?.id, running);
   const counts=mine?.result?routeCounts(mine.result):undefined;
-  const legacyCards=shown?overviewCards(shown, counts):[];
+  const legacyCards=shown?overviewCards(shown, counts, coverage):[];
   const countOf=(id:string)=>{const card=legacyCards.find(item=>item.id===id);return card&&card.state==='known'?card.value:undefined;};
-  const navItems=shown?navItemsOf(technologiesOf(shown).length, countOf, counts, scans.length):navItemsOf(0, ()=>undefined);
+  // Sécurité et Non interprétées comptent les routes examinées par la sécurité : rien si elle n'a rien lu.
+  const examined=readNothing(readingOf(coverage, 'taxo.spring-security'), coverage)?undefined:counts;
+  const navItems=shown?navItemsOf(technologiesOf(shown).length, countOf, examined, scans.length):navItemsOf(0, ()=>undefined);
   const project=projects.find(item=>item.id===selected);
   const latest=scans[0];
   const showLatest=()=>setScanId('');
@@ -96,8 +101,10 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   }
   function scanPage(current:Scan){
     const note=<DisplayedNote scan={current} latest={latest} onLatest={showLatest}/>;
+    // Routes et Sécurité disent ce que leur analyseur n'a pas lu.
     const routesOf=(filter:string, title?:string, intro?:string)=><>{note}<RoutesExplorer key={`${current.id}:${filter}`} result={mine?.result??null}
-      error={mine?.error??''} initialFilter={filter} title={title} intro={intro}/></>;
+      error={mine?.error??''} initialFilter={filter} title={title} intro={intro}
+      unread={unreadBy(coverage, [filter==='ALL'?'taxo.spring-api':'taxo.spring-security'])}/></>;
     switch(route.page){
     case 'interroger':return <AskTaxo key={panelKey('ask',selected)} base={base} request={request} minia={minia}/>;
     case 'technologies':return <>{note}<TechnologiesPage scan={current}/></>;
@@ -105,8 +112,8 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     case 'securite':return routesOf('PROTECTED', 'Sécurité des routes', 'Règles de protection observées par Taxo : pour chaque route, la règle qui la capture, ce qu’elle exige, et la preuve dans le code. Ce n’est pas encore une analyse de sécurité complète : seules les routes HTTP et leurs règles sont lues.');
     case 'non-interpretees':return routesOf('GAPS', 'Non interprétées', 'Les routes dont Taxo ne sait pas établir la protection, avec la zone qu’il n’a pas su interpréter. Une route listée ici n’est ni protégée ni ouverte : Taxo n’en dit rien.');
     case 'architecture':return <>{note}<ArchitecturePage base={base} request={request} scanId={current.id} project={project}/></>;
-    case 'limites':return <>{note}<AnalysisLimits scan={current}/></>;
-    default:return <>{note}<OverviewPage scan={current} latest={latest} pending={running?pendingEvaluators(run):undefined} routes={counts}/></>;
+    case 'limites':return <>{note}<AnalysisLimits scan={current} coverage={coverage}/></>;
+    default:return <>{note}<OverviewPage scan={current} latest={latest} pending={running?pendingEvaluators(run):undefined} routes={counts} coverage={coverage}/></>;
     }
   }
   function welcome(){

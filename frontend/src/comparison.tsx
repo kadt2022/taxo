@@ -9,7 +9,7 @@ type Request=<T>(path:string)=>Promise<T>;
 export type Side={id:string; created_at:string; snapshot?:{commit?:string; mode?:string; content_fingerprint?:string}|null};
 export type EvaluatorEntry={evaluator_id:string; comparable:boolean; reason?:string; message?:string;
   versions:{before:string[]; after:string[]}; counts?:Record<string,number>;
-  relations?:Record<string, Record<string,number>>};
+  relations?:Record<string, Record<string,number>>; not_analysed?:{before:string[]; after:string[]}};
 export type ComparisonSummary={before:Side; after:Side; evaluators:EvaluatorEntry[]; totals:Record<string,number>;
   unknown:{before:number; after:number}};
 export type Evidence={path?:string; line_start?:number; line_end?:number; symbol?:string; object?:string; method?:string;
@@ -188,7 +188,8 @@ function DomainCard({domain, open, onOpen}:Readonly<{domain:DomainResult; open:s
         <span className="change-sign" aria-hidden="true">{CATEGORIES.find(item=>item.id===line.category)?.sign}</span>
         <span>{line.text}{line.source&&<small> · selon {line.source}</small>}</span></button></li>)}</ul>}
     {domain.state==='unchanged'&&<p className="domain-quiet">Aucun changement parmi les faits comparés.</p>}
-    {domain.state==='absent'&&<p className="domain-quiet">Aucun analyseur de ce domaine dans ces deux analyses.</p>}
+    {domain.state==='absent'&&domain.reasons.length===0&&<p className="domain-quiet">Aucun analyseur de ce domaine dans ces deux analyses.</p>}
+    {domain.unread.length>0&&<p className="domain-unread">Non analysé : {domain.unread.join(', ')} — rien n’y est ni trouvé ni exclu.</p>}
     {domain.reasons.map(item=><p key={item.evaluator} className="domain-reason"><strong>{item.evaluator}</strong> {item.message}</p>)}
     {domain.lines.length>1&&<button type="button" className="link domain-all" aria-pressed={open===`${domain.id}:*`}
       onClick={()=>onOpen(domain.lines, `${domain.id}:*`)}>Voir tous les faits →</button>}

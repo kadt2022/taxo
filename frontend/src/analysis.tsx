@@ -43,7 +43,9 @@ export function reduce(run:Run, event:ServerEvent):Run{
     case 'evaluator.progress':
       return withStep(run, data.evaluator, {detail:progressText(data as never)});
     case 'evaluator.completed':
-      return {...withStep(run, data.evaluator, {state:'done'}), summaries:[...run.summaries, data.summary],
+      // Un analyseur qui n'avait rien a lire est termine, sans avoir rien analyse : l'etape le dit (TAXO-COV-01).
+      return {...withStep(run, data.evaluator, data.summary?.status==='UNSUPPORTED'?{state:'done', detail:'Non pris en charge : rien à lire'}
+        :{state:'done'}), summaries:[...run.summaries, data.summary],
         result:data.result?{...run.result, ...data.result}:run.result};
     case 'evaluator.failed':
       return {...withStep(run, data.evaluator, {state:'failed', detail:'Analyse incomplète — voir le détail'}),

@@ -78,7 +78,11 @@ export function phrase(evaluator:string, relation:string, category:string, count
 /** Une ligne d'un domaine : un compte du serveur, pour un evaluateur, une relation et une categorie. */
 export type Line={key:string; evaluator:string; relation:string; category:string; count:number; text:string; source?:string};
 export type DomainResult={id:DomainId; label:string; icon:string; state:'changed'|'unchanged'|'refused'|'absent';
-  lines:Line[]; reasons:{evaluator:string; message:string}[]};
+  lines:Line[]; reasons:{evaluator:string; message:string}[]; unread:string[]};
+
+/** Un analyseur qui n'avait rien a lire d'un cote (TAXO-COV-01) : son domaine n'est pas analyse, il n'est pas
+ * « non comparable » pour une autre raison, et ce n'est jamais « aucun changement ». */
+const unsupported=(entry:EvaluatorEntry)=>!entry.comparable&&(entry.reason??'').startsWith('NOT_SUPPORTED');
 
 /** Les lignes d'un evaluateur comparable, chacune dans son domaine : un compte non nul par relation et categorie. */
 function linesOf(entry:EvaluatorEntry):[DomainId, Line][]{
@@ -93,10 +97,16 @@ const byOrder=(left:Line, right:Line)=>ORDER.indexOf(left.category)-ORDER.indexO
 const named=(lines:Line[])=>lines.map(line=>lines.some(other=>other!==line&&other.text===line.text)
   ?{...line, source:label(EVALUATORS, line.evaluator)}:line);
 
-function stateOf(lines:Line[], compared:boolean, refused:boolean):DomainResult['state']{
+function stateOf(lines:Line[], compared:boolean, refused:EvaluatorEntry[]):DomainResult['state']{
   if(lines.length)return 'changed';
   if(compared)return 'unchanged';
-  return refused?'refused':'absent';
+  return refused.some(entry=>!unsupported(entry))?'refused':'absent';
+}
+
+/** Les langages presents, d'un cote ou de l'autre, que les analyseurs de ce domaine n'ont pas lus. */
+function unreadOf(entries:EvaluatorEntry[]){
+  const found=new Set(entries.flatMap(entry=>[...entry.not_analysed?.before??[], ...entry.not_analysed?.after??[]]));
+  return [...found].sort((left, right)=>left.localeCompare(right));
 }
 
 const add=<T>(map:Map<DomainId, T[]>, id:DomainId, value:T)=>map.set(id, [...map.get(id)??[], value]);
@@ -104,8 +114,10 @@ const add=<T>(map:Map<DomainId, T[]>, id:DomainId, value:T)=>map.set(id, [...map
 /** Les comptes du serveur, ranges par domaine ; un domaine sans evaluateur compare le dit, sans rien supposer. */
 export function byDomain(summary:Pick<ComparisonSummary, 'evaluators'>):DomainResult[]{
   const lines=new Map<DomainId, Line[]>(), compared=new Set<DomainId>(), refused=new Map<DomainId, EvaluatorEntry[]>();
+  const members=new Map<DomainId, EvaluatorEntry[]>();
   for(const entry of summary.evaluators){
     const ids=domainsOf(entry.evaluator_id);
+    ids.forEach(id=>add(members, id, entry));
     if(!entry.comparable){
       ids.forEach(id=>add(refused, id, entry));
       continue;
@@ -118,7 +130,9 @@ export function byDomain(summary:Pick<ComparisonSummary, 'evaluators'>):DomainRe
   }
   return DOMAINS.map(domain=>{
     const shown=named([...lines.get(domain.id)??[]].sort(byOrder));
-    const reasons=(refused.get(domain.id)??[]).map(entry=>({evaluator:label(EVALUATORS, entry.evaluator_id), message:entry.message??''}));
-    return {...domain, state:stateOf(shown, compared.has(domain.id), reasons.length>0), lines:shown, reasons};
-  }).filter(domain=>domain.id!=='autres'||domain.state==='changed'||domain.state==='refused');
+    const refusedHere=refused.get(domain.id)??[];
+    const reasons=refusedHere.map(entry=>({evaluator:label(EVALUATORS, entry.evaluator_id), message:entry.message??''}));
+    return {...domain, state:stateOf(shown, compared.has(domain.id), refusedHere), lines:shown, reasons,
+      unread:unreadOf(members.get(domain.id)??[])};
+  }).filter(domain=>domain.id!=='autres'||domain.state==='changed'||domain.state==='refused'||domain.reasons.length>0);
 }
