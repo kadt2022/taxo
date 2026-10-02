@@ -9,7 +9,7 @@ import {href, go, parse, useRoute, withProject} from './nav';
 import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, ProjectsPage, TechnologiesPage} from './pages';
 import {AskTaxo} from './query';
 import {loadRoutes, RoutesExplorer, type RoutesResult} from './routes';
-import {readNothing, readingOf, unreadBy, useCoverage} from './reading';
+import {isUnknown, readNothing, readingOf, unreadBy, useCoverage} from './reading';
 import {apiUrl} from './api';
 import {openStream} from './sse';
 import {AnalysisProgress, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
@@ -74,7 +74,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   const legacyCards=shown?overviewCards(shown, counts, coverage):[];
   const countOf=(id:string)=>{const card=legacyCards.find(item=>item.id===id);return card&&card.state==='known'?card.value:undefined;};
   // Sécurité et Non interprétées comptent les routes examinées par la sécurité : rien si elle n'a rien lu.
-  const examined=readNothing(readingOf(coverage, 'taxo.spring-security'), coverage)?undefined:counts;
+  const examined=isUnknown(coverage)||readNothing(readingOf(coverage, 'taxo.spring-security'), coverage)?undefined:counts;
   const navItems=shown?navItemsOf(technologiesOf(shown).length, countOf, examined, scans.length):navItemsOf(0, ()=>undefined);
   const project=projects.find(item=>item.id===selected);
   const latest=scans[0];
@@ -104,7 +104,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     // Routes et Sécurité disent ce que leur analyseur n'a pas lu.
     const routesOf=(filter:string, title?:string, intro?:string)=><>{note}<RoutesExplorer key={`${current.id}:${filter}`} result={mine?.result??null}
       error={mine?.error??''} initialFilter={filter} title={title} intro={intro}
-      unread={unreadBy(coverage, [filter==='ALL'?'taxo.spring-api':'taxo.spring-security'])}/></>;
+      unread={unreadBy(coverage, [filter==='ALL'?'taxo.spring-api':'taxo.spring-security'])} unknown={isUnknown(coverage)}/></>;
     switch(route.page){
     case 'interroger':return <AskTaxo key={panelKey('ask',selected)} base={base} request={request} minia={minia}/>;
     case 'technologies':return <>{note}<TechnologiesPage scan={current}/></>;

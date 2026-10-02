@@ -1,7 +1,11 @@
+// @vitest-environment happy-dom
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it, vi} from 'vitest';
 import {AnalysisLimits, overviewCards, ProjectOverview, type EvaluationSummary, type Scan} from './overview';
-import {loadCoverage, readNothing, unreadAnywhere, unreadBy, type AnalysisCoverage, type Reading} from './reading';
+import {act} from 'react';
+import {createRoot} from 'react-dom/client';
+import {loadCoverage, readNothing, unreadAnywhere, unreadBy, useCoverage, UNKNOWN_COVERAGE, type AnalysisCoverage, type CoverageView,
+  type Reading} from './reading';
 import {RoutesView} from './routes';
 import {byDomain} from './domains';
 import {reduce, startRun} from './analysis';
@@ -22,7 +26,7 @@ const TAXO:AnalysisCoverage={languages:['Python', 'TypeScript'], complete:true, 
   reading('taxo.spring-security', 'UNSUPPORTED', ['Java'], ['Python', 'TypeScript'])]};
 const taxoScan=scanOf(summary('taxo.inventory'), summary('taxo.git'), summary('taxo.spring-api', {status:'UNSUPPORTED'}),
   summary('taxo.spring-security', {status:'UNSUPPORTED'}));
-const card=(scan:Scan, id:string, coverage?:AnalysisCoverage)=>overviewCards(scan, undefined, coverage).find(item=>item.id===id)!;
+const card=(scan:Scan, id:string, coverage?:CoverageView)=>overviewCards(scan, undefined, coverage).find(item=>item.id===id)!;
 
 describe('ce que chaque analyseur a lu', ()=>{
   it('un analyseur sans rien à lire ne lit rien ; un contrat qui lit un langage présent a lu', ()=>{
@@ -127,4 +131,58 @@ describe('ce que chaque analyseur a lu', ()=>{
     await new Promise(resolve=>setTimeout(resolve, 0));
     expect(onError).toHaveBeenCalledWith('panne');
   });
+
+  it('couverture inconnue : aucune conclusion négative, ni « 0 route » ni « aucune limite »', ()=>{
+    const legacy=scanOf(summary('taxo.inventory'), summary('taxo.spring-api'), summary('taxo.spring-security'),
+      summary('taxo.spring-boot'), summary('taxo.structure', {relations:{CONTAINS:2}}));
+    expect(card(legacy, 'api', UNKNOWN_COVERAGE)).toMatchObject({value:'Non établi', state:'unknown'});
+    expect(card(legacy, 'security', UNKNOWN_COVERAGE)).toMatchObject({value:'Non établi', link:{href:'#/securite'}});
+    expect(overviewCards(legacy, {PROTECTED:0, PERMITS_ALL:0, NOT_INTERPRETED:0, NO_CONCLUSION:0, reserved:0, missing:0}, UNKNOWN_COVERAGE)
+      .find(item=>item.id==='security')?.value).toBe('Non établi');
+    expect(card(legacy, 'architecture', UNKNOWN_COVERAGE).lines).not.toContain('0 application Spring Boot');
+    const counted=scanOf(summary('taxo.inventory'), summary('taxo.spring-api', {relations:{HANDLED_BY:3}}));
+    expect(card(counted, 'api', UNKNOWN_COVERAGE)).toMatchObject({value:'3', state:'known'});
+    const html=renderToStaticMarkup(<ProjectOverview scan={legacy} coverage={UNKNOWN_COVERAGE}/>);
+    expect(html).toContain('Couverture des langages inconnue');
+    expect(html).not.toContain('Aucune limite signalée');
+    const gaps=scanOf(summary('taxo.inventory', {coverage:[{coverage_type:'READ_ERROR', count:1, subjects:['file:a']}]}));
+    expect(renderToStaticMarkup(<ProjectOverview scan={gaps} coverage={UNKNOWN_COVERAGE}/>)).toContain('1 limite signalée');
+    const limits=renderToStaticMarkup(<AnalysisLimits scan={legacy} coverage={UNKNOWN_COVERAGE}/>);
+    expect(limits).toContain('Ce que chaque analyseur a lu n’est pas encore connu');
+    expect(limits).not.toContain('Langages non analysés');
+    const routes=renderToStaticMarkup(<RoutesView result={{routes:[], unestablished:[]}} error="" text="" filter="ALL" selected=""
+      onText={vi.fn()} onFilter={vi.fn()} onSelect={vi.fn()} unknown={true}/>);
+    expect(routes).toContain('ce que Taxo a lu n’est pas encore connu : aucune conclusion');
+    expect(routes).not.toContain('Aucune route HTTP établie par cette analyse');
+    expect(readNothing(TAXO.evaluators[2], UNKNOWN_COVERAGE)).toBe(false);
+    expect(unreadAnywhere(UNKNOWN_COVERAGE)).toEqual([]);
+  });
+
+  it('le crochet dit « inconnu » en chargement, en échec et pendant une nouvelle analyse', async()=>{
+    (globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
+    const seen:(CoverageView|undefined)[]=[];
+    let answer:()=>Promise<unknown>=()=>Promise.resolve(TAXO);
+    const request=(()=>answer()) as never;
+    function Probe({scanId, running}:Readonly<{scanId?:string; running:boolean}>){
+      seen.push(useCoverage(request, '/projects/p', scanId, scanId, running));
+      return null;
+    }
+    const host=document.createElement('div');
+    const root=createRoot(host);
+    const settle=()=>act(async()=>{await new Promise(resolve=>setTimeout(resolve, 0));});
+    await act(async()=>{root.render(<Probe scanId="s" running={false}/>);});
+    expect(seen[0]).toBe(UNKNOWN_COVERAGE);
+    await settle();
+    expect(seen.at(-1)).toEqual(TAXO);
+    await act(async()=>{root.render(<Probe scanId="s" running={true}/>);});
+    expect(seen.at(-1)).toBe(UNKNOWN_COVERAGE);
+    answer=()=>Promise.reject(new Error('panne'));
+    await act(async()=>{root.render(<Probe scanId="s" running={false}/>);});
+    await settle();
+    expect(seen.at(-1)).toBe(UNKNOWN_COVERAGE);
+    await act(async()=>{root.render(<Probe running={false}/>);});
+    expect(seen.at(-1)).toBeUndefined();
+    act(()=>root.unmount());
+  });
 });
+

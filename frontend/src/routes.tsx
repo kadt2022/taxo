@@ -126,7 +126,7 @@ export function loadRoutes(request:Run, base:string, scanId:string, {onResult, o
 
 type ViewProps = {result:RoutesResult|null; error:string; text:string; filter:string; selected:string;
   onText:(value:string)=>void; onFilter:(value:string)=>void; onSelect:(endpoint:string)=>void; title?:string; intro?:string;
-  unread?:string[]};
+  unread?:string[]; unknown?:boolean};
 
 const INTRO='Ce que Taxo prouve de chaque route HTTP : qui la traite, quelle application la sert, quelle règle la capture et ce qui la protège. Tout vient des faits, avec leurs preuves ; rien n’est rédigé par Minia.';
 
@@ -137,8 +137,15 @@ function Unread({unread, empty}:Readonly<{unread:string[]; empty:boolean}>){
     :`Non analysé : ${list}`} — une route écrite dans {unread.length>1?'ces langages':'ce langage'} n’est ni trouvée ni exclue.</p>;
 }
 
+/** Le message d'une page sans route : jamais « aucune route » quand Taxo ne sait pas ce qu'il a lu. */
+function NoRoute({unread, unknown}:Readonly<{unread:string[]; unknown:boolean}>){
+  if(unread.length)return <Unread unread={unread} empty={true}/>;
+  return <p className="empty">{unknown?'Aucune route établie ; ce que Taxo a lu n’est pas encore connu : aucune conclusion.'
+    :'Aucune route HTTP établie par cette analyse.'}</p>;
+}
+
 export function RoutesView({result, error, text, filter, selected, onText, onFilter, onSelect, title='Routes', intro=INTRO,
-  unread=[]}:Readonly<ViewProps>){
+  unread=[], unknown=false}:Readonly<ViewProps>){
   const shown=result?filterRoutes(result.routes, text, filter):[];
   const row=result?.routes.find(item=>item.endpoint===selected);
   return <section className="results routes" aria-label={title}>
@@ -151,9 +158,8 @@ export function RoutesView({result, error, text, filter, selected, onText, onFil
         <label>État<select value={filter} onChange={typed(onFilter)}>{Object.entries(FILTERS).map(([key, value])=><option key={key} value={key}>{value}</option>)}</select></label>
         <p className="muted">{shown.length} sur {result.routes.length} routes</p>
       </div>
-      {unread.length>0&&<Unread unread={unread} empty={result.routes.length===0}/>}
-      {result.routes.length===0?unread.length===0&&<p className="empty">Aucune route HTTP établie par cette analyse.</p>
-        :<RoutesTable routes={shown} selected={selected} onSelect={onSelect}/>}
+      {result.routes.length===0?<NoRoute unread={unread} unknown={unknown}/>
+        :<>{unread.length>0&&<Unread unread={unread} empty={false}/>}<RoutesTable routes={shown} selected={selected} onSelect={onSelect}/></>}
       {row&&<RouteDetail row={row}/>}
       {result.unestablished.length>0&&<details className="analysis-details"><summary>Des routes peuvent manquer ({result.unestablished.length})</summary><ul>
         {result.unestablished.map(gap=><li key={gap.subject}><code>{gap.subject}</code> : {gap.reason||'raison non conservée par cette analyse'}</li>)}
@@ -164,9 +170,9 @@ export function RoutesView({result, error, text, filter, selected, onText, onFil
 
 /** Une page de routes (Routes, Sécurité, Non interprétées) : les routes de l'analyse affichée, lues une seule fois par le portail,
  * avec le filtre propre à la page. */
-export function RoutesExplorer({result, error, initialFilter='ALL', title, intro, unread}:Readonly<{result:RoutesResult|null; error:string;
-  initialFilter?:string; title?:string; intro?:string; unread?:string[]}>){
+export function RoutesExplorer({result, error, initialFilter='ALL', title, intro, unread, unknown}:Readonly<{result:RoutesResult|null;
+  error:string; initialFilter?:string; title?:string; intro?:string; unread?:string[]; unknown?:boolean}>){
   const [text,setText]=useState(''), [filter,setFilter]=useState(initialFilter), [selected,setSelected]=useState('');
   return <RoutesView result={result} error={error} text={text} filter={filter} selected={selected} onText={setText} onFilter={setFilter}
-    onSelect={setSelected} title={title} intro={intro} unread={unread}/>;
+    onSelect={setSelected} title={title} intro={intro} unread={unread} unknown={unknown}/>;
 }

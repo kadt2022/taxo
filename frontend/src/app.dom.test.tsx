@@ -285,5 +285,16 @@ describe('une page par fonction', ()=>{
     await visit('#/limites');
     expect(host.querySelector('.unread-languages')?.textContent).toContain('Endpoints Spring');
   });
+
+  it('une couverture qui ne se charge pas n’est jamais une couverture complète (TAXO-COV-01)', async()=>{
+    unread=true;
+    failing=['/coverage'];
+    await open('#/');
+    expect(host.querySelector('[aria-label="API"] .card-value')?.textContent).not.toBe('0');
+    expect(host.querySelector('.overview-limits strong')?.textContent).toBe('Couverture des langages inconnue');
+    expect(host.querySelector('.results-nav a[href="#/securite"] .results-count')).toBeNull();
+    await visit('#/routes');
+    expect(text()).not.toContain('Aucune route HTTP établie par cette analyse');
+  });
 });
 

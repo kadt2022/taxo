@@ -4,7 +4,7 @@
 import {href} from './nav';
 import {COVERAGE, EVALUATORS, label, reference} from './vocabulary';
 import type {RouteState, RoutesResult} from './routes';
-import {type AnalysisCoverage, type Reading, languages, readNothing, readingOf, unreadAnywhere} from './reading';
+import {type CoverageView, type Reading, isUnknown, languages, readNothing, readingOf, unreadAnywhere} from './reading';
 
 export type SnapshotReference = {repository:string; commit:string; mode:'COMMIT'|'WORKING_TREE'; dirty?:boolean; content_fingerprint?:string};
 export type EvaluationSummary = {
@@ -93,28 +93,32 @@ function unread(what:string, reading:Reading|undefined):Body{
     :`${what} non cherchées : aucun fichier dans les langages que son analyseur lit.`);
 }
 
+/** Ce que l'analyseur a lu n'est pas connu : un compte nul n'est pas une conclusion (TAXO-COV-01). */
+const UNCONCLUDED:Body={value:'Non établi', state:'unknown', lines:['Ce que l’analyseur a lu n’est pas connu : aucune conclusion.']};
+
 /** Ce qu'un domaine n'a pas lu, en une ligne, quand son analyseur a lu une partie des langages presents. */
 const partly=(reading:Reading|undefined)=>reading?.unread.length?[`Non analysé : ${languages(reading.unread)}`]:[];
 
 /** Les routes relevees par l'evaluateur Spring API (TAXO-04) : une route est un endpoint et la methode qui le traite. */
-function api(spring:EvaluationSummary|undefined, _routes:RouteCounts|undefined, coverage?:AnalysisCoverage):Body{
+function api(spring:EvaluationSummary|undefined, _routes:RouteCounts|undefined, coverage?:CoverageView):Body{
   if(!spring)return UNKNOWN('Cette analyse n’a pas cherché les routes.');
   if(spring.status==='FAILED')return FAILED('La recherche des routes a échoué : voir les détails de l’analyse.');
   const reading=readingOf(coverage, spring.evaluator_id);
   if(readNothing(reading, coverage))return unread('Routes', reading);
   const total=spring.relations.HANDLED_BY??0;
+  if(isUnknown(coverage)&&total===0)return UNCONCLUDED;
   return {value:count(total), unit:noun(total, 'route relevée', 'routes relevées'), state:'known', lines:partly(reading),
     link:{href:href('routes'), label:'Explorer les routes'}};
 }
 
 /** Les modules et ce qui s'en construit, lus dans les fichiers de build (TAXO-E1) et les applications Spring Boot. */
-function architecture(structure:EvaluationSummary|undefined, boot:EvaluationSummary|undefined, coverage?:AnalysisCoverage):Body{
+function architecture(structure:EvaluationSummary|undefined, boot:EvaluationSummary|undefined, coverage?:CoverageView):Body{
   if(!structure)return UNKNOWN('Cette analyse n’a pas lu la structure du dépôt : relancez l’analyse globale.');
   if(structure.status==='FAILED')return FAILED('La lecture de la structure a échoué : voir les détails de l’analyse.');
   const modules=structure.relations.CONTAINS??0;
   const lines=[counted(structure.relations.DEPENDS_ON??0, 'dépendance', 'dépendances')];
   // Un analyseur qui n'a rien lu ne compte pas « 0 application » : il n'en a pas cherche (TAXO-COV-01).
-  if(boot&&boot.status!=='FAILED'&&!readNothing(readingOf(coverage, boot.evaluator_id), coverage))lines.push(counted(boot.relations.BUILT_FROM??0, 'application Spring Boot', 'applications Spring Boot'));
+  if(boot&&boot.status!=='FAILED'&&!isUnknown(coverage)&&!readNothing(readingOf(coverage, boot.evaluator_id), coverage))lines.push(counted(boot.relations.BUILT_FROM??0, 'application Spring Boot', 'applications Spring Boot'));
   const services=structure.relations.BUILT_FROM??0;
   if(services)lines.push(counted(services, 'service compose', 'services compose'));
   lines.push('Lu dans les fichiers de build, sans rien exécuter.');
@@ -123,7 +127,7 @@ function architecture(structure:EvaluationSummary|undefined, boot:EvaluationSumm
 }
 
 /** Ce que Taxo etablit de la protection des routes ; sans le detail par route, il ne compte que les regles lues. */
-function security(spring:EvaluationSummary|undefined, routes:RouteCounts|undefined, coverage?:AnalysisCoverage):Body{
+function security(spring:EvaluationSummary|undefined, routes:RouteCounts|undefined, coverage?:CoverageView):Body{
   if(!spring)return UNKNOWN('Cette analyse n’a pas lu la sécurité.');
   if(spring.status==='FAILED')return FAILED('La lecture de la sécurité a échoué : voir les détails de l’analyse.');
   const reading=readingOf(coverage, spring.evaluator_id);
@@ -131,10 +135,12 @@ function security(spring:EvaluationSummary|undefined, routes:RouteCounts|undefin
   const link={href:href('securite'), label:'Explorer la sécurité'};
   if(!routes){
     const rules=(spring.relations.AUTHORIZED_BY??0)+(spring.relations.PERMITS_ALL??0);
+    if(isUnknown(coverage)&&rules===0)return {...UNCONCLUDED, link};
     return {value:count(rules), unit:noun(rules, 'règle de sécurité lue', 'règles de sécurité lues'), state:'known', link,
       lines:partly(reading)};
   }
   const total=routes.PROTECTED+routes.PERMITS_ALL+routes.NOT_INTERPRETED+routes.NO_CONCLUSION;
+  if(isUnknown(coverage)&&total===0)return {...UNCONCLUDED, link};
   const established=routes.PROTECTED+routes.PERMITS_ALL;
   return {value:count(total), unit:noun(total, 'route examinée', 'routes examinées'), state:'known', link,
     lines:[counted(established, 'statut de sécurité établi', 'statuts de sécurité établis'), ...partly(reading)]};
@@ -155,7 +161,7 @@ const PAGE_LINKS:Record<string,{href:string; label:string}>={project:{href:href(
   data:{href:href('donnees'), label:'Voir la page Données'}};
 
 /** Les cartes de la vue d'ensemble, toujours dans le meme ordre. */
-export function overviewCards(scan:Scan, routes?:RouteCounts, coverage?:AnalysisCoverage):Card[]{
+export function overviewCards(scan:Scan, routes?:RouteCounts, coverage?:CoverageView):Card[]{
   const evaluations=evaluationsOf(scan);
   const find=(id:string)=>evaluations.find(item=>item.evaluator_id===id);
   const structure=find('taxo.structure'), boot=find('taxo.spring-boot');
@@ -201,7 +207,7 @@ export function CardBar({segments}:Readonly<{segments:Segment[]}>){
 }
 
 export function ProjectOverview({scan, pending, routes, coverage}:Readonly<{scan:Scan; pending?:string[]; routes?:RouteCounts;
-  coverage?:AnalysisCoverage}>){
+  coverage?:CoverageView}>){
   const refreshing=pending!==undefined;
   const stale=(id:string)=>refreshing&&(CARD_SOURCES[id]??[]).some(source=>pending.includes(source));
   const gaps=gapsOf(scan);
@@ -221,28 +227,32 @@ export function ProjectOverview({scan, pending, routes, coverage}:Readonly<{scan
         {card.link&&<a className="card-link" href={card.link.href}>{card.link.label} <span aria-hidden="true">→</span></a>}
       </article>)}
     </div>
-    {evaluationsOf(scan).length>0&&<div className={`overview-limits${gapCount||missing.length?' has-limits':''}`}>
-      <div><LimitsSummary gapCount={gapCount} analysers={analysers} missing={missing}/></div>
+    {evaluationsOf(scan).length>0&&<div className={`overview-limits${gapCount||missing.length||isUnknown(coverage)?' has-limits':''}`}>
+      <div><LimitsSummary gapCount={gapCount} analysers={analysers} missing={missing} unknown={isUnknown(coverage)}/></div>
       <a href={href('limites')}>Voir les limites <span aria-hidden="true">→</span></a>
     </div>}
   </section>;
 }
 
-function LimitsSummary({gapCount, analysers, missing}:Readonly<{gapCount:number; analysers:number; missing:string[]}>){
-  const unreadText=`Non analysé : ${languages(missing)}`;
+function LimitsSummary({gapCount, analysers, missing, unknown}:Readonly<{gapCount:number; analysers:number; missing:string[];
+  unknown:boolean}>){
+  const unreadText=unknown?'Couverture des langages inconnue':`Non analysé : ${languages(missing)}`;
+  if(unknown&&!gapCount)return <><strong>{unreadText}</strong><span> · ce que les analyseurs n’ont pas lu n’est pas encore connu</span></>;
   if(gapCount)return <><strong>{counted(gapCount, 'limite signalée', 'limites signalées')}</strong>
-    <span>{` · ${counted(analysers, 'analyseur concerné', 'analyseurs concernés')}`}{missing.length?` · ${unreadText}`:''}</span></>;
+    <span>{` · ${counted(analysers, 'analyseur concerné', 'analyseurs concernés')}`}{missing.length||unknown?` · ${unreadText}`:''}</span></>;
   if(missing.length)return <><strong>{unreadText}</strong><span> · des langages présents que certains analyseurs ne lisent pas</span></>;
   return <><strong>Aucune limite signalée</strong><span> dans les périmètres parcourus</span></>;
 }
 
 /** Ce que Taxo ne sait pas encore, par analyseur, avec des exemples : la liste complete est dans les details. */
-export function AnalysisLimits({scan, coverage}:Readonly<{scan:Scan; coverage?:AnalysisCoverage}>){
+export function AnalysisLimits({scan, coverage}:Readonly<{scan:Scan; coverage?:CoverageView}>){
   const gaps=gapsOf(scan);
-  const unreadRows=(coverage?.evaluators??[]).filter(item=>item.unread.length>0||item.status==='UNSUPPORTED');
+  const unknown=isUnknown(coverage), view=coverage===undefined||unknown?undefined:coverage;
+  const unreadRows=(view?.evaluators??[]).filter(item=>item.unread.length>0||item.status==='UNSUPPORTED');
   return <section className="results limits" id="limites" aria-label="Limites de l’analyse">
     <div className="section-heading"><div><h2>Limites de l’analyse</h2><p>Les zones que Taxo n’a pas su lire ou interpréter, par analyseur. Une zone listée ici n’est ni absente ni sûre : Taxo n’en dit rien.</p></div></div>
-    {coverage&&!coverage.complete&&<p className="limits-note">L’inventaire n’a pas tout lu : des fichiers aux langages inconnus n’ont été lus par aucun analyseur.</p>}
+    {unknown&&<p className="limits-note">Ce que chaque analyseur a lu n’est pas encore connu : aucune zone n’est dite lue.</p>}
+    {view&&!view.complete&&<p className="limits-note">L’inventaire n’a pas tout lu : des fichiers aux langages inconnus n’ont été lus par aucun analyseur.</p>}
     {unreadRows.length>0&&<div className="table-wrap unread-languages"><table aria-label="Langages non analysés">
       <caption>Langages présents qu’un analyseur ne lit pas : ce qu’il y aurait trouvé est inconnu, jamais absent.</caption>
       <thead><tr><th>Analyseur</th><th>Lit</th><th>Non analysé</th></tr></thead><tbody>
