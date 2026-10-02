@@ -2,7 +2,7 @@
 import {useEffect, useState, type FormEvent, type ReactNode} from 'react';
 import {type MiniaStatus} from './minia';
 import {AnalysisLimits, overviewCards, panelKey, routeCounts, technologiesOf, type Scan} from './overview';
-import {ProjectPicker, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
+import {BrandMark, ProjectPicker, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
 import {href, go, parse, useRoute, withProject} from './nav';
 import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, TechnologiesPage} from './pages';
 import {AskTaxo} from './query';
@@ -109,12 +109,13 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     return <section className="welcome"><div className="glyph">⌘</div><h2>Prêt pour la première analyse</h2><p>Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>;
   }
   return <div className="layout">
-    <header className="page-head"><TopMenu canAnalyze={!!selected&&!busy&&!loading} analyze={analyze} latest={scanId&&scanId!==latest?.id?showLatest:undefined}
-      addProject={()=>{setPickerOpen(true);setAdding(true);}}/>
+    <header className="page-head"><div className="head-start"><a className="top-brand" href={href('overview')}><BrandMark/><span>Taxo</span></a>
+      <TopMenu canAnalyze={!!selected&&!busy&&!loading} analyze={analyze} latest={scanId&&scanId!==latest?.id?showLatest:undefined}
+      addProject={()=>{setPickerOpen(true);setAdding(true);}}/></div>
       <div className="head-actions"><ProjectPicker projects={projects} selected={selected} busy={busy} loading={loading} open={pickerOpen||projects.length===0&&!loading} setOpen={open=>{setPickerOpen(open);if(!open)setAdding(false);}}
         adding={adding||projects.length===0} setAdding={setAdding} onSelect={id=>{setError('');setSelected(id);setPickerOpen(false);setAdding(false);go(href('overview'));}} status={shown?since(shown.created_at):''}
         name={name} setName={setName} path={path} setPath={setPath} onSubmit={add}/><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?<Working text="Analyse en cours"/>:<>{"Lancer l’analyse globale"}<svg className="btn-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></>}</button></div></header>
-    <aside><a className="brand" href={href('overview')}><svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="7"/><path d="M10 11h12M16 11v11"/></svg>Taxo<span>EXPLORATEUR LOGICIEL</span></a>
+    <aside><a className="brand" href={href('overview')}><BrandMark/>Taxo<span>EXPLORATEUR LOGICIEL</span></a>
     {selected&&<ResultsNav items={navItems} current={route.page}/>}
     <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
     <main>

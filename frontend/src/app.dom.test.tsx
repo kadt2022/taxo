@@ -63,6 +63,11 @@ describe('une page par fonction', ()=>{
   it('ouvre Overview en tableau de bord : cartes, analyse affichée, actions, et rien d’autre', async()=>{
     await open('#/');
     expect(current()).toContain('Overview');
+    // La marque Taxo ouvre la barre du haut et mène à Overview, avant les menus globaux.
+    const head=host.querySelector('.page-head .head-start');
+    expect(head?.firstElementChild?.matches('a.top-brand[href="#/"]')).toBe(true);
+    expect(head?.firstElementChild?.textContent).toBe('Taxo');
+    expect(head?.querySelector('.top-brand + .top-menu')).not.toBeNull();
     expect(host.querySelector('.overview .cards')).not.toBeNull();
     expect(text()).toContain('Dernière analyse');
     expect(host.querySelector('.overview-actions a[href="#/comparaisons"]')?.textContent).toContain('Comparer deux analyses');

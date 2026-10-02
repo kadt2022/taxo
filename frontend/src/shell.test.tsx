@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it, vi} from 'vitest';
-import {ProjectPicker, ResultsNav, TopMenu, closeOnOutside, commitOf, navItemsOf, since, type PickerProps} from './shell';
+import {BrandMark, MENU_ICONS, ProjectPicker, ResultsNav, TopMenu, closeOnOutside, commitOf, navItemsOf, since, type PickerProps} from './shell';
 import type {RouteCounts, Scan} from './overview';
 
 const NOW=Date.parse('2026-09-30T12:00:00Z');
@@ -88,7 +88,8 @@ describe('TopMenu', ()=>{
     addProject={()=>{}} latest={latest} initialOpen={initialOpen}/>);
   it('ne garde que les commandes globales : aucun lien de navigation', ()=>{
     const html=render(null);
-    for(const name of ['Fichier','Analyse','Affichage','Aide'])expect(html).toContain(`>${name}</button>`);
+    for(const name of ['Fichier','Analyse','Affichage','Aide'])expect(html).toContain(`<path d="${MENU_ICONS[name]}"></path></svg><span class="menu-label">${name}</span></button>`);
+    expect(new Set(Object.values(MENU_ICONS)).size).toBe(4);
     expect(html).not.toContain('Overview');
     expect(html).not.toContain('<a ');
     expect(html).not.toContain('menu-list');
@@ -107,6 +108,14 @@ describe('TopMenu', ()=>{
     expect(render('Affichage', true, ()=>{})).not.toContain('disabled=""');
     expect(render('Fichier')).toContain('Ajouter un projet…');
     expect(render('Aide')).toContain('version 0.1');
+  });
+});
+
+describe('BrandMark', ()=>{
+  it('le même logo partout, décoratif', ()=>{
+    const html=renderToStaticMarkup(<BrandMark/>);
+    expect(html).toContain('class="brand-mark"');
+    expect(html).toContain('aria-hidden="true"');
   });
 });
 

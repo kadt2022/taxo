@@ -17,6 +17,17 @@ export const ICON_PATHS:Record<string,string>={overview:'M3 3h7v9H3zM14 3h7v5h-7
   donnees:'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
   'non-interpretees':'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8v5M12 16v.5'};
 
+/** Icônes des menus globaux, au même trait que celles du menu vertical : une feuille, une courbe d'activité, une mise en page,
+ * un point d'interrogation. */
+export const MENU_ICONS:Record<string,string>={Fichier:'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4',
+  Analyse:'M3 12h4l3-7 4 14 3-7h4', Affichage:'M4 4h16v16H4zM4 9h16M9 9v11',
+  Aide:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.5M12 17h.01'};
+
+/** Le logo de Taxo, le même dans la barre du haut et dans la barre latérale. */
+export function BrandMark(){
+  return <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="7"/><path d="M10 11h12M16 11v11"/></svg>;
+}
+
 /** Les 7 premiers caractères du commit analysé, ou rien si l'analyse n'en porte pas. */
 export function commitOf(scan:Scan){
   const sha=scan.snapshot?.commit??scan.commit;
@@ -74,7 +85,8 @@ export function TopMenu({canAnalyze, analyze, addProject, latest, initialOpen=nu
     ['Aide',[{label:'Taxo · version 0.1', disabled:true},{label:'Analyse locale : vos fichiers restent sur votre machine', disabled:true}]]];
   useEffect(()=>open?closeOnOutside(bar.current,()=>setOpen(null)):undefined,[open]);
   return <nav className="top-menu" ref={bar} aria-label="Menus">{menus.map(([name,items])=><div className="menu" key={name}>
-    <button type="button" aria-haspopup="menu" aria-expanded={open===name} onClick={()=>setOpen(open===name?null:name)} onMouseEnter={()=>open&&setOpen(name)}>{name}</button>
+    <button type="button" aria-haspopup="menu" aria-expanded={open===name} onClick={()=>setOpen(open===name?null:name)} onMouseEnter={()=>open&&setOpen(name)}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d={MENU_ICONS[name]}/></svg><span className="menu-label">{name}</span></button>
     {open===name&&<div className="menu-list" role="menu">{items.map(item=>item.href
       ?<a key={item.label} role="menuitem" href={item.href} onClick={()=>setOpen(null)}>{item.label}</a>
       :<button type="button" key={item.label} role="menuitem" disabled={item.disabled} onClick={()=>{setOpen(null);item.run?.();}}>{item.label}</button>)}</div>}

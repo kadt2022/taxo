@@ -461,8 +461,22 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
   main{height:calc(100vh - 44px - 10px)}
 }
 
-/* Barre de menus : Fichier, Analyse, Affichage, Aide */
+/* Barre de menus : la marque Taxo, puis Fichier, Analyse, Affichage, Aide */
+.head-start{display:flex;align-items:center;gap:28px;min-width:0}
+.top-brand{display:inline-flex;align-items:center;gap:8px;flex:none;color:#fff;font-size:17px;font-weight:700;letter-spacing:-.02em;text-decoration:none;line-height:1}
+.top-brand .brand-mark{width:24px;height:24px}
+.top-brand:focus-visible{border-radius:6px}
 .top-menu{display:flex;align-items:center;gap:2px;min-width:0}
+.top-menu .menu>button{display:inline-flex;align-items:center;gap:7px}
+.top-menu .menu>button svg{flex:none;width:15px;height:15px;fill:none;stroke:#8fb0a3;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:stroke .15s}
+.top-menu .menu>button:hover svg,.top-menu .menu>button[aria-expanded="true"] svg{stroke:var(--accent)}
+@media(max-width:1100px){.head-start{gap:14px}}
+@media(max-width:900px){.top-menu .menu>button{padding:6px 8px}.menu-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
+/* Sous 900 px, la règle générale des en-têtes empile leur contenu : la barre du haut reste sur une ligne, puis se replie sur deux sous
+   560 px, sans jamais rogner le sélecteur de projet ni l'analyse globale. */
+@media(max-width:900px){.page-head{grid-column:1/-1;flex-direction:row;align-items:center}.head-start{flex:1 1 auto}}
+@media(max-width:560px){.top-brand span{display:none}.head-start{gap:6px}
+  .page-head{height:auto;flex-wrap:wrap;row-gap:8px;padding:8px 12px}.head-actions{width:100%;justify-content:space-between}.picker{flex:1 1 auto;min-width:0}.picker-current{max-width:100%;min-width:0;overflow:hidden}.picker-current strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.head-actions>.primary{flex:none;width:auto}}
 .top-menu .menu{position:relative}
 .top-menu .menu>button{padding:6px 12px;border:0;border-radius:8px;background:none;font-size:13.5px;font-weight:550;color:#a9c4b8;white-space:nowrap}
 .top-menu .menu>button:hover,.top-menu .menu>button[aria-expanded="true"]{background:rgba(255,255,255,.09);color:#fff}
