@@ -16,6 +16,7 @@ CATEGORIES = (ADDED, REMOVED, MODIFIED, EVIDENCE_CHANGED, STATUS_CHANGED, OCCURR
 ABSENT_BEFORE, ABSENT_AFTER = 'ABSENT_BEFORE', 'ABSENT_AFTER'
 FAILED_BEFORE, FAILED_AFTER = 'FAILED_BEFORE', 'FAILED_AFTER'
 NOT_SUPPORTED_BEFORE, NOT_SUPPORTED_AFTER = 'NOT_SUPPORTED_BEFORE', 'NOT_SUPPORTED_AFTER'
+CONTRACT_UNKNOWN_BEFORE, CONTRACT_UNKNOWN_AFTER = 'CONTRACT_UNKNOWN_BEFORE', 'CONTRACT_UNKNOWN_AFTER'
 CATALOG_CHANGED = 'CATALOG_CHANGED'
 REASONS = {
     ABSENT_BEFORE: "Absent de l'analyse de départ.",
@@ -28,6 +29,10 @@ REASONS = {
     NOT_SUPPORTED_AFTER: ("Rien à lire pour cet analyseur dans l'analyse d'arrivée : aucun fichier dans "
                           "les langages qu'il lit. Ses faits ne sont pas comparés ; ce n'est pas une absence "
                           "de changement."),
+    CONTRACT_UNKNOWN_BEFORE: ("Contrat de catalogue inconnu de ce Taxo dans l'analyse de départ : ce qu'il a lu n'est pas "
+                              "connu. Ses faits ne sont pas comparés."),
+    CONTRACT_UNKNOWN_AFTER: ("Contrat de catalogue inconnu de ce Taxo dans l'analyse d'arrivée : ce qu'il a lu n'est pas "
+                             "connu. Ses faits ne sont pas comparés."),
     CATALOG_CHANGED: 'Catalogue différent. Cause possible : évolution du producteur, pas du logiciel.',
 }
 
@@ -40,6 +45,7 @@ class Side:
     versions: frozenset
     failed: bool
     supported: bool = True
+    known: bool = True  # le contrat de son catalogue est connu de ce Taxo
 
 
 @dataclass(frozen=True)
@@ -61,6 +67,20 @@ def comparability(before, after):
         return FAILED_BEFORE
     if after.failed:
         return FAILED_AFTER
+    return _contract_reason(before, after) or _content_reason(before, after)
+
+
+def _contract_reason(before, after):
+    """Un contrat inconnu ne justifie aucune conclusion negative, « aucun changement » compris (TAXO-ARCH-REF-01).
+    Si les catalogues different, c'est la raison premiere, et elle le reste."""
+    if before.known and after.known:
+        return None
+    if before.catalogs != after.catalogs:
+        return CATALOG_CHANGED
+    return CONTRACT_UNKNOWN_BEFORE if not before.known else CONTRACT_UNKNOWN_AFTER
+
+
+def _content_reason(before, after):
     if not before.supported:
         return NOT_SUPPORTED_BEFORE
     if not after.supported:

@@ -20,16 +20,17 @@ MAX_PAGE = 200
 KEPT_COMPARISONS = 8
 
 
-def _side(executions, statuses, languages, present, complete=True):
-    """`languages` : ce que lit le contrat de catalogue des executions (None : independant du langage).
-    Une absence de langage ne se deduit que d'un inventaire `complete`."""
+def _side(executions, statuses, contract, present, complete=True):
+    """`contract` : (connu, langages lus ; None s'il est independant du langage). Une absence de langage ne se
+    deduit que d'un inventaire `complete`, et d'un contrat connu."""
     if executions is None:
         return None
+    known, languages = contract
     return Side(frozenset((item.catalog_id, item.catalog_version) for item in executions),
                 frozenset(item.producer_version for item in executions),
                 any(statuses.get(item.execution_id) == 'FAILED' for item in executions),
                 not any(statuses.get(item.execution_id) == 'UNSUPPORTED' for item in executions)
-                and (not complete or applicable(languages, present)))
+                and (not complete or applicable(languages, present)), known)
 
 
 def _statuses(scan):
@@ -79,10 +80,18 @@ class CompareAnalyses:
         return tuple(recorded) if recorded is not None else self.store.languages(scan.id)
 
     def _read(self, executions):
-        """Les langages que lit le contrat de catalogue de ces executions ; None s'il n'en declare aucun."""
-        declared = [self.capabilities.get((item.catalog_id, item.catalog_version)) for item in executions or ()]
-        declared = [item for item in declared if item is not None]
-        return frozenset().union(*declared) if declared else None
+        """(contrat connu, langages lus) pour ces executions : `None` si le contrat est independant du langage.
+        Un contrat que ce Taxo ne connait pas ne lit rien de connu, comme pour les verdicts. Seul un evaluateur
+        nomme un catalogue : une projection n'en a pas, et n'est liee a aucun contrat. Sans contrats fournis,
+        aucune regle de langage ne s'applique."""
+        if not self.capabilities:
+            return True, None
+        keys = [(item.catalog_id, item.catalog_version) for item in executions or ()
+                if item.producer_type == 'EVALUATOR']
+        if any(key not in self.capabilities for key in keys):
+            return False, frozenset()
+        declared = [self.capabilities[key] for key in keys if self.capabilities[key] is not None]
+        return True, frozenset().union(*declared) if declared else None
 
     def _producers(self, before, after, unread=None):
         """Chaque producteur et ce que dit de lui chaque cote. `unread`, s'il est donne, recoit pour chaque
@@ -102,7 +111,7 @@ class CompareAnalyses:
 
     def _unread(self, executions, present):
         """Les langages presents que le catalogue de ces executions ne lit pas (TAXO-COV-01)."""
-        read = self._read(executions)
+        _, read = self._read(executions)
         return [] if read is None else sorted(set(present) - read)
 
     def _compute(self, before, after, producer):
