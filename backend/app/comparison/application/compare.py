@@ -12,6 +12,7 @@ from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
 UNCHANGED = 'UNCHANGED'
+LABELS = 'LABELS'
 MAX_PAGE = 200
 # A complete analysis never changes again: a computed comparison stays true. Only the identities of the
 # differences are kept (never whole analyses), for the few comparisons being browsed.
@@ -99,6 +100,9 @@ class CompareAnalyses:
                 found[signal].append(identity_hash)
         for name in CATEGORIES:
             found[name].sort()
+        # What each difference is about (its relation), read by identity: the domains group these counts.
+        keys = {_pair(name, entry)[0] for name in CATEGORIES for entry in found[name]}
+        found[LABELS] = self.store.labels(sorted(keys))
         return found
 
     def summary(self, project_id, before_id, after_id):
@@ -117,11 +121,12 @@ class CompareAnalyses:
                                    for name in (*CATEGORIES, UNCHANGED)}
                 for name, count in entry['counts'].items():
                     totals[name] += count
+                entry['relations'] = _relations(found)
             evaluators.append(entry)
         return {'before': _describe(before), 'after': _describe(after), 'evaluators': evaluators, 'totals': totals,
                 'unknown': {'before': self.store.unknown(before.id), 'after': self.store.unknown(after.id)}}
 
-    def changes(self, project_id, before_id, after_id, category, producer, cursor=None, limit=50):
+    def changes(self, project_id, before_id, after_id, category, producer, cursor=None, limit=50, relation=None):
         if category not in CATEGORIES:
             raise ProjectError('INVALID_ARGUMENT', f'Catégorie inconnue : {category}.')
         before, after = self._analyses(project_id, before_id, after_id)
@@ -129,14 +134,16 @@ class CompareAnalyses:
         reason = comparability(left, right)
         if reason is not None:
             raise ProjectError('INVALID_ARGUMENT', f'{producer} : {REASONS[reason]}')
-        pairs = [_pair(category, entry) for entry in self._compute(before, after, producer)[category]]
+        found = self._compute(before, after, producer)
+        pairs = [_pair(category, entry) for entry in found[category]
+                 if relation is None or found[LABELS].get(_pair(category, entry)[0]) == relation]
         remaining = [pair for pair in pairs if cursor is None or pair[0] > cursor]
         page = remaining[:max(1, min(limit, MAX_PAGE))]
         facts_before = self._facts(before, producer, [old for old, _ in page] if category != ADDED else [])
         facts_after = self._facts(after, producer, [new for _, new in page] if category != REMOVED else [])
         items = [{'before': facts_before.get(old, []), 'after': facts_after.get(new, [])} for old, new in page]
         more = len(remaining) > len(page)
-        return {'category': category, 'evaluator_id': producer, 'items': items,
+        return {'category': category, 'evaluator_id': producer, 'relation': relation, 'items': items,
                 'next': page[-1][0] if more else None}
 
     def _facts(self, scan, producer, identity_hashes):
@@ -146,3 +153,13 @@ class CompareAnalyses:
 def _pair(category, entry):
     """(before identity, after identity) of a listed entry; the before side keys the page."""
     return tuple(entry) if category == MODIFIED else (entry, entry)
+
+
+def _relations(found):
+    """Counts of each category by relation (or kind): {relation: {category: count}}, zeros left out."""
+    counts = {}
+    for name in CATEGORIES:
+        for entry in found[name]:
+            label = found[LABELS].get(_pair(name, entry)[0], 'UNKNOWN')
+            counts.setdefault(label, dict.fromkeys(CATEGORIES, 0))[name] += 1
+    return {label: {name: count for name, count in value.items() if count} for label, value in sorted(counts.items())}

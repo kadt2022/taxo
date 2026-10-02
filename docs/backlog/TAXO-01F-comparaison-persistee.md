@@ -1,7 +1,8 @@
 # TAXO-01F — Comparer deux analyses depuis la mémoire, sans relire le dépôt
 
 Statut : rédigé le 2026-10-01, complété le 2026-10-02. Priorité active du plan ([PLAN](PLAN.md)), après
-TAXO-01E. Tranches A (API, #67) et B (écran de résultat, #68) livrées. Tranche C en cours : choisir les deux analyses.
+TAXO-01E. Tranches A (API, #67), B (écran de résultat, #68) et C (choisir les deux analyses, #69) livrées. Tranche D
+en cours : comprendre les changements, par domaine.
 
 Source de vérité : [ARCHITECTURE § 5.2, § 8 et § 15](../ARCHITECTURE.md). En cas de divergence, le
 document cible prévaut.
@@ -162,11 +163,18 @@ Critères d'acceptation :
 
 Répond à : « Qu'est-ce qui a réellement changé dans mon logiciel ? »
 
-- **Agrégations calculées dans la base** : les comptes de chaque catégorie, par relation, pour chaque
-  évaluateur comparable. Le portail ne compare rien ; il regroupe des comptes déjà calculés.
+- **Agrégations calculées par le serveur** : les comptes de chaque catégorie, par relation, pour chaque
+  évaluateur comparable (`relations` dans la réponse de la comparaison). La relation de chaque différence est
+  lue dans la base par son identité (`identity_hash`), jamais en parcourant une analyse. Le portail ne compare
+  rien ; il regroupe des comptes déjà calculés, sans jamais additionner deux évaluateurs : si deux évaluateurs
+  disent la même phrase, chacun est nommé.
+- **Une liste par relation** : `relation` restreint la liste d'une catégorie aux faits de cette relation, page
+  par page comme les autres listes.
 - **Résultat par domaine** : API, Sécurité, Architecture, Technologies, Fichiers et Git. Chaque domaine dit
   ses changements en phrases (« 4 routes ajoutées », « 2 règles de sécurité modifiées ») ou « Aucun
-  changement ».
+  changement ». Un domaine dont aucun évaluateur n'est comparable dit « Non comparable » et pourquoi ; un
+  domaine qu'aucun évaluateur des deux analyses ne couvre dit « Non analysé ». Une relation qu'aucun domaine
+  ne connaît va dans « Autres faits », jamais perdue.
 - **État sans différence** : « Aucune différence détectée parmi les faits comparables », avec les non
   comparables et les zones inconnues toujours rendus.
 - **Les comptes de Taxo** (ajoutés, disparus, preuves déplacées…) passent sous « Détails techniques

@@ -1,13 +1,15 @@
-// Comparer deux analyses (TAXO-01F, tranche B). Le portail lit les deux reponses de l'API telles quelles :
+// Comparer deux analyses (TAXO-01F, tranches B et D). Le portail lit les deux reponses de l'API telles quelles :
 // aucune comparaison n'est calculee ici. Des comptes, jamais de pourcentage ; aucun impact suppose.
 import {type ReactNode, useEffect, useRef, useState} from 'react';
 import {type Sentence, entity, plain, premise, relation, subjectOf} from './sentences';
 import {EVALUATORS, ORIGINS, VALIDITIES, label, reference} from './vocabulary';
+import {type DomainResult, type Line, byDomain} from './domains';
 
 type Request=<T>(path:string)=>Promise<T>;
 export type Side={id:string; created_at:string; snapshot?:{commit?:string; mode?:string; content_fingerprint?:string}|null};
 export type EvaluatorEntry={evaluator_id:string; comparable:boolean; reason?:string; message?:string;
-  versions:{before:string[]; after:string[]}; counts?:Record<string,number>};
+  versions:{before:string[]; after:string[]}; counts?:Record<string,number>;
+  relations?:Record<string, Record<string,number>>};
 export type ComparisonSummary={before:Side; after:Side; evaluators:EvaluatorEntry[]; totals:Record<string,number>;
   unknown:{before:number; after:number}};
 export type Evidence={path?:string; line_start?:number; line_end?:number; symbol?:string; object?:string; method?:string;
@@ -140,8 +142,9 @@ export function ChangeItem({category, item, project}:Readonly<{category:Category
       <div className="side-after"><dt><b>B</b>Après</dt><dd>{side(item.after, project)}</dd></div></dl></li>;
 }
 
-function EvaluatorChanges({base, request, summary, category, entry, project}:Readonly<{base:string; request:Request; summary:ComparisonSummary;
-  category:Category; entry:EvaluatorEntry; project?:Project}>){
+/** Les faits d'une categorie pour un evaluateur, et eventuellement une seule relation, page par page. */
+function EvaluatorChanges({base, request, summary, category, entry, project, relation, title, count}:Readonly<{base:string; request:Request;
+  summary:ComparisonSummary; category:Category; entry:EvaluatorEntry; project?:Project; relation?:string; title?:string; count?:number}>){
   const [items,setItems]=useState<ChangesPage['items']>([]), [next,setNext]=useState<string|null>(null);
   const [loading,setLoading]=useState(true), [error,setError]=useState('');
   // Une reponse arrivee apres un changement de categorie ne doit jamais remplir la nouvelle liste.
@@ -149,6 +152,7 @@ function EvaluatorChanges({base, request, summary, category, entry, project}:Rea
   function load(cursor:string|null){
     const mine=cursor===null?++generation.current:generation.current;
     const query=new URLSearchParams({before:summary.before.id, after:summary.after.id, evaluator:entry.evaluator_id, category, limit:'20'});
+    if(relation)query.set('relation', relation);
     if(cursor)query.set('cursor', cursor);
     setLoading(true);setError('');
     request<ChangesPage>(`${base}/comparisons/changes?${query}`)
@@ -160,8 +164,8 @@ function EvaluatorChanges({base, request, summary, category, entry, project}:Rea
       .catch(reason=>{if(mine===generation.current)setError((reason as Error).message);})
       .finally(()=>{if(mine===generation.current)setLoading(false);});
   }
-  useEffect(()=>{setItems([]);setNext(null);load(null);},[category, entry.evaluator_id, summary.before.id, summary.after.id]);
-  return <section className="change-group"><h4>{label(EVALUATORS, entry.evaluator_id)} <span className="count-pill">{entry.counts?.[category]}</span></h4>
+  useEffect(()=>{setItems([]);setNext(null);load(null);},[category, entry.evaluator_id, relation, summary.before.id, summary.after.id]);
+  return <section className="change-group"><h4>{title??label(EVALUATORS, entry.evaluator_id)} <span className="count-pill">{count??entry.counts?.[category]}</span></h4>
     {error&&<p role="alert" className="error">{error}</p>}
     <ul className="change-list">{items.map(item=><ChangeItem key={keyOf(item)} category={category} item={item} project={project}/>)}</ul>
     {loading&&<output className="muted">Chargement…</output>}
@@ -169,20 +173,75 @@ function EvaluatorChanges({base, request, summary, category, entry, project}:Rea
   </section>;
 }
 
+const STATES:Record<DomainResult['state'], string>={changed:'Changements', unchanged:'Aucun changement',
+  refused:'Non comparable', absent:'Non analysé'};
+
+/** Un domaine : ses changements en phrases, chacune ouvrant ses faits ; ou ce qui l'empeche d'etre compare. */
+function DomainCard({domain, open, onOpen}:Readonly<{domain:DomainResult; open:string|null; onOpen:(lines:Line[], key:string)=>void}>){
+  const selected=open?.startsWith(domain.id+':')?' selected':'';
+  return <article className={`domain-card state-${domain.state}${selected}`} aria-label={domain.label}>
+    <header><span className="domain-icon" aria-hidden="true">{domain.icon}</span><h3>{domain.label}</h3>
+      <span className="domain-state">{STATES[domain.state]}</span></header>
+    {domain.lines.length>0&&<ul className="domain-lines">{domain.lines.map(line=><li key={line.key}>
+      <button type="button" className={`domain-line cat-${CATEGORIES.find(item=>item.id===line.category)?.tone}`}
+        aria-pressed={open===`${domain.id}:${line.key}`} onClick={()=>onOpen([line], `${domain.id}:${line.key}`)}>
+        <span className="change-sign" aria-hidden="true">{CATEGORIES.find(item=>item.id===line.category)?.sign}</span>
+        <span>{line.text}{line.source&&<small> · selon {line.source}</small>}</span></button></li>)}</ul>}
+    {domain.state==='unchanged'&&<p className="domain-quiet">Aucun changement parmi les faits comparés.</p>}
+    {domain.state==='absent'&&<p className="domain-quiet">Aucun analyseur de ce domaine dans ces deux analyses.</p>}
+    {domain.reasons.map(item=><p key={item.evaluator} className="domain-reason"><strong>{item.evaluator}</strong> {item.message}</p>)}
+    {domain.lines.length>1&&<button type="button" className="link domain-all" aria-pressed={open===`${domain.id}:*`}
+      onClick={()=>onOpen(domain.lines, `${domain.id}:*`)}>Voir tous les faits →</button>}
+  </article>;
+}
+
+/** Les comptes de Taxo, tels que le serveur les calcule : ils justifient le resultat par domaine. */
+function TaxoDetails({base, request, summary, project}:Readonly<{base:string; request:Request; summary:ComparisonSummary; project?:Project}>){
+  const [category,setCategory]=useState<Category|null>(null);
+  const versions=summary.evaluators.filter(entry=>entry.comparable&&entry.versions.before.join()!==entry.versions.after.join());
+  const chosen=CATEGORIES.find(item=>item.id===category);
+  return <details className="taxo-details"><summary>Détails techniques Taxo</summary>
+    <nav className="change-counts" aria-label="Changements">{CATEGORIES.map(item=>{
+      const count=summary.totals[item.id]??0;
+      return <button type="button" key={item.id} className={`change-count cat-${item.tone}${category===item.id?' selected':''}`}
+        disabled={count===0} aria-pressed={category===item.id} onClick={()=>setCategory(item.id)}>
+        <span className="sign" aria-hidden="true">{item.sign}</span><strong>{count}</strong><span>{item.label}</span></button>;})}
+    </nav>
+    <ul className="comparison-facts">
+      <li><strong>{summary.totals.UNCHANGED}</strong> faits inchangés</li>
+      <li>Calculé depuis les faits enregistrés des deux analyses : le dépôt n’est pas relu.</li>
+    </ul>
+    {versions.length>0&&<div className="comparison-note"><h3>Versions de producteur</h3><ul>{versions.map(entry=><li key={entry.evaluator_id}>
+      <strong>{label(EVALUATORS, entry.evaluator_id)}</strong>
+      <span>{entry.versions.before.join(', ')} → {entry.versions.after.join(', ')} · provenance, pas un changement du logiciel</span></li>)}</ul></div>}
+    {chosen&&<div className={`change-detail cat-${chosen.tone}`}>
+      <div className="change-detail-head"><span className="change-sign" aria-hidden="true">{chosen.sign}</span>
+        <div><h3>{chosen.label} <span className="count-pill">{summary.totals[chosen.id]}</span></h3><p>{chosen.hint}</p></div></div>
+      {summary.evaluators.filter(entry=>entry.comparable&&(entry.counts?.[chosen.id]??0)>0).map(entry=>
+        <EvaluatorChanges key={entry.evaluator_id} base={base} request={request} summary={summary} category={chosen.id} entry={entry}
+          project={project}/>)}
+    </div>}
+  </details>;
+}
+
 export function ComparisonView({base, request, before, after, onClose, onSwap, onChange, project}:Readonly<{base:string; request:Request;
   before:string; after:string; onClose:()=>void; onSwap:()=>void; onChange?:()=>void; project?:Project}>){
   const [summary,setSummary]=useState<ComparisonSummary|null>(null), [error,setError]=useState('');
-  const [category,setCategory]=useState<Category|null>(null);
+  const [open,setOpen]=useState<{key:string; lines:Line[]}|null>(null);
   useEffect(()=>{
     let active=true;
-    setSummary(null);setError('');setCategory(null);
+    setSummary(null);setError('');setOpen(null);
     request<ComparisonSummary>(`${base}/comparisons?${new URLSearchParams({before, after})}`)
       .then(value=>{if(active)setSummary(value);}).catch(reason=>{if(active)setError((reason as Error).message);});
     return ()=>{active=false;};
   },[base, before, after]);
   const refused=summary?.evaluators.filter(entry=>!entry.comparable)??[];
-  const versions=summary?.evaluators.filter(entry=>entry.comparable&&entry.versions.before.join()!==entry.versions.after.join())??[];
-  const chosen=CATEGORIES.find(item=>item.id===category);
+  const domains=summary?byDomain(summary):[];
+  const quiet=!!summary&&CATEGORIES.every(item=>!summary.totals[item.id]);
+  const opened=open&&domains.find(domain=>open.key.startsWith(`${domain.id}:`));
+  const detail=useRef<HTMLDivElement>(null);
+  // Les faits s'ouvrent sous la grille : on les amene a l'ecran, sinon le clic semble sans effet.
+  useEffect(()=>{if(open)detail.current?.scrollIntoView?.({behavior:'smooth', block:'start'});},[open?.key]);
   return <section className="comparison" id="comparaison" aria-label="Comparaison de deux analyses">
     <div className="comparison-bar"><button type="button" className="link back" onClick={onClose}>← Vue d’ensemble</button>
       {onChange?<button type="button" className="ghost" onClick={onChange}>Changer les analyses</button>
@@ -196,31 +255,30 @@ export function ComparisonView({base, request, before, after, onClose, onSwap, o
       <button type="button" className="ghost swap" onClick={onSwap}><span aria-hidden="true">⇄</span> Inverser le sens</button>
     </div>
     {summary&&<>
-      <nav className="change-counts" aria-label="Changements">{CATEGORIES.map(item=>{
-        const count=summary.totals[item.id]??0;
-        return <button type="button" key={item.id} className={`change-count cat-${item.tone}${category===item.id?' selected':''}`}
-          disabled={count===0} aria-pressed={category===item.id} onClick={()=>setCategory(item.id)}>
-          <span className="sign" aria-hidden="true">{item.sign}</span><strong>{count}</strong><span>{item.label}</span></button>;})}
-      </nav>
       {sameCommit(summary.before, summary.after)&&<p className="comparison-note">Deux analyses du même commit : le code est le même,
         seul ce que Taxo en dit peut différer.</p>}
+      <div className="domain-head"><h2>Ce qui a changé dans le logiciel</h2>
+        <p>Par domaine, en comptes seulement : chaque phrase ouvre les faits concernés et leurs preuves.</p></div>
+      {quiet&&<p className="comparison-quiet"><span aria-hidden="true">✓</span>Aucune différence détectée parmi les faits comparables.</p>}
+      <div className="domain-grid">{domains.map(domain=><DomainCard key={domain.id} domain={domain} open={open?.key??null}
+        onOpen={(lines, key)=>setOpen(open?.key===key?null:{key, lines})}/>)}</div>
+      {open&&opened&&<div className="change-detail domain-detail" ref={detail}>
+        <div className="change-detail-head"><span className="domain-icon" aria-hidden="true">{opened.icon}</span>
+          <div><h3>{opened.label}</h3><p>Les faits de chaque phrase, avant et après, preuves à l’appui.</p></div>
+          <button type="button" className="link" onClick={()=>setOpen(null)}>Fermer</button></div>
+        {open.lines.map(line=>{
+          const entry=summary.evaluators.find(item=>item.evaluator_id===line.evaluator);
+          return entry&&<EvaluatorChanges key={line.key} base={base} request={request} summary={summary} category={line.category as Category}
+            entry={entry} project={project} relation={line.relation} title={line.source?`${line.text} · selon ${line.source}`:line.text} count={line.count}/>;
+        })}
+      </div>}
       <ul className="comparison-facts">
-        <li><strong>{summary.totals.UNCHANGED}</strong> faits inchangés</li>
-        <li>Calculé depuis les faits enregistrés des deux analyses : le dépôt n’est pas relu.</li>
         <li>Zones inconnues <span className="count-pill">A : {summary.unknown.before} · B : {summary.unknown.after}</span></li>
+        <li>Ni pourcentage ni score : des comptes de faits enregistrés.</li>
       </ul>
       {refused.length>0&&<div className="comparison-note warn"><h3>Non comparables</h3><ul>{refused.map(entry=><li key={entry.evaluator_id}>
         <strong>{label(EVALUATORS, entry.evaluator_id)}</strong><span>{entry.message}</span></li>)}</ul></div>}
-      {versions.length>0&&<div className="comparison-note"><h3>Versions de producteur</h3><ul>{versions.map(entry=><li key={entry.evaluator_id}>
-        <strong>{label(EVALUATORS, entry.evaluator_id)}</strong>
-        <span>{entry.versions.before.join(', ')} → {entry.versions.after.join(', ')} · provenance, pas un changement du logiciel</span></li>)}</ul></div>}
-      {chosen?<div className={`change-detail cat-${chosen.tone}`}>
-        <div className="change-detail-head"><span className="change-sign" aria-hidden="true">{chosen.sign}</span>
-          <div><h3>{chosen.label} <span className="count-pill">{summary.totals[chosen.id]}</span></h3><p>{chosen.hint}</p></div></div>
-        {summary.evaluators.filter(entry=>entry.comparable&&(entry.counts?.[chosen.id]??0)>0).map(entry=>
-          <EvaluatorChanges key={entry.evaluator_id} base={base} request={request} summary={summary} category={chosen.id} entry={entry}
-            project={project}/>)}
-      </div>:<p className="comparison-empty">Choisissez un compte ci-dessus pour voir les faits concernés, preuves à l’appui.</p>}
+      <TaxoDetails base={base} request={request} summary={summary} project={project}/>
     </>}
   </section>;
 }

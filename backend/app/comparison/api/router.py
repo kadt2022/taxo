@@ -23,8 +23,9 @@ def create_router(compare):
                 responses={**missing, 422: {'description': 'Catégorie inconnue ou évaluateur non comparable.'}})
     def changes(project_id: str, before: str, after: str, evaluator: str,
                 category: Annotated[str, Query(description=', '.join(CATEGORIES))],
-                cursor: str | None = None, limit: Annotated[int, Query(ge=1, le=200)] = 50):
+                cursor: str | None = None, limit: Annotated[int, Query(ge=1, le=200)] = 50,
+                relation: Annotated[str | None, Query(description='Seulement les faits de cette relation.')] = None):
         """Les faits d'une catégorie, page par page ; `next` reprend la page suivante."""
-        return compare.changes(project_id, before, after, category, evaluator, cursor, limit)
+        return compare.changes(project_id, before, after, category, evaluator, cursor, limit, relation)
 
     return router

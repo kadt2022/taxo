@@ -118,6 +118,17 @@ class SqlAlchemyComparisonStore:
         return {'sha': sha, 'subject': qualifiers.get('subject'), 'authored_at': qualifiers.get('authored_at'),
                 'committed_at': qualifiers.get('committed_at'), 'author': named}
 
+    def labels(self, identity_hashes):
+        found = {}
+        identity = FactIdentityRow
+        with Session(self.engine) as db:
+            for start in range(0, len(identity_hashes), 500):
+                rows = db.execute(select(identity.identity_hash, identity.kind, identity.relation)
+                                  .where(identity.identity_hash.in_(identity_hashes[start:start + 500]))).all()
+                found |= {identity_hash: relation if kind == 'ASSERTION' and relation else kind
+                          for identity_hash, kind, relation in rows}
+        return found
+
     def unknown(self, scan_id):
         identity = FactIdentityRow
         with Session(self.engine) as db:
