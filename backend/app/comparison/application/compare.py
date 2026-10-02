@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 from app.comparison.domain.comparison import (ADDED, CATEGORIES, MODIFIED, REASONS, REMOVED, Side,
                                               comparability, pair_modified, signals)
-from app.evaluations.domain.capability import applicable, languages_complete
+from app.evaluations.domain.capability import CatalogContracts, Reads, languages_complete
 from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
@@ -20,17 +20,16 @@ MAX_PAGE = 200
 KEPT_COMPARISONS = 8
 
 
-def _side(executions, statuses, contract, present, complete=True):
-    """`contract` : (connu, langages lus ; None s'il est independant du langage). Une absence de langage ne se
-    deduit que d'un inventaire `complete`, et d'un contrat connu."""
+def _side(executions, statuses, reads, present, complete=True):
+    """`reads` : ce que lit le contrat de ces executions. Une absence de langage ne se deduit que d'un
+    inventaire `complete`, et d'un contrat connu."""
     if executions is None:
         return None
-    known, languages = contract
     return Side(frozenset((item.catalog_id, item.catalog_version) for item in executions),
                 frozenset(item.producer_version for item in executions),
                 any(statuses.get(item.execution_id) == 'FAILED' for item in executions),
                 not any(statuses.get(item.execution_id) == 'UNSUPPORTED' for item in executions)
-                and (not complete or applicable(languages, present)), known)
+                and (not complete or reads.reads_present(present)), reads.known)
 
 
 def _statuses(scan):
@@ -46,10 +45,10 @@ def _describe(scan):
 
 
 class CompareAnalyses:
-    def __init__(self, projects, scans, store, capabilities=None):
+    def __init__(self, projects, scans, store, contracts=None):
         self.projects, self.scans, self.store = projects, scans, store
-        # (catalog_id, catalog_version) -> langages lus (TAXO-COV-01) ; un contrat absent n'en declare aucun.
-        self.capabilities = capabilities or {}
+        # Ce que lit chaque contrat de catalogue (TAXO-COV-01) ; sans contrats, aucune regle de langage.
+        self.contracts = contracts or CatalogContracts()
         self._kept, self._lock = OrderedDict(), threading.Lock()
 
     def choices(self, project_id):
@@ -80,18 +79,18 @@ class CompareAnalyses:
         return tuple(recorded) if recorded is not None else self.store.languages(scan.id)
 
     def _read(self, executions):
-        """(contrat connu, langages lus) pour ces executions : `None` si le contrat est independant du langage.
-        Un contrat que ce Taxo ne connait pas ne lit rien de connu, comme pour les verdicts. Seul un evaluateur
-        nomme un catalogue : une projection n'en a pas, et n'est liee a aucun contrat. Sans contrats fournis,
+        """Ce que lit le contrat de ces executions. Un contrat que ce Taxo ne connait pas ne lit rien de connu,
+        comme pour les verdicts. Seul un evaluateur nomme un catalogue : une projection n'en a pas, et n'est
+        liee a aucun contrat. Plusieurs contrats lies a des langages lisent leur union. Sans contrats fournis,
         aucune regle de langage ne s'applique."""
-        if not self.capabilities:
-            return True, None
-        keys = [(item.catalog_id, item.catalog_version) for item in executions or ()
-                if item.producer_type == 'EVALUATOR']
-        if any(key not in self.capabilities for key in keys):
-            return False, frozenset()
-        declared = [self.capabilities[key] for key in keys if self.capabilities[key] is not None]
-        return True, frozenset().union(*declared) if declared else None
+        if not self.contracts:
+            return Reads.any()
+        found = [self.contracts.reads(item.catalog_id, item.catalog_version) for item in executions or ()
+                 if item.producer_type == 'EVALUATOR']
+        if not all(item.known for item in found):
+            return Reads.unknown()
+        declared = [item.languages for item in found if not item.independent]
+        return Reads.declared(frozenset().union(*declared)) if declared else Reads.any()
 
     def _producers(self, before, after, unread=None):
         """Chaque producteur et ce que dit de lui chaque cote. `unread`, s'il est donne, recoit pour chaque
@@ -111,8 +110,7 @@ class CompareAnalyses:
 
     def _unread(self, executions, present):
         """Les langages presents que le catalogue de ces executions ne lit pas (TAXO-COV-01)."""
-        _, read = self._read(executions)
-        return [] if read is None else sorted(set(present) - read)
+        return list(self._read(executions).unread(present))
 
     def _compute(self, before, after, producer):
         key = (before.id, after.id, producer)

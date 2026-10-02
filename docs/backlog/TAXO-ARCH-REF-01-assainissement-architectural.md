@@ -168,6 +168,7 @@ Stockage versionné, index de voisinage, lectures bornées. `_rank_adjacencies` 
 
 Les contrats de catalogue y prennent deux formes : `registry.all()` pour `TaxoQuery`, un dictionnaire
 construit à la main pour `CompareAnalyses`. Une seule valeur devrait être construite et injectée.
+→ Fait en tranche C1 : un seul `CatalogContracts`, injecté dans la restitution, la comparaison et le protocole.
 
 ## 5. Frontières proposées
 
@@ -235,6 +236,8 @@ l'intérieur de l'échange.
 | --- | --- | --- |
 | **A — Audit** | ce document ; deux tests qui exposent les divergences du § 3 (`tests/test_knowledge_divergences.py`, seule l’assertion divergente est attendue en échec (`divergence`, équivalent strict d’`xfail`) : les étapes préalables restent vérifiées, et la marque devra être retirée quand la divergence sera corrigée) ; mesures | inchangé |
 | **C — Connaissance** | `Reads`, `CatalogContracts`, `AnalysisKnowledge`, chargeur ; consommateurs migrés un par un (verdict, enveloppe, voisinage, comparaison) | inchangé : les trois divergences du § 3 sont corrigées avant, à part |
+| ↳ C1 — `Reads` (fait) | `Reads` (`ANY` / `LANGUAGES` / `UNKNOWN`) et `CatalogContracts` dans `evaluations/domain/capability.py` ; une seule valeur construite par la composition ; verdict (`Analyzer.reads`), enveloppe, `describe`, voisinage, comparaison et `/coverage` lisent `Reads` ; `capability.applicable` et `Analyzer.reads_present` ne font plus qu'un prédicat | inchangé, prouvé : sorties publiques identiques octet pour octet sur 8 scénarios (Java, Python, mixte ; langages oubliés, catalogues oubliés, contrat retiré, moteur antérieur) |
+| ↳ C2 — `AnalysisKnowledge` | langages présents, inventaire complet, exécutions vues et prédicats « zone non lue » en un seul objet, et son chargeur ; une seule règle pour plusieurs exécutions d'un producteur | inchangé |
 | **B — Protocole** | `call()` découpé, table d'opérations, collaborateur historique, interface étroite pour le voisinage, port des faits déclaré | inchangé |
 | **D — Comparaison** | `choices` séparé ; comparabilité via la connaissance | inchangé |
 | **E — Garde-fous** | tests d'architecture du § 7, ARCHITECTURE.md (frontières retenues), mesures après | inchangé |

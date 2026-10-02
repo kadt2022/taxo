@@ -8,6 +8,8 @@ import pytest
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
+from app.evaluations.domain.capability import CatalogContracts, Reads
+from app.evaluations.domain.evaluator import EvaluatorCatalog
 from app.protocol.domain.verdict import NOT_ANALYSED
 from app.scans.infrastructure.sqlalchemy.fact_memory import ProducerExecutionRow
 from app.scans.infrastructure.sqlalchemy.scan_repository import ScanRow
@@ -21,6 +23,10 @@ def retire_contract(taxo, producer):
         db.execute(update(ProducerExecutionRow).where(ProducerExecutionRow.producer_id == producer)
                    .values(catalog_version='retiree'))
         db.commit()
+
+
+def catalog(catalog_id, version, languages):
+    return EvaluatorCatalog(catalog_id, version, languages=languages)
 
 
 def forget_catalogs(taxo, scan_id):
@@ -67,11 +73,11 @@ def test_a_projection_is_bound_to_no_catalog_contract():
     """Une projection n'a pas de catalogue : elle n'est ni un contrat inconnu ni un contrat qui ne lit rien."""
     from app.comparison.application.compare import CompareAnalyses
     from app.facts.domain.provenance import ProducerExecution
-    compare = CompareAnalyses(None, None, None, capabilities={('taxo.spring', '1'): frozenset({'Java'})})
+    compare = CompareAnalyses(None, None, None, CatalogContracts([catalog('taxo.spring', '1', ('Java',))]))
     projection = ProducerExecution('PROJECTION', 'taxo.tree', '1', 'run')
-    assert compare._read([projection]) == (True, None)
+    assert compare._read([projection]) == Reads.any()
     evaluator = ProducerExecution('EVALUATOR', 'taxo.spring-api', '1', 'run', 'taxo.spring', 'retiree')
-    assert compare._read([evaluator]) == (False, frozenset())
+    assert compare._read([evaluator]) == Reads.unknown()
 
 
 def test_an_earlier_summary_is_read_by_the_contract_its_execution_recorded(taxo_on):
@@ -145,13 +151,12 @@ def test_executions_of_one_producer_naming_different_contracts_read_nothing_know
     from types import SimpleNamespace
     from app.facts.domain.provenance import ProducerExecution
     from app.neighborhood.application.query import _recorded_contracts
-    contracts = {('spring', '1'): frozenset({'Java'}), ('spring', '2'): frozenset({'Java', 'Kotlin'})}
+    contracts = CatalogContracts([catalog('spring', '1', ('Java',)), catalog('spring', '2', ('Java', 'Kotlin'))])
     executions = [ProducerExecution('EVALUATOR', 'api', '1', 'a', 'spring', '1'),
                   ProducerExecution('EVALUATOR', 'api', '1', 'b', 'spring', '2'),
                   ProducerExecution('EVALUATOR', 'git', '1', 'c', 'spring', '1'),
                   ProducerExecution('EVALUATOR', 'git', '1', 'd', 'spring', '1')]
     service = SimpleNamespace(facts=SimpleNamespace(executions=lambda scan_id: executions),
-                              languages_of=lambda item: contracts.get((item['catalog_id'], item['catalog_version']),
-                                                                      frozenset()))
+                              reads_of=lambda item: contracts.reads(item['catalog_id'], item['catalog_version']))
     exchange = SimpleNamespace(service=service, scan=SimpleNamespace(id='scan'))
-    assert _recorded_contracts(exchange) == {'api': frozenset(), 'git': frozenset({'Java'})}
+    assert _recorded_contracts(exchange) == {'api': Reads.unknown(), 'git': Reads.declared(('Java',))}
