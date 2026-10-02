@@ -62,7 +62,7 @@ n'ont pas de foyer : chaque consommateur les reconstruit.
 Conséquence observée, pas théorique : le P2 de Codex sur #74 (un contrat inconnu pris pour « indépendant du
 langage ») venait exactement de là, `None` signifiant « indépendant » à un endroit et « inconnu » à un autre.
 
-### Deux divergences de comportement trouvées (documentées, non corrigées ici)
+### Deux divergences de comportement trouvées (exposées par la tranche A, corrigées par une PR dédiée)
 
 1. **Contrat de catalogue inconnu.** Verdict et voisinage : il ne lit rien de connu (`frozenset()`).
    Comparaison : il est traité comme indépendant du langage (`None`), donc comparé comme avant. C'était un choix
@@ -220,7 +220,7 @@ l'intérieur de l'échange.
 | **B — Protocole** | `call()` découpé, table d'opérations, collaborateur historique, interface étroite pour le voisinage, port des faits déclaré | inchangé |
 | **D — Comparaison** | `choices` séparé ; comparabilité via la connaissance | inchangé |
 | **E — Garde-fous** | tests d'architecture du § 7, ARCHITECTURE.md (frontières retenues), mesures après | inchangé |
-| Correction séparée | les deux divergences du § 3, après votre décision | **modifié**, annoncé |
+| Correction séparée | les deux divergences du § 3 : un contrat inconnu n'est jamais comparé (`CONTRACT_UNKNOWN_*`, après `CATALOG_CHANGED`) ; le voisinage d'une analyse antérieure relit ses langages comme les verdicts | **modifié**, annoncé |
 
 Chaque tranche est une PR réversible. Les sorties publiques (enveloppes, verdicts, comparaisons, erreurs)
 restent identiques : les tests existants sont la référence, et aucune attente n'est modifiée sans le dire.

@@ -123,8 +123,12 @@ def _summaries(exchange, relations):
 def _unread_languages(exchange, relations):
     """Les langages presents qu'aucune execution capable n'a lus, relation par relation : ce qui s'y trouve
     est inconnu (TAXO-COV-01). Lus dans le resume de l'analyse, sans parcourir ses faits ; une analyse
-    anterieure a TAXO-COV-01 n'enregistre pas ses langages, et n'en dit donc rien."""
-    present = exchange.scan.result.get('languages')
+    anterieure a TAXO-COV-01 les relit dans ses faits ; sans resume d'inventaire, rien n'en est dit."""
+    result = exchange.scan.result
+    present = result.get('languages')
+    if present is None and 'evaluation_summary' in result:
+        # Une analyse anterieure a TAXO-COV-01 : ses langages sont relus dans ses faits, comme pour les verdicts.
+        present = exchange.languages
     if present is None:
         return []
     summarized = _summarized(exchange)

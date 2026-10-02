@@ -1,23 +1,15 @@
-"""TAXO-ARCH-REF-01, tranche A : deux divergences de la connaissance d'une analyse, trouvees par l'audit.
+"""TAXO-ARCH-REF-01 : deux divergences de la connaissance d'une analyse, trouvees par l'audit.
 
-Chaque test ecrit le comportement attendu. Seule l'assertion divergente est attendue en echec (`divergence`) : les
-etapes qui la precedent restent des assertions ordinaires, et une regression y ferait echouer le test. La divergence
-n'est ni masquee ni corrigee dans une restructuration ; quand une correction dediee la fera disparaitre, `divergence`
-echouera a son tour, et la marque devra etre retiree : le test deviendra un garde-fou ordinaire.
+Exposees par la tranche A (seule l assertion divergente attendue en echec), corrigees par une PR dediee, jamais dans une restructuration :
+ces tests sont desormais des garde-fous ordinaires. Une meme analyse dit la meme chose de ce qu'elle a lu, quelle
+que soit l'operation qui le demande.
 """
-import pytest
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.protocol.domain.verdict import NOT_ANALYSED
 from app.scans.infrastructure.sqlalchemy.fact_memory import ProducerExecutionRow
 from test_coverage_bounds import HEALTH, PYTHON, legacy, taxo_on_fixture  # noqa: F401  (fixture partagee)
-
-
-def divergence(reason):
-    """L'assertion qu'il entoure echoue aujourd'hui, et elle seule ; si elle passe, c'est que la divergence est
-    corrigee : le test echoue pour obliger a retirer la marque (l'equivalent de `xfail(strict=True)`)."""
-    return pytest.raises(AssertionError, match=reason)
 
 
 def retire_contract(taxo, producer):
@@ -40,9 +32,9 @@ def test_an_unknown_contract_justifies_no_negative_conclusion_anywhere(taxo_on, 
     verdict, = taxo.ask(('verify_claim', HEALTH), analysis=after)
     assert verdict['reason'] == NOT_ANALYSED, 'le verdict ne tire rien d un contrat inconnu'
     compared = taxo.compare(before, after)['taxo.spring-api']
-    # Divergence 1 : la comparaison tient un contrat inconnu pour independant du langage.
-    with divergence('aucun changement'):
-        assert not compared['comparable'], 'la comparaison ne doit pas en tirer « aucun changement »'
+    assert not compared['comparable'], 'la comparaison ne doit pas en tirer « aucun changement »'
+    assert compared['reason'] == 'CONTRACT_UNKNOWN_BEFORE', 'le contrat est retire des deux cotes'
+    assert compared['not_analysed'] == {'before': ['Python'], 'after': ['Python']}, 'un contrat inconnu ne lit rien'
 
 
 def test_an_earlier_analysis_names_the_same_unread_languages_in_every_operation(taxo_on, monkeypatch):
@@ -55,6 +47,4 @@ def test_an_earlier_analysis_names_the_same_unread_languages_in_every_operation(
     named = sorted(entry['subject'] for entry in verdict['coverage'] if entry['type'] == 'NOT_ANALYSED' and entry['subject'])
     assert named == ['language:Python']
     frontier = [item for item in tile['frontier'] if item.get('reason') == 'NOT_ANALYSED']
-    # Divergence 2 : le voisinage d'une analyse anterieure ne nomme pas les langages que le verdict nomme.
-    with divergence('meme limite'):
-        assert [item['languages'] for item in frontier] == [['Python']], 'le voisinage dit la meme limite que le verdict'
+    assert [item['languages'] for item in frontier] == [['Python']], 'le voisinage dit la meme limite que le verdict'
