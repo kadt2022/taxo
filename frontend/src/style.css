@@ -655,6 +655,7 @@ main section,main details,main [id]{scroll-margin-top:16px}
 
 /* ——— Une page par fonction (TAXO-UI-05) ——— */
 .page{display:flex;flex-direction:column;gap:16px}
+.page>a.ghost{align-self:flex-start;text-decoration:none}
 .page-intro h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em}
 .page-intro p{margin:4px 0 0;color:var(--muted);font-size:14px;max-width:760px}
 .displayed-note{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px;padding:10px 14px;border-radius:var(--r);background:var(--warn-soft);border:1px solid #f1dfba;font-size:13.5px;color:var(--text-2)}

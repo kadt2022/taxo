@@ -41,7 +41,8 @@ describe('overviewCards', ()=>{
   });
   it('ne transforme jamais une absence d’information en résultat', ()=>{
     for(const id of ['architecture','api','security','data'])expect(card(scan,id)).toMatchObject({value:'Non analysé', state:'unknown'});
-    expect(card(scan,'api').link).toBeUndefined();
+    expect(card(scan,'api').link).toEqual({href:'#/routes', label:'Explorer les routes'});
+    expect(card(scan,'data').link).toEqual({href:'#/donnees', label:'Voir la page Données'});
     expect(card(scan,'data').lines[0]).toContain('Aucun analyseur de données');
   });
 });

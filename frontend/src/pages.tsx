@@ -35,8 +35,14 @@ export function useChoices(base:string, request:Request, revision:string){
 /** Une autre analyse que la plus recente est affichee : chaque page le dit, et propose d'y revenir. */
 export function DisplayedNote({scan, latest, onLatest}:Readonly<{scan:Scan; latest?:Scan; onLatest:()=>void}>){
   if(!latest||latest.id===scan.id)return null;
-  return <p className="displayed-note">Vous regardez l’analyse du <strong>{day(scan.created_at)}</strong>, pas la plus récente.
-    <button type="button" className="link" onClick={onLatest}>Revenir à la dernière</button></p>;
+  return <output className="displayed-note"><span>Vous consultez une analyse antérieure — <strong>{day(scan.created_at)}</strong></span>
+    <button type="button" className="ghost" onClick={onLatest}>Revenir à la dernière analyse</button></output>;
+}
+
+/** Une adresse qui ne mene a aucune page. */
+export function NotFoundPage(){
+  return <section className="page"><PageHead title="Page introuvable" intro="Cette adresse ne correspond à aucune page de Taxo."/>
+    <a className="ghost" href={href('overview')}>← Revenir à Overview</a></section>;
 }
 
 function PageHead({title, intro}:Readonly<{title:string; intro:string}>){

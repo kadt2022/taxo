@@ -130,6 +130,12 @@ export function gapsOf(scan:Scan):Gap[]{
     .sort((a,b)=>b.count-a.count||a.evaluator.localeCompare(b.evaluator));
 }
 
+/** Chaque carte mene a sa page, meme quand Taxo n'a rien analyse : la page dit pourquoi (TAXO-UI-05). */
+const PAGE_LINKS:Record<string,{href:string; label:string}>={project:{href:href('technologies'), label:'Voir les technologies'},
+  git:{href:href('historique'), label:'Voir l’historique'}, api:{href:href('routes'), label:'Explorer les routes'},
+  architecture:{href:href('architecture'), label:'Explorer l’architecture'}, security:{href:href('securite'), label:'Explorer la sécurité'},
+  data:{href:href('donnees'), label:'Voir la page Données'}};
+
 /** Les cartes de la vue d'ensemble, toujours dans le meme ordre. */
 export function overviewCards(scan:Scan, routes?:RouteCounts):Card[]{
   const evaluations=evaluationsOf(scan);
@@ -142,7 +148,7 @@ export function overviewCards(scan:Scan, routes?:RouteCounts):Card[]{
     {id:'architecture', title:'Architecture', ...architecture(structure, boot)},
     {id:'security', title:'Sécurité', ...security(find('taxo.spring-security'), routes)},
     {id:'data', title:'Données', ...UNKNOWN('Aucun analyseur de données n’est encore branché.')},
-  ];
+  ].map(card=>({...card, link:card.link??PAGE_LINKS[card.id]}));
 }
 
 /** Cle d'un panneau propre a un projet : unique parmi ses voisins, sinon React duplique le panneau a chaque changement. */

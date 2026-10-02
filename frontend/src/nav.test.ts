@@ -12,8 +12,11 @@ describe('adresses du portail', ()=>{
     const compared=parse('#/comparaisons?a=x&b=y');
     expect([compared.page, compared.id, compared.params.get('a'), compared.params.get('b')]).toEqual(['comparaisons', undefined, 'x', 'y']);
   });
-  it('ramène une adresse vide, ancienne ou inconnue à Overview', ()=>{
-    for(const hash of ['', '#', '#/', '#routes', '#/nulle-part', '#/overview/x'])expect(parse(hash)).toMatchObject({page:hash==='#routes'?'routes':'overview', id:undefined});
+  it('ouvre Overview sans page, garde les anciennes ancres, et dit introuvable une page inconnue', ()=>{
+    for(const hash of ['', '#', '#/', '#/overview/x'])expect(parse(hash)).toMatchObject({page:'overview', id:undefined});
+    expect(parse('#routes').page).toBe('routes');
+    expect(parse('#/nulle-part').page).toBe('introuvable');
+    expect(href('introuvable')).toBe('#/');
   });
   it('écrit une adresse, sans paramètre vide', ()=>{
     expect(href('overview')).toBe('#/');

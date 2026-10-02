@@ -67,7 +67,10 @@ describe('une page par fonction', ()=>{
     expect(text()).toContain('Dernière analyse');
     expect(host.querySelector('.overview-actions a[href="#/comparaisons"]')?.textContent).toContain('Comparer deux analyses');
     expect(host.querySelector('a[href="#/analyses/new"]')?.textContent).toBe('Voir l’analyse');
-    for(const absent of ['.tags', '.routes table', '.choice-columns', '.history'])expect(host.querySelector(absent)).toBeNull();
+    for(const absent of ['.tags', '.routes table', '.choice-columns', '.history', '.limits', '.analysis-details', '.ask-taxo'])expect(host.querySelector(absent)).toBeNull();
+    // Chaque carte mene a sa page, meme quand Taxo n'a rien analyse pour elle.
+    expect(Array.from(host.querySelectorAll('.card-link')).map(link=>link.getAttribute('href')))
+      .toEqual(['#/technologies', '#/historique', '#/routes', '#/architecture', '#/securite', '#/donnees']);
     expect(host.querySelector('.results-nav a[href="#/securite"] .results-count')?.textContent).toBe('1');
     expect(host.querySelector('.results-nav a[href="#/routes"] .results-count')).toBeNull();
   });
@@ -84,12 +87,20 @@ describe('une page par fonction', ()=>{
     await act(async()=>{show?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
     await flush();
     expect(window.location.hash).toBe('#/');
-    expect(text()).toContain('pas la plus récente');
-    const back=Array.from(host.querySelectorAll('button')).find(item=>item.textContent==='Revenir à la dernière');
+    expect(text()).toContain('Vous consultez une analyse antérieure');
+    // L'analyse affichee suit la navigation d'une page a l'autre, et chaque page le rappelle.
+    for(const hash of ['#/routes', '#/architecture', '#/securite', '#/technologies', '#/limites']){
+      await visit(hash);
+      expect(host.querySelector('.displayed-note')?.textContent, hash).toContain('Vous consultez une analyse antérieure');
+    }
+    const back=Array.from(host.querySelectorAll('button')).find(item=>item.textContent==='Revenir à la dernière analyse');
     await act(async()=>{back?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
-    expect(text()).not.toContain('pas la plus récente');
+    expect(host.querySelector('.displayed-note')).toBeNull();
     await visit('#/analyses/inconnue');
     expect(text()).toContain('Analyse introuvable');
+    await visit('#/nulle-part');
+    expect(host.querySelector('main h1')?.textContent).toBe('Page introuvable');
+    expect(host.querySelector('main a[href="#/"]')).not.toBeNull();
   });
 
   it('donne à une comparaison sa propre adresse, et au comparateur la sienne', async()=>{
@@ -109,7 +120,8 @@ describe('une page par fonction', ()=>{
     expect(text()).toContain('Le module app dépend du module web.');
     expect(text()).toContain('Aucune application reconnue.');
     await visit('#/securite');
-    expect(host.querySelector('.routes h2')?.textContent).toBe('Sécurité');
+    expect(host.querySelector('.routes h2')?.textContent).toBe('Sécurité des routes');
+    expect(text()).toContain('Ce n’est pas encore une analyse de sécurité complète');
     expect((host.querySelector('.routes select') as HTMLSelectElement).value).toBe('PROTECTED');
     await visit('#/non-interpretees');
     expect((host.querySelector('.routes select') as HTMLSelectElement).value).toBe('GAPS');

@@ -4,7 +4,7 @@ import {type MiniaStatus} from './minia';
 import {AnalysisLimits, overviewCards, panelKey, routeCounts, technologiesOf, type Scan} from './overview';
 import {ProjectPicker, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
 import {href, go, useRoute} from './nav';
-import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, OverviewPage, TechnologiesPage} from './pages';
+import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, TechnologiesPage} from './pages';
 import {AskTaxo} from './query';
 import {loadRoutes, RoutesExplorer, type RoutesResult} from './routes';
 import {apiUrl} from './api';
@@ -77,6 +77,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     case 'comparaisons':return <ComparisonsPage base={base} request={request} route={route} project={project}/>;
     case 'historique':return history(selected, minia);
     case 'donnees':return <DataPage/>;
+    case 'introuvable':return <NotFoundPage/>;
     default:return shown?scanPage(shown):welcome();
     }
   }
@@ -88,7 +89,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     case 'interroger':return <AskTaxo key={panelKey('ask',selected)} base={base} request={request} minia={minia}/>;
     case 'technologies':return <>{note}<TechnologiesPage scan={current}/></>;
     case 'routes':return routesOf('ALL');
-    case 'securite':return routesOf('PROTECTED', 'Sécurité', 'Les routes vues par ce qui les protège : la règle qui les capture, ce qu’elle exige, et la preuve dans le code. Changez de filtre pour voir les routes ouvertes à tous ou sans conclusion.');
+    case 'securite':return routesOf('PROTECTED', 'Sécurité des routes', 'Règles de protection observées par Taxo : pour chaque route, la règle qui la capture, ce qu’elle exige, et la preuve dans le code. Ce n’est pas encore une analyse de sécurité complète : seules les routes HTTP et leurs règles sont lues.');
     case 'non-interpretees':return routesOf('GAPS', 'Non interprétées', 'Les routes dont Taxo ne sait pas établir la protection, avec la zone qu’il n’a pas su interpréter. Une route listée ici n’est ni protégée ni ouverte : Taxo n’en dit rien.');
     case 'architecture':return <>{note}<ArchitecturePage base={base} request={request} scanId={current.id} project={project}/></>;
     case 'limites':return <>{note}<AnalysisLimits scan={current}/></>;

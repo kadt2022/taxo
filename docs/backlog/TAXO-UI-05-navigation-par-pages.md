@@ -55,20 +55,23 @@ de bord.
 | `#/technologies` | Technologies | technologies reconnues et fichiers justificatifs |
 | `#/routes` | Routes | les routes, filtres, preuves |
 | `#/architecture` | Architecture | modules, dépendances entre modules, applications, dits en phrases avec leur preuve |
-| `#/securite` | Sécurité | les routes vues sous l'angle de leur protection |
+| `#/securite` | Sécurité des routes | les règles de protection observées par Taxo, route par route ; la page dit qu'elle n'est pas encore une analyse de sécurité complète |
 | `#/donnees` | Données et stockage | « Non analysé » tant qu'aucun analyseur n'est branché |
 | `#/historique` | Historique Git | l'historique consulté sur demande |
 | `#/limites` | Limites | les zones non lues ou non interprétées, par analyseur |
 | `#/non-interpretees` | Non interprétées | les routes dont Taxo ne sait pas établir la protection |
 | `#/interroger` | Interroger Taxo | la question posée aux faits de l'analyse |
+| toute autre adresse | Page introuvable | une page d'état et un lien vers Overview, jamais un écran vide |
 
 - **Historique Git et Analyses restent distincts** : l'un dit ce qui est arrivé au code, l'autre ce que
   Taxo a observé et quand. Une analyse renvoie à son commit.
 - **L'analyse affichée** : les pages de domaine montrent l'analyse affichée, la plus récente par défaut.
-  « Afficher cette analyse » en change ; une autre que la plus récente est signalée en haut de page,
-  avec « Revenir à la dernière ».
+  « Afficher cette analyse » en change. Une autre que la plus récente est signalée en haut de chaque page
+  de domaine : « Vous consultez une analyse antérieure — 30 sept. 2026, 19:04:12 », avec « Revenir à la
+  dernière analyse ». Ce choix suit la navigation d'une page à l'autre.
 - **Chaque carte d'Overview** suit la même forme : domaine, information principale, court résumé,
-  « Explorer → » vers sa page. Overview ne contient jamais la version complète d'une fonction.
+  « Explorer → » vers sa page, y compris quand Taxo n'a rien analysé pour ce domaine : la page dit
+  pourquoi. Overview ne contient jamais la version complète d'une fonction.
 
 ## Barre du haut
 
@@ -82,7 +85,8 @@ Réservée aux commandes globales ; la navigation est dans le menu vertical.
 ## Critères d'acceptation
 
 1. Chaque adresse du tableau ouvre sa page, y compris après un rechargement ; le bouton Précédent du
-   navigateur revient à la page d'avant.
+   navigateur revient à la page d'avant. Une adresse inconnue ou une analyse supprimée donne une page
+   d'état.
 2. Une comparaison a sa propre adresse : la copier et la rouvrir montre la même comparaison.
 3. Overview ne contient ni comparateur, ni liste de technologies, ni tableau de routes, ni historique.
 4. Le menu vertical marque la page affichée ; la barre du haut ne contient plus de lien de navigation.
