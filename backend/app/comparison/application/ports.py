@@ -22,3 +22,6 @@ class ComparisonStore(Protocol):
 
     def facts(self, scan_id: str, producer_id: str, identity_hashes: list[str]) -> dict[str, list[dict]]:
         """The facts of these identities in the analysis, rebuilt exactly."""
+
+    def commit(self, scan_id: str, sha: str) -> dict | None:
+        """The commit as the analysis recorded it (message, dates, author), or None if it holds no such fact."""

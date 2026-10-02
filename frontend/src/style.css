@@ -543,7 +543,7 @@ main section,main details,main [id]{scroll-margin-top:16px}
 .comparison{display:flex;flex-direction:column;gap:16px}
 .comparison-bar{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .comparison-bar .eyebrow{margin:0}
-.back{font-weight:600;font-size:14px}
+.back{font-weight:600;font-size:14px;white-space:nowrap}
 .back:hover{text-decoration:underline}
 .comparison-wait{color:var(--muted);font-size:14px}
 .comparison-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow)}
@@ -629,3 +629,41 @@ main section,main details,main [id]{scroll-margin-top:16px}
   .change-sides{grid-template-columns:1fr}.comparison-head{flex-direction:column;align-items:stretch}.side-card{flex:none}
   .comparison-arrow{align-self:center;transform:rotate(90deg)}.swap{margin-left:0;justify-content:center}
   .comparison-facts{flex-direction:column;align-items:flex-start}.comparison-facts li+li::before{display:none}.compare-current{border-right:0;padding-right:0}.compare-launch select{min-width:0}}
+
+/* ——— Choisir deux analyses (TAXO-01F, tranche C) ——— */
+.compare-buttons{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.compare-buttons .primary{padding:9px 16px;font-size:13.5px}
+.picker-intro{margin:-4px 0 0;max-width:760px}
+.choice-columns{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:14px;align-items:start}
+.choice-columns>.comparison-arrow{margin-top:22px}
+.choice-column{display:flex;flex-direction:column;gap:10px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);min-width:0}
+.choice-column>header{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:12px;margin:0}
+.choice-column>header>div{display:flex;flex-direction:column}
+.choice-column>header .eyebrow{margin:0;font-size:10.5px}
+.choice-column>header strong{font-size:15px}
+.choice-search{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:var(--r);background:var(--surface-2);border:1px solid var(--border)}
+.choice-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.choice-row select,.choice-row input{margin:0;padding:7px 9px;font-size:13px;width:auto}
+.choice-row select{flex:0 0 auto}
+.choice-row input[type=search]{flex:1 1 160px}
+.choice-dates{display:inline-flex;gap:8px;white-space:nowrap}
+.choice-row label{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.choice-count{margin:0;font-size:12px;color:var(--muted)}
+.choice-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:460px;overflow:auto}
+.choice-list button{display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%;padding:10px 12px;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);color:var(--text)}
+.choice-list button:hover:not(:disabled){border-color:var(--brand-3);background:var(--surface-2)}
+.choice-list button.selected{border-color:var(--brand-3);background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--brand-3)}
+.choice-list button:disabled{opacity:.55}
+.choice-card{display:flex;flex-direction:column;gap:2px;min-width:0}
+.choice-when{font-size:13.5px}
+.choice-code{font-size:12.5px;color:var(--text-2);overflow-wrap:anywhere}
+.choice-code code{font-size:12px;padding:0 4px;border-radius:4px;background:var(--surface-3)}
+.choice-message{font-size:13px;color:var(--text);overflow-wrap:anywhere}
+.choice-facts{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.choice-failed{color:var(--danger)}
+.choice-taken{font-size:11.5px;color:var(--muted);font-style:italic}
+.choice-selected{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:var(--r);background:var(--accent-soft);border:1px solid var(--border)}
+.choice-selected .link{align-self:flex-start;font-size:13px;font-weight:600}
+.picker-actions{display:flex;justify-content:flex-end}
+.picker-actions .primary{padding:11px 22px}
+@media(max-width:900px){.choice-columns{grid-template-columns:1fr}.choice-columns>.comparison-arrow{justify-self:center;margin:0;transform:rotate(90deg)}}

@@ -37,11 +37,12 @@ describe('comparaison de deux analyses', ()=>{
       'OCCURRENCE_COUNT_CHANGED', 'OCCURRENCES_CHANGED']);
   });
 
-  it('propose de comparer avec une autre analyse complète, ou dit pourquoi ce n’est pas possible', ()=>{
-    const html=renderToStaticMarkup(<CompareLauncher current={commit} others={[tree]} onCompare={()=>undefined}/>);
-    expect(html).toContain('Comparer avec');
+  it('propose de comparer l’analyse affichée, ou de choisir les deux, ou dit pourquoi ce n’est pas possible', ()=>{
+    const html=renderToStaticMarkup(<CompareLauncher current={tree} count={2} onPick={()=>undefined}/>);
+    expect(html).toContain('Comparer avec…');
+    expect(html).toContain('Choisir deux analyses');
     expect(html).toContain('Fichiers non commités');
-    expect(renderToStaticMarkup(<CompareLauncher current={commit} others={[]} onCompare={()=>undefined}/>))
+    expect(renderToStaticMarkup(<CompareLauncher current={commit} count={1} onPick={()=>undefined}/>))
       .toContain('Une seule analyse complète');
   });
 

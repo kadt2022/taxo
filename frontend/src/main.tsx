@@ -8,6 +8,7 @@ import {ConsultForm} from './consult';
 import {AnalysisLimits, overviewCards, panelKey, ProjectOverview, routeCounts, technologiesOf, type RouteCounts, type Scan} from './overview';
 import {AnalysisDetails} from './details';
 import {CompareLauncher, ComparisonView, type Side} from './comparison';
+import {ComparePicker} from './picker';
 import {ProjectPicker, ResultsNav, TopMenu, resultItemsOf, since, type Project} from './shell';
 import {EVALUATORS, label} from './vocabulary';
 import {AskTaxo} from './query';
@@ -154,9 +155,11 @@ function App(){
     catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
   const [run,setRun]=useState<Run|null>(null);
-  // Comparaison de deux analyses completes (TAXO-01F) : A est la plus ancienne, B la plus recente, sauf inversion.
+  // Comparaison de deux analyses completes (TAXO-01F) : choisies dans le comparateur, A au depart, B a l'arrivee.
   const [comparing,setComparing]=useState<{before:string; after:string}|null>(null);
-  useEffect(()=>setComparing(null),[selected]);
+  const [choosing,setChoosing]=useState<{before?:string; after?:string}|null>(null);
+  useEffect(()=>{setComparing(null);setChoosing(null);},[selected]);
+  const elsewhere=!!comparing||!!choosing;
   const [pickerOpen,setPickerOpen]=useState(false), [adding,setAdding]=useState(false);
   // Les routes de l'analyse affichee, lues une fois par la section Routes et resumees dans la vue d'ensemble.
   const [routes,setRoutes]=useState<{scanId:string; counts:RouteCounts}|null>(null);
@@ -183,15 +186,15 @@ function App(){
     <main>
     {error&&<div role="alert" className="error">{error}</div>}
     {run&&run.status!=='done'&&<AnalysisProgress run={run}/>}
+    {choosing&&selected&&<ComparePicker base={`/projects/${selected}`} request={request} initial={choosing}
+      onClose={()=>setChoosing(null)} onCompare={(before, after)=>{setChoosing(null);setComparing({before, after});}}/>}
     {comparing&&selected&&<ComparisonView base={`/projects/${selected}`} request={request} before={comparing.before} after={comparing.after}
       onClose={()=>setComparing(null)} onSwap={()=>setComparing({before:comparing.after, after:comparing.before})}
-      project={projects.find(item=>item.id===selected)}/>}
-    {!comparing&&loading&&<output>Chargement…</output>}
-    {!comparing&&!loading&&(shown?<>
+      onChange={()=>{setChoosing(comparing);setComparing(null);}} project={projects.find(item=>item.id===selected)}/>}
+    {!elsewhere&&loading&&<output>Chargement…</output>}
+    {!elsewhere&&!loading&&(shown?<>
       <ProjectOverview scan={shown} pending={running?pendingEvaluators(run):undefined} routes={routes?.scanId===shown.id?routes.counts:undefined}/>
-      {!running&&<CompareLauncher current={sideOf(shown)} others={scans.filter(other=>other.id!==shown.id).map(sideOf)}
-        onCompare={other=>{const pair=[shown, scans.find(item=>item.id===other)!].sort((left, right)=>left.created_at.localeCompare(right.created_at));
-          setComparing({before:pair[0].id, after:pair[1].id});}}/>}
+      {!running&&<CompareLauncher current={sideOf(shown)} count={scans.length} onPick={fixed=>setChoosing(fixed?{before:fixed}:{})}/>}
       <section className="results" id="technologies"><div className="section-heading"><div><h2>Technologies</h2><p>Reconnues par les noms de fichiers et les dépendances déclarées ; une dépendance déclarée ne prouve pas qu’elle est utilisée.</p></div><label>Analyse du<select value={shown.id} onChange={e=>setScanId(e.target.value)}>{scans.map(s=><option key={s.id} value={s.id}>{new Date(s.created_at).toLocaleString('fr-CA')}</option>)}</select></label></div>
       {technologies.length?<div className="tags">{technologies.map(t=><span key={t}>{t}</span>)}</div>:<p className="empty">Aucune technologie reconnue dans ce dossier.</p>}
       {legacyFacts.length>0&&<details className="evidence-files"><summary>Fichiers justificatifs ({legacyFacts.length})</summary><div className="table-wrap"><table><thead><tr><th>Technologie</th><th>Fichier justificatif</th><th>Détection</th></tr></thead><tbody>{legacyFacts.map(f=><tr key={f.technology+f.file}><td>{f.technology}</td><td><code>{f.file}</code></td><td>{f.method==='manifest'?'Manifeste':'Nom de fichier'}</td></tr>)}</tbody></table></div></details>}
@@ -200,8 +203,8 @@ function App(){
       <AnalysisDetails scan={shown}/>
       {!running&&<RoutesPanel key={panelKey('routes',selected)} base={`/projects/${selected}`} scanId={shown.id} request={request} onLoaded={routesLoaded}/>}
     </>:!running&&<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>)}
-    {!comparing&&selected&&!loading&&scan&&<AskTaxo key={panelKey('ask',selected)} base={`/projects/${selected}`} request={request} minia={minia}/>}
-    {!comparing&&selected&&!loading&&<HistoryPanel key={panelKey('history',selected)} projectId={selected} minia={minia}/>}
+    {!elsewhere&&selected&&!loading&&scan&&<AskTaxo key={panelKey('ask',selected)} base={`/projects/${selected}`} request={request} minia={minia}/>}
+    {!elsewhere&&selected&&!loading&&<HistoryPanel key={panelKey('history',selected)} projectId={selected} minia={minia}/>}
     </main>
   </div>;
 }
