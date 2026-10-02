@@ -1,8 +1,10 @@
 # TAXO-01F — Comparer deux analyses depuis la mémoire, sans relire le dépôt
 
 Statut : rédigé le 2026-10-01, complété le 2026-10-02. Priorité active du plan ([PLAN](PLAN.md)), après
-TAXO-01E. Tranches A (API, #67), B (écran de résultat, #68) et C (choisir les deux analyses, #69) livrées. Tranche D
-en cours : comprendre les changements, par domaine.
+TAXO-01E. Tranches A (API, #67), B (écran de résultat, #68), C (choisir les deux analyses, #69) et D
+(comprendre les changements, #73) livrées. Tranche E suspendue jusqu'à la PR B de
+[TAXO-COV-01](TAXO-COV-01-couverture-bornee.md) : un analyseur qui n'avait rien à lire d'un côté n'est
+jamais comparé comme « aucun changement » (raisons `NOT_SUPPORTED_BEFORE`, `NOT_SUPPORTED_AFTER`).
 
 Source de vérité : [ARCHITECTURE § 5.2, § 8 et § 15](../ARCHITECTURE.md). En cas de divergence, le
 document cible prévaut.

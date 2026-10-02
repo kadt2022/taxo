@@ -131,7 +131,7 @@ Règles de dépendance :
 | **Application** | unité déployable identifiée par une règle (service compose, `@SpringBootApplication`) | une instance en production |
 | **Lecteur de langage** | interprète les constructions prises en charge d'un langage | un évaluateur universel |
 | **Évaluateur** | producteur de propositions selon un catalogue, des règles et une version | un modèle qui complète librement |
-| **Catalogue** | relations et couvertures qu'un évaluateur sait fournir, versionné | la liste des relations ayant un résultat |
+| **Catalogue** | relations et couvertures qu'un évaluateur sait fournir, et les langages qu'il lit pour les produire (ou aucun, s'il est indépendant du langage), versionné | la liste des relations ayant un résultat |
 
 ### 4.2 Connaissance et justification
 
@@ -190,6 +190,10 @@ attendu) que tout producteur doit passer, en Python comme ailleurs.
 - Une absence littérale ne prouve pas une absence à l'exécution. Aucun évaluateur livré ne produit encore
   d'`ABSENCE`.
 - Types de couverture : `ANALYSED`, `RECOGNIZED`, `NOT_INTERPRETED`, `OUT_OF_SCOPE`, `READ_ERROR`.
+- **Une couverture ne vaut que pour ce que son producteur sait lire** (TAXO-COV-01) : une couverture
+  `ANALYSED` du dépôt écrite par un catalogue qui lit Java couvre les sources Java du dépôt, pas le dépôt
+  entier qu'elle nomme. Elle s'interprète selon le contrat du catalogue enregistré avec l'exécution
+  (`catalog_id`, `catalog_version`) ; un contrat inconnu ne justifie aucun « non trouvé ».
 - `reason` (texte) dit pourquoi une zone n'est pas interprétée ; il est refusé sur une assertion ou une
   absence et **n'entre pas dans l'identité**.
 
@@ -335,19 +339,26 @@ du portail.
 Une exécution peut réussir, produire un `INFERRED` et déclarer une zone `NOT_INTERPRETED` ; une question
 sur cette zone reçoit `NOT_PROVEN`. Aucun badge global « tout est vérifié ».
 
+`UNSUPPORTED` (TAXO-COV-01) : l'analyseur lit des langages dont aucun n'est présent dans l'instantané. Le
+moteur ne l'exécute pas, si l'inventaire a tout lu ; il enregistre son exécution avec pour seule
+couverture `OUT_OF_SCOPE` sur le dépôt et sa raison, comme il enregistre la couverture d'une exécution en échec. Un résultat vide n'est jamais une
+couverture : « aucun fait » d'un analyseur qui n'avait rien à lire n'est pas « rien trouvé ».
+
 ## 7. Évaluateurs livrés (normatifs, Existant)
 
 Tous s'exécutent sur le même instantané lors de l'analyse globale. L'inventaire est principal : s'il
-échoue, l'analyse échoue ; un autre évaluateur en échec est signalé sans bloquer l'analyse.
+échoue, l'analyse échoue ; un autre évaluateur en échec est signalé sans bloquer l'analyse. Les langages
+de l'inventaire (`WRITTEN_IN`) sont enregistrés avec l'analyse (`languages`) ; un évaluateur dont le
+catalogue ne lit aucun d'eux est `UNSUPPORTED` (§ 6, TAXO-COV-01).
 
-| Évaluateur | Catalogue | Produit |
-| --- | --- | --- |
-| `taxo.inventory` | `inventory` v1 | fichiers, langages, technologies déclarées |
-| `taxo.git` | `git` v1 | historique complet atteignable |
-| `taxo.spring-api` | `spring-api` v2 | endpoints et méthode qui les traite |
-| `taxo.spring-boot` | `spring-boot` v1 | applications Spring Boot, route → application |
-| `taxo.spring-security` | `spring-security` v2 | règles d'URL, correspondance, protection |
-| `taxo.structure` | `structure` v1 | modules, dépendances entre modules, applications compose |
+| Évaluateur | Catalogue | Lit | Produit |
+| --- | --- | --- | --- |
+| `taxo.inventory` | `inventory` v1 | indépendant du langage | fichiers, langages, technologies déclarées |
+| `taxo.git` | `git` v1 | indépendant du langage | historique complet atteignable |
+| `taxo.spring-api` | `spring-api` v2 | Java | endpoints et méthode qui les traite |
+| `taxo.spring-boot` | `spring-boot` v1 | Java | applications Spring Boot, route → application |
+| `taxo.spring-security` | `spring-security` v2 | Java | règles d'URL, correspondance, protection |
+| `taxo.structure` | `structure` v1 | indépendant du langage | modules, dépendances entre modules, applications compose |
 
 ### 7.1 Inventaire
 
@@ -573,6 +584,10 @@ sinon. « Au moins sept » ne devient jamais « sept ».
 | **Connaissance** | construction non interprétée, lecture impossible, résolution échouée | une capacité d'analyse améliorée, jamais un budget |
 | **Contexte** | aucun évaluateur exécuté ne couvre la relation demandée | l'exécution ou la construction d'une capacité |
 
+Un évaluateur `UNSUPPORTED` n'est pas une capacité de l'analyse. Pour une relation suivie, les langages
+présents qu'aucune exécution capable n'a lus sont une frontière de **connaissance** (`NOT_ANALYSED`, avec
+ces langages), lue dans le résumé de l'analyse (TAXO-COV-01).
+
 Une Tuile finie n'atteste pas un logiciel entièrement connu.
 
 ### 9.4 Parcours et reprise
@@ -716,7 +731,11 @@ Réponse (enveloppe commune) :
   `OUT_OF_SCOPE`, `BUDGET_EXHAUSTED`, `INTERNAL`) et aucun résultat ;
 - `snapshot` (analyse, commit) ;
 - `items` : faits avec des références courtes stables dans l'échange (`F1`…), preuves (`E1`…) ;
-- `coverage` **obligatoire** : « rien trouvé » dit toujours où et avec quel analyseur ;
+- `coverage` **obligatoire** : « rien trouvé » dit toujours où et avec quel analyseur. Une entrée dont le
+  producteur lit des langages en propre les porte (`languages`) : elle ne vaut que pour eux. Pour une
+  opération qui porte sur une relation, chaque langage présent qu'aucune exécution capable n'a lu est
+  nommé : `{subject: "language:…", type: "NOT_ANALYSED", relation}` (TAXO-COV-01). `describe` donne les
+  langages présents et ceux de chaque analyseur ;
 - `not_sent` : ce qui n'a pas été transmis, compté, avec sa raison (`BUDGET`, `CONFIDENTIAL`, `BINARY`,
   `TOO_LARGE`, `NOT_A_REGULAR_FILE`, `NO_CONSENT`…) ;
 - `bytes`.
@@ -753,6 +772,15 @@ phrase, et rend un verdict :
 | `CONFIRMED` | le ou les faits, leur statut et leurs preuves ; pour un `INFERRED`, prémisses et règle (« Confirmée par Taxo, par déduction ») |
 | `REFUTED` | un fait incompatible sur une relation déclarée exclusive (aujourd'hui `AUTHORED_BY`, `WRITTEN_IN`). La réfutation par une `ABSENCE` couvrante (motif, périmètre, méthode) est **À construire** : aucun évaluateur livré ne produit d'`ABSENCE`, et la correspondance entre un motif d'absence et une affirmation sera fixée avec le premier qui en produira |
 | `NOT_PROVEN` | une raison : `NOT_FOUND_IN_ANALYSED_SCOPE`, `NOT_INTERPRETED`, `NOT_ANALYSED` |
+
+`NOT_FOUND_IN_ANALYSED_SCOPE` exige que chaque **langage concerné** ait été lu par une exécution aboutie,
+capable de la relation et dont la couverture `ANALYSED` englobe le sujet, ou par une exécution indépendante
+du langage qui l'englobe. Les langages concernés sont ceux du fichier si le sujet est un fichier, sinon
+tous les langages présents : le sujet interrogé n'a pas à exister dans le graphe pour que Taxo sache où il
+aurait dû le chercher. Un inventaire incomplet laisse des langages inconnus : seule une exécution
+indépendante du langage peut alors justifier un « non trouvé ». Sinon, la raison est `NOT_ANALYSED`
+(TAXO-COV-01). Le vérificateur interprète les
+capacités déclarées ; il ne connaît aucun langage ni aucun analyseur par son nom.
 
 `NOT_PROVEN` n'est jamais `REFUTED`. Le vérificateur n'est pas un prouveur général. Une résolution
 incomplète relève du diagnostic, pas d'un quatrième verdict.
@@ -935,3 +963,10 @@ règles normatives des ADR 0001 à 0012, supprimés du dépôt. Décisions :
   Tuile adaptative soit rejouable ; `commit-impact/1` annonce son raccord manquant.
 - nettoyage : les récits livrés ou remplacés et l'épique TAXO-01 quittent le backlog ; le manifeste
   renvoie au § 16 pour l'état, au lieu d'en tenir une copie.
+
+**2026-10-02** — Couverture bornée (TAXO-COV-01), après l'exercice « Taxo analyse Taxo » : les analyseurs
+Spring déclaraient `ANALYSED` sur un dépôt sans Java, et `verify_claim` en tirait `NOT_FOUND_IN_ANALYSED_SCOPE`
+pour une route Python. Décisions : un catalogue déclare les langages qu'il lit ; l'analyse enregistre ses
+langages ; un évaluateur sans rien à lire est `UNSUPPORTED`, couverture `OUT_OF_SCOPE` ; un « non trouvé »
+exige que chaque langage concerné ait été lu par une exécution capable de la relation ; une couverture
+enregistrée s'interprète selon le contrat de son catalogue, sans réécriture des analyses antérieures.

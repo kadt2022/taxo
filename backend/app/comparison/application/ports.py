@@ -20,6 +20,9 @@ class ComparisonStore(Protocol):
     def labels(self, identity_hashes: list[str]) -> dict[str, str]:
         """What each identity is about: its relation for an assertion, else its kind. Read by identity_hash."""
 
+    def languages(self, scan_id: str) -> tuple[str, ...]:
+        """Languages present in an analysis recorded before TAXO-COV-01, read from its WRITTEN_IN facts."""
+
     def unknown(self, scan_id: str) -> int:
         """Zones the analysis could not interpret (NOT_INTERPRETED, READ_ERROR coverage)."""
 

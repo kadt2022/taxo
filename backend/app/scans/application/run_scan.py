@@ -17,6 +17,7 @@ from app.snapshots.domain.mode import COMMIT, WORKING_TREE
 from app.snapshots.domain.errors import SnapshotError
 from app.scans.domain.scan import INCOMPLETE, MEMORY, Scan, ScanError
 from .ports import AnalysisFacts, AnalysisProvenance, ScanRepository, EvaluationRunner
+from app.evaluations.domain.capability import applicable, languages_complete, present_languages
 from app.evaluations.domain.evaluator import Evaluator
 from app.evaluations.domain.status import EvaluationStatus
 
@@ -59,9 +60,14 @@ class RunScan:
                 detail = execution.warnings[0] if execution.warnings else "L'évaluation a échoué."
                 _, separator, message = detail.partition(': ')
                 raise ScanError(message if separator else detail)
-            executions = [execution, *(self._run(other, snapshot, listener) for other in self.others)]
+            # TAXO-COV-01 : les langages de l'inventaire disent quels analyseurs ont quelque chose a lire, mais
+            # seulement s'il a tout lu ; sinon chaque analyseur est execute et son resultat dit ce qu'il a lu.
+            languages = present_languages(execution.facts)
+            gate = languages if languages_complete(execution.summary()) else None
+            executions = [execution, *(self._run(other, snapshot, listener, languages=gate)
+                                       for other in self.others)]
             result = {**(execution.legacy or {}), 'evaluation_summary': execution.summary(),
-                      'evaluations': [item.summary() for item in executions]}
+                      'evaluations': [item.summary() for item in executions], 'languages': list(languages)}
         except SnapshotError as exc:
             raise ScanError(f'{exc.code} : {exc}') from exc
         except (ValueError, OSError) as exc:
@@ -86,15 +92,20 @@ class RunScan:
             self.facts.add(scan.id, item.evaluator_id, [*item.facts, *item.coverage])
         return self.scans.complete(scan.id)
 
-    def _run(self, evaluator, snapshot, listener, main=False):
+    def _run(self, evaluator, snapshot, listener, main=False, languages=None):
         evaluator_id = getattr(evaluator, 'evaluator_id', '')
         listener('evaluator.started', {'evaluator': evaluator_id})
+        catalog = getattr(evaluator, 'catalog', None)
 
         def progress(stage, message, completed=None, total=None):
             listener('evaluator.progress', {'evaluator': evaluator_id, 'stage': stage, 'message': message,
                                             'completed': completed, 'total': total})
 
-        execution = self.evaluator_runner(evaluator, snapshot, progress)
+        if languages is not None and catalog is not None and not applicable(catalog.languages, languages):
+            # Rien a lire : l'analyseur n'est pas appele, et son resultat vide n'est jamais une couverture.
+            execution = self.evaluator_runner.unsupported(evaluator, snapshot)
+        else:
+            execution = self.evaluator_runner(evaluator, snapshot, progress)
         summary = execution.summary()
         if execution.status is EvaluationStatus.FAILED:
             listener('evaluator.failed', {'evaluator': evaluator_id, 'summary': summary,

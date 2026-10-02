@@ -9,4 +9,6 @@ CATALOG = EvaluatorCatalog(
     catalog_version='2',
     relations=('AUTHORIZED_BY', 'MATCHED_BY', 'PERMITS_ALL', 'PROTECTED_BY'),
     coverage_types=('ANALYSED', 'NOT_INTERPRETED', 'READ_ERROR'),
+    # TAXO-COV-01 : ce que ce catalogue a toujours lu ; il ne couvre aucune autre source.
+    languages=('Java',),
 )

@@ -264,6 +264,15 @@ class SqlAlchemyFactMemory:
         with Session(self.engine) as db:
             return [fact for _, fact in self.load_rows(db, scan_id, statement.order_by(occurrence.id))]
 
+    def objects(self, scan_id, relation):
+        """The distinct objects of one relation in the analysis, sorted, without rebuilding any fact."""
+        occurrence, identity = FactOccurrenceRow, FactIdentityRow
+        with Session(self.engine) as db:
+            return sorted(db.scalars(select(identity.object).distinct()
+                                     .join(occurrence, occurrence.identity_hash == identity.identity_hash)
+                                     .where(occurrence.scan_id == scan_id, identity.kind == 'ASSERTION',
+                                            identity.relation == relation)).all())
+
     def neighbor(self, scan_id, root, relation, direction, after=''):
         """One indexed adjacent occurrence. Never materialize the complete adjacency."""
         anchor, fingerprint, rank, _ = _SIDES[direction]

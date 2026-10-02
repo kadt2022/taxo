@@ -26,3 +26,6 @@ class AnalysisProvenance(Protocol):
 
 class EvaluationRunner(Protocol):
     def __call__(self, evaluator: Evaluator, snapshot: Snapshot, progress=None) -> EvaluatorExecution: ...
+
+    def unsupported(self, evaluator: Evaluator, snapshot: Snapshot) -> EvaluatorExecution:
+        """L'execution non appelee d'un analyseur qui ne lit aucun langage present (TAXO-COV-01)."""

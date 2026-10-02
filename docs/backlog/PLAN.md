@@ -17,7 +17,10 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
    ([TAXO-01F](TAXO-01F-comparaison-persistee.md)).
    - **Une page par fonction** : Overview devient un tableau de bord, Analyses et Comparaisons ont leur
      page ([TAXO-UI-05](TAXO-UI-05-navigation-par-pages.md)), avant la tranche D de 01F. Livrée (#70 à #72).
-   - → **Tranche D** : le résultat d'une comparaison, par domaine, en phrases.
+   - **Tranche D** : le résultat d'une comparaison, par domaine, en phrases. Livrée (#73).
+   - Tranche E **suspendue** jusqu'à la PR B de TAXO-COV-01.
+   - → **Couverture bornée** : une absence de preuve n'est jamais une preuve d'absence
+     ([TAXO-COV-01](TAXO-COV-01-couverture-bornee.md)), découverte par l'exercice « Taxo analyse Taxo ».
 5. Tuile multi-niveaux et couverture locale détaillée ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
 6. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 7. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.

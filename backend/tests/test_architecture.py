@@ -243,7 +243,7 @@ def test_scan_persists_only_legacy_and_bounded_execution_summary():
 
     scans = SavedScans()
     run = RunScan(Projects(), scans, Paths(), Reader(), object(), Runner())
-    expected = {**legacy, 'evaluation_summary': summary, 'evaluations': [summary]}
+    expected = {**legacy, 'evaluation_summary': summary, 'evaluations': [summary], 'languages': []}
     assert run('project-key').result == expected
     assert scans.scan.result == expected, 'les faits vont au magasin des faits, jamais dans scans.result'
 
