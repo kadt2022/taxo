@@ -2,7 +2,7 @@
 import {act, createElement} from 'react';
 import {createRoot} from 'react-dom/client';
 import {describe, expect, it} from 'vitest';
-import {go, href, parse, useRoute, type Route} from './nav';
+import {go, href, parse, useRoute, withProject, type Route} from './nav';
 
 (globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
 
@@ -36,5 +36,15 @@ describe('adresses du portail', ()=>{
     await act(async()=>{window.location.hash='#/architecture';window.dispatchEvent(new Event('hashchange'));});
     expect(seen.at(-1)?.page).toBe('architecture');
     act(()=>root.unmount());
+  });
+  it('inscrit le projet dans l’adresse sans nouvelle entrée d’historique, une seule fois', ()=>{
+    const replaced:string[]=[];
+    const place=(hash:string)=>({location:{hash}, history:{replaceState:(_state:unknown, _title:string, url?:string|URL|null)=>{replaced.push(String(url));}}});
+    withProject('p1', place('#/comparaisons?a=x&b=y'));
+    withProject('p1', place('#/'));
+    withProject('p1', place('#/routes?projet=p1'));
+    withProject('p1', place('#/nulle-part'));
+    expect(replaced).toEqual(['#/comparaisons?a=x&b=y&projet=p1', '#/?projet=p1']);
+    expect(parse(replaced[0]).params.get('projet')).toBe('p1');
   });
 });

@@ -31,6 +31,14 @@ export function go(target:string, place:Pick<Location, 'hash'>=window.location){
   place.hash=target;
 }
 
+/** Ajoute le projet a l'adresse courante, sans nouvelle entree d'historique : une adresse copiee designe toujours son projet. */
+export function withProject(project:string, place:{location:Pick<Location, 'hash'>; history:Pick<History, 'replaceState'>}=window){
+  const route=parse(place.location.hash);
+  if(route.page==='introuvable'||route.params.get('projet')===project)return;
+  const params=Object.fromEntries(route.params);
+  place.history.replaceState(null, '', href(route.page, route.id, {...params, projet:project}));
+}
+
 type Hashed=Pick<Window, 'addEventListener'|'removeEventListener'> & {location:Pick<Location, 'hash'>};
 
 /** La page affichee, suivie a chaque changement d'adresse. */

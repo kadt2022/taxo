@@ -39,6 +39,12 @@ export function DisplayedNote({scan, latest, onLatest}:Readonly<{scan:Scan; late
     <button type="button" className="ghost" onClick={onLatest}>Revenir à la dernière analyse</button></output>;
 }
 
+/** La premiere analyse du projet n'est pas encore enregistree : les pages qui lisent ses faits attendent sa fin. */
+export function PendingPage(){
+  return <section className="page"><PageHead title="Analyse en cours" intro="Cette page sera disponible à la fin de la première analyse du projet : elle lit des faits qui ne sont pas encore enregistrés."/>
+    <a className="ghost" href={href('overview')}>← Suivre l’analyse dans Overview</a></section>;
+}
+
 /** Une adresse qui ne mene a aucune page. */
 export function NotFoundPage(){
   return <section className="page"><PageHead title="Page introuvable" intro="Cette adresse ne correspond à aucune page de Taxo."/>

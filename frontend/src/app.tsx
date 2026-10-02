@@ -3,8 +3,8 @@ import {useEffect, useState, type FormEvent, type ReactNode} from 'react';
 import {type MiniaStatus} from './minia';
 import {AnalysisLimits, overviewCards, panelKey, routeCounts, technologiesOf, type Scan} from './overview';
 import {ProjectPicker, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
-import {href, go, useRoute} from './nav';
-import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, TechnologiesPage} from './pages';
+import {href, go, parse, useRoute, withProject} from './nav';
+import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, TechnologiesPage} from './pages';
 import {AskTaxo} from './query';
 import {loadRoutes, RoutesExplorer, type RoutesResult} from './routes';
 import {apiUrl} from './api';
@@ -31,7 +31,10 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   const [busy,setBusy]=useState(false), [loading,setLoading]=useState(true);
   // L'analyse affichee : la plus recente par defaut, ou celle choisie dans la page Analyses.
   const scan=scans.find(s=>s.id===scanId) ?? scans[0];
-  useEffect(()=>{request<Project[]>('/projects').then(p=>{setProjects(p);setSelected(p[0]?.id??'');}).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);
+  // Le projet fait partie de l'adresse : une page rechargee ou copiee rouvre le meme projet.
+  useEffect(()=>{request<Project[]>('/projects').then(p=>{const wanted=parse(window.location.hash).params.get('projet');
+    setProjects(p);setSelected(p.find(item=>item.id===wanted)?.id??p[0]?.id??'');}).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);
+  useEffect(()=>{if(selected)withProject(selected);},[selected, route]);
   useEffect(()=>{
     let active=true;
     setScans([]);setScanId('');
@@ -78,7 +81,11 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     case 'historique':return history(selected, minia);
     case 'donnees':return <DataPage/>;
     case 'introuvable':return <NotFoundPage/>;
-    default:return shown?scanPage(shown):welcome();
+    default:
+      if(scan&&shown)return scanPage(shown);
+      // Premiere analyse en cours : seule Overview la suit ; les autres pages attendent une analyse enregistree.
+      if(shown&&route.page==='overview')return <OverviewPage scan={shown} pending={pendingEvaluators(run!)} canAnalyze={false} onAnalyze={analyze}/>;
+      return shown?<PendingPage/>:welcome();
     }
   }
   function scanPage(current:Scan){

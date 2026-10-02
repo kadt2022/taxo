@@ -63,6 +63,10 @@ de bord.
 | `#/interroger` | Interroger Taxo | la question posée aux faits de l'analyse |
 | toute autre adresse | Page introuvable | une page d'état et un lien vers Overview, jamais un écran vide |
 
+- **Le projet fait partie de l'adresse** (`?projet=<id>`) : une page rechargée ou copiée rouvre le même
+  projet ; un projet inconnu ramène au premier.
+- **Première analyse en cours** : seule Overview la suit ; les pages qui lisent des faits enregistrés
+  disent qu'elles attendent sa fin.
 - **Historique Git et Analyses restent distincts** : l'un dit ce qui est arrivé au code, l'autre ce que
   Taxo a observé et quand. Une analyse renvoie à son commit.
 - **L'analyse affichée** : les pages de domaine montrent l'analyse affichée, la plus récente par défaut.
