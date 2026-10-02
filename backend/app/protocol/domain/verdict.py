@@ -132,15 +132,23 @@ def judge(claim, established, analyzers, present=(), needed=None, complete=True)
         other = tuple(fact for fact in established if fact.get('object') not in (None, target))
         if other:
             return Verdict(REFUTED, facts=other)
-    able = capable(analyzers, relation, claim['subject'])
+    return Verdict(NOT_PROVEN, _not_proven(claim, analyzers, present, needed, complete))
+
+
+def _not_proven(claim, analyzers, present, needed, complete):
+    """Pourquoi rien n'est etabli : personne ne sait produire la relation, une zone est illisible, ce qui
+    est concerne n'a pas ete lu, ou c'est introuvable la ou Taxo a lu."""
+    relation, subject = claim['relation'], claim['subject']
+    able = capable(analyzers, relation, subject)
     if not able:
-        return Verdict(NOT_PROVEN, NOT_ANALYSED)
-    references = {claim['subject'], target} - {None}
+        return NOT_ANALYSED
+    references = {subject, claim.get('object')} - {None}
     if any(_unreadable(analyzer, references) for analyzer in able):
-        return Verdict(NOT_PROVEN, NOT_INTERPRETED)
-    subject = claim['subject']
-    if (not reaching(analyzers, relation, present, subject)
-            or not_analysed(analyzers, relation, present, needed, subject)
-            or (needed is None and unknown_languages(analyzers, relation, present, complete, subject))):
-        return Verdict(NOT_PROVEN, NOT_ANALYSED)
-    return Verdict(NOT_PROVEN, NOT_FOUND_IN_ANALYSED_SCOPE)
+        return NOT_INTERPRETED
+    if not reaching(analyzers, relation, present, subject):
+        return NOT_ANALYSED
+    if not_analysed(analyzers, relation, present, needed, subject):
+        return NOT_ANALYSED
+    if needed is None and unknown_languages(analyzers, relation, present, complete, subject):
+        return NOT_ANALYSED
+    return NOT_FOUND_IN_ANALYSED_SCOPE

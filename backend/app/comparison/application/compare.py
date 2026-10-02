@@ -87,17 +87,23 @@ class CompareAnalyses:
     def _producers(self, before, after, unread=None):
         """Chaque producteur et ce que dit de lui chaque cote. `unread`, s'il est donne, recoit pour chaque
         producteur les langages presents de chaque cote que son catalogue ne lit pas."""
-        producers = {}
         sides = [(scan, self.store.producers(scan.id), self._languages(scan)) for scan in (before, after)]
-        for name in sorted({name for _, found, _ in sides for name in found}):
-            producers[name] = [_side(found.get(name), _statuses(scan), self._read(found.get(name)), present,
-                                     languages_complete(scan.result.get('evaluation_summary')))
-                               for scan, found, present in sides]
-            if unread is not None:
-                reads = [self._read(found.get(name)) for _, found, _ in sides]
-                unread[name] = {side: [] if read is None else sorted(set(present) - read)
-                                for side, read, (_, _, present) in zip(('before', 'after'), reads, sides)}
-        return producers
+        names = sorted({name for _, found, _ in sides for name in found})
+        if unread is not None:
+            unread.update({name: {side: self._unread(found.get(name), present)
+                                  for side, (_, found, present) in zip(('before', 'after'), sides)}
+                           for name in names})
+        return {name: [self._side_of(scan, found.get(name), present) for scan, found, present in sides]
+                for name in names}
+
+    def _side_of(self, scan, executions, present):
+        return _side(executions, _statuses(scan), self._read(executions), present,
+                     languages_complete(scan.result.get('evaluation_summary')))
+
+    def _unread(self, executions, present):
+        """Les langages presents que le catalogue de ces executions ne lit pas (TAXO-COV-01)."""
+        read = self._read(executions)
+        return [] if read is None else sorted(set(present) - read)
 
     def _compute(self, before, after, producer):
         key = (before.id, after.id, producer)

@@ -89,7 +89,8 @@ def test_an_analyzer_with_nothing_to_read_is_not_run_and_never_claims_coverage(t
     assert scan['languages'] == ['Python']
     found = evaluations(scan)
     for name in SPRING:
-        assert found[name]['status'] == 'UNSUPPORTED' and found[name]['fact_count'] == 0, name
+        assert found[name]['status'] == 'UNSUPPORTED', name
+        assert found[name]['fact_count'] == 0, name
         assert [item['coverage_type'] for item in found[name]['coverage']] == ['OUT_OF_SCOPE'], name
     assert found['taxo.inventory']['status'] == found['taxo.git']['status'] == 'SUCCESS'
     spring = [entry for entry in taxo.ask(('find_facts', {'relation': 'HANDLED_BY'}))[0]['coverage']
@@ -108,7 +109,8 @@ def test_a_python_route_is_not_analysed_never_not_found(taxo_on):
     assert (verdict['verdict'], verdict['reason']) == (NOT_PROVEN, NOT_ANALYSED)
     named = {'subject': 'language:Python', 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
              'relation': 'HANDLED_BY'}
-    assert named in verdict['coverage'] and named in found['coverage']
+    assert named in verdict['coverage']
+    assert named in found['coverage']
     items = described['items']
     assert {'kind': 'languages', 'present': ['Python'], 'complete': True} in items
     analyzers = {item['analyzer']: item for item in items if item['kind'] == 'analyzer'}
@@ -126,7 +128,8 @@ def test_on_java_and_python_only_java_was_read(taxo_on):
     assert (verdict['verdict'], verdict['reason']) == (NOT_PROVEN, NOT_ANALYSED), 'Python n a pas ete lu'
     assert [entry['subject'] for entry in verdict['coverage'] if entry['type'] == 'NOT_ANALYSED'] == ['language:Python']
     spring = [entry for entry in verdict['coverage'] if entry['producer'] == 'taxo.spring-api']
-    assert spring and all(entry['languages'] == ['Java'] for entry in spring), 'sa couverture ne vaut que pour Java'
+    assert spring
+    assert all(entry['languages'] == ['Java'] for entry in spring), 'sa couverture ne vaut que pour Java'
 
 
 def test_on_java_alone_an_absent_route_is_still_not_found_in_the_analysed_scope(taxo_on):
@@ -197,7 +200,8 @@ def test_two_unread_sides_are_never_compared_as_no_change(taxo_on, git, monkeypa
         assert (compared[name]['comparable'], compared[name]['reason']) == (False, 'NOT_SUPPORTED_BEFORE'), name
         assert 'counts' not in compared[name], 'jamais « aucun changement »'
         assert compared[name]['not_analysed'] == {'before': ['Python'], 'after': ['Python']}
-    assert compared['taxo.inventory']['comparable'] and compared['taxo.inventory']['counts']['ADDED'] > 0
+    assert compared['taxo.inventory']['comparable']
+    assert compared['taxo.inventory']['counts']['ADDED'] > 0
     assert compared['taxo.inventory']['not_analysed'] == {'before': [], 'after': []}
     monkeypatch.undo()
     fresh = taxo.analyse()['id']
@@ -216,7 +220,8 @@ def test_two_producer_versions_of_one_catalog_stay_comparable_with_their_real_ch
     monkeypatch.setattr(SpringApiEvaluator, 'producer_version', '9.9.9')
     after = taxo.analyse()['id']
     api = taxo.compare(before, after)['taxo.spring-api']
-    assert api['comparable'] and api['versions'] == {'before': ['0.2.0'], 'after': ['9.9.9']}
+    assert api['comparable']
+    assert api['versions'] == {'before': ['0.2.0'], 'after': ['9.9.9']}
     assert api['relations']['HANDLED_BY']['ADDED'] == 1, 'la nouvelle route, pas « aucun changement »'
     assert api['not_analysed'] == {'before': [], 'after': []}
 
@@ -295,9 +300,11 @@ def test_a_partial_inventory_never_makes_an_analyzer_unsupported(taxo_on, monkey
     partial_inventory(monkeypatch)
     taxo, _ = taxo_on(repository())
     scan = taxo.analyse()
-    assert scan['languages'] == [] and evaluations(scan)['taxo.inventory']['status'] == 'PARTIAL'
+    assert scan['languages'] == []
+    assert evaluations(scan)['taxo.inventory']['status'] == 'PARTIAL'
     spring = evaluations(scan)['taxo.spring-api']
-    assert spring['status'] == 'SUCCESS' and spring['fact_count'] > 0, 'l analyseur a lu ses sources lui-meme'
+    assert spring['status'] == 'SUCCESS', 'l analyseur a lu ses sources lui-meme'
+    assert spring['fact_count'] > 0
     missing = {'subject': 'endpoint:GET /missing', 'relation': 'HANDLED_BY',
                'object': 'symbol:java:com.acme.Missing#get()'}
     verdict, described = taxo.ask(('verify_claim', missing), ('describe', {}))
@@ -319,4 +326,5 @@ def test_a_partial_inventory_is_never_a_reason_to_refuse_a_comparison(taxo_on, g
     git(root, 'add', '-A')
     git(root, 'commit', '-qm', 'status')
     api = taxo.compare(before, taxo.analyse()['id'])['taxo.spring-api']
-    assert api['comparable'] and api['relations']['HANDLED_BY']['ADDED'] == 1
+    assert api['comparable']
+    assert api['relations']['HANDLED_BY']['ADDED'] == 1

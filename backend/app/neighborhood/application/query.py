@@ -90,8 +90,19 @@ def _arguments(exchange, arguments):
 
 
 def _coverage(exchange, root, relations, priority):
-    coverage, frontier = [], []
-    capabilities = set()
+    coverage, frontier, capabilities = _summaries(exchange, relations)
+    for relation in priority:
+        if relation not in capabilities:
+            frontier.append({'nature': 'CONTEXT', 'node': root, 'relation': relation,
+                             'reason': 'NO_ANALYZER', 'count': {'kind': 'UNKNOWN'}})
+    frontier += _unread_languages(exchange, [relation for relation in priority if relation in capabilities])
+    return coverage, frontier, capabilities
+
+
+def _summaries(exchange, relations):
+    """Ce que le resume de l'analyse dit des analyseurs des relations suivies : leur couverture, leurs
+    lacunes, et les relations qu'ils rendent disponibles."""
+    coverage, frontier, capabilities = [], [], set()
     for evaluation in exchange.evaluations:
         identifier = evaluation['evaluator_id']
         produced = exchange.service.catalogs.get(identifier, frozenset(evaluation.get('relations', {})))
@@ -106,25 +117,26 @@ def _coverage(exchange, root, relations, priority):
                 if item[_TYPE] in ('NOT_INTERPRETED', 'READ_ERROR')]
         if evaluation['status'] in ('FAILED', 'PARTIAL') or gaps:
             frontier.append(_knowledge('ANALYSIS_INCOMPLETE', producer=identifier))
-    # Les langages presents qu'aucune execution capable n'a lus : ce qui s'y trouve est inconnu. Lus dans le
-    # resume de l'analyse, sans parcourir ses faits ; une analyse anterieure a TAXO-COV-01 ne les a pas.
+    return coverage, frontier, capabilities
+
+
+def _unread_languages(exchange, relations):
+    """Les langages presents qu'aucune execution capable n'a lus, relation par relation : ce qui s'y trouve
+    est inconnu (TAXO-COV-01). Lus dans le resume de l'analyse, sans parcourir ses faits ; une analyse
+    anterieure a TAXO-COV-01 n'enregistre pas ses langages, et n'en dit donc rien."""
     present = exchange.scan.result.get('languages')
-    summarized = _summarized(exchange) if present is not None else []
+    if present is None:
+        return []
+    summarized = _summarized(exchange)
     complete = languages_complete(exchange.scan.result.get('evaluation_summary'))
-    for relation in priority:
-        if relation not in capabilities:
-            frontier.append({'nature': 'CONTEXT', 'node': root, 'relation': relation,
-                             'reason': 'NO_ANALYZER', 'count': {'kind': 'UNKNOWN'}})
-            continue
-        if present is None:
-            continue
+    frontier = []
+    for relation in relations:
         unread = not_analysed(summarized, relation, present)
         if unread:
             frontier.append(_knowledge('NOT_ANALYSED', relation=relation, languages=list(unread)))
         if unknown_languages(summarized, relation, present, complete):
             frontier.append(_knowledge('LANGUAGES_UNKNOWN', relation=relation))
-
-    return coverage, frontier, capabilities
+    return frontier
 
 
 def _knowledge(reason, **fields):
