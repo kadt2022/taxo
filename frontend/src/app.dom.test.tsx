@@ -71,6 +71,8 @@ describe('une page par fonction', ()=>{
     expect(head?.firstElementChild?.matches('a.top-brand[href="#/"]')).toBe(true);
     expect(head?.querySelector('.top-brand-text strong')?.textContent).toBe('Taxo');
     expect(head?.querySelector('.top-brand-text small')?.textContent).toBe('Software Intelligence');
+    // Le lien garde un nom pour les lecteurs d'écran : le texte n'est jamais retiré, seulement masqué visuellement sur petit écran.
+    expect(head?.querySelector('a.top-brand')?.textContent).toContain('Taxo');
     expect(head?.querySelector('.top-brand + .top-menu')).not.toBeNull();
     // Une seule marque : la barre latérale ne la répète pas.
     expect(host.querySelectorAll('.brand-mark')).toHaveLength(1);
