@@ -21,7 +21,8 @@ const SUMMARY:ComparisonSummary={
   after:{id:'b', created_at:'2026-10-01T10:00:00Z', snapshot:{commit:'3c4d5e6f7a8b', mode:'COMMIT'}},
   evaluators:[
     {evaluator_id:'taxo.spring-security', comparable:true, versions:{before:['0.3.0'], after:['0.4.0']},
-     counts:{ADDED:0, REMOVED:0, MODIFIED:3, EVIDENCE_CHANGED:1, STATUS_CHANGED:0, OCCURRENCE_COUNT_CHANGED:0, OCCURRENCES_CHANGED:0, UNCHANGED:9}},
+     counts:{ADDED:0, REMOVED:0, MODIFIED:3, EVIDENCE_CHANGED:1, STATUS_CHANGED:0, OCCURRENCE_COUNT_CHANGED:0, OCCURRENCES_CHANGED:0, UNCHANGED:9},
+     relations:{PROTECTED_BY:{MODIFIED:2, EVIDENCE_CHANGED:1}, AUTHORIZED_BY:{MODIFIED:1}}},
     {evaluator_id:'taxo.structure', comparable:false, reason:'CATALOG_CHANGED', versions:{before:['1'], after:['2']},
      message:'Catalogue différent. Cause possible : évolution du producteur, pas du logiciel.'}],
   totals:{ADDED:0, REMOVED:0, MODIFIED:3, EVIDENCE_CHANGED:1, STATUS_CHANGED:0, OCCURRENCE_COUNT_CHANGED:0, OCCURRENCES_CHANGED:0, UNCHANGED:9},
@@ -124,4 +125,40 @@ describe('même commit des deux côtés', ()=>{
     await click(button('Changer les analyses'));
     expect(onChange).toHaveBeenCalledOnce();
   });
+
+  it('dit les changements par domaine, et chaque phrase ouvre ses faits pour sa seule relation', async()=>{
+    const {request, calls}=api({'MODIFIED:':{items:[{before:[fact('policy-rule:hasRole(USER)')], after:[fact('policy-rule:hasRole(ADMIN)')]}], next:null}});
+    await open(request);
+    const security=host.querySelector('[aria-label="Sécurité"]');
+    expect(security?.querySelector('.domain-state')?.textContent).toBe('Changements');
+    expect(Array.from(security?.querySelectorAll('.domain-line')??[]).map(item=>item.textContent)).toEqual([
+      '~1 règle de sécurité modifiée', '~2 protections de route modifiées', '↗1 protection de route dont la preuve a changé de place']);
+    expect(host.querySelector('[aria-label="Architecture"] .domain-state')?.textContent).toBe('Non comparable');
+    expect(host.querySelector('[aria-label="Architecture"] .domain-reason')?.textContent).toContain('Catalogue différent');
+    expect(host.querySelector('[aria-label="Git"] .domain-state')?.textContent).toBe('Non analysé');
+    expect(host.querySelector('.comparison-quiet')).toBeNull();
+    click(button('2 protections de route modifiées'));
+    await flush();
+    expect(calls.at(-1)).toContain('relation=PROTECTED_BY');
+    expect(calls.at(-1)).toContain('category=MODIFIED');
+    expect(host.querySelector('.domain-detail h4')?.textContent).toBe('2 protections de route modifiées 2');
+    expect(host.querySelector('.domain-detail .change-pair')?.textContent).toContain('ADMIN');
+    click(button('Voir tous les faits'));
+    await flush();
+    expect(host.querySelectorAll('.domain-detail .change-group')).toHaveLength(3);
+    click(button('Fermer'));
+    expect(host.querySelector('.domain-detail')).toBeNull();
+  });
+
+  it('sans différence : le dit, et garde les non comparables et les zones inconnues', async()=>{
+    const quiet:ComparisonSummary={...SUMMARY, evaluators:[{...SUMMARY.evaluators[0], relations:{}}, SUMMARY.evaluators[1]],
+      totals:{...SUMMARY.totals, MODIFIED:0, EVIDENCE_CHANGED:0}};
+    const request=vi.fn(()=>Promise.resolve(quiet)) as unknown as <T>(path:string)=>Promise<T>;
+    await open(request);
+    expect(host.querySelector('.comparison-quiet')?.textContent).toContain('Aucune différence détectée parmi les faits comparables.');
+    expect(host.querySelector('[aria-label="Sécurité"] .domain-state')?.textContent).toBe('Aucun changement');
+    expect(host.textContent).toContain('A : 5 · B : 3');
+    expect(host.textContent).toContain('Non comparables');
+  });
 });
+

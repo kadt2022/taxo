@@ -17,6 +17,9 @@ class ComparisonStore(Protocol):
                producer_id: str) -> Iterator[tuple[str, list[Occurrence], list[Occurrence]]]:
         """Identities of the producer on both sides, with their occurrences on each (no coverage)."""
 
+    def labels(self, identity_hashes: list[str]) -> dict[str, str]:
+        """What each identity is about: its relation for an assertion, else its kind. Read by identity_hash."""
+
     def unknown(self, scan_id: str) -> int:
         """Zones the analysis could not interpret (NOT_INTERPRETED, READ_ERROR coverage)."""
 

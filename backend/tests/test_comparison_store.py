@@ -124,3 +124,20 @@ def test_following_pages_never_read_the_analyses_again(compared, monkeypatch):
         compared.changes('project', 'before', 'after', category, 'fixture', limit=1)
     assert first == 3
     assert len(calls) == first
+
+
+def test_each_relation_has_its_own_counts(compared):
+    """Tranche D : les domaines regroupent des comptes calculés par relation, jamais recomptés par le portail."""
+    [entry] = compared.summary('project', 'before', 'after')['evaluators']
+    assert entry['relations'] == {
+        'CONTAINS': {'MODIFIED': 1},
+        'DEPENDS_ON': {'ADDED': 1, 'REMOVED': 1, 'EVIDENCE_CHANGED': 1, 'STATUS_CHANGED': 1,
+                       'OCCURRENCE_COUNT_CHANGED': 1, 'OCCURRENCES_CHANGED': 1}}
+
+
+def test_a_list_can_be_limited_to_one_relation(compared):
+    contains = compared.changes('project', 'before', 'after', 'MODIFIED', 'fixture', relation='CONTAINS')
+    assert [item['after'][0]['object'] for item in contains['items']] == ['module:fresh']
+    assert compared.changes('project', 'before', 'after', 'MODIFIED', 'fixture', relation='DEPENDS_ON')['items'] == []
+    added = compared.changes('project', 'before', 'after', 'ADDED', 'fixture', relation='DEPENDS_ON')
+    assert [item['after'][0]['object'] for item in added['items']] == ['module:new']

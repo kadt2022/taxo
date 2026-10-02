@@ -114,6 +114,12 @@ def test_a_to_b_a_route_appears_and_a_controller_moves(bench):
     # Une preuve ne peut bouger que dans un fichier modifie.
     assert all(ORDERS in paths(item) for item in moved), [paths(item) for item in moved]
     assert totals['EVIDENCE_CHANGED'] == len(moved)
+    # Tranche D : la route ajoutee se retrouve dans les comptes par relation de son evaluateur.
+    api = next(item for item in bench.summary(a, b)['evaluators'] if item['evaluator_id'] == 'taxo.spring-api')
+    assert api['relations']['HANDLED_BY']['ADDED'] == 1
+    params = {'before': a, 'after': b, 'evaluator': 'taxo.spring-api', 'category': 'ADDED', 'relation': 'HANDLED_BY'}
+    [route] = bench.client.get(f'{bench.base}/comparisons/changes', params=params).json()['items']
+    assert route['after'][0]['subject'] == 'endpoint:GET /status'
 
 
 def test_b_to_c_a_rule_changes_and_a_route_disappears(bench):
