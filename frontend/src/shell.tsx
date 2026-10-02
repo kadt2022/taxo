@@ -1,6 +1,6 @@
 // Coque de l'application : barre de menus, sélecteur de projet et menu vertical des résultats (TAXO-UI-04).
 // Sorti de main.tsx pour être testé ; les effets prennent leur document et leur observateur en paramètre.
-import {useEffect, useRef, useState, type FormEvent} from 'react';
+import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {type RouteCounts, type Scan} from './overview';
 import {href, type Page} from './nav';
 
@@ -9,6 +9,7 @@ export type MenuItem = {label:string; href?:string; disabled?:boolean; run?:()=>
 export type NavItem = {id:Page; label:string; count?:string; apart?:boolean; muted?:boolean};
 
 export const ICON_PATHS:Record<string,string>={overview:'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z',
+  projets:'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
   analyses:'M9 4h6M9 3h6v3H9zM6 5H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-1M8 12h8M8 16h5',
   comparaisons:'M4 7h11M12 4l3 3-3 3M20 17H9M12 14l-3 3 3 3', interroger:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM9 9h6M9 13h4',
   architecture:'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
@@ -48,7 +49,7 @@ export function since(iso?:string, now:number=Date.now()){
 /** Le menu vertical : une entrée par page, groupées ; un compte seulement quand Taxo en a un. « Données » reste grisée tant
  * qu'aucun analyseur ne la nourrit, mais sa page dit pourquoi. */
 export function navItemsOf(technologies:number, counts:(id:string)=>string|undefined, routes?:RouteCounts, analyses?:number):NavItem[]{
-  return [{id:'overview', label:'Overview'},
+  return [{id:'overview', label:'Overview'}, {id:'projets', label:'Projets'},
     {id:'analyses', label:'Analyses', count:analyses?String(analyses):undefined, apart:true}, {id:'comparaisons', label:'Comparaisons'},
     {id:'interroger', label:'Interroger Taxo'},
     {id:'technologies', label:'Technologies', count:technologies?String(technologies):undefined, apart:true},
@@ -70,26 +71,29 @@ export function closeOnOutside(box:{contains(node:Node):boolean}|null, close:()=
   return()=>{doc.removeEventListener('mousedown',away);doc.removeEventListener('keydown',escape);};
 }
 
-type TopMenuProps = {canAnalyze:boolean; analyze:()=>void; addProject:()=>void; latest?:()=>void; initialOpen?:string|null};
+type TopMenuProps = {analysis:(close:()=>void)=>ReactNode; running?:boolean; latest?:()=>void; initialOpen?:string|null};
 
 /** Barre de menus façon application, réservée aux commandes globales : Fichier, Analyse, Affichage, Aide. La navigation est dans le
- * menu vertical. Un seul menu ouvert à la fois ; Échap ou un clic ailleurs le referme, et le survol change de menu une fois la barre
- * activée. */
-export function TopMenu({canAnalyze, analyze, addProject, latest, initialOpen=null}:Readonly<TopMenuProps>){
+ * menu vertical. Analyse ouvre un panneau de commande ; les autres menus, une liste. Un seul menu ouvert à la fois ; Échap ou un clic
+ * ailleurs le referme, et le survol change de menu une fois la barre activée. */
+export function TopMenu({analysis, running=false, latest, initialOpen=null}:Readonly<TopMenuProps>){
   const [open,setOpen]=useState<string|null>(initialOpen);
   const bar=useRef<HTMLElement>(null);
-  const menus:[string,MenuItem[]][]=[
-    ['Fichier',[{label:'Ajouter un projet…', run:addProject}]],
-    ['Analyse',[{label:'Lancer l’analyse globale', disabled:!canAnalyze, run:analyze}, {label:'Comparer deux analyses…', href:href('comparaisons')}]],
+  const close=()=>setOpen(null);
+  const menus:[string,MenuItem[]|null][]=[
+    ['Fichier',[{label:'Ouvrir un projet…', href:href('projets')}, {label:'Ajouter un projet…', href:href('projets', undefined, {ajouter:'1'})}]],
+    ['Analyse',null],
     ['Affichage',[{label:'Revenir à la dernière analyse', disabled:!latest, run:latest}, {label:'Choisir l’analyse affichée…', href:href('analyses')}]],
     ['Aide',[{label:'Taxo · version 0.1', disabled:true},{label:'Analyse locale : vos fichiers restent sur votre machine', disabled:true}]]];
-  useEffect(()=>open?closeOnOutside(bar.current,()=>setOpen(null)):undefined,[open]);
+  useEffect(()=>open?closeOnOutside(bar.current,close):undefined,[open]);
   return <nav className="top-menu" ref={bar} aria-label="Menus">{menus.map(([name,items])=><div className="menu" key={name}>
-    <button type="button" aria-haspopup="menu" aria-expanded={open===name} onClick={()=>setOpen(open===name?null:name)} onMouseEnter={()=>open&&setOpen(name)}>
+    <button type="button" aria-haspopup={items?'menu':'dialog'} aria-expanded={open===name} className={!items&&running?'is-running':undefined}
+      onClick={()=>setOpen(open===name?null:name)} onMouseEnter={()=>open&&setOpen(name)}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d={MENU_ICONS[name]}/></svg><span className="menu-label">{name}</span></button>
-    {open===name&&<div className="menu-list" role="menu">{items.map(item=>item.href
-      ?<a key={item.label} role="menuitem" href={item.href} onClick={()=>setOpen(null)}>{item.label}</a>
-      :<button type="button" key={item.label} role="menuitem" disabled={item.disabled} onClick={()=>{setOpen(null);item.run?.();}}>{item.label}</button>)}</div>}
+    {open===name&&(items?<div className="menu-list" role="menu">{items.map(item=>item.href
+      ?<a key={item.label} role="menuitem" href={item.href} onClick={close}>{item.label}</a>
+      :<button type="button" key={item.label} role="menuitem" disabled={item.disabled} onClick={()=>{close();item.run?.();}}>{item.label}</button>)}</div>
+      :<div className="menu-panel" role="dialog" aria-label={name}>{analysis(close)}</div>)}
   </div>)}</nav>;
 }
 
@@ -100,36 +104,4 @@ export function ResultsNav({items, current}:Readonly<{items:readonly NavItem[]; 
       aria-current={current===item.id?'page':undefined} title={item.muted?'Pas encore analysé':undefined}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d={ICON_PATHS[item.id]??ICON_PATHS.overview}/></svg>
       <span className="results-label">{item.label}</span>{item.count&&<span className="results-count">{item.count}</span>}</a>)}</nav>;
-}
-
-export type PickerProps = {projects:Project[]; selected:string; busy:boolean; loading:boolean; open:boolean; setOpen:(open:boolean)=>void;
-  adding:boolean; setAdding:(adding:boolean)=>void; onSelect:(id:string)=>void; status:string;
-  name:string; setName:(value:string)=>void; path:string; setPath:(value:string)=>void; onSubmit:(event:FormEvent)=>void};
-
-/** Sélecteur de projet de la barre du haut : le projet courant, l'état de son analyse, la liste des projets et l'ajout d'un projet. */
-export function ProjectPicker(props:Readonly<PickerProps>){
-  const {projects, selected, busy, loading, open, setOpen, adding, setAdding, onSelect, status}=props;
-  const box=useRef<HTMLDivElement>(null);
-  useEffect(()=>open?closeOnOutside(box.current,()=>setOpen(false)):undefined,[open,setOpen]);
-  const current=projects.find(project=>project.id===selected);
-  return <div className="picker" ref={box}>
-    <button type="button" className="picker-current" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(!open)}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-      <strong>{current?.name??'Choisir un projet'}</strong>
-      {status&&<span className="picker-status"><i aria-hidden="true"/>{status}</span>}
-      <span className="picker-chevron" aria-hidden="true">⌄</span>
-    </button>
-    {open&&<div className="picker-panel">
-      <p className="picker-title">Projets <span>{projects.length}</span></p>
-      <div role="listbox" aria-label="Projets">{projects.map(project=><button type="button" role="option" aria-selected={selected===project.id} disabled={busy} key={project.id}
-        onClick={()=>onSelect(project.id)}>{project.name}</button>)}</div>
-      {adding
-        ?<form onSubmit={props.onSubmit}>
-          <label>Nom<input required autoFocus maxLength={120} value={props.name} onChange={event=>props.setName(event.target.value)} placeholder="Mon application"/></label>
-          <label>Dossier local<input required value={props.path} onChange={event=>props.setPath(event.target.value)} placeholder="D:\MonProjet"/></label>
-          <button type="submit" className="picker-save" disabled={busy||loading}>Enregistrer le projet</button>
-        </form>
-        :<button type="button" className="picker-add" onClick={()=>setAdding(true)}><span aria-hidden="true">+</span>Ajouter un projet</button>}
-    </div>}
-  </div>;
 }

@@ -1,15 +1,16 @@
 // L'application (TAXO-UI-05) : une page par fonction, choisie par l'adresse. Sortie de main.tsx pour etre testee.
-import {useEffect, useState, type FormEvent, type ReactNode} from 'react';
+import {useEffect, useState, type ReactNode} from 'react';
 import {type MiniaStatus} from './minia';
 import {AnalysisLimits, overviewCards, panelKey, routeCounts, technologiesOf, type Scan} from './overview';
-import {BrandMark, ProjectPicker, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
+import {BrandMark, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
+import {AnalysisCommand} from './commands';
 import {href, go, parse, useRoute, withProject} from './nav';
-import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, TechnologiesPage} from './pages';
+import {ActiveProject, AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, ProjectsPage, TechnologiesPage} from './pages';
 import {AskTaxo} from './query';
 import {loadRoutes, RoutesExplorer, type RoutesResult} from './routes';
 import {apiUrl} from './api';
 import {openStream} from './sse';
-import {AnalysisProgress, Working, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
+import {AnalysisProgress, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
 
 export async function request<T>(path:string, init?:RequestInit):Promise<T> {
   const response = await fetch(apiUrl(path), init);
@@ -27,7 +28,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   const [minia,setMinia]=useState<MiniaStatus|null>(null);
   useEffect(()=>{request<MiniaStatus>('/minia/status').then(setMinia).catch(()=>setMinia(null));},[]);
   const [scans,setScans]=useState<Scan[]>([]), [scanId,setScanId]=useState('');
-  const [name,setName]=useState(''), [path,setPath]=useState(''), [error,setError]=useState('');
+  const [error,setError]=useState('');
   const [busy,setBusy]=useState(false), [loading,setLoading]=useState(true);
   // L'analyse affichee : la plus recente par defaut, ou celle choisie dans la page Analyses.
   const scan=scans.find(s=>s.id===scanId) ?? scans[0];
@@ -41,13 +42,14 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     if(selected){setLoading(true);request<Scan[]>(`/projects/${selected}/scans`).then(s=>{if(active)setScans(s);}).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active)setLoading(false);});}
     return ()=>{active=false;};
   },[selected]);
-  async function add(event:FormEvent){
-    event.preventDefault();setBusy(true);setError('');
-    try{const p=await request<Project>('/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,path})});setProjects(past=>[...past,p]);setSelected(p.id);setName('');setPath('');setAdding(false);setPickerOpen(false);go(href('overview'));}
-    catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  /** Ajouter un projet en fait le projet actif ; renvoie faux si l'API le refuse, l'erreur restant affichee. */
+  async function add(name:string, path:string){
+    setBusy(true);setError('');
+    try{const p=await request<Project>('/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,path})});setProjects(past=>[...past,p]);setSelected(p.id);go(href('overview'));return true;}
+    catch(e){setError((e as Error).message);return false;}finally{setBusy(false);}
   }
+  const open=(id:string)=>{setError('');setSelected(id);go(href('overview'));};
   const [run,setRun]=useState<Run|null>(null);
-  const [pickerOpen,setPickerOpen]=useState(false), [adding,setAdding]=useState(false);
   function analyze(){
     return analyzeProject(selected,{request, open:(url,last)=>openStream(url,last?{headers:{'Last-Event-ID':last}}:undefined), setRun, setError, setBusy, addScan:s=>{setScans(past=>[s,...past]);setScanId(s.id);}});
   }
@@ -73,7 +75,8 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   const show=(id:string)=>{setScanId(id);go(href('overview'));};
   const revision=`${selected}:${scans.length}:${latest?.id??''}`;
   function page(){
-    if(!selected)return null;
+    const projectsPage=<ProjectsPage projects={projects} selected={selected} busy={busy} adding={route.params.get('ajouter')==='1'} onOpen={open} onAdd={add}/>;
+    if(!selected||route.page==='projets')return projectsPage;
     switch(route.page){
     case 'analyses':return route.id?<AnalysisPage base={base} request={request} revision={revision} scan={scans.find(item=>item.id===route.id)}
       displayed={scan?.id} onShow={show}/>:<AnalysesPage base={base} request={request} revision={revision} displayed={scan?.id}/>;
@@ -84,7 +87,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     default:
       if(scan&&shown)return scanPage(shown);
       // Premiere analyse en cours : seule Overview la suit ; les autres pages attendent une analyse enregistree.
-      if(shown&&route.page==='overview')return <OverviewPage scan={shown} pending={pendingEvaluators(run!)} canAnalyze={false} onAnalyze={analyze}/>;
+      if(shown&&route.page==='overview')return <OverviewPage scan={shown} pending={pendingEvaluators(run!)}/>;
       return shown?<PendingPage/>:welcome();
     }
   }
@@ -100,22 +103,20 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     case 'non-interpretees':return routesOf('GAPS', 'Non interprétées', 'Les routes dont Taxo ne sait pas établir la protection, avec la zone qu’il n’a pas su interpréter. Une route listée ici n’est ni protégée ni ouverte : Taxo n’en dit rien.');
     case 'architecture':return <>{note}<ArchitecturePage base={base} request={request} scanId={current.id} project={project}/></>;
     case 'limites':return <>{note}<AnalysisLimits scan={current}/></>;
-    default:return <>{note}<OverviewPage scan={current} latest={latest} pending={running?pendingEvaluators(run):undefined} routes={counts}
-      canAnalyze={!busy&&!loading} onAnalyze={analyze}/></>;
+    default:return <>{note}<OverviewPage scan={current} latest={latest} pending={running?pendingEvaluators(run):undefined} routes={counts}/></>;
     }
   }
   function welcome(){
     if(running)return null;
-    return <section className="welcome"><div className="glyph">⌘</div><h2>Prêt pour la première analyse</h2><p>Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>;
+    return <section className="welcome"><div className="glyph">⌘</div><h2>Prêt pour la première analyse</h2><p>Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.</p>
+      <button type="button" className="primary" disabled={busy} onClick={analyze}>Lancer la première analyse</button><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>;
   }
   return <div className="layout">
     <header className="page-head"><div className="head-start"><a className="top-brand" href={href('overview')}><BrandMark/><span>Taxo</span></a>
-      <TopMenu canAnalyze={!!selected&&!busy&&!loading} analyze={analyze} latest={scanId&&scanId!==latest?.id?showLatest:undefined}
-      addProject={()=>{setPickerOpen(true);setAdding(true);}}/></div>
-      <div className="head-actions"><ProjectPicker projects={projects} selected={selected} busy={busy} loading={loading} open={pickerOpen||projects.length===0&&!loading} setOpen={open=>{setPickerOpen(open);if(!open)setAdding(false);}}
-        adding={adding||projects.length===0} setAdding={setAdding} onSelect={id=>{setError('');setSelected(id);setPickerOpen(false);setAdding(false);go(href('overview'));}} status={shown?since(shown.created_at):''}
-        name={name} setName={setName} path={path} setPath={setPath} onSubmit={add}/><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?<Working text="Analyse en cours"/>:<>{"Lancer l’analyse globale"}<svg className="btn-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></>}</button></div></header>
+      <TopMenu running={running} latest={scanId&&scanId!==latest?.id?showLatest:undefined} analysis={close=><AnalysisCommand project={project}
+        latest={latest} running={running} canAnalyze={!!selected&&!busy&&!loading} onAnalyze={analyze} onClose={close}/>}/></div></header>
     <aside>
+    {projects.length>0&&<ActiveProject project={project} status={shown?since(shown.created_at):''}/>}
     {selected&&<ResultsNav items={navItems} current={route.page}/>}
     <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
     <main>

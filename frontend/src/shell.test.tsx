@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it, vi} from 'vitest';
-import {BrandMark, MENU_ICONS, ProjectPicker, ResultsNav, TopMenu, closeOnOutside, commitOf, navItemsOf, since, type PickerProps} from './shell';
+import {BrandMark, MENU_ICONS, ResultsNav, TopMenu, closeOnOutside, commitOf, navItemsOf, since} from './shell';
 import type {RouteCounts, Scan} from './overview';
 
 const NOW=Date.parse('2026-09-30T12:00:00Z');
@@ -39,7 +39,7 @@ describe('navItemsOf', ()=>{
   const values:Record<string,string>={api:'210', architecture:'5', git:'2 280'};
   it('une entrée par page, groupées, avec un compte seulement quand Taxo en a un', ()=>{
     const items=navItemsOf(11, id=>values[id], counts, 3);
-    expect(items.map(item=>[item.id, item.count])).toEqual([['overview',undefined], ['analyses','3'], ['comparaisons',undefined],
+    expect(items.map(item=>[item.id, item.count])).toEqual([['overview',undefined], ['projets',undefined], ['analyses','3'], ['comparaisons',undefined],
       ['interroger',undefined], ['technologies','11'], ['routes','210'], ['architecture','5'], ['securite','4'], ['donnees',undefined],
       ['historique','2 280'], ['limites',undefined], ['non-interpretees','7']]);
     expect(items.filter(item=>item.apart).map(item=>item.id)).toEqual(['analyses', 'technologies', 'historique', 'limites']);
@@ -84,8 +84,8 @@ describe('closeOnOutside', ()=>{
 });
 
 describe('TopMenu', ()=>{
-  const render=(initialOpen:string|null, canAnalyze=true, latest?:()=>void)=>renderToStaticMarkup(<TopMenu canAnalyze={canAnalyze} analyze={()=>{}}
-    addProject={()=>{}} latest={latest} initialOpen={initialOpen}/>);
+  const render=(initialOpen:string|null, latest?:()=>void, running=false)=>renderToStaticMarkup(<TopMenu latest={latest} running={running}
+    initialOpen={initialOpen} analysis={()=><p>Panneau</p>}/>);
   it('ne garde que les commandes globales : aucun lien de navigation', ()=>{
     const html=render(null);
     for(const name of ['Fichier','Analyse','Affichage','Aide'])expect(html).toContain(`<path d="${MENU_ICONS[name]}"></path></svg><span class="menu-label">${name}</span></button>`);
@@ -93,21 +93,23 @@ describe('TopMenu', ()=>{
     expect(html).not.toContain('Overview');
     expect(html).not.toContain('<a ');
     expect(html).not.toContain('menu-list');
+    expect(html).toContain('aria-haspopup="dialog"');
   });
-  it('ouvre un seul menu à la fois', ()=>{
+  it('ouvre un seul menu à la fois, et Analyse en panneau', ()=>{
     const html=render('Affichage');
     expect(html.match(/menu-list/g)).toHaveLength(1);
     expect(html).toContain('href="#/analyses"');
     expect(html).not.toContain('Ajouter un projet…');
+    expect(render('Analyse')).toContain('<div class="menu-panel" role="dialog" aria-label="Analyse"><p>Panneau</p></div>');
   });
-  it('désactive ce qui n’est pas possible', ()=>{
-    expect(render('Analyse', false)).toContain('disabled=""');
-    expect(render('Analyse', true)).not.toContain('disabled=""');
-    expect(render('Analyse')).toContain('href="#/comparaisons"');
+  it('mène aux projets, désactive ce qui n’est pas possible, et signale une analyse en cours', ()=>{
+    expect(render('Fichier')).toContain('href="#/projets?ajouter=1"');
+    expect(render('Fichier')).toContain('href="#/projets"');
     expect(render('Affichage')).toMatch(/disabled="">Revenir à la dernière analyse/);
-    expect(render('Affichage', true, ()=>{})).not.toContain('disabled=""');
-    expect(render('Fichier')).toContain('Ajouter un projet…');
+    expect(render('Affichage', ()=>{})).not.toContain('disabled=""');
     expect(render('Aide')).toContain('version 0.1');
+    expect(render(null, undefined, true)).toContain('class="is-running"');
+    expect(render(null)).not.toContain('is-running');
   });
 });
 
@@ -134,39 +136,3 @@ describe('ResultsNav', ()=>{
   });
 });
 
-describe('ProjectPicker', ()=>{
-  const projects=[{id:'a', name:'Iam', path:'/iam'}, {id:'b', name:'Taxo', path:'/taxo'}];
-  const base:PickerProps={projects, selected:'a', busy:false, loading:false, open:false, setOpen:()=>{}, adding:false, setAdding:()=>{}, onSelect:()=>{}, status:'il y a 12 min',
-    name:'', setName:()=>{}, path:'', setPath:()=>{}, onSubmit:()=>{}};
-  const render=(extra:Partial<PickerProps>={})=>renderToStaticMarkup(<ProjectPicker {...base} {...extra}/>);
-  it('montre le projet courant et l’âge de son analyse, panneau fermé', ()=>{
-    const html=render();
-    expect(html).toContain('<strong>Iam</strong>');
-    expect(html).toContain('il y a 12 min');
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).not.toContain('picker-panel');
-  });
-  it('invite à choisir un projet quand aucun n’est sélectionné, sans état d’analyse', ()=>{
-    const html=render({selected:'', status:''});
-    expect(html).toContain('Choisir un projet');
-    expect(html).not.toContain('picker-status');
-  });
-  it('liste les projets, le courant marqué, et propose l’ajout', ()=>{
-    const html=render({open:true});
-    expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain('Projets <span>2</span>');
-    expect(html).toContain('aria-selected="true">Iam');
-    expect(html).toContain('aria-selected="false">Taxo');
-    expect(html).toContain('picker-add');
-    expect(html).not.toContain('<form');
-  });
-  it('déplie le formulaire d’ajout et le bloque pendant un travail en cours', ()=>{
-    const html=render({open:true, adding:true, name:'Mon app', path:'D:\\Projet'});
-    expect(html).toContain('<form');
-    expect(html).toContain('value="Mon app"');
-    expect(html).not.toContain('picker-add');
-    expect(html).not.toMatch(/picker-save"[^>]*disabled/);
-    expect(render({open:true, adding:true, busy:true})).toMatch(/disabled=""[^>]*>Iam|disabled=""/);
-    expect(render({open:true, adding:true, loading:true})).toMatch(/picker-save" disabled=""/);
-  });
-});
