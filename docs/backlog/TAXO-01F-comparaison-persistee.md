@@ -1,7 +1,7 @@
 # TAXO-01F — Comparer deux analyses depuis la mémoire, sans relire le dépôt
 
-Statut : rédigé le 2026-10-01. Priorité active du plan ([PLAN](PLAN.md)), après TAXO-01E. Tranche A
-en cours : API de comparaison.
+Statut : rédigé le 2026-10-01, complété le 2026-10-02. Priorité active du plan ([PLAN](PLAN.md)), après
+TAXO-01E. Tranches A (API, #67) et B (écran de résultat, #68) livrées. Tranche C en cours : choisir les deux analyses.
 
 Source de vérité : [ARCHITECTURE § 5.2, § 8 et § 15](../ARCHITECTURE.md). En cas de divergence, le
 document cible prévaut.
@@ -90,7 +90,7 @@ Pour un évaluateur comparable, avec I(A) et I(B) les identités de chaque analy
 
 ## Tranches
 
-Un seul récit ; chaque tranche est une PR.
+Un seul récit ; chaque tranche est une PR (C commence par la mise à jour de ce récit).
 
 ### A — Comparaison depuis la mémoire (API)
 
@@ -113,15 +113,74 @@ Un seul récit ; chaque tranche est une PR.
   inconnues visibles, chaque compte ouvrant sa liste. Une preuve déplacée montre l'avant et l'après.
 - Comptes seulement, aucun pourcentage. Minia n'intervient pas dans cet écran.
 
-### C — Impact d'un commit sans relire le dépôt
+### C — Choisir les deux analyses
+
+Constat sur une vraie base : l'écran de #68 ne propose que « l'analyse affichée, comparée à une autre »,
+désignée par sa seule date. Deux analyses du même commit donnent zéro changement, et rien ne permettait de
+le voir avant de comparer. La tranche C construit le choix avant le résultat. Elle répond à : « Comment je
+choisis A et B ? »
+
+**Taxo compare deux analyses, pas deux commits.** Le commit est une information attachée à une analyse
+et un critère de recherche, pas l'objet comparé :
+
+- un même commit peut avoir été analysé plusieurs fois, et comparer ces analyses est utile (deux moments,
+  deux versions d'un analyseur) ;
+- une analyse peut porter sur des fichiers non commités.
+
+- **Sélecteur de deux analyses** : A puis B, chacune choisie parmi les analyses complètes du projet. Une
+  analyse interrompue n'est jamais proposée.
+- **Chaque analyse se présente assez pour être reconnue**, la date de l'analyse d'abord : c'est elle que
+  l'on choisit. Puis, en une ligne, son contexte Git (commit, auteur, message du commit, ou
+  « Modifications non commitées » avec l'empreinte de leur contenu) ; enfin le nombre de faits et les
+  analyseurs en échec.
+- **Le commit est décrit depuis les faits de l'analyse** : son message et ses dates (`HAS_COMMIT`), son
+  auteur (`AUTHORED_BY`), lus dans la mémoire par l'index de la référence `commit:`. Le dépôt n'est pas
+  relu. Si l'analyse ne contient pas ces faits : « Source Git non disponible », jamais présenté comme une
+  erreur.
+- **Recherche** : par date de l'analyse, identifiant du commit, date du commit, auteur et message du
+  commit. Elle filtre la liste des analyses du projet ; elle ne compare rien.
+- **Deux portes d'entrée** :
+  - **comparateur libre** : choisir A, puis B ;
+  - **« Comparer avec… »** depuis l'analyse affichée : A est fixée, il reste à choisir B.
+- **Le sens est celui choisi** : A est le départ, B l'arrivée ; « Inverser le sens » reste disponible.
+- **Même commit des deux côtés** : l'écran le dit avant et après la comparaison (« deux analyses du même
+  commit : seul ce que Taxo en dit peut différer »). La même analyse ne peut pas être A et B.
+- **Un commit jamais analysé** ne fait pas partie du comparateur. L'analyser depuis l'historique Git
+  (« Analyser ce commit ») est un travail à part, hors de cette tranche ; son analyse apparaîtra alors dans
+  le sélecteur comme les autres.
+- L'écran de résultat reste celui de la tranche B.
+
+Critères d'acceptation :
+
+1. Chaque analyse proposée montre d'abord la date de l'analyse, puis ce qu'elle a lu ; pour un commit,
+   son auteur et son message tels qu'enregistrés par l'analyse.
+2. Décrire les analyses ne lit pas le dépôt, et chaque description passe par un index lié à l'analyse.
+3. Trois analyses du même commit sont trois choix distincts ; les choisir en A et B est permis et signalé.
+4. Une analyse de modifications non commitées est proposée et décrite comme telle.
+
+### D — Comprendre les changements
+
+Répond à : « Qu'est-ce qui a réellement changé dans mon logiciel ? »
+
+- **Agrégations calculées dans la base** : les comptes de chaque catégorie, par relation, pour chaque
+  évaluateur comparable. Le portail ne compare rien ; il regroupe des comptes déjà calculés.
+- **Résultat par domaine** : API, Sécurité, Architecture, Technologies, Fichiers et Git. Chaque domaine dit
+  ses changements en phrases (« 4 routes ajoutées », « 2 règles de sécurité modifiées ») ou « Aucun
+  changement ».
+- **État sans différence** : « Aucune différence détectée parmi les faits comparables », avec les non
+  comparables et les zones inconnues toujours rendus.
+- **Les comptes de Taxo** (ajoutés, disparus, preuves déplacées…) passent sous « Détails techniques
+  Taxo » : ils justifient le résultat, ils n'en sont plus le centre.
+- Chaque domaine s'ouvre sur ses faits et leurs preuves, avec le rendu en phrases de la tranche B.
+- Toujours des comptes seulement : ni pourcentage, ni score, ni « impact » supposé.
+
+### E — Impact d'un commit sans relire le dépôt
 
 - Si le commit et son parent ont chacun une analyse enregistrée, l'impact du commit est calculé par la
-  tranche A, sans exécuter d'évaluateur.
-- **Choix des analyses, déterministe** : pour chaque commit, la plus récente analyse en mode `COMMIT`
-  de ce commit exact. Un commit analysé plusieurs fois donne toujours la même paire tant qu'aucune
-  nouvelle analyse n'est faite. La réponse nomme les deux analyses utilisées. L'API accepte aussi deux
-  identifiants d'analyse explicites. Les règles de comparabilité (catalogue, échec) s'appliquent
-  ensuite, évaluateur par évaluateur.
+  tranche A, sans exécuter d'évaluateur. **Choix des analyses, déterministe** : pour chaque commit, la
+  plus récente analyse en mode `COMMIT` de ce commit exact. La réponse nomme les deux analyses utilisées.
+  L'API accepte aussi deux identifiants d'analyse explicites. Les règles de comparabilité (catalogue, échec)
+  s'appliquent ensuite, évaluateur par évaluateur.
 - Sinon, le comportement actuel est conservé et la réponse dit qu'il a fallu relire le dépôt.
 
 ## Hors périmètre

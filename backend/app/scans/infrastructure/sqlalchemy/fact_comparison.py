@@ -105,6 +105,19 @@ class SqlAlchemyComparisonStore:
                 for identity_hash in hashes:
                     yield identity_hash, left[identity_hash], right[identity_hash]
 
+    def commit(self, scan_id, sha):
+        """Read through the `commit:` reference index of the analysis: two lookups, never a walk."""
+        reference = f'commit:{sha}'
+        recorded = self.memory.neighbor(scan_id, reference, 'HAS_COMMIT', 'INCOMING')
+        if recorded is None:
+            return None
+        qualifiers = recorded[1].get('qualifiers') or {}
+        author, named = self.memory.neighbor(scan_id, reference, 'AUTHORED_BY', 'OUTGOING'), None
+        if author is not None:
+            named = (author[1].get('qualifiers') or {}).get('name') or author[1]['object'].removeprefix('person:')
+        return {'sha': sha, 'subject': qualifiers.get('subject'), 'authored_at': qualifiers.get('authored_at'),
+                'committed_at': qualifiers.get('committed_at'), 'author': named}
+
     def unknown(self, scan_id):
         identity = FactIdentityRow
         with Session(self.engine) as db:

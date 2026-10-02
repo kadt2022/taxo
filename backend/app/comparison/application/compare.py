@@ -30,15 +30,33 @@ def _statuses(scan):
     return {item.get('execution_id'): item.get('status') for item in scan.result.get('evaluations', [])}
 
 
+def _snapshot(scan):
+    return (scan.result.get('evaluation_summary') or {}).get('snapshot') or scan.result.get('snapshot')
+
+
 def _describe(scan):
-    snapshot = (scan.result.get('evaluation_summary') or {}).get('snapshot') or scan.result.get('snapshot')
-    return {'id': scan.id, 'created_at': scan.created_at, 'snapshot': snapshot}
+    return {'id': scan.id, 'created_at': scan.created_at, 'snapshot': _snapshot(scan)}
 
 
 class CompareAnalyses:
     def __init__(self, projects, scans, store):
         self.projects, self.scans, self.store = projects, scans, store
         self._kept, self._lock = OrderedDict(), threading.Lock()
+
+    def choices(self, project_id):
+        """The complete analyses of the project, newest first, each described enough to be recognised.
+
+        The commit is described from the analysis's own Git facts, never by reading the repository again.
+        """
+        require_project(self.projects, project_id)
+        return [self._choice(scan) for scan in self.scans.list(project_id)]
+
+    def _choice(self, scan):
+        sha = (_snapshot(scan) or {}).get('commit')
+        evaluations = scan.result.get('evaluations', [])
+        return {**_describe(scan), 'commit': self.store.commit(scan.id, sha) if sha else None,
+                'fact_count': sum(item.get('fact_count') or 0 for item in evaluations),
+                'failed': sorted(item.get('evaluator_id') for item in evaluations if item.get('status') == 'FAILED')}
 
     def _analyses(self, project_id, before_id, after_id):
         require_project(self.projects, project_id)

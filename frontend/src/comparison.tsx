@@ -32,11 +32,19 @@ type Category=typeof CATEGORIES[number]['id'];
 /** Ce qu'une analyse a lu : un commit, ou des fichiers non commites et leur empreinte. */
 export function sideLabel(side:Side){
   const snapshot=side.snapshot??{};
-  if(snapshot.mode==='WORKING_TREE')return `Fichiers non commités · empreinte ${(snapshot.content_fingerprint??'').replace('sha256:','').slice(0,10)}…`;
+  if(snapshot.mode==='WORKING_TREE')return `Modifications non commitées · empreinte ${(snapshot.content_fingerprint??'').replace('sha256:','').slice(0,10)}…`;
   return snapshot.commit?`commit ${snapshot.commit.slice(0,10)}`:'instantané inconnu';
 }
 
-export const day=(value:string)=>{const moment=new Date(value);return Number.isNaN(moment.getTime())?value:moment.toLocaleString('fr-CA');};
+/** Deux analyses du meme commit : seul ce que Taxo en dit peut differer. */
+export function sameCommit(left?:Side|null, right?:Side|null){
+  const before=left?.snapshot, after=right?.snapshot;
+  return !!before?.commit&&before.mode!=='WORKING_TREE'&&after?.mode!=='WORKING_TREE'&&before.commit===after?.commit;
+}
+
+/** Un instant lisible : « 1 oct. 2026, 19:02:08 ». Les secondes distinguent deux analyses faites dans la meme minute. */
+export const day=(value:string)=>{const moment=new Date(value);return Number.isNaN(moment.getTime())?value
+  :moment.toLocaleString('fr-FR', {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'});};
 
 /** Le fait dit en clair, par le rendu type de sa relation ; le depot par le nom du projet. */
 export function sentence(fact:ComparedFact, project?:Project):Sentence{
@@ -161,8 +169,8 @@ function EvaluatorChanges({base, request, summary, category, entry, project}:Rea
   </section>;
 }
 
-export function ComparisonView({base, request, before, after, onClose, onSwap, project}:Readonly<{base:string; request:Request; before:string;
-  after:string; onClose:()=>void; onSwap:()=>void; project?:Project}>){
+export function ComparisonView({base, request, before, after, onClose, onSwap, onChange, project}:Readonly<{base:string; request:Request;
+  before:string; after:string; onClose:()=>void; onSwap:()=>void; onChange?:()=>void; project?:Project}>){
   const [summary,setSummary]=useState<ComparisonSummary|null>(null), [error,setError]=useState('');
   const [category,setCategory]=useState<Category|null>(null);
   useEffect(()=>{
@@ -177,7 +185,8 @@ export function ComparisonView({base, request, before, after, onClose, onSwap, p
   const chosen=CATEGORIES.find(item=>item.id===category);
   return <section className="comparison" id="comparaison" aria-label="Comparaison de deux analyses">
     <div className="comparison-bar"><button type="button" className="link back" onClick={onClose}>← Vue d’ensemble</button>
-      <span className="eyebrow">Comparaison de deux analyses</span></div>
+      {onChange?<button type="button" className="ghost" onClick={onChange}>Changer les analyses</button>
+        :<span className="eyebrow">Comparaison de deux analyses</span>}</div>
     {error&&<div role="alert" className="error">{error}</div>}
     {!summary&&!error&&<output className="comparison-wait">Comparaison en cours…</output>}
     <div className="comparison-head">
@@ -193,6 +202,8 @@ export function ComparisonView({base, request, before, after, onClose, onSwap, p
           disabled={count===0} aria-pressed={category===item.id} onClick={()=>setCategory(item.id)}>
           <span className="sign" aria-hidden="true">{item.sign}</span><strong>{count}</strong><span>{item.label}</span></button>;})}
       </nav>
+      {sameCommit(summary.before, summary.after)&&<p className="comparison-note">Deux analyses du même commit : le code est le même,
+        seul ce que Taxo en dit peut différer.</p>}
       <ul className="comparison-facts">
         <li><strong>{summary.totals.UNCHANGED}</strong> faits inchangés</li>
         <li>Calculé depuis les faits enregistrés des deux analyses : le dépôt n’est pas relu.</li>
@@ -220,19 +231,16 @@ function SideCard({letter, title, side}:Readonly<{letter:string; title:string; s
     <div><span className="eyebrow">Analyse {letter} · {title}</span><code>{sideLabel(side)}</code><span className="side-date">{day(side.created_at)}</span></div></div>;
 }
 
-/** Lancer une comparaison depuis la vue d'ensemble : l'analyse affichee et une autre analyse du projet. */
-export function CompareLauncher({current, others, onCompare}:Readonly<{current:Side; others:Side[]; onCompare:(other:string)=>void}>){
-  const [other,setOther]=useState(others[0]?.id??'');
-  useEffect(()=>{setOther(others[0]?.id??'');},[others]);
+/** Depuis la vue d'ensemble : comparer l'analyse affichee avec une autre, ou choisir librement les deux. */
+export function CompareLauncher({current, count, onPick}:Readonly<{current:Side; count:number; onPick:(fixed?:string)=>void}>){
   return <section className="compare-launch" aria-label="Comparer">
     <div className="compare-intro"><strong>Comparer deux analyses</strong>
-      <span className="muted">Ce qui a changé, preuves à l’appui, sans relire le dépôt.</span></div>
+      <span className="muted">Ce qui a changé entre deux analyses Taxo, preuves à l’appui, sans relire le dépôt.</span></div>
     <div className="compare-flow">
       <div className="compare-current"><span className="eyebrow">Analyse affichée</span><code>{sideLabel(current)}</code><span className="side-date">{day(current.created_at)}</span></div>
-      {others.length?<form onSubmit={event=>{event.preventDefault();onCompare(other);}}>
-        <label>Comparer avec<select value={other} onChange={event=>setOther(event.target.value)}>
-          {others.map(side=><option key={side.id} value={side.id}>{day(side.created_at)} · {sideLabel(side)}</option>)}</select></label>
-        <button type="submit" className="primary">Comparer →</button></form>
+      {count>1?<div className="compare-buttons">
+        <button type="button" className="primary" onClick={()=>onPick(current.id)}>Comparer avec… →</button>
+        <button type="button" className="ghost" onClick={()=>onPick()}>Choisir deux analyses</button></div>
         :<p className="muted">Une seule analyse complète : relancez l’analyse pour pouvoir comparer.</p>}
     </div>
   </section>;

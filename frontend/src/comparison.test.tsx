@@ -9,7 +9,7 @@ const tree={id:'b', created_at:'2026-10-01T11:00:00Z',
 describe('comparaison de deux analyses', ()=>{
   it('dit ce que chaque analyse a lu : un commit, ou des fichiers non commités', ()=>{
     expect(sideLabel(commit)).toBe('commit 3c4d5e6f7a');
-    expect(sideLabel(tree)).toBe('Fichiers non commités · empreinte abcdef0123…');
+    expect(sideLabel(tree)).toBe('Modifications non commitées · empreinte abcdef0123…');
     expect(sideLabel({id:'c', created_at:'', snapshot:null})).toBe('instantané inconnu');
   });
 
@@ -37,11 +37,12 @@ describe('comparaison de deux analyses', ()=>{
       'OCCURRENCE_COUNT_CHANGED', 'OCCURRENCES_CHANGED']);
   });
 
-  it('propose de comparer avec une autre analyse complète, ou dit pourquoi ce n’est pas possible', ()=>{
-    const html=renderToStaticMarkup(<CompareLauncher current={commit} others={[tree]} onCompare={()=>undefined}/>);
-    expect(html).toContain('Comparer avec');
-    expect(html).toContain('Fichiers non commités');
-    expect(renderToStaticMarkup(<CompareLauncher current={commit} others={[]} onCompare={()=>undefined}/>))
+  it('propose de comparer l’analyse affichée, ou de choisir les deux, ou dit pourquoi ce n’est pas possible', ()=>{
+    const html=renderToStaticMarkup(<CompareLauncher current={tree} count={2} onPick={()=>undefined}/>);
+    expect(html).toContain('Comparer avec…');
+    expect(html).toContain('Choisir deux analyses');
+    expect(html).toContain('Modifications non commitées');
+    expect(renderToStaticMarkup(<CompareLauncher current={commit} count={1} onPick={()=>undefined}/>))
       .toContain('Une seule analyse complète');
   });
 

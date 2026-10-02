@@ -113,15 +113,26 @@ describe('écran de comparaison', ()=>{
 });
 
 describe('lanceur de comparaison', ()=>{
-  it('compare avec l’analyse choisie', async()=>{
-    const onCompare=vi.fn();
-    const sides=[{id:'x', created_at:'2026-09-29T10:00:00Z', snapshot:{commit:'aaaa', mode:'COMMIT'}},
-      {id:'y', created_at:'2026-09-28T10:00:00Z', snapshot:{commit:'bbbb', mode:'COMMIT'}}];
+  it('fixe l’analyse affichée en A, ou ouvre le choix libre', async()=>{
+    const onPick=vi.fn();
     await act(async()=>{root.render(<CompareLauncher current={{id:'c', created_at:'2026-10-01T10:00:00Z', snapshot:{commit:'cccc', mode:'COMMIT'}}}
-      others={sides} onCompare={onCompare}/>);});
-    const select=host.querySelector('select') as HTMLSelectElement;
-    await act(async()=>{select.value='y';select.dispatchEvent(new Event('change',{bubbles:true}));});
-    await act(async()=>{host.querySelector('form')?.dispatchEvent(new Event('submit',{bubbles:true, cancelable:true}));});
-    expect(onCompare).toHaveBeenCalledWith('y');
+      count={3} onPick={onPick}/>);});
+    await click(button('Comparer avec'));
+    await click(button('Choisir deux analyses'));
+    expect(onPick.mock.calls).toEqual([['c'], []]);
+  });
+});
+
+describe('même commit des deux côtés', ()=>{
+  it('le dit sur l’écran de résultat, et propose de changer les analyses', async()=>{
+    const same={...SUMMARY, after:{...SUMMARY.after, snapshot:{commit:'1a2b3c4d5e6f', mode:'COMMIT'}}};
+    const request=vi.fn(()=>Promise.resolve(same)) as unknown as <T>(path:string)=>Promise<T>;
+    const onChange=vi.fn();
+    await act(async()=>{root.render(<ComparisonView base="/projects/p" request={request} before="a" after="b" onClose={vi.fn()}
+      onSwap={vi.fn()} onChange={onChange}/>);});
+    await flush();
+    expect(host.textContent).toContain('Deux analyses du même commit');
+    await click(button('Changer les analyses'));
+    expect(onChange).toHaveBeenCalledOnce();
   });
 });

@@ -14,6 +14,11 @@ def create_router(compare):
         """Ce qui a changé entre deux analyses, compté par évaluateur, sans relire le dépôt (TAXO-01F)."""
         return compare.summary(project_id, before, after)
 
+    @router.get('/api/projects/{project_id}/comparisons/analyses', responses={404: {'description': 'Projet introuvable.'}})
+    def analyses(project_id: str):
+        """Les analyses que l'on peut comparer, chacune décrite par ce qu'elle a lu et enregistré."""
+        return compare.choices(project_id)
+
     @router.get('/api/projects/{project_id}/comparisons/changes',
                 responses={**missing, 422: {'description': 'Catégorie inconnue ou évaluateur non comparable.'}})
     def changes(project_id: str, before: str, after: str, evaluator: str,

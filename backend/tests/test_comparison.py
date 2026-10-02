@@ -213,3 +213,74 @@ def test_reads_are_bound_to_the_two_analyses(bench):
                 if re.match(r'SCAN (fact_occurrences|fact_identities|fact_evidence)', row[-1]):
                     walked.append((row[-1], sql))
     assert walked == []
+
+
+def choices(bench):
+    response = bench.client.get(f'{bench.base}/comparisons/analyses')
+    assert response.status_code == 200, response.text
+    return {item['id']: item for item in response.json()}
+
+
+def test_each_analysis_is_described_by_the_commit_it_recorded(bench):
+    """Tranche C : une analyse se reconnait par le commit lu, decrit depuis ses propres faits Git."""
+    described = choices(bench)
+    for name in 'ABC':
+        item = described[bench.scans[name]]
+        assert item['snapshot']['commit'] == item['commit']['sha'] == bench.commits[name]
+        assert (item['commit']['subject'], item['commit']['author']) == (name, 'Taxo')
+        assert item['commit']['authored_at'] and item['fact_count'] > 0 and item['failed'] == []
+
+
+def test_the_same_commit_analysed_again_is_another_choice(bench):
+    again = bench.analyse('B')
+    described = choices(bench)
+    assert described[again]['commit'] == described[bench.scans['B']]['commit']
+    assert list(described)[0] == again
+
+
+def test_uncommitted_files_are_a_choice_of_their_own(bench):
+    tree = bench.client.post(f'{bench.base}/scans', params={'mode': 'working-tree'}).json()['id']
+    item = choices(bench)[tree]
+    assert item['snapshot']['mode'] == 'WORKING_TREE'
+    assert item['snapshot']['content_fingerprint'].startswith('sha256:')
+
+
+def test_a_failed_evaluator_is_named(bench, monkeypatch):
+    def broken(self, snapshot):
+        raise RuntimeError('panne')
+    monkeypatch.setattr(SpringSecurityEvaluator, 'evaluate', broken)
+    failed = bench.analyse('A')
+    assert choices(bench)[failed]['failed'] == ['taxo.spring-security']
+
+
+def test_without_its_git_facts_an_analysis_shows_only_its_commit(bench, monkeypatch):
+    from app.evaluators.git.evaluator import GitEvaluator
+    def broken(self, snapshot):
+        raise RuntimeError('panne')
+    monkeypatch.setattr(GitEvaluator, 'evaluate', broken)
+    bare = bench.analyse('C')
+    item = choices(bench)[bare]
+    assert (item['commit'], item['snapshot']['commit'], item['failed']) == (None, bench.commits['C'], ['taxo.git'])
+
+
+def test_describing_the_analyses_never_reads_the_repository_nor_walks_the_memory(bench, monkeypatch):
+    from app.snapshots.infrastructure.git.reader import GitSnapshotReader
+    monkeypatch.setattr(GitSnapshotReader, 'open', lambda *a, **k: pytest.fail('dépôt relu'))
+    statements = []
+    listen = lambda conn, cursor, sql, params, context, many: statements.append((sql, params))
+    event.listen(bench.engine, 'before_cursor_execute', listen)
+    try:
+        choices(bench)
+    finally:
+        event.remove(bench.engine, 'before_cursor_execute', listen)
+    walked = []
+    with bench.engine.connect() as connection:
+        for sql, params in statements:
+            if sql.lstrip().upper().startswith('SELECT') and 'fact_occurrences' in sql:
+                walked += [row[-1] for row in connection.exec_driver_sql('EXPLAIN QUERY PLAN ' + sql, params).all()
+                           if re.match(r'SCAN (fact_occurrences|fact_identities|fact_evidence)', row[-1])]
+    assert statements and walked == []
+
+
+def test_an_unknown_project_has_no_analyses(bench):
+    assert bench.client.get('/api/projects/nope/comparisons/analyses').status_code == 404
