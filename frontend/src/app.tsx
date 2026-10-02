@@ -4,8 +4,9 @@ import {type MiniaStatus} from './minia';
 import {AnalysisLimits, overviewCards, panelKey, routeCounts, technologiesOf, type Scan} from './overview';
 import {BrandMark, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
 import {AnalysisCommand} from './commands';
+import {ProjectSwitcher} from './switcher';
 import {href, go, parse, useRoute, withProject} from './nav';
-import {ActiveProject, AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, ProjectsPage, TechnologiesPage} from './pages';
+import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, ProjectsPage, TechnologiesPage} from './pages';
 import {AskTaxo} from './query';
 import {loadRoutes, RoutesExplorer, type RoutesResult} from './routes';
 import {apiUrl} from './api';
@@ -116,7 +117,8 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
       <TopMenu running={running} latest={scanId&&scanId!==latest?.id?showLatest:undefined} analysis={close=><AnalysisCommand project={project}
         latest={latest} running={running} canAnalyze={!!selected&&!busy&&!loading} onAnalyze={analyze} onClose={close}/>}/></div></header>
     <aside>
-    {projects.length>0&&<ActiveProject project={project} status={shown?since(shown.created_at):''}/>}
+    {!loading&&<ProjectSwitcher key={projects.length} projects={projects} selected={selected} status={shown?since(shown.created_at):''} busy={busy}
+      onOpen={open} onAdd={add}/>}
     {selected&&<ResultsNav items={navItems} current={route.page}/>}
     <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
     <main>

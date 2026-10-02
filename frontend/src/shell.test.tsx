@@ -39,7 +39,7 @@ describe('navItemsOf', ()=>{
   const values:Record<string,string>={api:'210', architecture:'5', git:'2 280'};
   it('une entrée par page, groupées, avec un compte seulement quand Taxo en a un', ()=>{
     const items=navItemsOf(11, id=>values[id], counts, 3);
-    expect(items.map(item=>[item.id, item.count])).toEqual([['overview',undefined], ['projets',undefined], ['analyses','3'], ['comparaisons',undefined],
+    expect(items.map(item=>[item.id, item.count])).toEqual([['overview',undefined], ['analyses','3'], ['comparaisons',undefined],
       ['interroger',undefined], ['technologies','11'], ['routes','210'], ['architecture','5'], ['securite','4'], ['donnees',undefined],
       ['historique','2 280'], ['limites',undefined], ['non-interpretees','7']]);
     expect(items.filter(item=>item.apart).map(item=>item.id)).toEqual(['analyses', 'technologies', 'historique', 'limites']);

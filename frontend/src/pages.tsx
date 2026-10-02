@@ -206,9 +206,3 @@ export function ProjectsPage({projects, selected, busy, adding, onOpen, onAdd}:R
     </form>:<button type="button" className="ghost project-add" onClick={()=>setOpen(true)}><span aria-hidden="true">+</span> Ajouter un projet</button>}
   </section>;
 }
-
-/** Le projet actif, discret, en haut du menu vertical : il mene a la page Projets. */
-export function ActiveProject({project, status}:Readonly<{project?:Project; status:string}>){
-  return <a className="active-project" href={href('projets')}><span>Projet actif</span>
-    <strong>{project?.name??'Aucun projet'}</strong>{status&&<small>Dernière analyse {status}</small>}</a>;
-}

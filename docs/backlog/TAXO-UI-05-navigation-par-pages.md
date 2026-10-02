@@ -21,8 +21,9 @@ suis.
 ## Menu vertical
 
 ```text
+[ Projet : Boutique  ⌄ ]
+
 Overview
-Projets
 
 Analyses
 Comparaisons
@@ -97,9 +98,14 @@ Réservée à l'identité de Taxo et aux commandes globales : ni sélecteur de p
 - **Affichage** : revenir à la dernière analyse, choisir l'analyse affichée.
 - **Aide** : version, analyse locale.
 
+**Sélecteur de projet**, en tête du menu vertical, au-dessus d'Overview : le projet actif (pastille à son
+initiale, nom, âge de la dernière analyse) et une flèche. Au clic, il se déplie : tous les projets avec
+l'actif coché, une recherche à partir de six projets, « Ajouter un projet » sur place, « Gérer les
+projets » vers la page Projets. Échap ou un clic ailleurs le referme.
+
 Trois rôles distincts : **Projets**, sur quoi je travaille ; **Analyse** (barre du haut), quelle analyse je
 lance ; **Analyses** (menu vertical), ce que Taxo possède déjà. Le projet actif reste visible, discret,
-en haut du menu vertical, avec l'âge de sa dernière analyse ; il mène à la page Projets.
+dans le sélecteur de projet, en tête du menu vertical.
 
 ## Critères d'acceptation
 

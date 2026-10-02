@@ -179,20 +179,21 @@ describe('une page par fonction', ()=>{
     const calls=(vi.mocked(fetch).mock.calls as unknown as [URL][]).map(([url])=>url.toString());
     expect(calls.some(url=>url.includes('/projects/q/comparisons?'))).toBe(true);
     expect(calls.some(url=>url.includes('/projects/p/comparisons?'))).toBe(false);
-    expect(host.querySelector('.active-project strong')?.textContent).toBe('Atelier');
+    expect(host.querySelector('.switcher-current strong')?.textContent).toBe('Atelier');
     await visit('#/routes');
     expect(window.location.hash).toBe('#/routes?projet=q');
   });
 
   it('ouvre le premier projet quand l’adresse n’en nomme aucun connu, et l’y inscrit', async()=>{
     await open('#/limites?projet=disparu');
-    expect(host.querySelector('.active-project strong')?.textContent).toBe('Boutique');
+    expect(host.querySelector('.switcher-current strong')?.textContent).toBe('Boutique');
     expect(window.location.hash).toBe('#/limites?projet=p');
   });
 
   it('Projets : le projet actif marqué, un autre s’ouvre, un nouveau s’ajoute et devient actif', async()=>{
     await open('#/projets');
-    expect(current()).toContain('Projets');
+    expect(host.querySelector('aside > .switcher')).not.toBeNull();
+    expect(host.querySelector('.results-nav a[href="#/projets"]')).toBeNull();
     expect(host.querySelector('.page-head .picker')).toBeNull();
     const items=Array.from(host.querySelectorAll('.project-list li'));
     expect(items.map(item=>item.querySelector('strong')?.textContent)).toEqual(['Boutique', 'Atelier']);
@@ -201,7 +202,7 @@ describe('une page par fonction', ()=>{
     await act(async()=>{items[1].querySelector('button')?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
     await flush();
     expect(window.location.hash).toBe('#/?projet=q');
-    expect(host.querySelector('.active-project strong')?.textContent).toBe('Atelier');
+    expect(host.querySelector('.switcher-current strong')?.textContent).toBe('Atelier');
     await visit('#/projets?ajouter=1');
     const [name, path]=Array.from(host.querySelectorAll('.project-form input')) as HTMLInputElement[];
     const type=async(input:HTMLInputElement, value:string)=>act(async()=>{
@@ -210,7 +211,7 @@ describe('une page par fonction', ()=>{
     await type(name, 'Nouveau');await type(path, '/nouveau');
     await act(async()=>{host.querySelector('.project-form')?.dispatchEvent(new Event('submit', {bubbles:true, cancelable:true}));});
     await flush();
-    expect(host.querySelector('.active-project strong')?.textContent).toBe('Nouveau');
+    expect(host.querySelector('.switcher-current strong')?.textContent).toBe('Nouveau');
   });
 
   it('Analyse : un panneau de commande pour le projet actif, la dernière analyse et les analyses existantes', async()=>{

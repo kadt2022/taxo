@@ -49,7 +49,7 @@ export function since(iso?:string, now:number=Date.now()){
 /** Le menu vertical : une entrée par page, groupées ; un compte seulement quand Taxo en a un. « Données » reste grisée tant
  * qu'aucun analyseur ne la nourrit, mais sa page dit pourquoi. */
 export function navItemsOf(technologies:number, counts:(id:string)=>string|undefined, routes?:RouteCounts, analyses?:number):NavItem[]{
-  return [{id:'overview', label:'Overview'}, {id:'projets', label:'Projets'},
+  return [{id:'overview', label:'Overview'},
     {id:'analyses', label:'Analyses', count:analyses?String(analyses):undefined, apart:true}, {id:'comparaisons', label:'Comparaisons'},
     {id:'interroger', label:'Interroger Taxo'},
     {id:'technologies', label:'Technologies', count:technologies?String(technologies):undefined, apart:true},
