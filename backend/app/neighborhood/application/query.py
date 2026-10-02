@@ -8,7 +8,8 @@ import hashlib
 import json
 
 from app.facts import is_reference
-from app.protocol.domain.verdict import Analyzer, not_analysed
+from app.evaluations.domain.capability import languages_complete
+from app.protocol.domain.verdict import Analyzer, not_analysed, unknown_languages
 from app.facts.domain.fact import RELATIONS
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INVALID_ARGUMENT,
                                           OperationError, Response, size)
@@ -109,14 +110,19 @@ def _coverage(exchange, root, relations, priority):
     # resume de l'analyse, sans parcourir ses faits ; une analyse anterieure a TAXO-COV-01 ne les a pas.
     present = exchange.scan.result.get('languages')
     summarized = _summarized(exchange) if present is not None else []
+    complete = languages_complete(exchange.scan.result.get('evaluation_summary'))
     for relation in priority:
         if relation not in capabilities:
             frontier.append({'nature': 'CONTEXT', 'node': root, 'relation': relation,
                              'reason': 'NO_ANALYZER', 'count': {'kind': 'UNKNOWN'}})
             continue
-        unread = present is not None and not_analysed(summarized, relation, present)
+        if present is None:
+            continue
+        unread = not_analysed(summarized, relation, present)
         if unread:
             frontier.append(_knowledge('NOT_ANALYSED', relation=relation, languages=list(unread)))
+        if unknown_languages(summarized, relation, present, complete):
+            frontier.append(_knowledge('LANGUAGES_UNKNOWN', relation=relation))
 
     return coverage, frontier, capabilities
 

@@ -17,7 +17,7 @@ from app.snapshots.domain.mode import COMMIT, WORKING_TREE
 from app.snapshots.domain.errors import SnapshotError
 from app.scans.domain.scan import INCOMPLETE, MEMORY, Scan, ScanError
 from .ports import AnalysisFacts, AnalysisProvenance, ScanRepository, EvaluationRunner
-from app.evaluations.domain.capability import applicable, present_languages
+from app.evaluations.domain.capability import applicable, languages_complete, present_languages
 from app.evaluations.domain.evaluator import Evaluator
 from app.evaluations.domain.status import EvaluationStatus
 
@@ -60,9 +60,11 @@ class RunScan:
                 detail = execution.warnings[0] if execution.warnings else "L'évaluation a échoué."
                 _, separator, message = detail.partition(': ')
                 raise ScanError(message if separator else detail)
-            # TAXO-COV-01 : les langages de l'inventaire disent quels analyseurs ont quelque chose a lire.
+            # TAXO-COV-01 : les langages de l'inventaire disent quels analyseurs ont quelque chose a lire, mais
+            # seulement s'il a tout lu ; sinon chaque analyseur est execute et son resultat dit ce qu'il a lu.
             languages = present_languages(execution.facts)
-            executions = [execution, *(self._run(other, snapshot, listener, languages=languages)
+            gate = languages if languages_complete(execution.summary()) else None
+            executions = [execution, *(self._run(other, snapshot, listener, languages=gate)
                                        for other in self.others)]
             result = {**(execution.legacy or {}), 'evaluation_summary': execution.summary(),
                       'evaluations': [item.summary() for item in executions], 'languages': list(languages)}

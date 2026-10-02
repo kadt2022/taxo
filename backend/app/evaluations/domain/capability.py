@@ -7,6 +7,9 @@ analyseur ni aucun langage par son nom : il compare ce que les catalogues declar
 """
 LANGUAGE = 'language:'
 WRITTEN_IN = 'WRITTEN_IN'
+_UNREAD = ('NOT_INTERPRETED', 'READ_ERROR')
+INCOMPLETE = ("L'inventaire n'a pas tout lu : des fichiers aux langages inconnus n'ont été lus par aucun "
+              "analyseur de cette relation.")
 
 
 def present_languages(facts):
@@ -36,6 +39,14 @@ def unread(present, readers):
         return ()
     covered = set().union(*readers) if readers else set()
     return tuple(sorted(set(present) - covered))
+
+
+def languages_complete(summary):
+    """Les langages d'un inventaire ne disent ce qui est absent que s'il a tout lu : une execution aboutie,
+    sans zone illisible ni non interpretee. Sinon, des fichiers non lus ont des langages inconnus."""
+    if not summary or summary.get('status') != 'SUCCESS':
+        return False
+    return not any(item.get('coverage_type') in _UNREAD for item in summary.get('coverage', []))
 
 
 def unsupported_reason(languages):

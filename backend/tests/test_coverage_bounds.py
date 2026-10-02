@@ -3,6 +3,7 @@
 La verite de chaque cas est ecrite ici a la main, a partir des fichiers du depot : un depot sans Java n'a
 rien a lire pour un analyseur Java ; une route d'un fichier Python n'a pas ete cherchee par lui.
 """
+import dataclasses
 import re
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.bootstrap.database import Base
+from app.evaluations.domain.status import EvaluationStatus
+from app.evaluators.inventory.evaluator import InventoryEvaluator
 from app.evaluators.spring_api.evaluator import SpringApiEvaluator
 from app.main import create_app
 from app.protocol.domain.verdict import NOT_ANALYSED, NOT_FOUND_IN_ANALYSED_SCOPE, NOT_PROVEN, Analyzer, judge
@@ -107,7 +110,7 @@ def test_a_python_route_is_not_analysed_never_not_found(taxo_on):
              'relation': 'HANDLED_BY'}
     assert named in verdict['coverage'] and named in found['coverage']
     items = described['items']
-    assert {'kind': 'languages', 'present': ['Python']} in items
+    assert {'kind': 'languages', 'present': ['Python'], 'complete': True} in items
     analyzers = {item['analyzer']: item for item in items if item['kind'] == 'analyzer'}
     assert (analyzers['taxo.spring-api']['status'], analyzers['taxo.spring-api']['languages']) == ('UNSUPPORTED', ['Java'])
     assert analyzers['taxo.git']['languages'] is None, 'un analyseur independant du langage le dit'
@@ -268,3 +271,52 @@ def test_an_unknown_catalog_contract_reads_nothing_known_in_the_neighborhood_too
     assert query.languages_of('taxo.spring-api', {'catalog_id': 'spring-api', 'catalog_version': '1'}) == frozenset()
     assert query.languages_of('taxo.git', {}) is None, 'un resume anterieur : le catalogue actuel de son analyseur'
     assert query.languages_of('taxo.spring-api', {}) == frozenset({'Java'})
+
+
+def partial_inventory(monkeypatch):
+    """Un inventaire qui n'a pas tout lu : ses fichiers Java sont des zones illisibles, sans `WRITTEN_IN`."""
+    original = InventoryEvaluator.evaluate
+
+    def evaluate(self, snapshot, *args, **kwargs):
+        output = original(self, snapshot, *args, **kwargs)
+        java = [fact['subject'] for fact in output.facts
+                if fact.get('relation') == 'WRITTEN_IN' and fact['object'] == 'language:Java']
+        facts = tuple(fact for fact in output.facts if fact.get('subject') not in java)
+        unread = tuple({'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED', 'validity': 'VALID',
+                        'subject': subject, 'coverage_type': 'READ_ERROR', 'scope': {'include': [subject]}}
+                       for subject in java)
+        return dataclasses.replace(output, facts=facts, coverage=output.coverage + unread,
+                                   status=EvaluationStatus.PARTIAL)
+    monkeypatch.setattr(InventoryEvaluator, 'evaluate', evaluate)
+
+
+def test_a_partial_inventory_never_makes_an_analyzer_unsupported(taxo_on, monkeypatch):
+    """Des fichiers que l'inventaire n'a pas lus ont des langages inconnus : leur absence ne se deduit pas."""
+    partial_inventory(monkeypatch)
+    taxo, _ = taxo_on(repository())
+    scan = taxo.analyse()
+    assert scan['languages'] == [] and evaluations(scan)['taxo.inventory']['status'] == 'PARTIAL'
+    spring = evaluations(scan)['taxo.spring-api']
+    assert spring['status'] == 'SUCCESS' and spring['fact_count'] > 0, 'l analyseur a lu ses sources lui-meme'
+    missing = {'subject': 'endpoint:GET /missing', 'relation': 'HANDLED_BY',
+               'object': 'symbol:java:com.acme.Missing#get()'}
+    verdict, described = taxo.ask(('verify_claim', missing), ('describe', {}))
+    assert (verdict['verdict'], verdict['reason']) == (NOT_PROVEN, NOT_ANALYSED), 'des fichiers n ont pas ete lus'
+    assert any(entry['subject'] is None and entry['type'] == 'NOT_ANALYSED' and entry['reason']
+               for entry in verdict['coverage'])
+    assert {'kind': 'languages', 'present': [], 'complete': False} in described['items']
+    tile, = taxo.ask(('get_neighborhood', {'analysis': scan['id'], 'root': 'endpoint:GET /orders',
+                                           'follow': ['HANDLED_BY'], 'direction': 'OUTGOING'}))
+    assert any(item['reason'] == 'LANGUAGES_UNKNOWN' for item in tile['frontier'])
+
+
+def test_a_partial_inventory_is_never_a_reason_to_refuse_a_comparison(taxo_on, git, monkeypatch):
+    partial_inventory(monkeypatch)
+    taxo, root = taxo_on(repository())
+    before = taxo.analyse()['id']
+    (root / 'web/src/main/java/com/acme/web/StatusController.java').write_text(
+        controller('com.acme.web', 'StatusController', '/status'))
+    git(root, 'add', '-A')
+    git(root, 'commit', '-qm', 'status')
+    api = taxo.compare(before, taxo.analyse()['id'])['taxo.spring-api']
+    assert api['comparable'] and api['relations']['HANDLED_BY']['ADDED'] == 1

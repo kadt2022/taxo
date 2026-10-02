@@ -12,7 +12,8 @@ import json
 import logging
 import re
 
-from app.evaluations.domain.capability import LANGUAGE, WRITTEN_IN, present_languages
+from app.evaluations.domain.capability import (INCOMPLETE, LANGUAGE, WRITTEN_IN, languages_complete,
+                                               present_languages)
 from app.facts import is_path, is_reference
 from app.facts.domain.fact import RELATIONS
 from app.history.domain.errors import UNKNOWN_COMMIT, UNKNOWN_PATH, HistoryError
@@ -22,7 +23,7 @@ from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INTERNAL, INVALID_ARGUMENT, MAX_ERROR_BYTES,
                                           NO_CONSENT, NOT_AVAILABLE, OUT_OF_SCOPE, PROTOCOL, OperationError,
                                           Response, error)
-from app.protocol.domain.verdict import Analyzer, contains, judge, not_analysed
+from app.protocol.domain.verdict import Analyzer, contains, judge, not_analysed, unknown_languages
 from app.neighborhood.application.query import neighborhood
 
 logger = logging.getLogger(__name__)
@@ -247,11 +248,17 @@ class Exchange:
                 self._languages = present_languages(self._query(relation=WRITTEN_IN, kind=_ASSERTION))
         return self._languages
 
+    @property
+    def complete(self):
+        """L'inventaire a-t-il tout lu ? Sinon ses langages ne disent pas ce qui est absent."""
+        return languages_complete(self.scan.result.get('evaluation_summary'))
+
     def needed(self, subject):
-        """Ou un sujet aurait pu etre etabli : les langages de son fichier, sinon tous les langages presents."""
+        """Ou un sujet aurait pu etre etabli : les langages de son fichier ; sinon `None`, tous les langages
+        presents, et ceux des fichiers que l'inventaire n'a pas lus."""
         if subject.startswith('file:'):
             return present_languages(self._query(subject=subject, relation=WRITTEN_IN, kind=_ASSERTION))
-        return self.languages
+        return None
 
     def analyzers(self):
         found = []
@@ -278,6 +285,9 @@ class Exchange:
             entries += [{'subject': f'{LANGUAGE}{language}', 'type': 'NOT_ANALYSED', 'scope': None,
                          'producer': None, 'relation': relation}
                         for language in not_analysed(analyzers, relation, self.languages)]
+            if unknown_languages(analyzers, relation, self.languages, self.complete):
+                entries.append({'subject': None, 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
+                                'relation': relation, 'reason': INCOMPLETE})
         return entries or [{'subject': None, 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
                             'relation': relation}]
 
@@ -381,7 +391,8 @@ class Exchange:
                                   consent={'diff': self.diff_consent})
         for name in self.available():
             response.add('items', {'kind': 'operation', 'operation': name, 'arguments': _ARGUMENTS[name]})
-        response.add('items', {'kind': _LANGUAGES, 'present': list(self.languages)})
+        response.add('items', {'kind': _LANGUAGES, 'present': list(self.languages),
+                                'complete': self.complete})
         for analyzer, evaluation in zip(self.analyzers(), self.evaluations):
             response.add('items', {'kind': 'analyzer', 'analyzer': analyzer.analyzer_id,
                                    'status': evaluation.get('status'), 'relations': sorted(analyzer.relations),
@@ -532,7 +543,7 @@ class Exchange:
             claim['object'] = target
         established = [fact for fact in self._query(subject=subject, relation=relation, kind=_ASSERTION)
                        if fact.get('validity', 'VALID') == 'VALID']
-        verdict = judge(claim, established, self.analyzers(), self.languages, self.needed(subject))
+        verdict = judge(claim, established, self.analyzers(), self.languages, self.needed(subject), self.complete)
         response = self._response('verify_claim', self._envelope_coverage(relation, {subject, target} - {None}),
                                   max_bytes, claim=claim, verdict=verdict.verdict, reason=verdict.reason)
         self._add_facts(response, list(verdict.facts), evidence=True)

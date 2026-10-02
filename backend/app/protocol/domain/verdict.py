@@ -105,18 +105,25 @@ def not_analysed(analyzers, relation, present, needed=None, subject=None):
     return unread(present if needed is None else needed, readers)
 
 
+def unknown_languages(analyzers, relation, present, complete, subject=None):
+    """L'inventaire n'a pas tout lu : des langages presents peuvent manquer. Seule une execution capable et
+    independante du langage peut alors repondre de tout le depot."""
+    return not complete and not any(item.languages is None for item in reaching(analyzers, relation, present, subject))
+
+
 def _unreadable(analyzer, references):
     return analyzer.failed or any(item[_TYPE] in _UNREADABLE and item['subject'] in references
                                   for item in analyzer.coverage)
 
 
-def judge(claim, established, analyzers, present=(), needed=None):
+def judge(claim, established, analyzers, present=(), needed=None, complete=True):
     """Verdict sur `claim` ({subject, relation, object?}) d'apres les faits etablis `established` de meme
     sujet et relation, et les analyseurs de l'analyse.
 
     `present` : les langages de l'analyse ; `needed` : ceux ou le sujet aurait pu etre etabli (ceux de
     son fichier, sinon tous les langages presents : le sujet n'a pas a exister dans le graphe). Un « non
-    trouve » exige que chacun ait ete lu par une execution capable de la relation (TAXO-COV-01)."""
+    trouve » exige que chacun ait ete lu par une execution capable de la relation (TAXO-COV-01), et que
+    l'inventaire soit `complete` quand le sujet n'est pas situe dans un fichier."""
     relation, target = claim['relation'], claim.get('object')
     same = tuple(fact for fact in established if fact.get('object') == target)
     if same:
@@ -131,7 +138,9 @@ def judge(claim, established, analyzers, present=(), needed=None):
     references = {claim['subject'], target} - {None}
     if any(_unreadable(analyzer, references) for analyzer in able):
         return Verdict(NOT_PROVEN, NOT_INTERPRETED)
-    if not reaching(analyzers, relation, present, claim['subject']) or not_analysed(
-            analyzers, relation, present, needed, claim['subject']):
+    subject = claim['subject']
+    if (not reaching(analyzers, relation, present, subject)
+            or not_analysed(analyzers, relation, present, needed, subject)
+            or (needed is None and unknown_languages(analyzers, relation, present, complete, subject))):
         return Verdict(NOT_PROVEN, NOT_ANALYSED)
     return Verdict(NOT_PROVEN, NOT_FOUND_IN_ANALYSED_SCOPE)

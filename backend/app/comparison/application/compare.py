@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 from app.comparison.domain.comparison import (ADDED, CATEGORIES, MODIFIED, REASONS, REMOVED, Side,
                                               comparability, pair_modified, signals)
-from app.evaluations.domain.capability import applicable
+from app.evaluations.domain.capability import applicable, languages_complete
 from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
@@ -20,15 +20,16 @@ MAX_PAGE = 200
 KEPT_COMPARISONS = 8
 
 
-def _side(executions, statuses, languages, present):
-    """`languages` : ce que lit le contrat de catalogue des executions (None : independant du langage)."""
+def _side(executions, statuses, languages, present, complete=True):
+    """`languages` : ce que lit le contrat de catalogue des executions (None : independant du langage).
+    Une absence de langage ne se deduit que d'un inventaire `complete`."""
     if executions is None:
         return None
     return Side(frozenset((item.catalog_id, item.catalog_version) for item in executions),
                 frozenset(item.producer_version for item in executions),
                 any(statuses.get(item.execution_id) == 'FAILED' for item in executions),
                 not any(statuses.get(item.execution_id) == 'UNSUPPORTED' for item in executions)
-                and applicable(languages, present))
+                and (not complete or applicable(languages, present)))
 
 
 def _statuses(scan):
@@ -89,7 +90,8 @@ class CompareAnalyses:
         producers = {}
         sides = [(scan, self.store.producers(scan.id), self._languages(scan)) for scan in (before, after)]
         for name in sorted({name for _, found, _ in sides for name in found}):
-            producers[name] = [_side(found.get(name), _statuses(scan), self._read(found.get(name)), present)
+            producers[name] = [_side(found.get(name), _statuses(scan), self._read(found.get(name)), present,
+                                     languages_complete(scan.result.get('evaluation_summary')))
                                for scan, found, present in sides]
             if unread is not None:
                 reads = [self._read(found.get(name)) for _, found, _ in sides]

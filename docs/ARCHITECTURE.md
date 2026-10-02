@@ -340,8 +340,8 @@ Une exécution peut réussir, produire un `INFERRED` et déclarer une zone `NOT_
 sur cette zone reçoit `NOT_PROVEN`. Aucun badge global « tout est vérifié ».
 
 `UNSUPPORTED` (TAXO-COV-01) : l'analyseur lit des langages dont aucun n'est présent dans l'instantané. Le
-moteur ne l'exécute pas ; il enregistre son exécution avec pour seule couverture `OUT_OF_SCOPE` sur le dépôt
-et sa raison, comme il enregistre la couverture d'une exécution en échec. Un résultat vide n'est jamais une
+moteur ne l'exécute pas, si l'inventaire a tout lu ; il enregistre son exécution avec pour seule
+couverture `OUT_OF_SCOPE` sur le dépôt et sa raison, comme il enregistre la couverture d'une exécution en échec. Un résultat vide n'est jamais une
 couverture : « aucun fait » d'un analyseur qui n'avait rien à lire n'est pas « rien trouvé ».
 
 ## 7. Évaluateurs livrés (normatifs, Existant)
@@ -777,7 +777,9 @@ phrase, et rend un verdict :
 capable de la relation et dont la couverture `ANALYSED` englobe le sujet, ou par une exécution indépendante
 du langage qui l'englobe. Les langages concernés sont ceux du fichier si le sujet est un fichier, sinon
 tous les langages présents : le sujet interrogé n'a pas à exister dans le graphe pour que Taxo sache où il
-aurait dû le chercher. Sinon, la raison est `NOT_ANALYSED` (TAXO-COV-01). Le vérificateur interprète les
+aurait dû le chercher. Un inventaire incomplet laisse des langages inconnus : seule une exécution
+indépendante du langage peut alors justifier un « non trouvé ». Sinon, la raison est `NOT_ANALYSED`
+(TAXO-COV-01). Le vérificateur interprète les
 capacités déclarées ; il ne connaît aucun langage ni aucun analyseur par son nom.
 
 `NOT_PROVEN` n'est jamais `REFUTED`. Le vérificateur n'est pas un prouveur général. Une résolution

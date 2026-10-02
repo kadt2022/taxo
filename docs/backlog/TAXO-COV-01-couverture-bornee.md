@@ -70,7 +70,9 @@ produit déjà la couverture d'une exécution en échec ; l'analyseur n'est pas 
 2. **Langages présents.** L'analyse enregistre les langages de son inventaire (`languages` dans son
    résultat). Une analyse antérieure qui ne les porte pas les relit dans ses faits `WRITTEN_IN`.
 3. **Exécution.** Après l'inventaire, le moteur n'exécute pas un analyseur lié à des langages dont aucun
-   n'est présent : `UNSUPPORTED`, couverture `OUT_OF_SCOPE`, aucun fait.
+   n'est présent : `UNSUPPORTED`, couverture `OUT_OF_SCOPE`, aucun fait. **Seulement si l'inventaire a tout
+   lu** (`SUCCESS`, sans zone `NOT_INTERPRETED` ni `READ_ERROR`) : sinon des fichiers non lus ont des
+   langages inconnus, et chaque analyseur est exécuté pour dire lui-même ce qu'il a lu.
 4. **Verdict négatif** (`verify_claim`, ARCHITECTURE § 12.4). Sans fait qui confirme ou réfute :
    - aucun analyseur capable de la relation : `NOT_ANALYSED` (inchangé) ;
    - un analyseur capable en échec, ou une zone illisible sur le sujet ou l'objet : `NOT_INTERPRETED`
@@ -80,7 +82,11 @@ produit déjà la couverture d'une exécution en échec ; l'analyseur n'est pas 
      que Taxo sache où il aurait dû le chercher ;
    - `NOT_FOUND_IN_ANALYSED_SCOPE` seulement si chaque langage concerné est lu par une exécution aboutie
      capable de la relation et dont la couverture `ANALYSED` englobe le sujet, ou par une exécution
-     indépendante du langage qui l'englobe. Sinon `NOT_ANALYSED`.
+     indépendante du langage qui l'englobe. Sinon `NOT_ANALYSED` ;
+   - inventaire incomplet et sujet hors d'un fichier : les langages des fichiers non lus sont inconnus.
+     Seule une exécution capable indépendante du langage peut alors justifier un « non trouvé » ; sinon
+     `NOT_ANALYSED`, et l'enveloppe le dit (`subject: null`, `type: NOT_ANALYSED`, avec sa raison).
+     `describe` dit si les langages sont complets ; le voisinage en fait une frontière `LANGUAGES_UNKNOWN`.
 5. **Enveloppe du protocole.** Chaque entrée de couverture dit les langages de son producteur
    (`languages`, `null` s'il est indépendant du langage). Pour une opération portant sur une relation,
    chaque langage présent que rien ne couvre pour elle est rendu : `{"subject": "language:Python",
@@ -90,8 +96,8 @@ produit déjà la couverture d'une exécution en échec ; l'analyseur n'est pas 
    couvert pour une relation suivie est une frontière de connaissance (`NOT_ANALYSED`). Le voisinage lit le
    résumé de l'analyse, sans parcourir ses faits : pour une analyse antérieure, qui n'enregistre pas ses
    langages, il ne les nomme pas ; ses verdicts, eux, restent bornés.
-7. **Comparaison (TAXO-01F).** Un analyseur lié à des langages dont aucun n'est présent d'un côté, ou
-   `UNSUPPORTED` d'un côté, n'est **pas comparable** de ce côté, avec sa raison. Comparer deux absences de
+7. **Comparaison (TAXO-01F).** Un analyseur lié à des langages dont aucun n'est présent d'un côté (selon
+   un inventaire complet), ou `UNSUPPORTED` d'un côté, n'est **pas comparable** de ce côté, avec sa raison. Comparer deux absences de
    lecture n'est jamais « aucun changement ». Pour un analyseur comparable, la réponse donne les langages
    présents qu'il ne lit pas, de chaque côté (`not_analysed`). Un catalogue dont Taxo ne connaît pas le
    contrat reste comparé comme avant : comparer des faits enregistrés ne suppose rien de ce qui n'a pas
