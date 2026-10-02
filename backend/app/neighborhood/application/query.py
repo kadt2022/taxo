@@ -170,11 +170,16 @@ def _recorded_contracts(exchange):
     """Un resume anterieur a TAXO-COV-01 ne nomme pas son catalogue : chaque execution est lue selon le contrat
     enregistre avec elle, celui que portent ses couvertures et que lisent les verdicts, jamais selon le
     catalogue actuel de son analyseur. Une lecture bornee : une ligne par execution, aucun fait. Sans
-    execution enregistree, son contrat est inconnu : il ne lit rien de connu."""
+    execution enregistree, son contrat est inconnu : il ne lit rien de connu. Une analyse n'execute chaque
+    evaluateur qu'une fois ; si plusieurs executions d'un producteur nommaient des contrats differents, aucun
+    ne serait choisi a la place des autres : le contrat serait inconnu."""
     found = {}
     for execution in exchange.service.facts.executions(exchange.scan.id):
-        if execution.producer_type == 'EVALUATOR':
-            found.setdefault(execution.producer_id, exchange.service.languages_of(vars(execution)))
+        if execution.producer_type != 'EVALUATOR':
+            continue
+        languages = exchange.service.languages_of(vars(execution))
+        known = found.get(execution.producer_id, languages)
+        found[execution.producer_id] = languages if known == languages else frozenset()
     return found
 
 

@@ -106,3 +106,32 @@ def test_the_recorded_contract_is_read_without_reading_any_coverage(taxo_on, mon
                                            'follow': ['HANDLED_BY'], 'direction': 'OUTGOING'}), analysis=scan)
     assert [item['languages'] for item in tile['frontier'] if item.get('reason') == 'NOT_ANALYSED'] == [['Python']]
     assert not [filters for filters in read if filters.get('kind') == 'COVERAGE']
+
+
+def test_an_analysis_runs_each_evaluator_once(taxo_on):
+    """L'invariant sur lequel s'appuie la lecture du contrat enregistre : une execution d'evaluateur par
+    producteur et par analyse. Le registre refuse deux evaluateurs de meme identifiant ; la base, elle, ne le
+    garantit pas (sa contrainte porte sur `(scan_id, execution_id)`)."""
+    taxo, _ = taxo_on({**repository(), **PYTHON})
+    scan = taxo.analyse()['id']
+    producers = [item.producer_id for item in taxo.client.app.state.taxo_query.facts.executions(scan)
+                 if item.producer_type == 'EVALUATOR']
+    assert producers and len(producers) == len(set(producers))
+
+
+def test_executions_of_one_producer_naming_different_contracts_read_nothing_known():
+    """Aucune execution n'est choisie a la place d'une autre : des contrats differents pour un meme producteur
+    ne justifient aucune conclusion negative."""
+    from types import SimpleNamespace
+    from app.facts.domain.provenance import ProducerExecution
+    from app.neighborhood.application.query import _recorded_contracts
+    contracts = {('spring', '1'): frozenset({'Java'}), ('spring', '2'): frozenset({'Java', 'Kotlin'})}
+    executions = [ProducerExecution('EVALUATOR', 'api', '1', 'a', 'spring', '1'),
+                  ProducerExecution('EVALUATOR', 'api', '1', 'b', 'spring', '2'),
+                  ProducerExecution('EVALUATOR', 'git', '1', 'c', 'spring', '1'),
+                  ProducerExecution('EVALUATOR', 'git', '1', 'd', 'spring', '1')]
+    service = SimpleNamespace(facts=SimpleNamespace(executions=lambda scan_id: executions),
+                              languages_of=lambda item: contracts.get((item['catalog_id'], item['catalog_version']),
+                                                                      frozenset()))
+    exchange = SimpleNamespace(service=service, scan=SimpleNamespace(id='scan'))
+    assert _recorded_contracts(exchange) == {'api': frozenset(), 'git': frozenset({'Java'})}

@@ -79,6 +79,12 @@ langage ») venait exactement de là, `None` signifiant « indépendant » à un
    connu, le verdict nommait Java et Python non analysés, le voisinage Python seul. C'est contraire à la règle
    COV-01 : une couverture se juge selon le contrat de son producteur. → test qui l'expose, correction séparée :
    le voisinage relit le contrat enregistré, `TaxoQuery.languages_of` ne se rabat plus sur le catalogue actuel.
+   Invariant relevé à cette occasion : une analyse n'exécute chaque évaluateur qu'une fois. Le registre et
+   `RunScan` le garantissent, pas la base (contrainte sur `(scan_id, execution_id)`). Le voisinage ne choisit
+   aucune exécution à la place d'une autre : des contrats différents pour un même producteur sont inconnus.
+   Le verdict (contrat de la première couverture) et la comparaison (union des contrats) s'appuient sur le
+   même invariant sans le dire. Tant qu'il tient, rien ne diverge. `AnalysisKnowledge` (tranche C) portera
+   une seule règle pour ce cas.
 
 ## 4. Audit par classe
 
