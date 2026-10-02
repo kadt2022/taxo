@@ -791,3 +791,9 @@ main section,main details,main [id]{scroll-margin-top:16px}
 .switcher-current small{display:flex;align-items:center;gap:6px}
 .switcher-current small i{flex:none;width:6px;height:6px;border-radius:50%;background:#5fcf8a}
 .switcher-save{white-space:nowrap}
+/* Le menu horizontal commence juste après la barre latérale : la marque occupe sa largeur (272 px, 232 px sur tablette). */
+.top-brand{width:calc(272px - 20px)}
+.head-start{gap:0}
+.top-menu{margin-left:6px}
+@media(max-width:1000px){.top-brand{width:calc(232px - 20px)}}
+@media(max-width:900px){.top-brand{width:auto}.head-start{gap:14px}.top-menu{margin-left:0}}
