@@ -34,13 +34,16 @@ function answer(path:string){
   if(path.endsWith('/comparisons/analyses'))return CHOICES;
   if(path.includes('/facts?evaluator=taxo.structure'))return STRUCTURE;
   if(path.includes('/comparisons?'))return SUMMARY;
+  if(path.endsWith('/analyses'))return {failed:true};
   throw new Error(`inattendu : ${path}`);
 }
 
 let host:HTMLElement, root:Root;
 beforeEach(()=>{
   failing=[];empty=false;
-  vi.stubGlobal('fetch', vi.fn(async(url:URL)=>{const value=answer(url.toString());
+  vi.stubGlobal('fetch', vi.fn(async(url:URL, init?:RequestInit)=>{
+    if(init?.method==='POST'&&url.toString().endsWith('/api/projects'))return {ok:true, json:async()=>({id:'r', name:'Nouveau', path:'/nouveau'})};
+    const value=answer(url.toString());
     return 'failed' in value?{ok:false, status:500, json:async()=>({detail:'Panne simulée.'})}:{ok:true, json:async()=>value};}));
   host=document.createElement('div');document.body.append(host);root=createRoot(host);
 });
@@ -63,6 +66,17 @@ describe('une page par fonction', ()=>{
   it('ouvre Overview en tableau de bord : cartes, analyse affichée, actions, et rien d’autre', async()=>{
     await open('#/');
     expect(current()).toContain('Overview');
+    // La marque Taxo ouvre la barre du haut et mène à Overview, avant les menus globaux.
+    const head=host.querySelector('.page-head .head-start');
+    expect(head?.firstElementChild?.matches('a.top-brand[href="#/"]')).toBe(true);
+    expect(head?.querySelector('.top-brand-text strong')?.textContent).toBe('Taxo');
+    expect(head?.querySelector('.top-brand-text small')?.textContent).toBe('Software Intelligence');
+    // Le lien garde un nom pour les lecteurs d'écran : le texte n'est jamais retiré, seulement masqué visuellement sur petit écran.
+    expect(head?.querySelector('a.top-brand')?.textContent).toContain('Taxo');
+    expect(head?.querySelector('.top-brand + .top-menu')).not.toBeNull();
+    // Une seule marque : la barre latérale ne la répète pas.
+    expect(host.querySelectorAll('.brand-mark')).toHaveLength(1);
+    expect(text()).not.toContain('EXPLORATEUR');
     expect(host.querySelector('.overview .cards')).not.toBeNull();
     expect(text()).toContain('Dernière analyse');
     expect(host.querySelector('.overview-actions a[href="#/comparaisons"]')?.textContent).toContain('Comparer deux analyses');
@@ -168,14 +182,65 @@ describe('une page par fonction', ()=>{
     const calls=(vi.mocked(fetch).mock.calls as unknown as [URL][]).map(([url])=>url.toString());
     expect(calls.some(url=>url.includes('/projects/q/comparisons?'))).toBe(true);
     expect(calls.some(url=>url.includes('/projects/p/comparisons?'))).toBe(false);
-    expect(host.querySelector('.picker-current strong')?.textContent).toBe('Atelier');
+    expect(host.querySelector('.switcher-current strong')?.textContent).toBe('Atelier');
     await visit('#/routes');
     expect(window.location.hash).toBe('#/routes?projet=q');
   });
 
   it('ouvre le premier projet quand l’adresse n’en nomme aucun connu, et l’y inscrit', async()=>{
     await open('#/limites?projet=disparu');
-    expect(host.querySelector('.picker-current strong')?.textContent).toBe('Boutique');
+    expect(host.querySelector('.switcher-current strong')?.textContent).toBe('Boutique');
     expect(window.location.hash).toBe('#/limites?projet=p');
+  });
+
+  it('Projets : le projet actif marqué, un autre s’ouvre, un nouveau s’ajoute et devient actif', async()=>{
+    await open('#/projets');
+    expect(host.querySelector('aside > .switcher')).not.toBeNull();
+    expect(host.querySelector('.results-nav a[href="#/projets"]')).toBeNull();
+    expect(host.querySelector('.page-head .picker')).toBeNull();
+    const items=Array.from(host.querySelectorAll('.project-list li'));
+    expect(items.map(item=>item.querySelector('strong')?.textContent)).toEqual(['Boutique', 'Atelier']);
+    expect(items[0].textContent).toContain('Projet actif');
+    expect(items[0].querySelector('code')?.textContent).toBe('/boutique');
+    await act(async()=>{items[1].querySelector('button')?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
+    await flush();
+    expect(window.location.hash).toBe('#/?projet=q');
+    expect(host.querySelector('.switcher-current strong')?.textContent).toBe('Atelier');
+    await visit('#/projets?ajouter=1');
+    const [name, path]=Array.from(host.querySelectorAll('.project-form input')) as HTMLInputElement[];
+    const type=async(input:HTMLInputElement, value:string)=>act(async()=>{
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, value);
+      input.dispatchEvent(new Event('input', {bubbles:true}));});
+    await type(name, 'Nouveau');await type(path, '/nouveau');
+    await act(async()=>{host.querySelector('.project-form')?.dispatchEvent(new Event('submit', {bubbles:true, cancelable:true}));});
+    await flush();
+    expect(host.querySelector('.switcher-current strong')?.textContent).toBe('Nouveau');
+  });
+
+  it('Analyse : un panneau de commande pour le projet actif, la dernière analyse et les analyses existantes', async()=>{
+    await open('#/');
+    expect(host.querySelector('.page-head .primary')).toBeNull();
+    const menu=Array.from(host.querySelectorAll('.top-menu button')).find(item=>item.textContent==='Analyse');
+    await act(async()=>{menu?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
+    const panel=host.querySelector('.menu-panel');
+    expect(panel?.textContent).toContain('Boutique');
+    expect(panel?.querySelector('.command-main')?.textContent).toBe('Lancer l’analyse globale');
+    expect(panel?.querySelector('a[href="#/analyses/new"]')?.textContent).toBe('Voir l’analyse');
+    expect(Array.from(panel?.querySelectorAll('.command-links a')??[]).map(link=>link.getAttribute('href'))).toEqual(['#/analyses', '#/comparaisons']);
+    await act(async()=>{panel?.querySelector('.command-main')?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
+    await flush();
+    expect(host.querySelector('.menu-panel')).toBeNull();
+    const calls=(vi.mocked(fetch).mock.calls as unknown as [URL, RequestInit?][]).filter(([, init])=>init?.method==='POST').map(([url])=>url.toString());
+    expect(calls.some(url=>url.endsWith('/projects/p/analyses'))).toBe(true);
+  });
+
+  it('sans analyse : la première se lance depuis l’accueil comme depuis le menu', async()=>{
+    empty=true;
+    await open('#/');
+    expect(host.querySelector('.welcome .primary')?.textContent).toBe('Lancer la première analyse');
+    const menu=Array.from(host.querySelectorAll('.top-menu button')).find(item=>item.textContent==='Analyse');
+    await act(async()=>{menu?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
+    expect(host.querySelector('.menu-panel')?.textContent).toContain('Aucune analyse pour ce projet.');
+    expect(host.querySelector('.menu-panel .command-main')?.textContent).toBe('Lancer la première analyse');
   });
 });

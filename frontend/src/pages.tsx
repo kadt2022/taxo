@@ -1,6 +1,6 @@
 // Les pages du portail (TAXO-UI-05) : Overview est un tableau de bord, chaque fonction a sa page. Rien n'est calcule ici
 // que le portail ne lise deja : les analyses, leurs resumes et leurs faits, tels que l'API les rend.
-import {useEffect, useState} from 'react';
+import {useEffect, useState, type FormEvent} from 'react';
 import {ComparisonView, day, proof, sentence, Phrase, sideLabel, type ComparedFact, type Side} from './comparison';
 import {AnalysisDetails} from './details';
 import {href, go, type Route} from './nav';
@@ -9,7 +9,7 @@ import {ChoiceCard, ComparePicker, matches, NO_SEARCH, SearchFields, Source, typ
 import {EVALUATORS, STATUSES, label} from './vocabulary';
 
 type Request=<T>(path:string)=>Promise<T>;
-type Project={id:string; name:string};
+type Project={id:string; name:string; path?:string};
 
 /** Ce que la comparaison dit d'une analyse : son instantane, tel que le resume de l'analyse le rapporte. */
 export function sideOf(scan:Scan):Side{
@@ -55,9 +55,8 @@ function PageHead({title, intro}:Readonly<{title:string; intro:string}>){
   return <div className="page-intro"><h1>{title}</h1><p>{intro}</p></div>;
 }
 
-/** Overview : un tableau de bord. Les cartes, les limites, l'analyse affichee et deux actions ; jamais une fonction entiere. */
-export function OverviewPage({scan, latest, pending, routes, canAnalyze, onAnalyze}:Readonly<{scan:Scan; latest?:Scan; pending?:string[];
-  routes?:RouteCounts; canAnalyze:boolean; onAnalyze:()=>void}>){
+/** Overview : un tableau de bord. Les cartes, les limites et l'analyse affichee ; lancer une analyse est une commande du menu Analyse. */
+export function OverviewPage({scan, latest, pending, routes}:Readonly<{scan:Scan; latest?:Scan; pending?:string[]; routes?:RouteCounts}>){
   return <>
     <ProjectOverview scan={scan} pending={pending} routes={routes}/>
     <section className="overview-shown" aria-label="Analyse affichée">
@@ -65,7 +64,6 @@ export function OverviewPage({scan, latest, pending, routes, canAnalyze, onAnaly
         <strong>{day(scan.created_at)}</strong><code>{sideLabel(sideOf(scan))}</code></div>
       <div className="overview-actions">
         <a className="ghost" href={href('analyses', scan.id)}>Voir l’analyse</a>
-        <button type="button" className="ghost" disabled={!canAnalyze} onClick={onAnalyze}>Lancer une analyse</button>
         <a className="primary" href={href('comparaisons')}>Comparer deux analyses →</a>
       </div>
     </section>
@@ -178,5 +176,33 @@ export function DataPage(){
   return <section className="results" aria-label="Données et stockage">
     <div className="section-heading"><div><h2>Données et stockage</h2><p>Bases de données, schémas, entités et accès aux données.</p></div></div>
     <p className="empty">Non analysé : aucun analyseur de données n’est encore branché. Taxo n’en dit donc rien, ni présence ni absence.</p>
+  </section>;
+}
+
+/** Projets : sur quoi je travaille. Le projet actif est marque ; un autre s'ouvre, un nouveau s'ajoute. */
+export function ProjectsPage({projects, selected, busy, adding, onOpen, onAdd}:Readonly<{projects:Project[]; selected:string; busy:boolean;
+  adding:boolean; onOpen:(id:string)=>void; onAdd:(name:string, path:string)=>Promise<boolean>}>){
+  const [open,setOpen]=useState(adding), [name,setName]=useState(''), [path,setPath]=useState('');
+  useEffect(()=>{if(adding)setOpen(true);},[adding]);
+  const form=open||projects.length===0;
+  async function submit(event:FormEvent){
+    event.preventDefault();
+    if(await onAdd(name, path)){setName('');setPath('');setOpen(false);}
+  }
+  return <section className="page projects-page" aria-label="Projets">
+    <PageHead title="Projets" intro="Sur quoi je travaille : les dossiers locaux que Taxo connaît. Ouvrir un projet en fait le projet actif de toutes les pages."/>
+    {projects.length>0&&<ul className="project-list">{projects.map(item=><li key={item.id} className={item.id===selected?'active':undefined}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <div><strong>{item.name}</strong>{item.path&&<code>{item.path}</code>}</div>
+      {item.id===selected?<span className="count-pill">Projet actif</span>
+        :<button type="button" className="ghost" disabled={busy} onClick={()=>onOpen(item.id)}>Ouvrir</button>}
+    </li>)}</ul>}
+    {form?<form className="project-form" onSubmit={submit}>
+      <h2>{projects.length?'Ajouter un projet':'Commencez avec un projet local'}</h2>
+      <label>Nom<input required autoFocus maxLength={120} value={name} onChange={event=>setName(event.target.value)} placeholder="Mon application"/></label>
+      <label>Dossier local<input required value={path} onChange={event=>setPath(event.target.value)} placeholder="D:\MonProjet"/></label>
+      <div className="project-form-actions"><button type="submit" className="primary" disabled={busy}>Enregistrer le projet</button>
+        {projects.length>0&&<button type="button" className="link" onClick={()=>setOpen(false)}>Annuler</button>}</div>
+    </form>:<button type="button" className="ghost project-add" onClick={()=>setOpen(true)}><span aria-hidden="true">+</span> Ajouter un projet</button>}
   </section>;
 }

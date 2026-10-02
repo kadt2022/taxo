@@ -31,10 +31,10 @@ code{font-family:var(--mono),monospace;font-size:12.5px;color:var(--text-2);over
 /* ——— Mise en page ——— */
 .layout{display:grid;grid-template-columns:272px minmax(0,1fr);min-height:100vh}
 aside{background:linear-gradient(180deg,#123a31 0%,#0f3029 100%);color:#e9f1ea;padding:28px 20px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:auto}
-.brand{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:700;letter-spacing:-.02em;color:#fff;text-decoration:none;flex-wrap:wrap}
-.brand span{flex-basis:100%;font-size:10.5px;letter-spacing:.18em;font-weight:600;color:#9fbdb1;margin-top:2px}
-.brand-mark{width:30px;height:30px;fill:none;stroke-width:2.2;stroke-linecap:round}
-.brand-mark rect{fill:var(--accent);stroke:none}.brand-mark path{stroke:var(--brand)}
+.brand-mark{width:30px;height:30px;overflow:visible}
+.brand-links path{fill:none;stroke:#5aa9f5;stroke-width:1.3;stroke-linejoin:round;stroke-linecap:round;opacity:.9}
+.brand-links .brand-depth{stroke:#9fd3ff;stroke-width:.9;opacity:.55}
+.brand-nodes circle{stroke:#0f3029;stroke-width:.8}
 aside h2{display:flex;justify-content:space-between;align-items:center;margin:34px 0 10px;font-size:11.5px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:#9fbdb1}
 aside h2 span{background:rgba(255,255,255,.08);color:#d6e6dc;border-radius:var(--r-pill);padding:1px 8px;font-size:11px;letter-spacing:0}
 nav[aria-label="Projets"] button{display:flex;justify-content:space-between;align-items:center;width:100%;border:0;background:transparent;color:#dbe8df;padding:10px 12px;text-align:left;border-radius:var(--r-sm);margin-bottom:2px;overflow-wrap:anywhere;font-size:14.5px}
@@ -290,7 +290,7 @@ details>summary{list-style:none;cursor:pointer}
   aside{position:static;height:auto;padding:18px 16px 14px}
   aside h2{margin-top:18px}
   aside form{padding:12px}
-  .aside-note,.brand span{display:none}
+  .aside-note{display:none}
   main{padding:24px 16px 48px}
   header .primary{width:100%}
       .cards{grid-template-columns:1fr;gap:12px}
@@ -461,10 +461,28 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
   main{height:calc(100vh - 44px - 10px)}
 }
 
-/* Barre de menus : Fichier, Analyse, Affichage, Aide */
+/* Barre de menus : la marque Taxo, puis Fichier, Analyse, Affichage, Aide */
+.head-start{display:flex;align-items:center;gap:28px;min-width:0}
+.top-brand{display:inline-flex;align-items:center;gap:9px;flex:none;color:#fff;text-decoration:none;line-height:1}
+.top-brand .brand-mark{width:30px;height:30px}
+.top-brand-text{display:flex;flex-direction:column;gap:2px}
+.top-brand-text strong{font-size:17px;font-weight:700;letter-spacing:-.02em}
+.top-brand-text small{font-size:10.5px;font-weight:500;letter-spacing:.02em;color:#a9c4b8}
+.top-brand:focus-visible{border-radius:6px}
 .top-menu{display:flex;align-items:center;gap:2px;min-width:0}
+.top-menu .menu>button{display:inline-flex;align-items:center;gap:7px}
+.top-menu .menu>button svg{flex:none;width:15px;height:15px;fill:none;stroke:#d3e4da;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:stroke .15s}
+.top-menu .menu>button:hover svg,.top-menu .menu>button[aria-expanded="true"] svg{stroke:var(--accent)}
+@media(max-width:1100px){.head-start{gap:14px}}
+@media(max-width:900px){.top-menu .menu>button{padding:6px 8px}.menu-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
+/* Sous 900 px, la règle générale des en-têtes empile leur contenu : la barre du haut reste sur une ligne, puis se replie sur deux sous
+   560 px, sans jamais rogner le sélecteur de projet ni l'analyse globale. */
+@media(max-width:900px){.page-head{grid-column:1/-1;flex-direction:row;align-items:center}.head-start{flex:1 1 auto}}
+@media(max-width:900px){.top-brand-text small{display:none}}
+@media(max-width:560px){.top-brand-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.head-start{gap:6px}
+  .page-head{height:auto;flex-wrap:wrap;row-gap:8px;padding:8px 12px}.head-actions{width:100%;justify-content:space-between}.picker{flex:1 1 auto;min-width:0}.picker-current{max-width:100%;min-width:0;overflow:hidden}.picker-current strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.head-actions>.primary{flex:none;width:auto}}
 .top-menu .menu{position:relative}
-.top-menu .menu>button{padding:6px 12px;border:0;border-radius:8px;background:none;font-size:13.5px;font-weight:550;color:#a9c4b8;white-space:nowrap}
+.top-menu .menu>button{padding:6px 12px;border:0;border-radius:8px;background:none;font-size:13.5px;font-weight:550;color:#eef5f0;white-space:nowrap}
 .top-menu .menu>button:hover,.top-menu .menu>button[aria-expanded="true"]{background:rgba(255,255,255,.09);color:#fff}
 .top-menu .menu-link{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:8px;font-size:13.5px;font-weight:650;color:#fff;background:rgba(184,224,127,.16);text-decoration:none;white-space:nowrap}
 .top-menu .menu-link:hover{background:rgba(184,224,127,.26)}
@@ -477,7 +495,7 @@ main section,main details,main [id]{scroll-margin-top:16px}
 @media(prefers-reduced-motion:reduce){main{scroll-behavior:auto}}
 
 /* Menu vertical des résultats */
-.results-nav{margin-top:30px}
+.results-nav{margin-top:0}
 .results-nav a,.results-item{display:flex;align-items:center;gap:12px;padding:9px 12px;margin-bottom:2px;border-radius:var(--r-sm);color:#dbe8df;font-size:14.5px;text-decoration:none;transition:background .15s,color .15s}
 .results-nav .apart{margin-top:18px}
 .results-nav svg{flex:none;width:18px;height:18px;fill:none;stroke:#9fbdb1;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -692,3 +710,90 @@ main section,main details,main [id]{scroll-margin-top:16px}
 @media(max-width:700px){.analysis-facts>div:first-child{grid-column:auto}}
 .architecture-group+.architecture-group{margin-top:22px}
 .architecture-group h3{display:flex;align-items:center;gap:8px;font-size:15px;margin:0 0 6px}
+
+/* ——— Panneau de commande Analyse, page Projets, projet actif (TAXO-UI-05) ——— */
+.menu-panel{position:absolute;top:calc(100% + 8px);left:0;z-index:50;width:360px;max-width:calc(100vw - 24px);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 40px -12px rgba(8,30,25,.45);overflow:hidden}
+.command section{padding:16px 18px;border-bottom:1px solid var(--border)}
+.command h3{margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.command p{margin:0 0 10px;font-size:13.5px;line-height:1.5;color:var(--text-2)}
+.command dl{display:flex;gap:8px;align-items:baseline;margin:0 0 12px;font-size:13.5px}
+.command dt{color:var(--muted)}
+.command dd{margin:0;font-weight:650;color:var(--text)}
+.command-empty{color:var(--warn)!important}
+.command-main{display:flex;width:100%;justify-content:center;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--r-sm);font-size:14px;text-decoration:none}
+.command-main svg{width:14px;height:14px;fill:currentColor;stroke:none}
+.command-when{font-size:15px!important;font-weight:650;color:var(--text)!important;margin-bottom:2px!important;font-variant-numeric:tabular-nums}
+.command-code code{font-size:12px;color:var(--text-2)}
+.command .ghost{text-decoration:none}
+.command-links{display:flex;flex-direction:column;padding:6px;background:var(--surface-2)}
+.command-links a{display:flex;justify-content:space-between;padding:9px 12px;border-radius:8px;font-size:13.5px;font-weight:550;color:var(--brand);text-decoration:none}
+.command-links a:hover{background:var(--surface-3)}
+.top-menu .menu>button.is-running svg{stroke:var(--accent);animation:taxo-pulse 1.4s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.top-menu .menu>button.is-running svg{animation:none}}
+.active-project{display:flex;flex-direction:column;gap:1px;margin:0 0 18px;padding:10px 12px;border-radius:var(--r-sm);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#dbe8df;text-decoration:none}
+.active-project:hover{background:rgba(255,255,255,.08)}
+.active-project span{font-size:10.5px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:#8fb0a3}
+.active-project strong{font-size:14.5px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.active-project small{font-size:11.5px;color:#8fb0a3}
+.project-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-width:900px}
+.project-list li{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-sm)}
+.project-list li.active{border-color:var(--brand-3);box-shadow:inset 3px 0 0 var(--brand-3)}
+.project-list li>svg{flex:none;width:20px;height:20px;fill:none;stroke:var(--brand-3);stroke-width:1.8;stroke-linejoin:round}
+.project-list li>div{flex:1 1 auto;display:flex;flex-direction:column;gap:2px;min-width:0}
+.project-list strong{font-size:15px}
+.project-list code{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.project-form{max-width:560px;padding:18px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm)}
+.project-form h2{font-size:16px;margin:0 0 12px}
+.project-form-actions{display:flex;align-items:center;gap:14px}
+.project-add{align-self:flex-start}
+.page-head .menu-panel .command-main{padding:11px 14px;font-size:14px;font-weight:650;border-radius:var(--r-sm)}
+.page-head .menu-panel .command-main:disabled{background:var(--surface-3);color:var(--muted)}
+
+/* ——— Sélecteur de projet, en tête du menu vertical (TAXO-UI-05) ——— */
+.switcher{margin:0 0 18px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);transition:background .15s,border-color .15s}
+.switcher.is-open{background:rgba(0,0,0,.18);border-color:rgba(184,224,127,.28)}
+.switcher-current{display:flex;align-items:center;gap:11px;width:100%;padding:10px 11px;border:0;border-radius:12px;background:none;color:#e9f1ea;text-align:left}
+.switcher-current:hover{background:rgba(255,255,255,.05)}
+.switcher-text{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1 1 auto}
+.switcher-text strong{font-size:14.5px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.switcher-text small{font-size:11.5px;color:#8fb0a3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.switcher-eyebrow{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.switcher-chevron{flex:none;width:18px;height:18px;fill:none;stroke:#9fbdb1;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
+.switcher.is-open .switcher-chevron{transform:rotate(180deg);stroke:var(--accent)}
+.monogram{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:rgba(184,224,127,.16);color:#fff;font-size:15px;font-weight:700;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.switcher-panel{display:flex;flex-direction:column;gap:6px;padding:4px 8px 10px;border-top:1px solid rgba(255,255,255,.08);animation:switcher-in .16s ease-out}
+@keyframes switcher-in{from{opacity:0;transform:translateY(-4px)}}
+@media(prefers-reduced-motion:reduce){.switcher-panel{animation:none}.switcher-chevron{transition:none}}
+.switcher-head{display:flex;align-items:center;justify-content:space-between;padding:8px 4px 2px;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#8fb0a3}
+.switcher-count{padding:1px 8px;border-radius:var(--r-pill);background:rgba(255,255,255,.08);color:#d6e6dc;letter-spacing:0}
+.switcher-search{margin:0;padding:7px 10px;font-size:13px;background:rgba(0,0,0,.22);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:8px}
+.switcher-search::placeholder{color:#89a79b}
+.switcher-list{display:flex;flex-direction:column;gap:2px;max-height:300px;overflow:auto}
+.switcher-list button{display:flex;align-items:center;gap:10px;width:100%;padding:7px 8px;border:0;border-radius:8px;background:none;color:#dbe8df;text-align:left}
+.switcher-list button:hover:not(:disabled){background:rgba(255,255,255,.07)}
+.switcher-list button[aria-selected="true"]{background:rgba(184,224,127,.13);box-shadow:inset 3px 0 0 var(--accent)}
+.switcher-list .monogram{width:26px;height:26px;border-radius:7px;font-size:12.5px}
+.switcher-list .switcher-text strong{font-size:13.5px;font-weight:600}
+.switcher-check{flex:none;width:16px;height:16px;fill:none;stroke:var(--accent);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.switcher-empty{margin:4px;font-size:12.5px;color:#8fb0a3}
+.switcher-add{display:flex;align-items:center;gap:10px;width:100%;padding:8px;border:1px dashed rgba(184,224,127,.35);border-radius:9px;background:none;color:#dbe8df;font-size:13.5px;font-weight:600}
+.switcher-add span{display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:var(--accent);color:var(--brand);font-weight:800}
+.switcher-add:hover{background:rgba(184,224,127,.08);border-color:var(--accent)}
+.switcher-form{display:grid;gap:8px;padding:10px;border-radius:9px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.08)}
+.switcher-form label{display:grid;gap:4px;font-size:12px;color:#c9dbd0}
+.switcher-form input{margin:0;padding:7px 9px;font-size:13px;background:rgba(0,0,0,.22);color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:7px}
+.switcher-form input:focus{border-color:var(--accent)}
+.switcher-form-actions{display:flex;align-items:center;gap:12px}
+.switcher-form .link{color:#9fbdb1;font-size:13px}
+.switcher-save{padding:7px 12px;border:0;border-radius:7px;background:var(--accent);color:var(--brand);font-weight:650;font-size:13px}
+.switcher-manage{display:flex;justify-content:space-between;padding:6px 6px 0;font-size:12.5px;font-weight:600;color:#9fbdb1;text-decoration:none}
+.switcher-manage:hover{color:var(--accent)}
+.switcher-current small{display:flex;align-items:center;gap:6px}
+.switcher-current small i{flex:none;width:6px;height:6px;border-radius:50%;background:#5fcf8a}
+.switcher-save{white-space:nowrap}
+/* Le menu horizontal commence juste après la barre latérale : la marque occupe sa largeur (272 px, 232 px sur tablette). */
+.top-brand{width:calc(272px - 20px)}
+.head-start{gap:0}
+.top-menu{margin-left:6px}
+@media(max-width:1000px){.top-brand{width:calc(232px - 20px)}}
+@media(max-width:900px){.top-brand{width:auto}.head-start{gap:14px}.top-menu{margin-left:0}}

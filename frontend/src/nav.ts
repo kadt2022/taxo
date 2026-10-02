@@ -2,7 +2,7 @@
 // portail reste un fichier statique, un rechargement rouvre la meme page, et Precedent revient a la page d'avant.
 import {useEffect, useState} from 'react';
 
-export const PAGES=['overview', 'analyses', 'comparaisons', 'interroger', 'technologies', 'routes', 'architecture', 'securite',
+export const PAGES=['overview', 'projets', 'analyses', 'comparaisons', 'interroger', 'technologies', 'routes', 'architecture', 'securite',
   'donnees', 'historique', 'limites', 'non-interpretees'] as const;
 /** Une adresse qui ne mene a aucune page : elle a sa propre page d'etat, jamais un ecran vide. */
 export type Page=typeof PAGES[number]|'introuvable';

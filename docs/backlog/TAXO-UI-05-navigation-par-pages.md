@@ -21,6 +21,8 @@ suis.
 ## Menu vertical
 
 ```text
+[ Projet : Boutique  ⌄ ]
+
 Overview
 
 Analyses
@@ -48,6 +50,7 @@ de bord.
 | Adresse | Page | Contenu |
 | --- | --- | --- |
 | `#/` | Overview | les six cartes (Projet, Git, API, Architecture, Sécurité, Données), la ligne des limites, l'analyse affichée (date, commit, « Voir l'analyse »), et deux actions : lancer une analyse, comparer deux analyses |
+| `#/projets` | Projets | les projets connus, leur dossier, le projet actif marqué ; « Ouvrir » en fait le projet actif, « Ajouter un projet » en enregistre un nouveau (`?ajouter=1` ouvre le formulaire) |
 | `#/analyses` | Analyses | toutes les analyses complètes, la date d'abord puis le contexte Git ; recherche ; pour chacune « Ouvrir » et « Comparer avec… » |
 | `#/analyses/<id>` | Une analyse | date, commit (identifiant, auteur, message), faits, analyseurs et leur état, zones inconnues, détails techniques ; « Afficher cette analyse » et « Comparer cette analyse avec… » |
 | `#/comparaisons` | Comparaisons | le comparateur (tranche C de 01F) ; `?a=` fixe A |
@@ -79,12 +82,30 @@ de bord.
 
 ## Barre du haut
 
-Réservée aux commandes globales ; la navigation est dans le menu vertical.
+Réservée à l'identité de Taxo et aux commandes globales : ni sélecteur de projet, ni bouton d'analyse permanent.
 
-- **Fichier** : ajouter un projet.
-- **Analyse** : lancer l'analyse globale, comparer deux analyses.
+```text
+[T] Taxo     Fichier     Analyse     Affichage     Aide
+```
+
+- **Fichier** : ouvrir un projet, ajouter un projet (vers la page Projets).
+- **Analyse** : un panneau de commande, pas une liste.
+  - Nouvelle analyse : ce qu'elle fait, le projet actif, et « Lancer l'analyse globale » (« Lancer la
+    première analyse » si le projet n'en a aucune ; « Analyse en cours… » pendant une analyse).
+  - Dernière analyse : sa date, ce qu'elle a lu, « Voir l'analyse ».
+  - Toutes les analyses, Comparer deux analyses.
+  - Sans projet actif : « Sélectionnez d'abord un projet », et « Choisir un projet ».
 - **Affichage** : revenir à la dernière analyse, choisir l'analyse affichée.
 - **Aide** : version, analyse locale.
+
+**Sélecteur de projet**, en tête du menu vertical, au-dessus d'Overview : le projet actif (pastille à son
+initiale, nom, âge de la dernière analyse) et une flèche. Au clic, il se déplie : tous les projets avec
+l'actif coché, une recherche à partir de six projets, « Ajouter un projet » sur place, « Gérer les
+projets » vers la page Projets. Échap ou un clic ailleurs le referme.
+
+Trois rôles distincts : **Projets**, sur quoi je travaille ; **Analyse** (barre du haut), quelle analyse je
+lance ; **Analyses** (menu vertical), ce que Taxo possède déjà. Le projet actif reste visible, discret,
+dans le sélecteur de projet, en tête du menu vertical.
 
 ## Critères d'acceptation
 
