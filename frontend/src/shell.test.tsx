@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it, vi} from 'vitest';
-import {ProjectPicker, ResultsNav, SECTIONS, TopMenu, closeOnOutside, commitOf, resultItemsOf, since, watchSections, type NavItem, type PickerProps} from './shell';
+import {ProjectPicker, ResultsNav, TopMenu, closeOnOutside, commitOf, navItemsOf, since, type PickerProps} from './shell';
 import type {RouteCounts, Scan} from './overview';
 
 const NOW=Date.parse('2026-09-30T12:00:00Z');
@@ -34,19 +34,19 @@ describe('commitOf', ()=>{
   });
 });
 
-describe('resultItemsOf', ()=>{
+describe('navItemsOf', ()=>{
   const counts:RouteCounts={PROTECTED:4, PERMITS_ALL:1, NOT_INTERPRETED:7, NO_CONCLUSION:0, reserved:0, missing:0};
   const values:Record<string,string>={api:'210', architecture:'5', git:'2 280'};
-  it('met un compte seulement quand Taxo en a un', ()=>{
-    const items=resultItemsOf(11, id=>values[id], counts);
-    expect(items.map(item=>[item.id, item.count])).toEqual([['technologies','11'], ['routes','210'], ['details','5'], ['securite','4'], ['donnees',undefined],
+  it('une entrée par page, groupées, avec un compte seulement quand Taxo en a un', ()=>{
+    const items=navItemsOf(11, id=>values[id], counts, 3);
+    expect(items.map(item=>[item.id, item.count])).toEqual([['overview',undefined], ['analyses','3'], ['comparaisons',undefined],
+      ['interroger',undefined], ['technologies','11'], ['routes','210'], ['architecture','5'], ['securite','4'], ['donnees',undefined],
       ['historique','2 280'], ['limites',undefined], ['non-interpretees','7']]);
+    expect(items.filter(item=>item.apart).map(item=>item.id)).toEqual(['analyses', 'technologies', 'historique', 'limites']);
     expect(items.find(item=>item.id==='donnees')?.muted).toBe(true);
-    expect(items.find(item=>item.id==='limites')?.apart).toBe(true);
-    expect(items.filter(item=>item.to==='routes').map(item=>item.id)).toEqual(['securite','non-interpretees']);
   });
   it('n’invente aucun compte avant que les routes soient lues', ()=>{
-    const items=resultItemsOf(0, ()=>undefined);
+    const items=navItemsOf(0, ()=>undefined);
     expect(items.every(item=>item.count===undefined)).toBe(true);
   });
 });
@@ -83,71 +83,45 @@ describe('closeOnOutside', ()=>{
   });
 });
 
-describe('watchSections', ()=>{
-  const items:NavItem[]=[{id:'technologies', label:'T'}, {id:'securite', to:'routes', label:'S'}, {id:'historique', label:'H'}];
-  function setup(present:string[]){
-    const observed:string[]=[];
-    let notify:(entries:{target:{id:string}; isIntersecting:boolean}[])=>void=()=>{};
-    const disconnect=vi.fn();
-    const setCurrent=vi.fn();
-    const stop=watchSections(items, setCurrent, callback=>{notify=callback;return {observe:node=>{observed.push((node as unknown as {id:string}).id);}, disconnect};},
-      id=>present.includes(id)?({id} as unknown as Element):null);
-    return {observed, setCurrent, disconnect, stop, notify:(entries:{target:{id:string}; isIntersecting:boolean}[])=>notify(entries)};
-  }
-  it('n’observe que les sections présentes, sous l’identifiant visé', ()=>{
-    const watch=setup(['technologies','routes']);
-    expect(watch.observed).toEqual(['technologies','routes']);
-  });
-  it('désigne la première entrée visible, y compris pour une cible partagée', ()=>{
-    const watch=setup(['technologies','routes','historique']);
-    watch.notify([{target:{id:'routes'}, isIntersecting:true}]);
-    expect(watch.setCurrent).toHaveBeenLastCalledWith('securite');
-    watch.notify([{target:{id:'technologies'}, isIntersecting:true}]);
-    expect(watch.setCurrent).toHaveBeenLastCalledWith('technologies');
-  });
-  it('ne change rien quand aucune section n’est visible, et se déconnecte', ()=>{
-    const watch=setup(['technologies']);
-    watch.notify([{target:{id:'technologies'}, isIntersecting:false}]);
-    expect(watch.setCurrent).not.toHaveBeenCalled();
-    watch.stop();
-    expect(watch.disconnect).toHaveBeenCalled();
-  });
-});
-
 describe('TopMenu', ()=>{
-  const render=(initialOpen:string|null, canAnalyze=true)=>renderToStaticMarkup(<TopMenu canAnalyze={canAnalyze} analyze={()=>{}} addProject={()=>{}} initialOpen={initialOpen}/>);
-  it('montre Overview en premier, avec son icône, puis les quatre menus fermés', ()=>{
+  const render=(initialOpen:string|null, canAnalyze=true, latest?:()=>void)=>renderToStaticMarkup(<TopMenu canAnalyze={canAnalyze} analyze={()=>{}}
+    addProject={()=>{}} latest={latest} initialOpen={initialOpen}/>);
+  it('ne garde que les commandes globales : aucun lien de navigation', ()=>{
     const html=render(null);
-    expect(html.indexOf('Overview')).toBeLessThan(html.indexOf('Fichier'));
-    expect(html).toContain('class="menu-link"');
     for(const name of ['Fichier','Analyse','Affichage','Aide'])expect(html).toContain(`>${name}</button>`);
+    expect(html).not.toContain('Overview');
+    expect(html).not.toContain('<a ');
     expect(html).not.toContain('menu-list');
   });
   it('ouvre un seul menu à la fois', ()=>{
     const html=render('Affichage');
     expect(html.match(/menu-list/g)).toHaveLength(1);
-    for(const section of SECTIONS)expect(html).toContain(`href="${section.href}"`);
+    expect(html).toContain('href="#/analyses"');
     expect(html).not.toContain('Ajouter un projet…');
   });
-  it('désactive l’analyse tant qu’elle n’est pas possible', ()=>{
+  it('désactive ce qui n’est pas possible', ()=>{
     expect(render('Analyse', false)).toContain('disabled=""');
     expect(render('Analyse', true)).not.toContain('disabled=""');
+    expect(render('Analyse')).toContain('href="#/comparaisons"');
+    expect(render('Affichage')).toMatch(/disabled="">Revenir à la dernière analyse/);
+    expect(render('Affichage', true, ()=>{})).not.toContain('disabled=""');
     expect(render('Fichier')).toContain('Ajouter un projet…');
     expect(render('Aide')).toContain('version 0.1');
   });
 });
 
 describe('ResultsNav', ()=>{
-  it('rend les comptes, la pastille grisée et la séparation', ()=>{
-    const html=renderToStaticMarkup(<ResultsNav items={resultItemsOf(11, id=>id==='api'?'210':undefined)}/>);
-    expect(html).toContain('href="#technologies"');
+  it('une adresse par page, les comptes, la page grisée, les groupes et la page affichée', ()=>{
+    const html=renderToStaticMarkup(<ResultsNav items={navItemsOf(11, id=>id==='api'?'210':undefined)} current="routes"/>);
+    expect(html).toContain('href="#/technologies"');
+    expect(html).toContain('href="#/"');
     expect(html).toContain('<span class="results-count">11</span>');
     expect(html).toContain('<span class="results-count">210</span>');
-    expect(html).toContain('results-item muted');
+    expect(html).toContain('class="muted"');
     expect(html).toContain('title="Pas encore analysé"');
     expect(html).toContain('class="apart"');
-    expect(html.match(/href="#routes"/g)).toHaveLength(3);
-    expect(html).not.toContain('aria-current');
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(html).toMatch(/href="#\/routes"[^>]*aria-current="page"/);
   });
 });
 

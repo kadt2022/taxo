@@ -1,21 +1,14 @@
-import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
+import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {createRoot} from 'react-dom/client';
 import './style.css';
 import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
 import {MiniaChoice, MiniaView, SourceConsent, sourceConsent, withProvider, type MiniaAnswer, type MiniaStatus} from './minia';
 import {ConsultForm} from './consult';
-import {AnalysisLimits, overviewCards, panelKey, ProjectOverview, routeCounts, technologiesOf, type RouteCounts, type Scan} from './overview';
-import {AnalysisDetails} from './details';
-import {CompareLauncher, ComparisonView, type Side} from './comparison';
-import {ComparePicker} from './picker';
-import {ProjectPicker, ResultsNav, TopMenu, resultItemsOf, since, type Project} from './shell';
+import {panelKey} from './overview';
 import {EVALUATORS, label} from './vocabulary';
-import {AskTaxo} from './query';
-import {RoutesPanel} from './routes';
-import {apiUrl} from './api';
 import {openStream} from './sse';
-import {AnalysisProgress, Working, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
+import {App, request} from './app';
 import {ask as askMinia, askButton, createStop, MiniaProgress, questionInit, startMinia, type MiniaLive, type MiniaStop} from './minia-live';
 
 type Commit = {sha:string; parents:string[]; author:string; authored_at:string; subject:string};
@@ -121,91 +114,4 @@ function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:Minia
   </section>;
 }
 
-async function request<T>(path:string, init?:RequestInit):Promise<T> {
-  const response = await fetch(apiUrl(path), init);
-  if (!response.ok) {
-    const body = await response.json().catch(()=>null);
-    throw new Error(typeof body?.detail === 'string' ? body.detail : `La requête a échoué (${response.status}).`);
-  }
-  return response.json();
-}
-/** Ce que la comparaison dit d'une analyse : son instantane, tel que le resume de l'analyse le rapporte. */
-function sideOf(scan:Scan):Side{
-  return {id:scan.id, created_at:scan.created_at, snapshot:scan.evaluation_summary?.snapshot??scan.snapshot??null};
-}
-
-function App(){
-  const [projects,setProjects]=useState<Project[]>([]), [selected,setSelected]=useState('');
-  const [minia,setMinia]=useState<MiniaStatus|null>(null);
-  useEffect(()=>{request<MiniaStatus>('/minia/status').then(setMinia).catch(()=>setMinia(null));},[]);
-  const [scans,setScans]=useState<Scan[]>([]), [scanId,setScanId]=useState('');
-  const [name,setName]=useState(''), [path,setPath]=useState(''), [error,setError]=useState('');
-  const [busy,setBusy]=useState(false), [loading,setLoading]=useState(true);
-  const scan=scans.find(s=>s.id===scanId) ?? scans[0];
-  useEffect(()=>{request<Project[]>('/projects').then(p=>{setProjects(p);setSelected(p[0]?.id??'');}).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);
-  useEffect(()=>{
-    let active=true;
-    setScans([]);setScanId('');
-    if(selected){setLoading(true);request<Scan[]>(`/projects/${selected}/scans`).then(s=>{if(active)setScans(s);}).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active)setLoading(false);});}
-    return ()=>{active=false;};
-  },[selected]);
-  async function add(event:FormEvent){
-    event.preventDefault();setBusy(true);setError('');
-    try{const p=await request<Project>('/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,path})});setProjects(past=>[...past,p]);setSelected(p.id);setName('');setPath('');setAdding(false);setPickerOpen(false);}
-    catch(e){setError((e as Error).message);}finally{setBusy(false);}
-  }
-  const [run,setRun]=useState<Run|null>(null);
-  // Comparaison de deux analyses completes (TAXO-01F) : choisies dans le comparateur, A au depart, B a l'arrivee.
-  const [comparing,setComparing]=useState<{before:string; after:string}|null>(null);
-  const [choosing,setChoosing]=useState<{before?:string; after?:string}|null>(null);
-  useEffect(()=>{setComparing(null);setChoosing(null);},[selected]);
-  const elsewhere=!!comparing||!!choosing;
-  const [pickerOpen,setPickerOpen]=useState(false), [adding,setAdding]=useState(false);
-  // Les routes de l'analyse affichee, lues une fois par la section Routes et resumees dans la vue d'ensemble.
-  const [routes,setRoutes]=useState<{scanId:string; counts:RouteCounts}|null>(null);
-  const routesLoaded=useCallback((id:string, value:Parameters<typeof routeCounts>[0])=>setRoutes({scanId:id, counts:routeCounts(value)}),[]);
-  function analyze(){
-    return analyzeProject(selected,{request, open:(url,last)=>openStream(url,last?{headers:{'Last-Event-ID':last}}:undefined), setRun, setError, setBusy, addScan:s=>{setScans(past=>[s,...past]);setScanId(s.id);}});
-  }
-  const running=run?.status==='running';
-  const shown=running?liveScan(scan,run):scan;
-  const legacyFacts=shown?.facts??[];
-  const technologies=shown?technologiesOf(shown):[];
-  const cards=shown?overviewCards(shown, routes?.scanId===shown.id?routes.counts:undefined):[];
-  const countOf=(id:string)=>{const card=cards.find(item=>item.id===id);return card&&card.state==='known'?card.value:undefined;};
-  const protectedRoutes=routes&&routes.scanId===shown?.id?routes.counts:undefined;
-  const resultItems=shown?resultItemsOf(technologies.length, countOf, protectedRoutes):[];
-  return <div className="layout">
-    <header className="page-head"><TopMenu canAnalyze={!!selected&&!busy&&!loading} analyze={analyze} addProject={()=>{setPickerOpen(true);setAdding(true);}}/>
-      <div className="head-actions"><ProjectPicker projects={projects} selected={selected} busy={busy} loading={loading} open={pickerOpen||projects.length===0&&!loading} setOpen={open=>{setPickerOpen(open);if(!open)setAdding(false);}}
-        adding={adding||projects.length===0} setAdding={setAdding} onSelect={id=>{setError('');setSelected(id);setPickerOpen(false);setAdding(false);}} status={shown?since(shown.created_at):''}
-        name={name} setName={setName} path={path} setPath={setPath} onSubmit={add}/><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?<Working text="Analyse en cours"/>:<>{"Lancer l’analyse globale"}<svg className="btn-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></>}</button></div></header>
-    <aside><a className="brand" href="/"><svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="7"/><path d="M10 11h12M16 11v11"/></svg>Taxo<span>EXPLORATEUR LOGICIEL</span></a>
-    {resultItems.length>0&&<ResultsNav items={resultItems}/>}
-    <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
-    <main>
-    {error&&<div role="alert" className="error">{error}</div>}
-    {run&&run.status!=='done'&&<AnalysisProgress run={run}/>}
-    {choosing&&selected&&<ComparePicker base={`/projects/${selected}`} request={request} initial={choosing}
-      onClose={()=>setChoosing(null)} onCompare={(before, after)=>{setChoosing(null);setComparing({before, after});}}/>}
-    {comparing&&selected&&<ComparisonView base={`/projects/${selected}`} request={request} before={comparing.before} after={comparing.after}
-      onClose={()=>setComparing(null)} onSwap={()=>setComparing({before:comparing.after, after:comparing.before})}
-      onChange={()=>{setChoosing(comparing);setComparing(null);}} project={projects.find(item=>item.id===selected)}/>}
-    {!elsewhere&&loading&&<output>Chargement…</output>}
-    {!elsewhere&&!loading&&(shown?<>
-      <ProjectOverview scan={shown} pending={running?pendingEvaluators(run):undefined} routes={routes?.scanId===shown.id?routes.counts:undefined}/>
-      {!running&&<CompareLauncher current={sideOf(shown)} count={scans.length} onPick={fixed=>setChoosing(fixed?{before:fixed}:{})}/>}
-      <section className="results" id="technologies"><div className="section-heading"><div><h2>Technologies</h2><p>Reconnues par les noms de fichiers et les dépendances déclarées ; une dépendance déclarée ne prouve pas qu’elle est utilisée.</p></div><label>Analyse du<select value={shown.id} onChange={e=>setScanId(e.target.value)}>{scans.map(s=><option key={s.id} value={s.id}>{new Date(s.created_at).toLocaleString('fr-CA')}</option>)}</select></label></div>
-      {technologies.length?<div className="tags">{technologies.map(t=><span key={t}>{t}</span>)}</div>:<p className="empty">Aucune technologie reconnue dans ce dossier.</p>}
-      {legacyFacts.length>0&&<details className="evidence-files"><summary>Fichiers justificatifs ({legacyFacts.length})</summary><div className="table-wrap"><table><thead><tr><th>Technologie</th><th>Fichier justificatif</th><th>Détection</th></tr></thead><tbody>{legacyFacts.map(f=><tr key={f.technology+f.file}><td>{f.technology}</td><td><code>{f.file}</code></td><td>{f.method==='manifest'?'Manifeste':'Nom de fichier'}</td></tr>)}</tbody></table></div></details>}
-      </section>
-      <AnalysisLimits scan={shown}/>
-      <AnalysisDetails scan={shown}/>
-      {!running&&<RoutesPanel key={panelKey('routes',selected)} base={`/projects/${selected}`} scanId={shown.id} request={request} onLoaded={routesLoaded}/>}
-    </>:!running&&<section className="welcome"><div className="glyph">⌘</div><h2>{selected?'Prêt pour la première analyse':'Commencez avec un projet local'}</h2><p>{selected?'Lancez l’analyse globale : Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.':'Enregistrez un dossier dans le panneau de gauche, puis lancez son analyse.'}</p><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>)}
-    {!elsewhere&&selected&&!loading&&scan&&<AskTaxo key={panelKey('ask',selected)} base={`/projects/${selected}`} request={request} minia={minia}/>}
-    {!elsewhere&&selected&&!loading&&<HistoryPanel key={panelKey('history',selected)} projectId={selected} minia={minia}/>}
-    </main>
-  </div>;
-}
-createRoot(document.getElementById('root')!).render(<App/>);
+createRoot(document.getElementById('root')!).render(<App history={(projectId, minia)=><HistoryPanel key={panelKey('history',projectId)} projectId={projectId} minia={minia}/>}/>);

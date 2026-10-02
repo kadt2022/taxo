@@ -2,19 +2,20 @@
 // Sorti de main.tsx pour être testé ; les effets prennent leur document et leur observateur en paramètre.
 import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {type RouteCounts, type Scan} from './overview';
+import {href, type Page} from './nav';
 
 export type Project = {id:string; name:string; path:string};
 export type MenuItem = {label:string; href?:string; disabled?:boolean; run?:()=>void};
-export type NavItem = {id:string; to?:string; label:string; count?:string; icon?:string; apart?:boolean; muted?:boolean};
+export type NavItem = {id:Page; label:string; count?:string; apart?:boolean; muted?:boolean};
 
-export const SECTIONS:MenuItem[]=[['technologies','Technologies'],['routes','Routes'],['limites','Limites'],['details','Détails techniques'],['historique','Historique']]
-  .map(([id,label])=>({label, href:`#${id}`}));
-
-export const ICON_PATHS:Record<string,string>={'vue-ensemble':'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z',
+export const ICON_PATHS:Record<string,string>={overview:'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z',
+  analyses:'M9 4h6M9 3h6v3H9zM6 5H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-1M8 12h8M8 16h5',
+  comparaisons:'M4 7h11M12 4l3 3-3 3M20 17H9M12 14l-3 3 3 3', interroger:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM9 9h6M9 13h4',
+  architecture:'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   technologies:'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5', routes:'M8 7l-5 5 5 5M16 7l5 5-5 5', details:'M4 6h16M4 12h16M4 18h10',
   limites:'M12 3l10 18H2zM12 10v5M12 18v.5', historique:'M12 7v5l3 2M3 12a9 9 0 1 0 3-6.7M3 4v5h5', securite:'M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z',
   donnees:'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
-  nonint:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8v5M12 16v.5'};
+  'non-interpretees':'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8v5M12 16v.5'};
 
 /** Les 7 premiers caractères du commit analysé, ou rien si l'analyse n'en porte pas. */
 export function commitOf(scan:Scan){
@@ -33,14 +34,19 @@ export function since(iso?:string, now:number=Date.now()){
   return hours<24?`il y a ${hours} h`:`il y a ${Math.round(hours/24)} j`;
 }
 
-/** Les entrées du menu vertical : un compte seulement quand Taxo en a un, « Données » grisée tant qu'aucun analyseur ne la nourrit. */
-export function resultItemsOf(technologies:number, counts:(id:string)=>string|undefined, routes?:RouteCounts):NavItem[]{
-  return [{id:'technologies', label:'Technologies', count:technologies?String(technologies):undefined},
-    {id:'routes', label:'Routes', count:counts('api')}, {id:'details', label:'Architecture', count:counts('architecture')},
-    {id:'securite', to:'routes', label:'Sécurité', count:routes?String(routes.PROTECTED):undefined},
-    {id:'donnees', label:'Données et stockage', muted:true}, {id:'historique', label:'Historique Git', count:counts('git')},
+/** Le menu vertical : une entrée par page, groupées ; un compte seulement quand Taxo en a un. « Données » reste grisée tant
+ * qu'aucun analyseur ne la nourrit, mais sa page dit pourquoi. */
+export function navItemsOf(technologies:number, counts:(id:string)=>string|undefined, routes?:RouteCounts, analyses?:number):NavItem[]{
+  return [{id:'overview', label:'Overview'},
+    {id:'analyses', label:'Analyses', count:analyses?String(analyses):undefined, apart:true}, {id:'comparaisons', label:'Comparaisons'},
+    {id:'interroger', label:'Interroger Taxo'},
+    {id:'technologies', label:'Technologies', count:technologies?String(technologies):undefined, apart:true},
+    {id:'routes', label:'Routes', count:counts('api')}, {id:'architecture', label:'Architecture', count:counts('architecture')},
+    {id:'securite', label:'Sécurité', count:routes?String(routes.PROTECTED):undefined},
+    {id:'donnees', label:'Données et stockage', muted:true},
+    {id:'historique', label:'Historique Git', count:counts('git'), apart:true},
     {id:'limites', label:'Limites', apart:true},
-    {id:'non-interpretees', to:'routes', label:'Non interprétées', icon:'nonint', count:routes?String(routes.NOT_INTERPRETED):undefined}];
+    {id:'non-interpretees', label:'Non interprétées', count:routes?String(routes.NOT_INTERPRETED):undefined}];
 }
 
 type Listener = Pick<Document,'addEventListener'|'removeEventListener'>;
@@ -53,36 +59,21 @@ export function closeOnOutside(box:{contains(node:Node):boolean}|null, close:()=
   return()=>{doc.removeEventListener('mousedown',away);doc.removeEventListener('keydown',escape);};
 }
 
-type Watcher = {observe(node:Element):void; disconnect():void};
+type TopMenuProps = {canAnalyze:boolean; analyze:()=>void; addProject:()=>void; latest?:()=>void; initialOpen?:string|null};
 
-/** Suit la section visible : l'entrée du menu dont la cible est la première à l'écran devient la courante. */
-export function watchSections(items:readonly NavItem[], setCurrent:(id:string)=>void,
-  make:(callback:(entries:{target:{id:string}; isIntersecting:boolean}[])=>void)=>Watcher=callback=>new IntersectionObserver(callback,{rootMargin:'-10% 0px -70% 0px'}),
-  find:(id:string)=>Element|null=id=>document.getElementById(id)){
-  const seen=new Map<string,boolean>();
-  const observer=make(entries=>{
-    for(const entry of entries)seen.set(entry.target.id, entry.isIntersecting);
-    const first=items.find(item=>seen.get(item.to??item.id));
-    if(first)setCurrent(first.id);
-  });
-  for(const item of items){const node=find(item.to??item.id);if(node)observer.observe(node);}
-  return()=>observer.disconnect();
-}
-
-type TopMenuProps = {canAnalyze:boolean; analyze:()=>void; addProject:()=>void; initialOpen?:string|null};
-
-/** Barre de menus façon application : Overview, Fichier, Analyse, Affichage, Aide. Un seul menu ouvert à la fois ; Échap ou un clic
- * ailleurs le referme, et le survol change de menu une fois la barre activée. */
-export function TopMenu({canAnalyze, analyze, addProject, initialOpen=null}:Readonly<TopMenuProps>){
+/** Barre de menus façon application, réservée aux commandes globales : Fichier, Analyse, Affichage, Aide. La navigation est dans le
+ * menu vertical. Un seul menu ouvert à la fois ; Échap ou un clic ailleurs le referme, et le survol change de menu une fois la barre
+ * activée. */
+export function TopMenu({canAnalyze, analyze, addProject, latest, initialOpen=null}:Readonly<TopMenuProps>){
   const [open,setOpen]=useState<string|null>(initialOpen);
   const bar=useRef<HTMLElement>(null);
   const menus:[string,MenuItem[]][]=[
     ['Fichier',[{label:'Ajouter un projet…', run:addProject}]],
-    ['Analyse',[{label:'Lancer l’analyse globale', disabled:!canAnalyze, run:analyze}]],
-    ['Affichage',SECTIONS],
+    ['Analyse',[{label:'Lancer l’analyse globale', disabled:!canAnalyze, run:analyze}, {label:'Comparer deux analyses…', href:href('comparaisons')}]],
+    ['Affichage',[{label:'Revenir à la dernière analyse', disabled:!latest, run:latest}, {label:'Choisir l’analyse affichée…', href:href('analyses')}]],
     ['Aide',[{label:'Taxo · version 0.1', disabled:true},{label:'Analyse locale : vos fichiers restent sur votre machine', disabled:true}]]];
   useEffect(()=>open?closeOnOutside(bar.current,()=>setOpen(null)):undefined,[open]);
-  return <nav className="top-menu" ref={bar} aria-label="Menus"><a className="menu-link" href="#vue-ensemble" aria-current="page" onClick={()=>setOpen(null)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={ICON_PATHS['vue-ensemble']}/></svg>Overview</a>{menus.map(([name,items])=><div className="menu" key={name}>
+  return <nav className="top-menu" ref={bar} aria-label="Menus">{menus.map(([name,items])=><div className="menu" key={name}>
     <button type="button" aria-haspopup="menu" aria-expanded={open===name} onClick={()=>setOpen(open===name?null:name)} onMouseEnter={()=>open&&setOpen(name)}>{name}</button>
     {open===name&&<div className="menu-list" role="menu">{items.map(item=>item.href
       ?<a key={item.label} role="menuitem" href={item.href} onClick={()=>setOpen(null)}>{item.label}</a>
@@ -90,16 +81,13 @@ export function TopMenu({canAnalyze, analyze, addProject, initialOpen=null}:Read
   </div>)}</nav>;
 }
 
-/** Menu vertical des résultats : une entrée par section, avec son compte quand Taxo en a un, et l'entrée courante suit le défilement. */
-export function ResultsNav({items}:Readonly<{items:readonly NavItem[]}>){
-  const [current,setCurrent]=useState('');
-  useEffect(()=>watchSections(items,setCurrent),[items]);
-  return <nav className="results-nav" aria-label="Résultats">{items.map(item=>{
-    const inside=<><svg viewBox="0 0 24 24" aria-hidden="true"><path d={ICON_PATHS[item.icon??item.id]??ICON_PATHS.details}/></svg>
-      <span className="results-label">{item.label}</span>{item.count&&<span className="results-count">{item.count}</span>}</>;
-    return item.muted
-      ?<span key={item.id} className={`results-item muted${item.apart?' apart':''}`} title="Pas encore analysé">{inside}</span>
-      :<a key={item.id} href={`#${item.to??item.id}`} className={item.apart?'apart':undefined} aria-current={current===item.id?'true':undefined} onClick={()=>setCurrent(item.id)}>{inside}</a>;})}</nav>;
+/** Menu vertical : une entrée par page, la page affichée marquée. */
+export function ResultsNav({items, current}:Readonly<{items:readonly NavItem[]; current:Page}>){
+  return <nav className="results-nav" aria-label="Pages">{items.map(item=>
+    <a key={item.id} href={href(item.id)} className={[item.apart&&'apart', item.muted&&'muted'].filter(Boolean).join(' ')||undefined}
+      aria-current={current===item.id?'page':undefined} title={item.muted?'Pas encore analysé':undefined}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d={ICON_PATHS[item.id]??ICON_PATHS.overview}/></svg>
+      <span className="results-label">{item.label}</span>{item.count&&<span className="results-count">{item.count}</span>}</a>)}</nav>;
 }
 
 export type PickerProps = {projects:Project[]; selected:string; busy:boolean; loading:boolean; open:boolean; setOpen:(open:boolean)=>void;

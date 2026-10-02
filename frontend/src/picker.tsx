@@ -45,7 +45,7 @@ export function matches(choice:Choice, search:Search){
 const short=(sha:string)=><code>{sha.slice(0, 7)}</code>;
 
 /** D'ou vient le code analyse, en une ligne : le commit tel que l'analyse l'a enregistre, ou ce qui en manque. */
-function Source({choice}:Readonly<{choice:Choice}>){
+export function Source({choice}:Readonly<{choice:Choice}>){
   const commit=choice.commit, snapshot=choice.snapshot, sha=commit?.sha??snapshot?.commit;
   if(snapshot?.mode==='WORKING_TREE'){
     const content=(snapshot.content_fingerprint??'').replace('sha256:','').slice(0, 10);
@@ -65,7 +65,7 @@ export function ChoiceCard({choice}:Readonly<{choice:Choice}>){
   </span>;
 }
 
-function SearchFields({search, onChange, side}:Readonly<{search:Search; onChange:(next:Search)=>void; side:string}>){
+export function SearchFields({search, onChange, side}:Readonly<{search:Search; onChange:(next:Search)=>void; side:string}>){
   const set=(change:Partial<Search>)=>onChange({...search, ...change});
   return <div className="choice-search">
     <div className="choice-row">

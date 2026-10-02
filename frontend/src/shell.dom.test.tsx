@@ -2,7 +2,7 @@
 import {act} from 'react';
 import {createRoot, type Root} from 'react-dom/client';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {ProjectPicker, ResultsNav, TopMenu, resultItemsOf, type PickerProps} from './shell';
+import {ProjectPicker, TopMenu, type PickerProps} from './shell';
 
 (globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
 
@@ -67,31 +67,15 @@ describe('TopMenu', ()=>{
     act(()=>{document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));});
     expect(host.querySelector('.menu-list')).toBeNull();
   });
-  it('referme quand on choisit une section ou qu’on revient à Overview', ()=>{
-    setup();
+  it('revient à la dernière analyse, et referme quand on choisit une page', ()=>{
+    const latest=vi.fn();
+    render(<TopMenu canAnalyze analyze={vi.fn()} addProject={vi.fn()} latest={latest}/>);
     click(button('Affichage'));
-    click(item('Routes'));
-    expect(host.querySelector('.menu-list')).toBeNull();
+    click(item('Revenir à la dernière analyse'));
+    expect(latest).toHaveBeenCalledOnce();
     click(button('Affichage'));
-    click(host.querySelector('.menu-link'));
+    click(item('Choisir l’analyse affichée…'));
     expect(host.querySelector('.menu-list')).toBeNull();
-  });
-});
-
-describe('ResultsNav', ()=>{
-  it('marque l’entrée choisie comme courante', ()=>{
-    const observe=vi.fn(), disconnect=vi.fn();
-    vi.stubGlobal('IntersectionObserver', class {observe=observe;disconnect=disconnect;});
-    const target=document.createElement('section');target.id='technologies';document.body.append(target);
-    render(<ResultsNav items={resultItemsOf(11, ()=>undefined)}/>);
-    expect(observe).toHaveBeenCalledWith(target);
-    click(host.querySelector('a[href="#technologies"]'));
-    expect(host.querySelector('a[href="#technologies"]')?.getAttribute('aria-current')).toBe('true');
-    expect(host.querySelector('a[href="#limites"]')?.getAttribute('aria-current')).toBeNull();
-    act(()=>root.unmount());
-    expect(disconnect).toHaveBeenCalled();
-    target.remove();vi.unstubAllGlobals();
-    root=createRoot(host);
   });
 });
 
