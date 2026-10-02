@@ -48,3 +48,14 @@ def test_an_earlier_analysis_names_the_same_unread_languages_in_every_operation(
     assert named == ['language:Python']
     frontier = [item for item in tile['frontier'] if item.get('reason') == 'NOT_ANALYSED']
     assert [item['languages'] for item in frontier] == [['Python']], 'le voisinage dit la meme limite que le verdict'
+
+
+def test_a_projection_is_bound_to_no_catalog_contract():
+    """Une projection n'a pas de catalogue : elle n'est ni un contrat inconnu ni un contrat qui ne lit rien."""
+    from app.comparison.application.compare import CompareAnalyses
+    from app.facts.domain.provenance import ProducerExecution
+    compare = CompareAnalyses(None, None, None, capabilities={('taxo.spring', '1'): frozenset({'Java'})})
+    projection = ProducerExecution('PROJECTION', 'taxo.tree', '1', 'run')
+    assert compare._read([projection]) == (True, None)
+    evaluator = ProducerExecution('EVALUATOR', 'taxo.spring-api', '1', 'run', 'taxo.spring', 'retiree')
+    assert compare._read([evaluator]) == (False, frozenset())

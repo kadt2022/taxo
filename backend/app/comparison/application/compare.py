@@ -81,11 +81,13 @@ class CompareAnalyses:
 
     def _read(self, executions):
         """(contrat connu, langages lus) pour ces executions : `None` si le contrat est independant du langage.
-        Un contrat que ce Taxo ne connait pas ne lit rien de connu, comme pour les verdicts. Sans contrats fournis,
+        Un contrat que ce Taxo ne connait pas ne lit rien de connu, comme pour les verdicts. Seul un evaluateur
+        nomme un catalogue : une projection n'en a pas, et n'est liee a aucun contrat. Sans contrats fournis,
         aucune regle de langage ne s'applique."""
         if not self.capabilities:
             return True, None
-        keys = [(item.catalog_id, item.catalog_version) for item in executions or ()]
+        keys = [(item.catalog_id, item.catalog_version) for item in executions or ()
+                if item.producer_type == 'EVALUATOR']
         if any(key not in self.capabilities for key in keys):
             return False, frozenset()
         declared = [self.capabilities[key] for key in keys if self.capabilities[key] is not None]
