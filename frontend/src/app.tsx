@@ -113,7 +113,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
       <button type="button" className="primary" disabled={busy} onClick={analyze}>Lancer la première analyse</button><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>;
   }
   return <div className="layout">
-    <header className="page-head"><div className="head-start"><a className="top-brand" href={href('overview')}><BrandMark/><span>Taxo</span></a>
+    <header className="page-head"><div className="head-start"><a className="top-brand" href={href('overview')}><BrandMark/><span className="top-brand-text"><strong>Taxo</strong><small>Software Intelligence</small></span></a>
       <TopMenu running={running} latest={scanId&&scanId!==latest?.id?showLatest:undefined} analysis={close=><AnalysisCommand project={project}
         latest={latest} running={running} canAnalyze={!!selected&&!busy&&!loading} onAnalyze={analyze} onClose={close}/>}/></div></header>
     <aside>

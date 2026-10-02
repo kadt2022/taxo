@@ -31,8 +31,10 @@ code{font-family:var(--mono),monospace;font-size:12.5px;color:var(--text-2);over
 /* ——— Mise en page ——— */
 .layout{display:grid;grid-template-columns:272px minmax(0,1fr);min-height:100vh}
 aside{background:linear-gradient(180deg,#123a31 0%,#0f3029 100%);color:#e9f1ea;padding:28px 20px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:auto}
-.brand-mark{width:30px;height:30px;fill:none;stroke-width:2.2;stroke-linecap:round}
-.brand-mark rect{fill:var(--accent);stroke:none}.brand-mark path{stroke:var(--brand)}
+.brand-mark{width:30px;height:30px;overflow:visible}
+.brand-links path{fill:none;stroke:#5aa9f5;stroke-width:1.3;stroke-linejoin:round;stroke-linecap:round;opacity:.9}
+.brand-links .brand-depth{stroke:#9fd3ff;stroke-width:.9;opacity:.55}
+.brand-nodes circle{stroke:#0f3029;stroke-width:.8}
 aside h2{display:flex;justify-content:space-between;align-items:center;margin:34px 0 10px;font-size:11.5px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:#9fbdb1}
 aside h2 span{background:rgba(255,255,255,.08);color:#d6e6dc;border-radius:var(--r-pill);padding:1px 8px;font-size:11px;letter-spacing:0}
 nav[aria-label="Projets"] button{display:flex;justify-content:space-between;align-items:center;width:100%;border:0;background:transparent;color:#dbe8df;padding:10px 12px;text-align:left;border-radius:var(--r-sm);margin-bottom:2px;overflow-wrap:anywhere;font-size:14.5px}
@@ -461,8 +463,11 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
 
 /* Barre de menus : la marque Taxo, puis Fichier, Analyse, Affichage, Aide */
 .head-start{display:flex;align-items:center;gap:28px;min-width:0}
-.top-brand{display:inline-flex;align-items:center;gap:8px;flex:none;color:#fff;font-size:17px;font-weight:700;letter-spacing:-.02em;text-decoration:none;line-height:1}
-.top-brand .brand-mark{width:24px;height:24px}
+.top-brand{display:inline-flex;align-items:center;gap:9px;flex:none;color:#fff;text-decoration:none;line-height:1}
+.top-brand .brand-mark{width:30px;height:30px}
+.top-brand-text{display:flex;flex-direction:column;gap:2px}
+.top-brand-text strong{font-size:17px;font-weight:700;letter-spacing:-.02em}
+.top-brand-text small{font-size:10.5px;font-weight:500;letter-spacing:.02em;color:#a9c4b8}
 .top-brand:focus-visible{border-radius:6px}
 .top-menu{display:flex;align-items:center;gap:2px;min-width:0}
 .top-menu .menu>button{display:inline-flex;align-items:center;gap:7px}
@@ -473,7 +478,8 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
 /* Sous 900 px, la règle générale des en-têtes empile leur contenu : la barre du haut reste sur une ligne, puis se replie sur deux sous
    560 px, sans jamais rogner le sélecteur de projet ni l'analyse globale. */
 @media(max-width:900px){.page-head{grid-column:1/-1;flex-direction:row;align-items:center}.head-start{flex:1 1 auto}}
-@media(max-width:560px){.top-brand span{display:none}.head-start{gap:6px}
+@media(max-width:900px){.top-brand-text small{display:none}}
+@media(max-width:560px){.top-brand-text{display:none}.head-start{gap:6px}
   .page-head{height:auto;flex-wrap:wrap;row-gap:8px;padding:8px 12px}.head-actions{width:100%;justify-content:space-between}.picker{flex:1 1 auto;min-width:0}.picker-current{max-width:100%;min-width:0;overflow:hidden}.picker-current strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.head-actions>.primary{flex:none;width:auto}}
 .top-menu .menu{position:relative}
 .top-menu .menu>button{padding:6px 12px;border:0;border-radius:8px;background:none;font-size:13.5px;font-weight:550;color:#a9c4b8;white-space:nowrap}

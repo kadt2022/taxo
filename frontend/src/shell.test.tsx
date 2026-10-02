@@ -118,6 +118,10 @@ describe('BrandMark', ()=>{
     const html=renderToStaticMarkup(<BrandMark/>);
     expect(html).toContain('class="brand-mark"');
     expect(html).toContain('aria-hidden="true"');
+    // Un réseau dessiné : six nœuds autour d'un centre, colorés par un dégradé propre à chaque logo.
+    expect(html.match(/<circle /g)).toHaveLength(7);
+    const id=/<linearGradient id="([^"]+)"/.exec(html)?.[1];
+    expect(html).toContain(`fill="url(#${id})"`);
   });
 });
 

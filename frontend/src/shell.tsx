@@ -1,6 +1,6 @@
 // Coque de l'application : barre de menus, sélecteur de projet et menu vertical des résultats (TAXO-UI-04).
 // Sorti de main.tsx pour être testé ; les effets prennent leur document et leur observateur en paramètre.
-import {useEffect, useRef, useState, type ReactNode} from 'react';
+import {useEffect, useId, useRef, useState, type ReactNode} from 'react';
 import {type RouteCounts, type Scan} from './overview';
 import {href, type Page} from './nav';
 
@@ -24,9 +24,22 @@ export const MENU_ICONS:Record<string,string>={Fichier:'M14 3H7a2 2 0 0 0-2 2v14
   Analyse:'M3 12h4l3-7 4 14 3-7h4', Affichage:'M4 4h16v16H4zM4 9h16M9 9v11',
   Aide:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.5M12 17h.01'};
 
-/** Le logo de Taxo, le même dans la barre du haut et dans la barre latérale. */
+/** Le logo de Taxo : un réseau de faits, six nœuds reliés autour d'un centre. Dessiné, pas une image. */
 export function BrandMark(){
-  return <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="7"/><path d="M10 11h12M16 11v11"/></svg>;
+  const id=useId();
+  return <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+    <defs><linearGradient id={id} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#8fd0ff"/><stop offset="1" stopColor="#2f7df6"/></linearGradient></defs>
+    <g className="brand-links">
+      <path d="M16 5L25.53 10.5L25.53 21.5L16 27L6.47 21.5L6.47 10.5Z"/>
+      <path d="M16 16L16 5M16 16L25.53 10.5M16 16L25.53 21.5M16 16L16 27M16 16L6.47 21.5M16 16L6.47 10.5"/>
+      <path className="brand-depth" d="M16 5L25.53 21.5L6.47 21.5Z"/>
+    </g>
+    <g className="brand-nodes" fill={`url(#${id})`}>
+      <circle cx="16" cy="5" r="2.6"/><circle cx="25.53" cy="10.5" r="2.6"/><circle cx="25.53" cy="21.5" r="2.6"/>
+      <circle cx="16" cy="27" r="2.6"/><circle cx="6.47" cy="21.5" r="2.6"/><circle cx="6.47" cy="10.5" r="2.6"/>
+      <circle cx="16" cy="16" r="3.6"/>
+    </g>
+  </svg>;
 }
 
 /** Les 7 premiers caractères du commit analysé, ou rien si l'analyse n'en porte pas. */

@@ -69,7 +69,8 @@ describe('une page par fonction', ()=>{
     // La marque Taxo ouvre la barre du haut et mène à Overview, avant les menus globaux.
     const head=host.querySelector('.page-head .head-start');
     expect(head?.firstElementChild?.matches('a.top-brand[href="#/"]')).toBe(true);
-    expect(head?.firstElementChild?.textContent).toBe('Taxo');
+    expect(head?.querySelector('.top-brand-text strong')?.textContent).toBe('Taxo');
+    expect(head?.querySelector('.top-brand-text small')?.textContent).toBe('Software Intelligence');
     expect(head?.querySelector('.top-brand + .top-menu')).not.toBeNull();
     // Une seule marque : la barre latérale ne la répète pas.
     expect(host.querySelectorAll('.brand-mark')).toHaveLength(1);
