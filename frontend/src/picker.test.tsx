@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {ChoiceCard, NO_SEARCH, commitDay, localDay, matches, type Choice} from './picker';
+import {ChoiceCard, NO_SEARCH, localDay, matches, type Choice} from './picker';
 import {sameCommit} from './comparison';
 
 const commit={sha:'ada7a20ab4ffffffffffffffffffffffffffffff', subject:'Improve comparison UX', author:'Claude',
@@ -12,10 +12,8 @@ const late=analysis('late', '2026-10-01T19:02:00');
 describe('reconnaître une analyse', ()=>{
   it('montre la date de l’analyse, le commit tel qu’enregistré, son message et ses faits', ()=>{
     const html=renderToStaticMarkup(<ChoiceCard choice={late}/>);
-    expect(html).toContain('Analyse du 1 oct. 2026');
-    expect(html).toContain('Claude · 1 oct. 2026');
-    expect(html).toContain('<code>ada7a20</code> · Claude');
-    expect(html).toContain('« Improve comparison UX »');
+    expect(html).toMatch(/^<span class="choice-card"><strong class="choice-when">1 oct\. 2026, 19:02:00<\/strong>/);
+    expect(html).toContain('<code>ada7a20</code> · Claude · « Improve comparison UX »');
     expect(html).toContain('53');
     expect(html).not.toContain('%');
   });
@@ -23,11 +21,13 @@ describe('reconnaître une analyse', ()=>{
   it('dit les fichiers non commités, les analyseurs en échec, et un commit sans description', ()=>{
     const tree=renderToStaticMarkup(<ChoiceCard choice={analysis('t', '2026-10-01T20:00:00', {failed:['taxo.spring-security'],
       snapshot:{commit:commit.sha, mode:'WORKING_TREE', content_fingerprint:'sha256:abcdef0123456789'}})}/>);
-    expect(tree).toContain('Fichiers non commités · empreinte abcdef0123');
-    expect(tree).toContain('sur <code>ada7a20</code>');
+    expect(tree).toContain('Modifications non commitées · sur <code>ada7a20</code> · empreinte abcdef0123…');
     expect(tree).toContain('en échec : Sécurité Spring');
     const bare=renderToStaticMarkup(<ChoiceCard choice={analysis('b', '2026-10-01T20:00:00', {commit:null})}/>);
-    expect(bare).toContain('commit ada7a20ab4');
+    expect(bare).toContain('<code>ada7a20</code> · Source Git non disponible');
+    expect(bare).not.toMatch(/erreur|échec/i);
+    const nothing=renderToStaticMarkup(<ChoiceCard choice={analysis('x', '2026-10-01T20:00:00', {commit:null, snapshot:null})}/>);
+    expect(nothing).toContain('Source Git non disponible');
   });
 });
 
@@ -46,7 +46,6 @@ describe('rechercher une analyse', ()=>{
     expect(matches(late, {...NO_SEARCH, dayOf:'commit', to:'2026-09-30'})).toBe(false);
     expect(matches(analysis('n', '2026-10-01T19:02:00', {commit:null}), {...NO_SEARCH, dayOf:'commit', from:'2026-01-01'})).toBe(false);
     expect(localDay('pas une date')).toBe('pas une da');
-    expect(commitDay('demain')).toBe('demain');
   });
 
   it('signale deux analyses du même commit, jamais des fichiers non commités', ()=>{

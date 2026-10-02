@@ -2,7 +2,7 @@
 // le commit decrit une analyse et sert a la retrouver. La recherche filtre une liste ; elle ne compare rien.
 import {useEffect, useState} from 'react';
 import {EVALUATORS, label} from './vocabulary';
-import {day, sameCommit, sideLabel, type Side} from './comparison';
+import {day, sameCommit, type Side} from './comparison';
 
 type Request=<T>(path:string)=>Promise<T>;
 export type RecordedCommit={sha:string; subject?:string|null; authored_at?:string|null; author?:string|null};
@@ -29,10 +29,6 @@ export function localDay(value:string){
   return `${moment.getFullYear()}-${String(moment.getMonth()+1).padStart(2, '0')}-${String(moment.getDate()).padStart(2, '0')}`;
 }
 
-/** Le jour d'un commit, sans heure : « 1 oct. 2026 ». */
-export const commitDay=(value:string)=>{const moment=new Date(value);return Number.isNaN(moment.getTime())?value
-  :moment.toLocaleDateString('fr-FR', {day:'numeric', month:'short', year:'numeric'});};
-
 /** Une analyse repond-elle a la recherche ? Texte sans casse ; dates incluses. */
 export function matches(choice:Choice, search:Search){
   const wanted=search.text.trim().toLowerCase();
@@ -46,15 +42,24 @@ export function matches(choice:Choice, search:Search){
   return (!search.from||at>=search.from)&&(!search.to||at<=search.to);
 }
 
-/** Ce qu'une analyse a lu, assez pour la reconnaitre : le commit tel qu'elle l'a enregistre. */
+const short=(sha:string)=><code>{sha.slice(0, 7)}</code>;
+
+/** D'ou vient le code analyse, en une ligne : le commit tel que l'analyse l'a enregistre, ou ce qui en manque. */
+function Source({choice}:Readonly<{choice:Choice}>){
+  const commit=choice.commit, snapshot=choice.snapshot, sha=commit?.sha??snapshot?.commit;
+  if(snapshot?.mode==='WORKING_TREE'){
+    const content=(snapshot.content_fingerprint??'').replace('sha256:','').slice(0, 10);
+    return <>Modifications non commitées{sha&&<> · sur {short(sha)}</>}{content&&<> · empreinte {content}…</>}</>;
+  }
+  if(!commit)return <>{sha&&<>{short(sha)} · </>}Source Git non disponible</>;
+  return <>{short(commit.sha)}{commit.author&&<> · {commit.author}</>}{commit.subject&&<> · « {commit.subject} »</>}</>;
+}
+
+/** Une analyse, reconnue d'abord par sa date : c'est elle que l'on choisit, le commit n'en est que le contexte. */
 export function ChoiceCard({choice}:Readonly<{choice:Choice}>){
-  const commit=choice.commit, tree=choice.snapshot?.mode==='WORKING_TREE';
   return <span className="choice-card">
-    <strong className="choice-when">Analyse du {day(choice.created_at)}</strong>
-    <span className="choice-code">{tree?<>{sideLabel(choice)}{commit&&<> · sur <code>{commit.sha.slice(0, 7)}</code></>}</>
-      :commit?<><code>{commit.sha.slice(0, 7)}</code>{commit.author&&<> · {commit.author}</>}{commit.authored_at&&<> · {commitDay(commit.authored_at)}</>}</>
-        :sideLabel(choice)}</span>
-    {commit?.subject&&<span className="choice-message">« {commit.subject} »</span>}
+    <strong className="choice-when">{day(choice.created_at)}</strong>
+    <span className="choice-source"><Source choice={choice}/></span>
     <span className="choice-facts">{choice.fact_count.toLocaleString('fr-CA')} faits
       {choice.failed.length>0&&<span className="choice-failed"> · en échec : {choice.failed.map(id=>label(EVALUATORS, id)).join(', ')}</span>}</span>
   </span>;

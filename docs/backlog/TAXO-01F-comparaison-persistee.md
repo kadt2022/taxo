@@ -129,12 +129,14 @@ et un critère de recherche, pas l'objet comparé :
 
 - **Sélecteur de deux analyses** : A puis B, chacune choisie parmi les analyses complètes du projet. Une
   analyse interrompue n'est jamais proposée.
-- **Chaque analyse se présente assez pour être reconnue** : date de l'analyse ; code analysé (commit,
-  auteur, date et message du commit, ou « fichiers non commités » avec l'empreinte de leur contenu) ;
-  nombre de faits ; analyseurs en échec.
+- **Chaque analyse se présente assez pour être reconnue**, la date de l'analyse d'abord : c'est elle que
+  l'on choisit. Puis, en une ligne, son contexte Git (commit, auteur, message du commit, ou
+  « Modifications non commitées » avec l'empreinte de leur contenu) ; enfin le nombre de faits et les
+  analyseurs en échec.
 - **Le commit est décrit depuis les faits de l'analyse** : son message et ses dates (`HAS_COMMIT`), son
   auteur (`AUTHORED_BY`), lus dans la mémoire par l'index de la référence `commit:`. Le dépôt n'est pas
-  relu. Si l'analyse ne contient pas ces faits, seul l'identifiant est montré.
+  relu. Si l'analyse ne contient pas ces faits : « Source Git non disponible », jamais présenté comme une
+  erreur.
 - **Recherche** : par date de l'analyse, identifiant du commit, date du commit, auteur et message du
   commit. Elle filtre la liste des analyses du projet ; elle ne compare rien.
 - **Deux portes d'entrée** :
@@ -150,11 +152,11 @@ et un critère de recherche, pas l'objet comparé :
 
 Critères d'acceptation :
 
-1. Chaque analyse proposée montre la date de l'analyse et ce qu'elle a lu ; pour un commit, son auteur,
-   sa date et son message tels qu'enregistrés par l'analyse.
+1. Chaque analyse proposée montre d'abord la date de l'analyse, puis ce qu'elle a lu ; pour un commit,
+   son auteur et son message tels qu'enregistrés par l'analyse.
 2. Décrire les analyses ne lit pas le dépôt, et chaque description passe par un index lié à l'analyse.
 3. Trois analyses du même commit sont trois choix distincts ; les choisir en A et B est permis et signalé.
-4. Une analyse des fichiers non commités est proposée et décrite comme telle.
+4. Une analyse de modifications non commitées est proposée et décrite comme telle.
 
 ### D — Comprendre les changements
 

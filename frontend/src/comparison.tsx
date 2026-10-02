@@ -32,7 +32,7 @@ type Category=typeof CATEGORIES[number]['id'];
 /** Ce qu'une analyse a lu : un commit, ou des fichiers non commites et leur empreinte. */
 export function sideLabel(side:Side){
   const snapshot=side.snapshot??{};
-  if(snapshot.mode==='WORKING_TREE')return `Fichiers non commités · empreinte ${(snapshot.content_fingerprint??'').replace('sha256:','').slice(0,10)}…`;
+  if(snapshot.mode==='WORKING_TREE')return `Modifications non commitées · empreinte ${(snapshot.content_fingerprint??'').replace('sha256:','').slice(0,10)}…`;
   return snapshot.commit?`commit ${snapshot.commit.slice(0,10)}`:'instantané inconnu';
 }
 
