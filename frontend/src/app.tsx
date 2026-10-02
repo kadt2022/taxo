@@ -31,6 +31,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   const [scans,setScans]=useState<Scan[]>([]), [scanId,setScanId]=useState('');
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false), [loading,setLoading]=useState(true);
+  const [run,setRun]=useState<Run|null>(null);
   // L'analyse affichee : la plus recente par defaut, ou celle choisie dans la page Analyses.
   const scan=scans.find(s=>s.id===scanId) ?? scans[0];
   // Le projet fait partie de l'adresse : une page rechargee ou copiee rouvre le meme projet.
@@ -39,7 +40,8 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   useEffect(()=>{if(selected)withProject(selected);},[selected, route]);
   useEffect(()=>{
     let active=true;
-    setScans([]);setScanId('');
+    // Une analyse appartient a son projet : en changer efface sa progression, son echec et sa relance.
+    setScans([]);setScanId('');setRun(null);
     if(selected){setLoading(true);request<Scan[]>(`/projects/${selected}/scans`).then(s=>{if(active)setScans(s);}).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active)setLoading(false);});}
     return ()=>{active=false;};
   },[selected]);
@@ -50,7 +52,6 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     catch(e){setError((e as Error).message);return false;}finally{setBusy(false);}
   }
   const open=(id:string)=>{setError('');setSelected(id);go(href('overview'));};
-  const [run,setRun]=useState<Run|null>(null);
   function analyze(){
     return analyzeProject(selected,{request, open:(url,last)=>openStream(url,last?{headers:{'Last-Event-ID':last}}:undefined), setRun, setError, setBusy, addScan:s=>{setScans(past=>[s,...past]);setScanId(s.id);}});
   }
