@@ -22,6 +22,7 @@ NOT_ANALYSED = 'NOT_ANALYSED'
 EXCLUSIVE = frozenset({'AUTHORED_BY', 'WRITTEN_IN'})
 _UNREADABLE = frozenset({'NOT_INTERPRETED', 'READ_ERROR'})
 _SCOPES = ('repository', 'module', 'directory', 'file')
+_TYPE = 'coverage_type'
 
 
 @dataclass(frozen=True)
@@ -77,7 +78,7 @@ def capable(analyzers, relation, subject):
     for analyzer in analyzers:
         if relation not in analyzer.relations:
             continue
-        analysed = [item for item in analyzer.coverage if item['coverage_type'] == 'ANALYSED']
+        analysed = [item for item in analyzer.coverage if item[_TYPE] == 'ANALYSED']
         if analyzer.failed or not analysed or any(_covers(item, subject) for item in analysed):
             found.append(analyzer)
     return found
@@ -90,7 +91,7 @@ def reaching(analyzers, relation, present, subject=None):
     for analyzer in analyzers:
         if relation not in analyzer.relations or analyzer.failed or analyzer.unsupported:
             continue
-        analysed = [item for item in analyzer.coverage if item['coverage_type'] == 'ANALYSED']
+        analysed = [item for item in analyzer.coverage if item[_TYPE] == 'ANALYSED']
         if analysed and analyzer.reads_present(present) and (subject is None or any(_covers(item, subject)
                                                                                      for item in analysed)):
             found.append(analyzer)
@@ -105,7 +106,7 @@ def not_analysed(analyzers, relation, present, needed=None, subject=None):
 
 
 def _unreadable(analyzer, references):
-    return analyzer.failed or any(item['coverage_type'] in _UNREADABLE and item['subject'] in references
+    return analyzer.failed or any(item[_TYPE] in _UNREADABLE and item['subject'] in references
                                   for item in analyzer.coverage)
 
 

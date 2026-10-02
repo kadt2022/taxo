@@ -257,3 +257,14 @@ def test_the_core_knows_no_language_and_no_analyzer_by_name():
     found = [(path, line) for path in CORE for line in (root / path).read_text(encoding='utf-8').splitlines()
              if named.search(line)]
     assert found == []
+
+
+def test_an_unknown_catalog_contract_reads_nothing_known_in_the_neighborhood_too():
+    """`None` est reserve a un contrat connu independant du langage ; un contrat inconnu ne lit rien de connu."""
+    from app.evaluators.git.evaluator import GitEvaluator
+    from app.protocol.application.exchange import TaxoQuery
+    query = TaxoQuery(None, None, None, None, [GitEvaluator(), SpringApiEvaluator()], 'off')
+    assert query.languages_of('taxo.removed', {'catalog_id': 'removed', 'catalog_version': '1'}) == frozenset()
+    assert query.languages_of('taxo.spring-api', {'catalog_id': 'spring-api', 'catalog_version': '1'}) == frozenset()
+    assert query.languages_of('taxo.git', {}) is None, 'un resume anterieur : le catalogue actuel de son analyseur'
+    assert query.languages_of('taxo.spring-api', {}) == frozenset({'Java'})

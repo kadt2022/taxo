@@ -94,17 +94,16 @@ class RunScan:
         evaluator_id = getattr(evaluator, 'evaluator_id', '')
         listener('evaluator.started', {'evaluator': evaluator_id})
         catalog = getattr(evaluator, 'catalog', None)
-        if languages is not None and catalog is not None and not applicable(catalog.languages, languages):
-            # Rien a lire : l'analyseur n'est pas appele, et son resultat vide n'est jamais une couverture.
-            execution = self.evaluator_runner.unsupported(evaluator, snapshot)
-            listener('evaluator.completed', {'evaluator': evaluator_id, 'summary': execution.summary(), 'result': None})
-            return execution
 
         def progress(stage, message, completed=None, total=None):
             listener('evaluator.progress', {'evaluator': evaluator_id, 'stage': stage, 'message': message,
                                             'completed': completed, 'total': total})
 
-        execution = self.evaluator_runner(evaluator, snapshot, progress)
+        if languages is not None and catalog is not None and not applicable(catalog.languages, languages):
+            # Rien a lire : l'analyseur n'est pas appele, et son resultat vide n'est jamais une couverture.
+            execution = self.evaluator_runner.unsupported(evaluator, snapshot)
+        else:
+            execution = self.evaluator_runner(evaluator, snapshot, progress)
         summary = execution.summary()
         if execution.status is EvaluationStatus.FAILED:
             listener('evaluator.failed', {'evaluator': evaluator_id, 'summary': summary,
