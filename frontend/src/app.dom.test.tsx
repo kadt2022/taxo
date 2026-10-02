@@ -68,6 +68,9 @@ describe('une page par fonction', ()=>{
     expect(head?.firstElementChild?.matches('a.top-brand[href="#/"]')).toBe(true);
     expect(head?.firstElementChild?.textContent).toBe('Taxo');
     expect(head?.querySelector('.top-brand + .top-menu')).not.toBeNull();
+    // Une seule marque : la barre latérale ne la répète pas.
+    expect(host.querySelectorAll('.brand-mark')).toHaveLength(1);
+    expect(text()).not.toContain('EXPLORATEUR');
     expect(host.querySelector('.overview .cards')).not.toBeNull();
     expect(text()).toContain('Dernière analyse');
     expect(host.querySelector('.overview-actions a[href="#/comparaisons"]')?.textContent).toContain('Comparer deux analyses');

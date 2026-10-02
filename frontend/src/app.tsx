@@ -115,7 +115,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
       <div className="head-actions"><ProjectPicker projects={projects} selected={selected} busy={busy} loading={loading} open={pickerOpen||projects.length===0&&!loading} setOpen={open=>{setPickerOpen(open);if(!open)setAdding(false);}}
         adding={adding||projects.length===0} setAdding={setAdding} onSelect={id=>{setError('');setSelected(id);setPickerOpen(false);setAdding(false);go(href('overview'));}} status={shown?since(shown.created_at):''}
         name={name} setName={setName} path={path} setPath={setPath} onSubmit={add}/><button type="button" className="primary" disabled={!selected||busy||loading} onClick={analyze}>{busy?<Working text="Analyse en cours"/>:<>{"Lancer l’analyse globale"}<svg className="btn-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></>}</button></div></header>
-    <aside><a className="brand" href={href('overview')}><BrandMark/>Taxo<span>EXPLORATEUR LOGICIEL</span></a>
+    <aside>
     {selected&&<ResultsNav items={navItems} current={route.page}/>}
     <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
     <main>
