@@ -4,6 +4,7 @@ Exposees par la tranche A (seule l assertion divergente attendue en echec), corr
 ces tests sont desormais des garde-fous ordinaires. Une meme analyse dit la meme chose de ce qu'elle a lu, quelle
 que soit l'operation qui le demande.
 """
+import pytest
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
@@ -108,15 +109,34 @@ def test_the_recorded_contract_is_read_without_reading_any_coverage(taxo_on, mon
     assert not [filters for filters in read if filters.get('kind') == 'COVERAGE']
 
 
-def test_an_analysis_runs_each_evaluator_once(taxo_on):
-    """L'invariant sur lequel s'appuie la lecture du contrat enregistre : une execution d'evaluateur par
-    producteur et par analyse. Le registre refuse deux evaluateurs de meme identifiant ; la base, elle, ne le
-    garantit pas (sa contrainte porte sur `(scan_id, execution_id)`)."""
-    taxo, _ = taxo_on({**repository(), **PYTHON})
-    scan = taxo.analyse()['id']
-    producers = [item.producer_id for item in taxo.client.app.state.taxo_query.facts.executions(scan)
-                 if item.producer_type == 'EVALUATOR']
-    assert producers and len(producers) == len(set(producers))
+def test_an_analysis_cannot_record_a_second_execution_of_a_producer(taxo_on):
+    """L'invariant sur lequel s'appuient verdict, comparaison et voisinage : une execution d'evaluateur par
+    producteur et par analyse. La base ne le porte pas (contrainte sur `(scan_id, execution_id)`) ; il tient par
+    construction : chaque evaluateur enregistre n'est execute qu'une fois, et une analyse relancee sous le meme
+    identifiant est refusee par la cle de `scans` avant qu'aucune execution ne soit enregistree."""
+    from sqlalchemy.exc import IntegrityError
+    from app.evaluations.application.run_evaluator import RunEvaluator
+    from app.evaluators.git.evaluator import GitEvaluator
+    from app.evaluators.inventory.evaluator import InventoryEvaluator
+    from app.evaluators.spring_api.evaluator import SpringApiEvaluator
+    from app.projects.infrastructure.paths import LocalProjectPaths
+    from app.projects.infrastructure.sqlalchemy.project_repository import SqlAlchemyProjectRepository
+    from app.scans.application.run_scan import RunScan
+    from app.scans.infrastructure.sqlalchemy.fact_memory import SqlAlchemyFactMemory
+    from app.scans.infrastructure.sqlalchemy.scan_repository import SqlAlchemyScanRepository
+    from app.snapshots.infrastructure.git.reader import GitSnapshotReader
+    taxo, root = taxo_on({**repository(), **PYTHON})
+    memory = SqlAlchemyFactMemory(taxo.engine)
+    run = RunScan(SqlAlchemyProjectRepository(taxo.engine), SqlAlchemyScanRepository(taxo.engine),
+                  LocalProjectPaths([root]), GitSnapshotReader(), InventoryEvaluator(), RunEvaluator(),
+                  others=(GitEvaluator(), SpringApiEvaluator()), facts=memory, provenance=memory)
+    project = taxo.base.rsplit('/', 1)[1]
+    run(project, scan_id='reprise')
+    recorded = sorted(item.producer_id for item in memory.executions('reprise'))
+    assert recorded == ['taxo.git', 'taxo.inventory', 'taxo.spring-api']
+    with pytest.raises(IntegrityError):
+        run(project, scan_id='reprise')
+    assert sorted(item.producer_id for item in memory.executions('reprise')) == recorded, 'aucune seconde execution'
 
 
 def test_executions_of_one_producer_naming_different_contracts_read_nothing_known():
