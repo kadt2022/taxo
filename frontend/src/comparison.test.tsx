@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {CATEGORIES, ChangeItem, CompareLauncher, ComparisonView, proof, proofWithContent, sideLabel, statement} from './comparison';
+import {CATEGORIES, ChangeItem, ComparisonView, proof, proofWithContent, sideLabel, statement} from './comparison';
 
 const commit={id:'a', created_at:'2026-10-01T10:00:00Z', snapshot:{commit:'3c4d5e6f7a8b9c0d', mode:'COMMIT'}};
 const tree={id:'b', created_at:'2026-10-01T11:00:00Z',
@@ -35,15 +35,6 @@ describe('comparaison de deux analyses', ()=>{
     expect(labels).not.toMatch(/%|impact|risque/i);
     expect(CATEGORIES.map(item=>item.id)).toEqual(['ADDED', 'REMOVED', 'MODIFIED', 'EVIDENCE_CHANGED', 'STATUS_CHANGED',
       'OCCURRENCE_COUNT_CHANGED', 'OCCURRENCES_CHANGED']);
-  });
-
-  it('propose de comparer l’analyse affichée, ou de choisir les deux, ou dit pourquoi ce n’est pas possible', ()=>{
-    const html=renderToStaticMarkup(<CompareLauncher current={tree} count={2} onPick={()=>undefined}/>);
-    expect(html).toContain('Comparer avec…');
-    expect(html).toContain('Choisir deux analyses');
-    expect(html).toContain('Modifications non commitées');
-    expect(renderToStaticMarkup(<CompareLauncher current={commit} count={1} onPick={()=>undefined}/>))
-      .toContain('Une seule analyse complète');
   });
 
   it('annonce la comparaison en cours avant la réponse de l’API', ()=>{

@@ -230,18 +230,3 @@ function SideCard({letter, title, side}:Readonly<{letter:string; title:string; s
   return <div className={`side-card side-${letter.toLowerCase()}`}><b className="side-letter" aria-hidden="true">{letter}</b>
     <div><span className="eyebrow">Analyse {letter} · {title}</span><code>{sideLabel(side)}</code><span className="side-date">{day(side.created_at)}</span></div></div>;
 }
-
-/** Depuis la vue d'ensemble : comparer l'analyse affichee avec une autre, ou choisir librement les deux. */
-export function CompareLauncher({current, count, onPick}:Readonly<{current:Side; count:number; onPick:(fixed?:string)=>void}>){
-  return <section className="compare-launch" aria-label="Comparer">
-    <div className="compare-intro"><strong>Comparer deux analyses</strong>
-      <span className="muted">Ce qui a changé entre deux analyses Taxo, preuves à l’appui, sans relire le dépôt.</span></div>
-    <div className="compare-flow">
-      <div className="compare-current"><span className="eyebrow">Analyse affichée</span><code>{sideLabel(current)}</code><span className="side-date">{day(current.created_at)}</span></div>
-      {count>1?<div className="compare-buttons">
-        <button type="button" className="primary" onClick={()=>onPick(current.id)}>Comparer avec… →</button>
-        <button type="button" className="ghost" onClick={()=>onPick()}>Choisir deux analyses</button></div>
-        :<p className="muted">Une seule analyse complète : relancez l’analyse pour pouvoir comparer.</p>}
-    </div>
-  </section>;
-}

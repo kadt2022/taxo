@@ -1,6 +1,6 @@
 // Routes (TAXO-UI-02) : ce que Taxo prouve de chaque route, lu dans ses seuls faits. Aucune phrase de Minia :
 // un etat n'est affiche que si un fait le porte, et une route non interpretee dit exactement pourquoi.
-import {useEffect, useState} from 'react';
+import {useState} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, label} from './vocabulary';
 import type {Derivation} from './query';
@@ -125,13 +125,15 @@ export function loadRoutes(request:Run, base:string, scanId:string, {onResult, o
 }
 
 type ViewProps = {result:RoutesResult|null; error:string; text:string; filter:string; selected:string;
-  onText:(value:string)=>void; onFilter:(value:string)=>void; onSelect:(endpoint:string)=>void};
+  onText:(value:string)=>void; onFilter:(value:string)=>void; onSelect:(endpoint:string)=>void; title?:string; intro?:string};
 
-export function RoutesView({result, error, text, filter, selected, onText, onFilter, onSelect}:Readonly<ViewProps>){
+const INTRO='Ce que Taxo prouve de chaque route HTTP : qui la traite, quelle application la sert, quelle règle la capture et ce qui la protège. Tout vient des faits, avec leurs preuves ; rien n’est rédigé par Minia.';
+
+export function RoutesView({result, error, text, filter, selected, onText, onFilter, onSelect, title='Routes', intro=INTRO}:Readonly<ViewProps>){
   const shown=result?filterRoutes(result.routes, text, filter):[];
   const row=result?.routes.find(item=>item.endpoint===selected);
-  return <section className="results routes" id="routes" aria-label="Routes">
-    <div className="section-heading"><div><h2>Routes</h2><p>Ce que Taxo prouve de chaque route HTTP : qui la traite, quelle application la sert, quelle règle la capture et ce qui la protège. Tout vient des faits, avec leurs preuves ; rien n’est rédigé par Minia.</p></div></div>
+  return <section className="results routes" aria-label={title}>
+    <div className="section-heading"><div><h2>{title}</h2><p>{intro}</p></div></div>
     {error&&<div role="alert" className="error">{error}</div>}
     {!result&&!error&&<output>Chargement des routes…</output>}
     {result&&<>
@@ -150,20 +152,11 @@ export function RoutesView({result, error, text, filter, selected, onText, onFil
   </section>;
 }
 
-/** Affiche les routes chargees et les transmet, avec leur analyse, a qui les attend. */
-export function shared(show:(value:RoutesResult)=>void, scanId:string, onLoaded?:(scanId:string, value:RoutesResult)=>void){
-  return (value:RoutesResult)=>{show(value);onLoaded?.(scanId, value);};
-}
-
-/** `onLoaded` partage les routes chargees avec la vue d'ensemble : une seule lecture par analyse. */
-export function RoutesPanel({base, scanId, request, onLoaded}:Readonly<{base:string; scanId:string; request:Run;
-  onLoaded?:(scanId:string, value:RoutesResult)=>void}>){
-  const [result,setResult]=useState<RoutesResult|null>(null), [error,setError]=useState('');
-  const [text,setText]=useState(''), [filter,setFilter]=useState('ALL'), [selected,setSelected]=useState('');
-  useEffect(()=>{
-    setResult(null);setError('');setSelected('');
-    return loadRoutes(request, base, scanId, {onResult:shared(setResult, scanId, onLoaded), onError:setError});
-  },[base, scanId, request, onLoaded]);
-  return <RoutesView result={result} error={error} text={text} filter={filter} selected={selected}
-    onText={setText} onFilter={setFilter} onSelect={setSelected}/>;
+/** Une page de routes (Routes, Sécurité, Non interprétées) : les routes de l'analyse affichée, lues une seule fois par le portail,
+ * avec le filtre propre à la page. */
+export function RoutesExplorer({result, error, initialFilter='ALL', title, intro}:Readonly<{result:RoutesResult|null; error:string;
+  initialFilter?:string; title?:string; intro?:string}>){
+  const [text,setText]=useState(''), [filter,setFilter]=useState(initialFilter), [selected,setSelected]=useState('');
+  return <RoutesView result={result} error={error} text={text} filter={filter} selected={selected} onText={setText} onFilter={setFilter}
+    onSelect={setSelected} title={title} intro={intro}/>;
 }

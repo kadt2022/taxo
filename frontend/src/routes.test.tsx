@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {applicationName, chainName, filterRoutes, loadRoutes, RoutesPanel, shared, RoutesView, proofText, protectionText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow, type RoutesResult} from './routes';
+import {applicationName, chainName, filterRoutes, loadRoutes, RoutesExplorer, RoutesView, proofText, protectionText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow, type RoutesResult} from './routes';
 
 const admin:RouteRow={endpoint:'endpoint:GET /api/admin/users', verb:'GET', path:'/api/admin/users', state:'PROTECTED',
   handlers:[{subject:'endpoint:GET /api/admin/users', relation:'HANDLED_BY', object:'symbol:java:com.example.adp.test.controller.TestController#adminUsers(Authentication)',
@@ -113,17 +113,10 @@ describe('réserves', ()=>{
     expect(detail).toContain('sécurité de méthode non interprétée');
     expect(renderToStaticMarkup(<RoutesTable routes={[reserved]} selected="" onSelect={()=>{}}/>)).toContain('avec réserve');
   });
-  it('partage les routes chargées avec la vue d’ensemble', ()=>{
-    const shown:RoutesResult[]=[], passed:string[]=[];
-    const result:RoutesResult={routes:[], unestablished:[]};
-    shared(value=>shown.push(value), 's9', id=>passed.push(id))(result);
-    shared(value=>shown.push(value), 's10')(result);
-    expect(shown).toEqual([result, result]);
-    expect(passed).toEqual(['s9']);
-  });
   it('commence par charger, sans rien affirmer', ()=>{
-    const pending=()=>new Promise<never>(()=>{});
-    const html=renderToStaticMarkup(<RoutesPanel base="/projects/p" scanId="s1" request={pending}/>);
+    const html=renderToStaticMarkup(<RoutesExplorer result={null} error="" initialFilter="GAPS" title="Non interprétées" intro="Ce que Taxo ne sait pas."/>);
+    expect(html).toContain('<h2>Non interprétées</h2>');
+    expect(html).toContain('Ce que Taxo ne sait pas.');
     expect(html).toContain('Chargement des routes');
     expect(html).not.toContain('<table');
   });

@@ -2,7 +2,7 @@
 import {act} from 'react';
 import {createRoot, type Root} from 'react-dom/client';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {CompareLauncher, ComparisonView, type ChangesPage, type ComparisonSummary} from './comparison';
+import {ComparisonView, type ChangesPage, type ComparisonSummary} from './comparison';
 
 (globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
 
@@ -109,17 +109,6 @@ describe('écran de comparaison', ()=>{
     await flush();
     expect(host.querySelector('.change-group [role="alert"]')?.textContent).toBe('Catégorie inconnue');
     expect(host.textContent).toContain('Modifiés');
-  });
-});
-
-describe('lanceur de comparaison', ()=>{
-  it('fixe l’analyse affichée en A, ou ouvre le choix libre', async()=>{
-    const onPick=vi.fn();
-    await act(async()=>{root.render(<CompareLauncher current={{id:'c', created_at:'2026-10-01T10:00:00Z', snapshot:{commit:'cccc', mode:'COMMIT'}}}
-      count={3} onPick={onPick}/>);});
-    await click(button('Comparer avec'));
-    await click(button('Choisir deux analyses'));
-    expect(onPick.mock.calls).toEqual([['c'], []]);
   });
 });
 

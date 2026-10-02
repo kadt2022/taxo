@@ -1,6 +1,7 @@
 // Vue d'ensemble d'un projet analyse (TAXO-UI-01, TAXO-UI-03) : ce que Taxo a compris du logiciel, pas comment il
 // l'a compris. Chaque carte vient des donnees de l'analyse ; ce que Taxo ne sait pas encore determiner est dit
 // « non analyse », jamais presente comme un resultat. Des comptes, jamais un pourcentage : aucun score n'est invente.
+import {href} from './nav';
 import {COVERAGE, EVALUATORS, label, reference} from './vocabulary';
 import type {RouteState, RoutesResult} from './routes';
 
@@ -60,7 +61,7 @@ function project(scan:Scan, inventory:EvaluationSummary|undefined):Body{
   const technologies=technologiesOf(scan);
   return {value:count(files), unit:noun(files, 'fichier analysé', 'fichiers analysés'), state:'known',
     lines:technologies.length?[counted(technologies.length, 'technologie reconnue', 'technologies reconnues')]:[],
-    link:{href:'#technologies', label:'Voir les technologies'}};
+    link:{href:href('technologies'), label:'Voir les technologies'}};
 }
 
 /** Git est une capacité de premier rang : son historique n'est pas caché dans la carte Projet. */
@@ -69,7 +70,7 @@ function gitCard(git:EvaluationSummary|undefined):Body{
   if(git.status==='FAILED')return FAILED('La lecture de l’historique Git a échoué : voir les détails de l’analyse.');
   const commits=git.relations.HAS_COMMIT??0;
   return {value:count(commits), unit:noun(commits, 'commit lu', 'commits lus'), state:'known', lines:[],
-    link:{href:'#historique', label:'Voir l’historique'}};
+    link:{href:href('historique'), label:'Voir l’historique'}};
 }
 
 /** Les routes par etat etabli, et ce qui les rend incompletes : tout vient des faits de la page Routes. */
@@ -89,7 +90,7 @@ function api(spring:EvaluationSummary|undefined, _routes:RouteCounts|undefined):
   if(spring.status==='FAILED')return FAILED('La recherche des routes a échoué : voir les détails de l’analyse.');
   const total=spring.relations.HANDLED_BY??0;
   return {value:count(total), unit:noun(total, 'route relevée', 'routes relevées'), state:'known', lines:[],
-    link:{href:'#routes', label:'Explorer les routes'}};
+    link:{href:href('routes'), label:'Explorer les routes'}};
 }
 
 /** Les modules et ce qui s'en construit, lus dans les fichiers de build (TAXO-E1) et les applications Spring Boot. */
@@ -103,14 +104,14 @@ function architecture(structure:EvaluationSummary|undefined, boot:EvaluationSumm
   if(services)lines.push(counted(services, 'service compose', 'services compose'));
   lines.push('Lu dans les fichiers de build, sans rien exécuter.');
   return {value:count(modules), unit:noun(modules, 'module détecté', 'modules détectés'), state:'known',
-    lines:lines.slice(0,2), link:{href:'#details', label:'Explorer l’architecture'}};
+    lines:lines.slice(0,2), link:{href:href('architecture'), label:'Explorer l’architecture'}};
 }
 
 /** Ce que Taxo etablit de la protection des routes ; sans le detail par route, il ne compte que les regles lues. */
 function security(spring:EvaluationSummary|undefined, routes:RouteCounts|undefined):Body{
   if(!spring)return UNKNOWN('Cette analyse n’a pas lu la sécurité.');
   if(spring.status==='FAILED')return FAILED('La lecture de la sécurité a échoué : voir les détails de l’analyse.');
-  const link={href:'#routes', label:'Explorer la sécurité'};
+  const link={href:href('securite'), label:'Explorer la sécurité'};
   if(!routes){
     const rules=(spring.relations.AUTHORIZED_BY??0)+(spring.relations.PERMITS_ALL??0);
     return {value:count(rules), unit:noun(rules, 'règle de sécurité lue', 'règles de sécurité lues'), state:'known', link, lines:[]};
@@ -196,7 +197,7 @@ export function ProjectOverview({scan, pending, routes}:Readonly<{scan:Scan; pen
     {evaluationsOf(scan).length>0&&<div className={`overview-limits${gapCount?' has-limits':''}`}>
       <div><strong>{gapCount?counted(gapCount, 'limite signalée', 'limites signalées'):'Aucune limite signalée'}</strong>
         <span>{gapCount?` · ${counted(analysers, 'analyseur concerné', 'analyseurs concernés')}`:' dans les périmètres parcourus'}</span></div>
-      <a href="#limites">Voir les limites <span aria-hidden="true">→</span></a>
+      <a href={href('limites')}>Voir les limites <span aria-hidden="true">→</span></a>
     </div>}
   </section>;
 }
