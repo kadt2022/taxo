@@ -178,7 +178,8 @@ const STATES:Record<DomainResult['state'], string>={changed:'Changements', uncha
 
 /** Un domaine : ses changements en phrases, chacune ouvrant ses faits ; ou ce qui l'empeche d'etre compare. */
 function DomainCard({domain, open, onOpen}:Readonly<{domain:DomainResult; open:string|null; onOpen:(lines:Line[], key:string)=>void}>){
-  return <article className={`domain-card state-${domain.state}${open?.startsWith(`${domain.id}:`)?' selected':''}`} aria-label={domain.label}>
+  const selected=open?.startsWith(domain.id+':')?' selected':'';
+  return <article className={`domain-card state-${domain.state}${selected}`} aria-label={domain.label}>
     <header><span className="domain-icon" aria-hidden="true">{domain.icon}</span><h3>{domain.label}</h3>
       <span className="domain-state">{STATES[domain.state]}</span></header>
     {domain.lines.length>0&&<ul className="domain-lines">{domain.lines.map(line=><li key={line.key}>

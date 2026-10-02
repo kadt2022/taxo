@@ -80,37 +80,45 @@ export type Line={key:string; evaluator:string; relation:string; category:string
 export type DomainResult={id:DomainId; label:string; icon:string; state:'changed'|'unchanged'|'refused'|'absent';
   lines:Line[]; reasons:{evaluator:string; message:string}[]};
 
+/** Les lignes d'un evaluateur comparable, chacune dans son domaine : un compte non nul par relation et categorie. */
+function linesOf(entry:EvaluatorEntry):[DomainId, Line][]{
+  return Object.entries(entry.relations??{}).flatMap(([relation, counts])=>ORDER.filter(category=>(counts[category]??0)>0)
+    .map((category):[DomainId, Line]=>[domainOf(entry.evaluator_id, relation), {key:`${entry.evaluator_id}|${relation}|${category}`,
+      evaluator:entry.evaluator_id, relation, category, count:counts[category], text:phrase(entry.evaluator_id, relation, category, counts[category])}]));
+}
+
+const byOrder=(left:Line, right:Line)=>ORDER.indexOf(left.category)-ORDER.indexOf(right.category)||left.text.localeCompare(right.text, 'fr');
+
+/** Deux evaluateurs qui disent la meme phrase ne sont jamais additionnes : chacun est nomme. */
+const named=(lines:Line[])=>lines.map(line=>lines.some(other=>other!==line&&other.text===line.text)
+  ?{...line, source:label(EVALUATORS, line.evaluator)}:line);
+
+function stateOf(lines:Line[], compared:boolean, refused:boolean):DomainResult['state']{
+  if(lines.length)return 'changed';
+  if(compared)return 'unchanged';
+  return refused?'refused':'absent';
+}
+
+const add=<T>(map:Map<DomainId, T[]>, id:DomainId, value:T)=>map.set(id, [...map.get(id)??[], value]);
+
 /** Les comptes du serveur, ranges par domaine ; un domaine sans evaluateur compare le dit, sans rien supposer. */
 export function byDomain(summary:Pick<ComparisonSummary, 'evaluators'>):DomainResult[]{
   const lines=new Map<DomainId, Line[]>(), compared=new Set<DomainId>(), refused=new Map<DomainId, EvaluatorEntry[]>();
   for(const entry of summary.evaluators){
+    const ids=domainsOf(entry.evaluator_id);
     if(!entry.comparable){
-      for(const id of domainsOf(entry.evaluator_id))refused.set(id, [...refused.get(id)??[], entry]);
+      ids.forEach(id=>add(refused, id, entry));
       continue;
     }
-    for(const id of domainsOf(entry.evaluator_id))compared.add(id);
-    for(const [relation, counts] of Object.entries(entry.relations??{})){
-      const id=domainOf(entry.evaluator_id, relation);
+    ids.forEach(id=>compared.add(id));
+    for(const [id, line] of linesOf(entry)){
       compared.add(id);
-      for(const category of ORDER){
-        const count=counts[category]??0;
-        if(!count)continue;
-        lines.set(id, [...lines.get(id)??[], {key:`${entry.evaluator_id}|${relation}|${category}`, evaluator:entry.evaluator_id,
-          relation, category, count, text:phrase(entry.evaluator_id, relation, category, count)}]);
-      }
+      add(lines, id, line);
     }
   }
   return DOMAINS.map(domain=>{
-    const found=(lines.get(domain.id)??[]).sort((left, right)=>ORDER.indexOf(left.category)-ORDER.indexOf(right.category)
-      ||left.text.localeCompare(right.text, 'fr'));
-    // Deux evaluateurs qui disent la meme phrase ne sont jamais additionnes : chacun est nomme.
-    const shown=found.map(line=>found.some(other=>other!==line&&other.text===line.text)
-      ?{...line, source:label(EVALUATORS, line.evaluator)}:line);
+    const shown=named([...lines.get(domain.id)??[]].sort(byOrder));
     const reasons=(refused.get(domain.id)??[]).map(entry=>({evaluator:label(EVALUATORS, entry.evaluator_id), message:entry.message??''}));
-    let state:DomainResult['state']='absent';
-    if(shown.length)state='changed';
-    else if(compared.has(domain.id))state='unchanged';
-    else if(reasons.length)state='refused';
-    return {...domain, state, lines:shown, reasons};
+    return {...domain, state:stateOf(shown, compared.has(domain.id), reasons.length>0), lines:shown, reasons};
   }).filter(domain=>domain.id!=='autres'||domain.state==='changed'||domain.state==='refused');
 }
