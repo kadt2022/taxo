@@ -5,6 +5,7 @@ import {ComparisonView, day, proof, sentence, Phrase, sideLabel, type ComparedFa
 import {AnalysisDetails} from './details';
 import {href, go, type Route} from './nav';
 import {AnalysisLimits, evaluationsOf, gapsOf, ProjectOverview, technologiesOf, type RouteCounts, type Scan} from './overview';
+import type {CoverageView} from './reading';
 import {ChoiceCard, ComparePicker, matches, NO_SEARCH, SearchFields, Source, type Choice, type Search} from './picker';
 import {EVALUATORS, STATUSES, label} from './vocabulary';
 
@@ -56,9 +57,10 @@ function PageHead({title, intro}:Readonly<{title:string; intro:string}>){
 }
 
 /** Overview : un tableau de bord. Les cartes, les limites et l'analyse affichee ; lancer une analyse est une commande du menu Analyse. */
-export function OverviewPage({scan, latest, pending, routes}:Readonly<{scan:Scan; latest?:Scan; pending?:string[]; routes?:RouteCounts}>){
+export function OverviewPage({scan, latest, pending, routes, coverage}:Readonly<{scan:Scan; latest?:Scan; pending?:string[];
+  routes?:RouteCounts; coverage?:CoverageView}>){
   return <>
-    <ProjectOverview scan={scan} pending={pending} routes={routes}/>
+    <ProjectOverview scan={scan} pending={pending} routes={routes} coverage={coverage}/>
     <section className="overview-shown" aria-label="Analyse affichée">
       <div><span className="eyebrow">{latest&&latest.id!==scan.id?'Analyse affichée':'Dernière analyse'}</span>
         <strong>{day(scan.created_at)}</strong><code>{sideLabel(sideOf(scan))}</code></div>

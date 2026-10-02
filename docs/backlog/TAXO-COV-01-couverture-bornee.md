@@ -1,6 +1,7 @@
 # TAXO-COV-01 — Une couverture bornée : une absence de preuve n'est jamais une preuve d'absence
 
-Statut : rédigé le 2026-10-02, après l'exercice « Taxo analyse Taxo ». Passe avant la tranche E de
+Statut : rédigé le 2026-10-02, après l'exercice « Taxo analyse Taxo ». PR A (contrat et protocole, #74) livrée ;
+PR B (restitution) en cours. Passe avant la tranche E de
 [TAXO-01F](TAXO-01F-comparaison-persistee.md), suspendue jusqu'à la livraison de la PR B.
 
 Source de vérité : [ARCHITECTURE § 2, § 5.1, § 6, § 12.4](../ARCHITECTURE.md). En cas de divergence, le
@@ -125,6 +126,25 @@ exécuté.
 | --- | --- |
 | **A — Contrat et protocole** | catalogues, moteur (`UNSUPPORTED`, `OUT_OF_SCOPE`), langages de l'analyse, module générique des capacités, verdicts, enveloppe et `describe`, voisinage, comparabilité, ARCHITECTURE ; tests backend |
 | **B — Restitution** | Overview (« fichiers inventoriés » et non « analysés »), Routes, Sécurité, limites, comparaisons ; validation sur le dépôt Taxo |
+
+### PR B — ce que le portail dit
+
+- `GET /api/projects/{id}/scans/{scan_id}/coverage` : les langages de l'analyse, si l'inventaire a tout lu, et pour
+  chaque analyseur ce que lit son contrat (`reads`, `null` s'il est indépendant du langage), son statut, son
+  contrat (`KNOWN` / `UNKNOWN`) et les langages présents qu'il n'a pas lus (`unread`). Calculé par les fonctions
+  génériques de la PR A ; une analyse antérieure est relue dans ses faits (langages, catalogue de ses couvertures).
+- **Overview** : « fichiers inventoriés » ; une carte dont l'analyseur n'a rien lu dit « Non analysé » et les
+  langages qu'il aurait fallu lire ; une carte en partie lue garde son compte et ajoute « Non analysé : … » ; la
+  ligne des limites ne dit jamais « Aucune limite signalée » quand un langage présent n'est pas lu ; une
+  application Spring Boot jamais cherchée n'est pas comptée « 0 ».
+- **Routes, Sécurité** : « Aucune route établie dans ce que Taxo a lu. Non analysé : … — une route écrite dans ces
+  langages n'est ni trouvée ni exclue » ; le menu ne compte rien pour une sécurité qui n'a rien lu.
+- **Limites** : un tableau « Langages non analysés » (analyseur, ce qu'il lit, ce qu'il n'a pas lu, contrat
+  inconnu) ; l'inventaire incomplet est signalé.
+- **Comparaisons** : un domaine dont l'analyseur n'avait rien à lire est « Non analysé », avec sa raison, jamais
+  « Aucun changement » ; chaque domaine nomme les langages présents qu'il n'a pas lus.
+- **Progression et détails** : `UNSUPPORTED` se lit « Non pris en charge », `OUT_OF_SCOPE` « Hors de son
+  périmètre ».
 
 Hors périmètre : un analyseur FastAPI ou Python ; l'impact d'un commit (`/history/.../impact`), qui
 relance les analyseurs sans inventaire préalable et sera remplacé par la tranche E de 01F.

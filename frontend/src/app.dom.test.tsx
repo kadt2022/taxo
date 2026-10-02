@@ -23,7 +23,11 @@ const STRUCTURE=[{kind:'ASSERTION', subject:'repository:p', relation:'CONTAINS',
   {kind:'ASSERTION', subject:'module:app', relation:'DEPENDS_ON', object:'module:web', status:'OBSERVED', validity:'VALID', evidence:[]}];
 const SUMMARY={before:CHOICES[1], after:CHOICES[0], evaluators:[], totals:{UNCHANGED:3}, unknown:{before:0, after:0}};
 
-let failing:string[]=[], empty=false, streamed=false;
+let failing:string[]=[], empty=false, streamed=false, unread=false;
+// Ce que chaque analyseur a lu (TAXO-COV-01) : par defaut tout ; `unread` simule un depot sans Java.
+const COVERAGE=()=>({languages:unread?['Python']:['Java'], complete:true, evaluators:[
+  {evaluator_id:'taxo.spring-api', status:unread?'UNSUPPORTED':'SUCCESS', contract:'KNOWN', reads:['Java'], unread:unread?['Python']:[]},
+  {evaluator_id:'taxo.spring-security', status:unread?'UNSUPPORTED':'SUCCESS', contract:'KNOWN', reads:['Java'], unread:unread?['Python']:[]}]});
 // Le flux d'une analyse qui échoue après avoir annoncé ses étapes, tel que le serveur l'émet.
 const FAILED_RUN=['event: analysis.started\ndata: {"evaluators":["taxo.git"]}\n\n', 'event: evaluator.started\ndata: {"evaluator":"taxo.git"}\n\n',
   'event: analysis.failed\ndata: {"message":"Dépôt illisible."}\n\n'].join('');
@@ -34,6 +38,7 @@ function answer(path:string){
   if(path.endsWith('/api/projects'))return [{id:'p', name:'Boutique', path:'/boutique'}, {id:'q', name:'Atelier', path:'/atelier'}];
   if(/\/projects\/[pq]\/scans$/.test(path))return SCANS;
   if(path.includes('/routes'))return ROUTES;
+  if(path.endsWith('/coverage'))return COVERAGE();
   if(path.endsWith('/comparisons/analyses'))return CHOICES;
   if(path.includes('/facts?evaluator=taxo.structure'))return STRUCTURE;
   if(path.includes('/comparisons?'))return SUMMARY;
@@ -43,7 +48,7 @@ function answer(path:string){
 
 let host:HTMLElement, root:Root;
 beforeEach(()=>{
-  failing=[];empty=false;streamed=false;
+  failing=[];empty=false;streamed=false;unread=false;
   vi.stubGlobal('fetch', vi.fn(async(url:URL, init?:RequestInit)=>{
     if(streamed&&init?.method==='POST'&&url.toString().endsWith('/analyses'))return {ok:true, json:async()=>({events:'/projects/p/analyses/j/events'})};
     if(streamed&&url.toString().endsWith('/analyses/j/events'))return {ok:true, body:new Response(FAILED_RUN).body};
@@ -267,4 +272,29 @@ describe('une page par fonction', ()=>{
     expect(host.querySelector('.launch.is-failed')).toBeNull();
     expect(host.textContent).not.toContain('Dépôt illisible.');
   });
+
+  it('un dépôt que la sécurité n’a pas lu : ni compte au menu, ni « aucune route » (TAXO-COV-01)', async()=>{
+    unread=true;
+    await open('#/');
+    expect(host.querySelector('.results-nav a[href="#/securite"] .results-count')).toBeNull();
+    expect(host.querySelector('.results-nav a[href="#/non-interpretees"] .results-count')).toBeNull();
+    expect(host.querySelector('[aria-label="API"] .card-value')?.textContent).toBe('Non analysé');
+    expect(host.querySelector('.overview-limits strong')?.textContent).toBe('Non analysé : Python');
+    await visit('#/routes');
+    expect(text()).toContain('Non analysé : Python — une route écrite dans ce langage n’est ni trouvée ni exclue.');
+    await visit('#/limites');
+    expect(host.querySelector('.unread-languages')?.textContent).toContain('Endpoints Spring');
+  });
+
+  it('une couverture qui ne se charge pas n’est jamais une couverture complète (TAXO-COV-01)', async()=>{
+    unread=true;
+    failing=['/coverage'];
+    await open('#/');
+    expect(host.querySelector('[aria-label="API"] .card-value')?.textContent).not.toBe('0');
+    expect(host.querySelector('.overview-limits strong')?.textContent).toBe('Couverture des langages inconnue');
+    expect(host.querySelector('.results-nav a[href="#/securite"] .results-count')).toBeNull();
+    await visit('#/routes');
+    expect(text()).not.toContain('Aucune route HTTP établie par cette analyse');
+  });
 });
+

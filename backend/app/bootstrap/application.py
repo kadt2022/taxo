@@ -96,11 +96,13 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     api.include_router(health_router)
     api.include_router(projects_router(projects, paths))
     # Analyse observable : lancee en tache de fond, ses evenements reels sont diffuses (TAXO-UX-02).
-    api.include_router(scans_router(projects, scans, run, facts, AnalysisJobs(run, projects)))
+    # Ce que lit chaque contrat de catalogue (TAXO-COV-01) : une seule valeur pour la restitution et la comparaison.
+    contracts = {(item.catalog.catalog_id, item.catalog.catalog_version): item.catalog.languages
+                 for item in registry.all()}
+    api.include_router(scans_router(projects, scans, run, facts, AnalysisJobs(run, projects), contracts))
     api.include_router(history_router(history))
-    api.include_router(comparison_router(CompareAnalyses(
-        projects, scans, SqlAlchemyComparisonStore(engine),
-        {(item.catalog.catalog_id, item.catalog.catalog_version): item.catalog.languages for item in registry.all()})))
+    comparison = CompareAnalyses(projects, scans, SqlAlchemyComparisonStore(engine), contracts)
+    api.include_router(comparison_router(comparison))
     # La requete selectionne parmi les faits conserves ; elle ne relit jamais le depot (TAXO-QUERY-01).
     query = ProjectQuery(projects, scans, facts)
     api.include_router(query_router(query))
