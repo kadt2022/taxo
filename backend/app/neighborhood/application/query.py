@@ -168,9 +168,14 @@ def _summarized(exchange):
 
 def _recorded_contracts(exchange):
     """Un resume anterieur a TAXO-COV-01 ne nomme pas son catalogue : chaque execution est lue selon le contrat
-    que ses couvertures ont enregistre, comme pour les verdicts, jamais selon le catalogue actuel de son
-    analyseur. Sans couverture enregistree, son contrat est inconnu : il ne lit rien de connu."""
-    return {analyzer.analyzer_id: analyzer.languages for analyzer in exchange.analyzers()}
+    enregistre avec elle, celui que portent ses couvertures et que lisent les verdicts, jamais selon le
+    catalogue actuel de son analyseur. Une lecture bornee : une ligne par execution, aucun fait. Sans
+    execution enregistree, son contrat est inconnu : il ne lit rien de connu."""
+    found = {}
+    for execution in exchange.service.facts.executions(exchange.scan.id):
+        if execution.producer_type == 'EVALUATOR':
+            found.setdefault(execution.producer_id, exchange.service.languages_of(vars(execution)))
+    return found
 
 
 class _Neighborhood:

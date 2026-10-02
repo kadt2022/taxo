@@ -91,3 +91,18 @@ def test_an_earlier_summary_is_read_by_the_contract_its_execution_recorded(taxo_
     assert (api['contract'], api['unread']) == ('UNKNOWN', ['Java', 'Python'])
     frontier = [item['languages'] for item in tile['frontier'] if item.get('reason') == 'NOT_ANALYSED']
     assert frontier == [['Java', 'Python']], 'le voisinage dit la meme limite que le verdict et la restitution'
+
+
+def test_the_recorded_contract_is_read_without_reading_any_coverage(taxo_on, monkeypatch):
+    """Le voisinage reste borne : le contrat d'un resume anterieur se lit dans ses executions, pas dans ses faits."""
+    from app.scans.infrastructure.sqlalchemy.fact_memory import SqlAlchemyFactMemory
+    taxo, _ = taxo_on({**repository(), **PYTHON})
+    scan = taxo.analyse()['id']
+    forget_catalogs(taxo, scan)
+    read, query = [], SqlAlchemyFactMemory.query
+    monkeypatch.setattr(SqlAlchemyFactMemory, 'query',
+                        lambda self, scan_id, **filters: read.append(filters) or query(self, scan_id, **filters))
+    tile, = taxo.ask(('get_neighborhood', {'analysis': scan, 'root': 'endpoint:GET /orders',
+                                           'follow': ['HANDLED_BY'], 'direction': 'OUTGOING'}), analysis=scan)
+    assert [item['languages'] for item in tile['frontier'] if item.get('reason') == 'NOT_ANALYSED'] == [['Python']]
+    assert not [filters for filters in read if filters.get('kind') == 'COVERAGE']
