@@ -175,17 +175,13 @@ class TaxoQuery:
         self.capabilities = {(item.catalog.catalog_id, item.catalog.catalog_version):
                              None if item.catalog.languages is None else frozenset(item.catalog.languages)
                              for item in analyzers}
-        self._current = {item.evaluator_id: (item.catalog.catalog_id, item.catalog.catalog_version)
-                         for item in analyzers}
         self.source_context = source_context
 
-    def languages_of(self, evaluator_id, evaluation):
-        """Les langages du contrat de catalogue d'une execution resumee : celui qu'elle nomme, sinon le
-        catalogue actuel de son analyseur. `None` est reserve a un contrat connu independant du langage ; un
-        contrat inconnu ne lit rien de connu, comme pour les verdicts."""
+    def languages_of(self, evaluation):
+        """Les langages du contrat de catalogue qu'une execution resumee nomme. `None` est reserve a un contrat
+        connu independant du langage ; un contrat inconnu, ou non nomme, ne lit rien de connu, comme pour les
+        verdicts."""
         key = (evaluation.get('catalog_id'), evaluation.get('catalog_version'))
-        if key[0] is None:
-            key = self._current.get(evaluator_id)
         return self.capabilities[key] if key in self.capabilities else frozenset()
 
     def open(self, project_id, diff_consent=False, max_bytes=None, analysis_id=None):

@@ -272,10 +272,11 @@ def test_an_unknown_catalog_contract_reads_nothing_known_in_the_neighborhood_too
     from app.evaluators.git.evaluator import GitEvaluator
     from app.protocol.application.exchange import TaxoQuery
     query = TaxoQuery(None, None, None, None, [GitEvaluator(), SpringApiEvaluator()], 'off')
-    assert query.languages_of('taxo.removed', {'catalog_id': 'removed', 'catalog_version': '1'}) == frozenset()
-    assert query.languages_of('taxo.spring-api', {'catalog_id': 'spring-api', 'catalog_version': '1'}) == frozenset()
-    assert query.languages_of('taxo.git', {}) is None, 'un resume anterieur : le catalogue actuel de son analyseur'
-    assert query.languages_of('taxo.spring-api', {}) == frozenset({'Java'})
+    assert query.languages_of({'catalog_id': 'removed', 'catalog_version': '1'}) == frozenset()
+    assert query.languages_of({'catalog_id': 'spring-api', 'catalog_version': '1'}) == frozenset()
+    # Un resume anterieur ne nomme pas son catalogue : le voisinage le relit dans ses couvertures, jamais dans le
+    # catalogue actuel de son analyseur (TAXO-ARCH-REF-01, divergence 3).
+    assert query.languages_of({}) == frozenset()
 
 
 def partial_inventory(monkeypatch):
