@@ -1,8 +1,8 @@
 # TAXO-ARCH-REF-01 — Assainissement architectural et responsabilités
 
 Statut : tranche A (audit) rédigée le 2026-10-02, sur `main` à `08bb050` (après TAXO-COV-01 PR A). Frontières
-validées le 2026-10-02, avec l'ordre A → C → B → D → E ; `_Neighborhood` et `RunScan` ne sont pas touchés. Les deux
-divergences sont corrigées par une PR dédiée avant la tranche C, jamais dans une restructuration.
+validées le 2026-10-02, avec l'ordre A → C → B → D → E ; `_Neighborhood` et `RunScan` ne sont pas touchés. Les trois
+divergences sont corrigées par des PR dédiées avant la tranche C, jamais dans une restructuration.
 
 Règle absolue : à données identiques, mêmes faits, verdicts, comparaisons, enveloppes, limites, erreurs
 publiques, réponses API et déterminisme. Un défaut trouvé est documenté et exposé par un test, jamais corrigé
@@ -62,7 +62,7 @@ n'ont pas de foyer : chaque consommateur les reconstruit.
 Conséquence observée, pas théorique : le P2 de Codex sur #74 (un contrat inconnu pris pour « indépendant du
 langage ») venait exactement de là, `None` signifiant « indépendant » à un endroit et « inconnu » à un autre.
 
-### Deux divergences de comportement trouvées (exposées par la tranche A, corrigées par une PR dédiée)
+### Trois divergences de comportement trouvées (exposées par un test, corrigées par des PR dédiées)
 
 1. **Contrat de catalogue inconnu.** Verdict et voisinage : il ne lit rien de connu (`frozenset()`).
    Comparaison : il est traité comme indépendant du langage (`None`), donc comparé comme avant. C'était un choix
@@ -73,6 +73,24 @@ langage ») venait exactement de là, `None` signifiant « indépendant » à un
    **aucune frontière**, parce qu'il ne lit que le résumé, qui ne porte pas les langages, et y voit
    `spring-api` en `SUCCESS`. Le défaut corrigé par COV-01 survit donc dans le voisinage des analyses
    antérieures. → test qui l'expose dans la tranche A, correction séparée.
+3. **Contrat d'un résumé antérieur.** Trouvée en préparant la tranche C. Un résumé antérieur à COV-01 ne nomme
+   pas le catalogue de ses exécutions. Verdict et restitution (`/coverage`) relisent celui que ses couvertures
+   ont enregistré ; le voisinage prenait le catalogue **actuel** de l'analyseur. Quand ce contrat n'est plus
+   connu, le verdict nommait Java et Python non analysés, le voisinage Python seul. C'est contraire à la règle
+   COV-01 : une couverture se juge selon le contrat de son producteur. → test qui l'expose, correction séparée :
+   le voisinage relit le contrat enregistré, `TaxoQuery.languages_of` ne se rabat plus sur le catalogue actuel.
+   Invariant relevé à cette occasion (revue de #78) : une analyse a au plus une exécution d'évaluateur par
+   producteur. La base ne le porte pas (contrainte sur `(scan_id, execution_id)`) ; il tient par construction :
+   - le registre refuse deux évaluateurs de même identifiant, et `RunScan` exécute chacun une fois ;
+   - une analyse relancée sous le même identifiant est refusée par la clé de `scans` (`scans.add`) avant
+     qu'aucune exécution ne soit enregistrée ; aucune reprise ni nouvelle tentative ne réutilise un identifiant
+     (chaque lancement en tire un nouveau) ;
+   - la migration 004 n'a créé d'exécution que pour une entrée du résumé, une par évaluateur.
+   Un test le vérifie en relançant une analyse sous le même identifiant. Par prudence, le voisinage ne choisit
+   aucune exécution à la place d'une autre : des contrats différents pour un même producteur sont inconnus.
+   Le verdict (contrat de la première couverture) et la comparaison (union des contrats) s'appuient sur le
+   même invariant sans le dire. Tant qu'il tient, rien ne diverge. `AnalysisKnowledge` (tranche C) portera
+   une seule règle pour ce cas.
 
 ## 4. Audit par classe
 
@@ -216,11 +234,12 @@ l'intérieur de l'échange.
 | Tranche | Contenu | Comportement |
 | --- | --- | --- |
 | **A — Audit** | ce document ; deux tests qui exposent les divergences du § 3 (`tests/test_knowledge_divergences.py`, seule l’assertion divergente est attendue en échec (`divergence`, équivalent strict d’`xfail`) : les étapes préalables restent vérifiées, et la marque devra être retirée quand la divergence sera corrigée) ; mesures | inchangé |
-| **C — Connaissance** | `Reads`, `CatalogContracts`, `AnalysisKnowledge`, chargeur ; consommateurs migrés un par un (verdict, enveloppe, voisinage, comparaison) | inchangé, y compris les deux divergences (paramètre explicite) |
+| **C — Connaissance** | `Reads`, `CatalogContracts`, `AnalysisKnowledge`, chargeur ; consommateurs migrés un par un (verdict, enveloppe, voisinage, comparaison) | inchangé : les trois divergences du § 3 sont corrigées avant, à part |
 | **B — Protocole** | `call()` découpé, table d'opérations, collaborateur historique, interface étroite pour le voisinage, port des faits déclaré | inchangé |
 | **D — Comparaison** | `choices` séparé ; comparabilité via la connaissance | inchangé |
 | **E — Garde-fous** | tests d'architecture du § 7, ARCHITECTURE.md (frontières retenues), mesures après | inchangé |
-| Correction séparée | les deux divergences du § 3 : un contrat inconnu n'est jamais comparé (`CONTRACT_UNKNOWN_*`, après `CATALOG_CHANGED`) ; le voisinage d'une analyse antérieure relit ses langages comme les verdicts | **modifié**, annoncé |
+| Correction séparée (divergence 3) | le voisinage d'un résumé antérieur lit le contrat que ses couvertures ont enregistré, jamais le catalogue actuel | **modifié**, annoncé |
+| Correction séparée | les deux premières divergences du § 3 : un contrat inconnu n'est jamais comparé (`CONTRACT_UNKNOWN_*`, après `CATALOG_CHANGED`) ; le voisinage d'une analyse antérieure relit ses langages comme les verdicts | **modifié**, annoncé |
 
 Chaque tranche est une PR réversible. Les sorties publiques (enveloppes, verdicts, comparaisons, erreurs)
 restent identiques : les tests existants sont la référence, et aucune attente n'est modifiée sans le dire.

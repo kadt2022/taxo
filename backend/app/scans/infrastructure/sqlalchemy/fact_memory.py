@@ -264,6 +264,12 @@ class SqlAlchemyFactMemory:
         with Session(self.engine) as db:
             return [fact for _, fact in self.load_rows(db, scan_id, statement.order_by(occurrence.id))]
 
+    def executions(self, scan_id):
+        """The producer executions recorded for the analysis, in recording order: one row each, no fact read."""
+        with Session(self.engine) as db:
+            return [row.execution() for row in db.scalars(select(ProducerExecutionRow).where(
+                ProducerExecutionRow.scan_id == scan_id).order_by(ProducerExecutionRow.id))]
+
     def objects(self, scan_id, relation):
         """The distinct objects of one relation in the analysis, sorted, without rebuilding any fact."""
         occurrence, identity = FactOccurrenceRow, FactIdentityRow

@@ -151,15 +151,35 @@ def _knowledge(reason, **fields):
 def _summarized(exchange):
     """Les analyseurs tels que le resume de l'analyse les decrit : statut, relations, couvertures et
     langages de leur contrat de catalogue (TAXO-COV-01)."""
-    found = []
+    found, recorded = [], None
     for evaluation in exchange.evaluations:
         identifier = evaluation['evaluator_id']
         relations = exchange.service.catalogs.get(identifier, frozenset(evaluation.get('relations', {})))
         # Le resume ne garde que les types de couverture : assez pour savoir si l'execution a analyse.
         coverage = tuple({_TYPE: item[_TYPE]} for item in evaluation.get('coverage', []))
-        found.append(Analyzer(identifier, relations, evaluation['status'] == 'FAILED', coverage,
-                              exchange.service.languages_of(identifier, evaluation),
+        if evaluation.get('catalog_id') is None and recorded is None:
+            recorded = _recorded_contracts(exchange)
+        languages = (recorded.get(identifier, frozenset()) if evaluation.get('catalog_id') is None
+                     else exchange.service.languages_of(evaluation))
+        found.append(Analyzer(identifier, relations, evaluation['status'] == 'FAILED', coverage, languages,
                               evaluation['status'] == 'UNSUPPORTED'))
+    return found
+
+
+def _recorded_contracts(exchange):
+    """Un resume anterieur a TAXO-COV-01 ne nomme pas son catalogue : chaque execution est lue selon le contrat
+    enregistre avec elle, celui que portent ses couvertures et que lisent les verdicts, jamais selon le
+    catalogue actuel de son analyseur. Une lecture bornee : une ligne par execution, aucun fait. Sans
+    execution enregistree, son contrat est inconnu : il ne lit rien de connu. Une analyse n'a qu'une execution
+    par evaluateur (par construction, pas par la base) ; si plusieurs executions d'un producteur nommaient des
+    contrats differents, aucun ne serait choisi a la place des autres : le contrat serait inconnu."""
+    found = {}
+    for execution in exchange.service.facts.executions(exchange.scan.id):
+        if execution.producer_type != 'EVALUATOR':
+            continue
+        languages = exchange.service.languages_of(vars(execution))
+        known = found.get(execution.producer_id, languages)
+        found[execution.producer_id] = languages if known == languages else frozenset()
     return found
 
 

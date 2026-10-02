@@ -96,7 +96,9 @@ produit déjà la couverture d'une exécution en échec ; l'analyseur n'est pas 
 6. **Voisinage.** Un analyseur `UNSUPPORTED` ne compte pas parmi les capacités ; un langage présent non
    couvert pour une relation suivie est une frontière de connaissance (`NOT_ANALYSED`). Le voisinage lit le
    résumé de l'analyse ; une analyse antérieure, qui n'enregistre pas ses langages, les relit dans ses faits,
-   comme les verdicts (TAXO-ARCH-REF-01, divergence 2).
+   comme les verdicts (TAXO-ARCH-REF-01, divergence 2). Un résumé antérieur ne nomme pas non plus son
+   catalogue : le voisinage lit le contrat que ses couvertures ont enregistré, jamais le catalogue actuel de
+   l'analyseur (TAXO-ARCH-REF-01, divergence 3).
 7. **Comparaison (TAXO-01F).** Un analyseur lié à des langages dont aucun n'est présent d'un côté (selon
    un inventaire complet), ou `UNSUPPORTED` d'un côté, n'est **pas comparable** de ce côté, avec sa raison. Comparer deux absences de
    lecture n'est jamais « aucun changement ». Pour un analyseur comparable, la réponse donne les langages
