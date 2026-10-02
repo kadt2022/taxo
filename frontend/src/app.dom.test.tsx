@@ -23,7 +23,10 @@ const STRUCTURE=[{kind:'ASSERTION', subject:'repository:p', relation:'CONTAINS',
   {kind:'ASSERTION', subject:'module:app', relation:'DEPENDS_ON', object:'module:web', status:'OBSERVED', validity:'VALID', evidence:[]}];
 const SUMMARY={before:CHOICES[1], after:CHOICES[0], evaluators:[], totals:{UNCHANGED:3}, unknown:{before:0, after:0}};
 
-let failing:string[]=[], empty=false;
+let failing:string[]=[], empty=false, streamed=false;
+// Le flux d'une analyse qui échoue après avoir annoncé ses étapes, tel que le serveur l'émet.
+const FAILED_RUN=['event: analysis.started\ndata: {"evaluators":["taxo.git"]}\n\n', 'event: evaluator.started\ndata: {"evaluator":"taxo.git"}\n\n',
+  'event: analysis.failed\ndata: {"message":"Dépôt illisible."}\n\n'].join('');
 function answer(path:string){
   if(failing.some(part=>path.includes(part)))return {failed:true};
   if(empty&&/\/projects\/[pq]\/scans$/.test(path))return [];
@@ -40,8 +43,10 @@ function answer(path:string){
 
 let host:HTMLElement, root:Root;
 beforeEach(()=>{
-  failing=[];empty=false;
+  failing=[];empty=false;streamed=false;
   vi.stubGlobal('fetch', vi.fn(async(url:URL, init?:RequestInit)=>{
+    if(streamed&&init?.method==='POST'&&url.toString().endsWith('/analyses'))return {ok:true, json:async()=>({events:'/projects/p/analyses/j/events'})};
+    if(streamed&&url.toString().endsWith('/analyses/j/events'))return {ok:true, body:new Response(FAILED_RUN).body};
     if(init?.method==='POST'&&url.toString().endsWith('/api/projects'))return {ok:true, json:async()=>({id:'r', name:'Nouveau', path:'/nouveau'})};
     const value=answer(url.toString());
     return 'failed' in value?{ok:false, status:500, json:async()=>({detail:'Panne simulée.'})}:{ok:true, json:async()=>value};}));
@@ -93,6 +98,9 @@ describe('une page par fonction', ()=>{
     await open('#/analyses');
     expect(current()).toContain('Analyses');
     expect(host.querySelectorAll('.analysis-list > li')).toHaveLength(2);
+    // La page Analyses s'ouvre sur son poste de lancement.
+    expect(host.querySelector('.analyses-page .launch .launch-button')?.textContent).toBe('Lancer l’analyse globale');
+    expect(host.querySelector('.launch')?.textContent).toContain('Analyser Boutique maintenant');
     expect(host.querySelector('a[href="#/comparaisons/choix?a=old"]')).not.toBeNull();
     await visit('#/analyses/old');
     expect(text()).toContain('message old');
@@ -242,5 +250,21 @@ describe('une page par fonction', ()=>{
     await act(async()=>{menu?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
     expect(host.querySelector('.menu-panel')?.textContent).toContain('Aucune analyse pour ce projet.');
     expect(host.querySelector('.menu-panel .command-main')?.textContent).toBe('Lancer la première analyse');
+  });
+
+  it('une analyse interrompue reste à son projet : en changer efface son échec', async()=>{
+    streamed=true;
+    await open('#/analyses');
+    await act(async()=>{host.querySelector('.launch-button')?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
+    await flush();
+    expect(host.querySelector('.launch.is-failed')?.textContent).toContain('Dépôt illisible.');
+    await act(async()=>{host.querySelector('.switcher-current')?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
+    const other=Array.from(host.querySelectorAll('.switcher [role="option"]')).find(item=>item.textContent?.includes('Atelier'));
+    await act(async()=>{other?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
+    await flush();
+    await visit('#/analyses');
+    expect(host.querySelector('.switcher-current strong')?.textContent).toBe('Atelier');
+    expect(host.querySelector('.launch.is-failed')).toBeNull();
+    expect(host.textContent).not.toContain('Dépôt illisible.');
   });
 });

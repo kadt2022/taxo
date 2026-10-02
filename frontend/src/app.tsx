@@ -3,7 +3,7 @@ import {useEffect, useState, type ReactNode} from 'react';
 import {type MiniaStatus} from './minia';
 import {AnalysisLimits, overviewCards, panelKey, routeCounts, technologiesOf, type Scan} from './overview';
 import {BrandMark, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
-import {AnalysisCommand} from './commands';
+import {AnalysisCommand, LaunchCard} from './commands';
 import {ProjectSwitcher} from './switcher';
 import {href, go, parse, useRoute, withProject} from './nav';
 import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, ProjectsPage, TechnologiesPage} from './pages';
@@ -31,6 +31,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   const [scans,setScans]=useState<Scan[]>([]), [scanId,setScanId]=useState('');
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false), [loading,setLoading]=useState(true);
+  const [run,setRun]=useState<Run|null>(null);
   // L'analyse affichee : la plus recente par defaut, ou celle choisie dans la page Analyses.
   const scan=scans.find(s=>s.id===scanId) ?? scans[0];
   // Le projet fait partie de l'adresse : une page rechargee ou copiee rouvre le meme projet.
@@ -39,7 +40,8 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   useEffect(()=>{if(selected)withProject(selected);},[selected, route]);
   useEffect(()=>{
     let active=true;
-    setScans([]);setScanId('');
+    // Une analyse appartient a son projet : en changer efface sa progression, son echec et sa relance.
+    setScans([]);setScanId('');setRun(null);
     if(selected){setLoading(true);request<Scan[]>(`/projects/${selected}/scans`).then(s=>{if(active)setScans(s);}).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active)setLoading(false);});}
     return ()=>{active=false;};
   },[selected]);
@@ -50,7 +52,6 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     catch(e){setError((e as Error).message);return false;}finally{setBusy(false);}
   }
   const open=(id:string)=>{setError('');setSelected(id);go(href('overview'));};
-  const [run,setRun]=useState<Run|null>(null);
   function analyze(){
     return analyzeProject(selected,{request, open:(url,last)=>openStream(url,last?{headers:{'Last-Event-ID':last}}:undefined), setRun, setError, setBusy, addScan:s=>{setScans(past=>[s,...past]);setScanId(s.id);}});
   }
@@ -80,7 +81,8 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     if(!selected||route.page==='projets')return projectsPage;
     switch(route.page){
     case 'analyses':return route.id?<AnalysisPage base={base} request={request} revision={revision} scan={scans.find(item=>item.id===route.id)}
-      displayed={scan?.id} onShow={show}/>:<AnalysesPage base={base} request={request} revision={revision} displayed={scan?.id}/>;
+      displayed={scan?.id} onShow={show}/>:<AnalysesPage base={base} request={request} revision={revision} displayed={scan?.id}
+      launch={<LaunchCard project={project} latest={latest} count={scans.length} run={run} canAnalyze={!busy&&!loading} onAnalyze={analyze}/>}/>;
     case 'comparaisons':return <ComparisonsPage base={base} request={request} route={route} project={project}/>;
     case 'historique':return history(selected, minia);
     case 'donnees':return <DataPage/>;
@@ -123,7 +125,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     <p className="aside-note">Analyse locale · v0.1<br/>Vos fichiers restent sur votre machine.</p></aside>
     <main>
     {error&&<div role="alert" className="error">{error}</div>}
-    {run&&run.status!=='done'&&<AnalysisProgress run={run}/>}
+    {run&&run.status!=='done'&&!(route.page==='analyses'&&!route.id)&&<AnalysisProgress run={run}/>}
     {loading?<output>Chargement…</output>:page()}
     </main>
   </div>;

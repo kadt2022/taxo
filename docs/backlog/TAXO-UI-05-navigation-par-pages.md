@@ -51,7 +51,7 @@ de bord.
 | --- | --- | --- |
 | `#/` | Overview | les six cartes (Projet, Git, API, Architecture, Sécurité, Données), la ligne des limites, l'analyse affichée (date, commit, « Voir l'analyse »), et deux actions : lancer une analyse, comparer deux analyses |
 | `#/projets` | Projets | les projets connus, leur dossier, le projet actif marqué ; « Ouvrir » en fait le projet actif, « Ajouter un projet » en enregistre un nouveau (`?ajouter=1` ouvre le formulaire) |
-| `#/analyses` | Analyses | toutes les analyses complètes, la date d'abord puis le contexte Git ; recherche ; pour chacune « Ouvrir » et « Comparer avec… » |
+| `#/analyses` | Analyses | en tête, le poste de lancement : analyser le projet actif, la dernière analyse, puis la progression par étapes réelles pendant l'analyse (une piste, un segment par étape annoncée par le serveur, l'étape en cours et le compte des étapes terminées ; aucun pourcentage). Puis toutes les analyses terminées, la date d'abord puis le contexte Git ; recherche ; pour chacune « Ouvrir » et « Comparer avec… » |
 | `#/analyses/<id>` | Une analyse | date, commit (identifiant, auteur, message), faits, analyseurs et leur état, zones inconnues, détails techniques ; « Afficher cette analyse » et « Comparer cette analyse avec… » |
 | `#/comparaisons` | Comparaisons | le comparateur (tranche C de 01F) ; `?a=` fixe A |
 | `#/comparaisons?a=<A>&b=<B>` | Résultat | la comparaison A → B (tranche B, puis D) ; « Changer les analyses », « Inverser le sens » |
