@@ -321,15 +321,29 @@ def test_migration_007_anchors_existing_coverage_and_downgrades(tmp_path):
         db.execute(text("INSERT INTO projects (id, name, path) VALUES ('p', 'p', '/p')"))
         db.execute(text("INSERT INTO scans (id, project_id, created_at, result) VALUES ('s', 'p', '2026-10-03', '{}')"))
         db.execute(text("INSERT INTO fact_identities (identity_hash, kind, subject, identity) VALUES "
-                        "('c', 'COVERAGE', 'file:a.java', '{}'), ('x', 'ASSERTION', 'module:a', '{}')"))
-        db.execute(text("INSERT INTO fact_occurrences (scan_id, identity_hash, status, validity, has_evidence) VALUES "
-                        "('s', 'c', 'OBSERVED', 'VALID', 0), ('s', 'x', 'OBSERVED', 'VALID', 0)"))
-    assert '1 couvertures ancrées' in migrate('upgrade', '007')
+                        "('c', 'COVERAGE', 'file:a.java', '{}'), ('x', 'ASSERTION', 'module:a', '{}'), "
+                        "('n', 'COVERAGE', 'module:\u00f3', '{}')"))
+        db.execute(text("INSERT INTO fact_occurrences (scan_id, identity_hash, status, validity, has_evidence, "
+                        "raw_identity) VALUES ('s', 'c', 'OBSERVED', 'VALID', 0, NULL), "
+                        "('s', 'x', 'OBSERVED', 'VALID', 0, NULL), ('s', 'n', 'OBSERVED', 'VALID', 0, :raw)"),
+                   {'raw': '{"subject": "module:o\u0301"}'})
+    assert '2 couvertures ancrées' in migrate('upgrade', '007')
     import hashlib
     with engine.connect() as db:
         anchors = dict(db.execute(text('SELECT identity_hash, subject_hash FROM fact_occurrences')).all())
-    assert anchors == {'c': hashlib.sha256(b'file:a.java').hexdigest(), 'x': None}
+    assert anchors == {'c': hashlib.sha256(b'file:a.java').hexdigest(), 'x': None,
+                       'n': hashlib.sha256('module:o\u0301'.encode()).hexdigest()}, \
+        'l’orthographe soumise, comme à l’enregistrement'
     migrate('downgrade', '006')
     with engine.connect() as db:
         assert db.scalar(text('SELECT count(*) FROM fact_occurrences WHERE subject_hash IS NOT NULL')) == 0
     engine.dispose()
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_a_local_gap_on_a_reference_spelled_otherwise_than_nfc_is_found(tmp_path, name):
+    """Une référence soumise en NFD : la Tuile la rend telle quelle, et sa lacune locale doit être trouvée."""
+    twin = Twin(tmp_path)
+    spelled = 'module:órders'
+    twin.add([edge(spelled, subject=A), gap(spelled, 'NOT_INTERPRETED')])
+    assert local(ask(twin, name, **V2)) == [(spelled, spelled, 'NOT_INTERPRETED')]

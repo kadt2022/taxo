@@ -457,8 +457,9 @@ class Exchange:
         """Les references de l'analyse qui commencent par un prefixe (TAXO-01J) : une page bornee, dans l'ordre
         de leur cle, avec une reprise. Une liste ordonnee : ni score ni compte de degre."""
         prefix, kind, limit = _search(arguments, self.scan.id)
-        revision, folded = self.facts.revision(self.scan.id), references.fold(prefix)
+        revision = self.facts.revision(self.scan.id)
         try:
+            folded = references.prefix_key(prefix)
             after = references.decode(arguments.get('after'), self.scan.id, revision, folded, kind)
         except references.ReferenceSearchError as exc:
             raise OperationError(INVALID_ARGUMENT, str(exc)) from exc

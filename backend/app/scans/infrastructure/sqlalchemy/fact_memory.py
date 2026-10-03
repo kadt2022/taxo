@@ -336,15 +336,21 @@ class SqlAlchemyFactMemory:
             for start in range(0, len(wanted), _GROUPS):
                 chunk = wanted[start:start + _GROUPS]
                 rows = db.execute(
-                    select(identity.subject, identity.identity, execution.producer_id, occurrence.human_producer_id)
+                    select(identity.subject, occurrence.raw_identity, identity.identity, execution.producer_id,
+                           occurrence.human_producer_id)
                     .join(identity, identity.identity_hash == occurrence.identity_hash)
                     .outerjoin(execution, execution.id == occurrence.execution)
                     .where(occurrence.scan_id == scan_id, occurrence.relation.is_(None),
                            occurrence.subject_hash.in_([_reference_hash(item) for item in chunk]),
-                           identity.kind == 'COVERAGE', identity.subject.in_(chunk))).all()
-                found += [{'subject': subject, 'coverage_type': value.get('coverage_type'), 'producer': machine or human}
-                          for subject, value, machine, human in rows
-                          if value.get('coverage_type') in UNREAD_COVERAGE]
+                           identity.kind == 'COVERAGE')).all()
+                asked = set(chunk)
+                for canonical, raw, value, machine, human in rows:
+                    # The spelling as submitted, the one the anchor was computed from and a tile renders; it
+                    # also rules out another reference sharing the anchor fingerprint.
+                    subject = (raw or {}).get('subject', canonical)
+                    if subject in asked and value.get('coverage_type') in UNREAD_COVERAGE:
+                        found.append({'subject': subject, 'coverage_type': value['coverage_type'],
+                                      'producer': machine or human})
         return sorted(found, key=lambda item: (item['subject'], item['coverage_type'], item['producer'] or ''))
 
     def references(self, scan_id, prefix, kind, after, limit):

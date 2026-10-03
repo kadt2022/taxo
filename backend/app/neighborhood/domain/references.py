@@ -1,7 +1,8 @@
 """Chercher une référence d'une analyse par le début de sa clé (TAXO-01J, `find_references`).
 
 La règle de comparaison est ici, une seule fois : la clé d'une référence (après son type), sous sa forme
-canonique (NFC), repliée en casse. L'index la tronque à une longueur fixe ; un préfixe ne la dépasse jamais.
+canonique (NFC), repliée en casse. L'index la tronque à une longueur fixe ; un préfixe replié qui la dépasserait
+est refusé : à cette longueur au plus, comparer les clés tronquées équivaut à comparer les clés entières.
 La reprise est liée à l'analyse, à la génération des faits, au préfixe et au type : refusée ailleurs.
 """
 import base64
@@ -22,6 +23,15 @@ class ReferenceSearchError(ValueError):
 def fold(text):
     """Ce que l'on compare : la forme canonique, repliée en casse, à la longueur de l'index."""
     return unicodedata.normalize('NFC', text).casefold()[:KEY_LENGTH]
+
+
+def prefix_key(prefix):
+    """Le préfixe tel qu'il se compare. Replié en casse, il peut s'allonger (« ß » devient « ss ») : au-delà de la
+    clé de l'index, il serait tronqué et trouverait à tort ; il est alors refusé."""
+    folded = unicodedata.normalize('NFC', prefix).casefold()
+    if len(folded) > KEY_LENGTH:
+        raise ReferenceSearchError(f'prefix : plus de {KEY_LENGTH} caractères une fois replié en casse.')
+    return folded
 
 
 def encode(analysis, revision, prefix, kind, last):

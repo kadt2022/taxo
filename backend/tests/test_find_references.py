@@ -209,3 +209,13 @@ def test_a_prefix_range_follows_code_points_whatever_the_database_language(tmp_p
     assert found(search(twin, name, prefix='e')) == ['module:eclair']
     assert found(search(twin, name, prefix='é')) == ['module:éclair']
     assert found(search(twin, name, prefix='ecl')) == ['module:eclair']
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_a_prefix_that_folds_beyond_the_index_key_never_matches_wrongly(tmp_path, name):
+    """129 « ß » se replient en 258 « s » : tronqué à la clé de l'index, le préfixe trouverait une référence qui
+    ne commence pas par lui. Un tel préfixe est refusé ; à la longueur de la clé, il reste exact."""
+    twin = Twin(tmp_path)
+    twin.add([edge('module:' + 'ß' * 128 + 'x', subject='module:root')])
+    assert search(twin, name, prefix='ß' * 129)['error']['code'] == 'INVALID_ARGUMENT'
+    assert found(search(twin, name, prefix='ß' * 128)) == ['module:' + 'ß' * 128 + 'x']

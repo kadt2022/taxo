@@ -1,7 +1,8 @@
 """The anchor of each coverage's subject (TAXO-01J): what is unread about a node is read by that node.
 
 Coverage occurrences were written without anchor. Their subject fingerprint is computed again, batch by
-batch, from the identity row (sha256 of the reference as recorded). Relation and ranks stay empty: a coverage
+batch, from the subject as it was submitted (the raw spelling kept with the occurrence, else the identity
+row), as the writer does: sha256 of that reference. Relation and ranks stay empty: a coverage
 is never traversed. Downgrade empties the column again for coverage only.
 """
 import hashlib
@@ -14,7 +15,8 @@ down_revision = '006'
 
 _BATCH = 5000
 _occurrences = sa.table('fact_occurrences', sa.column('id', sa.Integer), sa.column('identity_hash', sa.String),
-                        sa.column('relation', sa.String), sa.column('subject_hash', sa.String))
+                        sa.column('relation', sa.String), sa.column('subject_hash', sa.String),
+                        sa.column('raw_identity', sa.JSON))
 _identities = sa.table('fact_identities', sa.column('identity_hash', sa.String), sa.column('kind', sa.String),
                        sa.column('subject', sa.Text))
 
@@ -31,7 +33,7 @@ def upgrade():
     connection, last, done = op.get_bind(), 0, 0
     while True:
         rows = connection.execute(
-            sa.select(_occurrences.c.id, _identities.c.subject)
+            sa.select(_occurrences.c.id, _identities.c.subject, _occurrences.c.raw_identity)
             .join(_identities, _identities.c.identity_hash == _occurrences.c.identity_hash)
             .where(_identities.c.kind == 'COVERAGE', _occurrences.c.id > last)
             .order_by(_occurrences.c.id).limit(_BATCH)).all()
@@ -39,7 +41,8 @@ def upgrade():
             break
         connection.execute(_occurrences.update().where(_occurrences.c.id == sa.bindparam('_id'))
                            .values(subject_hash=sa.bindparam('_hash')),
-                           [{'_id': identifier, '_hash': _fingerprint(subject)} for identifier, subject in rows])
+                           [{'_id': identifier, '_hash': _fingerprint((raw or {}).get('subject', subject))}
+                            for identifier, subject, raw in rows])
         last, done = rows[-1][0], done + len(rows)
     _say(f'{done} couvertures ancrées par leur sujet.')
 
