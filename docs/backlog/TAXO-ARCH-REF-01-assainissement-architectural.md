@@ -307,7 +307,8 @@ Hors du chantier, signalé sans action : d'autres fonctions dépassent le seuil 
 contrat des faits, Minia, historique, mémoire des faits). Elles étaient déjà là, et aucune n'est dans le cœur
 générique restructuré.
 
-Question ouverte, pour décision : sur une relation dont aucune exécution n'est capable (son analyseur n'avait
-rien à lire), le voisinage dit `NO_ANALYZER` (frontière de contexte, ARCHITECTURE § 9.3) là où le verdict, la
-restitution et la comparaison nomment les langages non lus. C'est la règle écrite, que le garde-fou de cohérence
-fixe ; nommer aussi les langages dans le voisinage serait un changement de comportement, donc une PR à part.
+Décision (revue de la PR de clôture) : sur une relation dont aucune exécution n'est capable (son analyseur
+n'avait rien à lire), le voisinage continue de dire `NO_ANALYZER`, frontière de **contexte** (ARCHITECTURE
+§ 9.3), là où le verdict, la restitution et la comparaison nomment les langages non lus. La distinction avec
+`NOT_ANALYSED` est conservée : une frontière de contexte n'est pas changée en affirmation de lecture manquante.
+Le garde-fou de cohérence fixe cette règle.
