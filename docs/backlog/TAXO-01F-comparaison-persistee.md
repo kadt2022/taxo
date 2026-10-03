@@ -214,7 +214,8 @@ Contrat livré (décisions du 2026-10-03) :
    parent ou du commit demandé est refusée (422, `INCOMPATIBLE_ANALYSES`). Jamais de relecture à la place.
 5. **Comparabilité.** Les règles de la tranche A s'appliquent évaluateur par évaluateur : absence, échec
    (les avertissements enregistrés de l'exécution en échec sont rendus), contrat inconnu, rien à lire,
-   catalogue différent. Un tel évaluateur est `comparable: false`, avec le message de sa raison.
+   catalogue différent. Un tel évaluateur est `comparable: false`, avec le message de sa raison ; il
+   nomme toujours les zones que chaque analyse n'a pas interprétées, comme à la relecture.
 6. **Preuve déplacée.** Un fait dont seule la preuve change reste compté inchangé dans l'impact, comme à la
    relecture. La comparaison depuis la mémoire continue de le signaler (`EVIDENCE_CHANGED`). Un test
    verrouille cette différence de lecture.

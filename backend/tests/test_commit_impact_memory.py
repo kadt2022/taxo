@@ -15,6 +15,7 @@ from app.comparison.domain.comparison import NOT_SUPPORTED_AFTER, NOT_SUPPORTED_
 from app.history.application.recorded import MEMORY, REREAD, RecordedImpact, _evaluation
 from app.scans.infrastructure.sqlalchemy.scan_repository import ScanRow
 from test_coverage_bounds import PYTHON, taxo_on_fixture  # noqa: F401  (fixture partagee)
+from test_knowledge_divergences import retire_contract
 
 API = 'taxo.spring-api'
 CONTROLLER = 'src/main/java/com/acme/web/OrderController.java'
@@ -231,7 +232,8 @@ def test_an_analyzer_with_nothing_to_read_is_never_an_absence_of_change(taxo_on,
 
 
 def test_a_reason_keeps_the_recorded_warnings_of_a_failed_execution():
-    found = {'reason': NOT_SUPPORTED_AFTER, 'message': REASONS[NOT_SUPPORTED_AFTER]}
+    found = {'reason': NOT_SUPPORTED_AFTER, 'message': REASONS[NOT_SUPPORTED_AFTER],
+             'unread': {'before': [], 'after': []}}
     before = {API: {'status': 'FAILED', 'warnings': ['lecture impossible'], 'producer_version': '1'}}
     after = {API: {'status': 'UNSUPPORTED', 'producer_version': '2'}}
     result = _evaluation(API, found, before, after)
@@ -253,3 +255,14 @@ def test_every_consumer_of_the_impact_reads_the_memory(bench):
     protocol, = taxo.ask(('diff_facts', {'commit': sha}), analysis=analyses[commits[-1]])
     assert protocol['source'] == MEMORY
     assert protocol['analyses'] == {'before': analyses[commits[0]], 'after': analyses[sha]}
+
+
+def test_a_non_comparable_evaluator_still_names_the_zones_it_could_not_interpret(bench):
+    """Ne pas comparer les faits ne fait pas oublier ce que chaque analyse n'a pas interprete : la relecture le
+    dit, la memoire aussi. Ici le contrat de catalogue enregistre n'est plus connu : aucun fait n'est compare."""
+    taxo, _, commits = bench
+    analyse_all(taxo, commits)
+    retire_contract(taxo, API)
+    found = by_evaluator(impact(taxo, commits[1]))[API]
+    assert found['comparable'] is False
+    assert found['not_interpreted_before'] == found['not_interpreted_after'] == [f'file:{BROKEN}']

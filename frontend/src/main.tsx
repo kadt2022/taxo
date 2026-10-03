@@ -107,13 +107,20 @@ function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:Minia
       <p className="muted">{impactSource(impact)}</p>
       {impact.evaluations.map(e=><div key={e.evaluator_id}>
         <h2>Impact selon {label(EVALUATORS,e.evaluator_id)} <span className="muted">{e.evaluator_id} v{e.producer_version}</span></h2>
-        {!e.comparable?<p role="alert" className="error">{notComparable(e.failures)}</p>:e.changes.length?<div className="table-wrap"><table><thead><tr><th>Changement</th><th>Sujet</th><th>Relation</th><th>Avant</th><th>Après</th><th>Statut</th></tr></thead><tbody>
-          {e.changes.map(c=><tr key={c.change+c.subject+c.relation+(c.before??'')+(c.after??'')}><td>{CHANGE_LABELS[c.change]}</td><td><code>{c.subject}</code></td><td>{c.relation??c.kind}</td><td><code>{c.before??''}</code></td><td><code>{c.after??''}</code></td><td>{c.status}</td></tr>)}
-        </tbody></table></div>:<p className="muted">Aucun fait changé parmi ceux que cet évaluateur sait produire.</p>}
+        <EvaluationChanges evaluation={e}/>
         {e.comparable&&<footer>{e.unchanged_count.toLocaleString('fr-CA')} faits inchangés. {gaps('avant le commit',e.not_interpreted_before)} {gaps('après le commit',e.not_interpreted_after)} Seuls les faits que cet évaluateur sait produire sont comparés : l’absence de changement ici ne prouve pas l’absence de changement ailleurs.</footer>}
       </div>)}
     </section>}
   </section>;
+}
+
+/** Ce qu'un evaluateur voit changer : la raison s'il n'est pas compare, sinon ses changements. */
+function EvaluationChanges({evaluation:e}:Readonly<{evaluation:Evaluation}>){
+  if(!e.comparable)return <p role="alert" className="error">{notComparable(e.failures)}</p>;
+  if(!e.changes.length)return <p className="muted">Aucun fait changé parmi ceux que cet évaluateur sait produire.</p>;
+  return <div className="table-wrap"><table><thead><tr><th>Changement</th><th>Sujet</th><th>Relation</th><th>Avant</th><th>Après</th><th>Statut</th></tr></thead><tbody>
+    {e.changes.map(c=><tr key={c.change+c.subject+c.relation+(c.before??'')+(c.after??'')}><td>{CHANGE_LABELS[c.change]}</td><td><code>{c.subject}</code></td><td>{c.relation??c.kind}</td><td><code>{c.before??''}</code></td><td><code>{c.after??''}</code></td><td>{c.status}</td></tr>)}
+  </tbody></table></div>;
 }
 
 createRoot(document.getElementById('root')!).render(<App history={(projectId, minia)=><HistoryPanel key={panelKey('history',projectId)} projectId={projectId} minia={minia}/>}/>);

@@ -171,17 +171,17 @@ class CompareAnalyses:
         found = {}
         for producer in producers:
             reason = comparability(*sides.get(producer, (None, None)))
+            # Ne pas comparer les faits ne fait pas oublier ce que chaque cote n'a pas interprete.
+            unread = {'before': self.store.unread(before.id, producer), 'after': self.store.unread(after.id, producer)}
             if reason is not None:
-                found[producer] = {'reason': reason, 'message': REASONS[reason]}
+                found[producer] = {'reason': reason, 'message': REASONS[reason], 'unread': unread}
                 continue
             changed = self._compute(before, after, producer)
             removed = changed[REMOVED] + [old for old, _ in changed[MODIFIED]]
             added = changed[ADDED] + [new for _, new in changed[MODIFIED]]
-            found[producer] = {'reason': None, 'unchanged': changed[UNCHANGED],
+            found[producer] = {'reason': None, 'unchanged': changed[UNCHANGED], 'unread': unread,
                                'before': _flat(self._facts(before, producer, removed)),
-                               'after': _flat(self._facts(after, producer, added)),
-                               'unread': {'before': self.store.unread(before.id, producer),
-                                          'after': self.store.unread(after.id, producer)}}
+                               'after': _flat(self._facts(after, producer, added))}
         return found
 
     def _facts(self, scan, producer, identity_hashes):

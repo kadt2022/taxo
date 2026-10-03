@@ -93,13 +93,11 @@ def _evaluation(identifier, found, before, after):
     left, right = before.get(identifier, {}), after.get(identifier, {})
     result = {'evaluator_id': identifier, 'producer_version': right.get('producer_version'),
               'status_before': left.get('status'), 'status_after': right.get('status'),
-              'comparable': found['reason'] is None, 'reason': found['reason']}
+              'comparable': found['reason'] is None, 'reason': found['reason'],
+              'not_interpreted_before': found['unread']['before'], 'not_interpreted_after': found['unread']['after']}
     if found['reason'] is not None:
         warnings = [warning for side in (left, right) if side.get('status') == 'FAILED'
                     for warning in side.get('warnings', [])]
-        return result | {'failures': [found['message'], *warnings], 'changes': [], 'unchanged_count': 0,
-                         'not_interpreted_before': [], 'not_interpreted_after': []}
+        return result | {'failures': [found['message'], *warnings], 'changes': [], 'unchanged_count': 0}
     changes, _ = compare(found['before'], found['after'], fact_identity)
-    return result | {'failures': [], 'changes': changes, 'unchanged_count': found['unchanged'],
-                     'not_interpreted_before': found['unread']['before'],
-                     'not_interpreted_after': found['unread']['after']}
+    return result | {'failures': [], 'changes': changes, 'unchanged_count': found['unchanged']}
