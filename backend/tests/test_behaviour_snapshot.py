@@ -113,7 +113,51 @@ def scenario(taxo_on, git, monkeypatch, files, change, alter, earlier_engine):
     if alter:
         alter(taxo, before, after)
     compared = taxo.client.get(f'{taxo.base}/comparisons', params={'before': before, 'after': after}).json()
-    return {'before': observed(taxo, before), 'after': observed(taxo, after), 'compare': compared}
+    return {'before': observed(taxo, before), 'after': observed(taxo, after), 'compare': compared,
+            'choices': taxo.client.get(f'{taxo.base}/comparisons/analyses').json(),
+            'changes': changes(taxo, before, after, compared)}
+
+
+def page(taxo, before, after, evaluator, category, **extra):
+    """Une page de faits, triee sur sa forme normalisee : l'ordre des pages suit les empreintes d'identite, qui
+    contiennent des identifiants tires au hasard ; seul ce qui ne depend pas du hasard est garde."""
+    response = taxo.client.get(f'{taxo.base}/comparisons/changes', params={
+        'before': before, 'after': after, 'evaluator': evaluator, 'category': category, **extra})
+    body = response.json()
+    if isinstance(body.get('items'), list):
+        body['items'] = sorted(body['items'], key=lambda item: json.dumps(normalized(item), sort_keys=True))
+    return {'status': response.status_code, 'body': body}
+
+
+def paged(taxo, before, after, evaluator, category, cursor=None):
+    """Ce qu'une page d'un element dit sans dependre du hasard : combien d'elements, et s'il y a une suite."""
+    extra = {'limit': 1, **({'cursor': cursor} if cursor else {})}
+    response = taxo.client.get(f'{taxo.base}/comparisons/changes', params={
+        'before': before, 'after': after, 'evaluator': evaluator, 'category': category, **extra}).json()
+    return {'items': len(response['items']), 'next': response['next'] is not None}, response['next']
+
+
+def changes(taxo, before, after, compared):
+    """Chaque categorie non vide de chaque evaluateur comparable, page par page et par relation, et les refus."""
+    found = {}
+    for entry in compared['evaluators']:
+        evaluator = entry['evaluator_id']
+        if not entry['comparable']:
+            found[f'{evaluator}|refused'] = page(taxo, before, after, evaluator, 'ADDED')
+            continue
+        for category, count in entry['counts'].items():
+            if category == 'UNCHANGED' or not count:
+                continue
+            first, following = paged(taxo, before, after, evaluator, category)
+            found[f'{evaluator}|{category}'] = {
+                'first': first, 'all': page(taxo, before, after, evaluator, category),
+                'next': paged(taxo, before, after, evaluator, category, following)[0] if following else None,
+                'by_relation': {relation: page(taxo, before, after, evaluator, category, relation=relation)
+                                for relation, counts in entry['relations'].items() if counts.get(category)}}
+    if compared['evaluators']:
+        found['unknown_category'] = page(taxo, before, after, compared['evaluators'][0]['evaluator_id'], 'NOPE')
+    found['unknown_evaluator'] = page(taxo, before, after, 'taxo.nobody', 'ADDED')
+    return found
 
 
 def requests(*operations):
@@ -176,6 +220,9 @@ def without_diff(taxo_on):
 
 
 def test_behaviour_snapshot(taxo_on, git, monkeypatch, make_repo, tmp_path):
+    # Des commits dates a l'identique : memes empreintes d'une execution a l'autre, donc meme ordre des pages.
+    for name in ('GIT_AUTHOR_DATE', 'GIT_COMMITTER_DATE'):
+        monkeypatch.setenv(name, '2026-01-01T00:00:00+00:00')
     result = {name: scenario(taxo_on, git, monkeypatch, *case) for name, case in SCENARIOS.items()}
     result['protocol'] = protocol(make_repo, git, tmp_path)
     result['without_diff'] = without_diff(taxo_on)
