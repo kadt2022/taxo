@@ -41,6 +41,14 @@ def _catalog(fact):
     return produced.get('catalog_id'), produced.get('catalog_version')
 
 
+def recorded_contract(coverage, read_contract):
+    """Le contrat que les couvertures d'un producteur ont enregistre, selon la regle commune (`Reads.combined`) :
+    leur contrat commun, sinon inconnu ; inconnu aussi sans couverture. `read_contract` n'est appele que pour
+    un contrat effectivement nomme."""
+    return Reads.combined([read_contract(*key) for key in dict.fromkeys(_catalog(fact) for fact in coverage)],
+                          Reads.unknown())
+
+
 def from_coverage(evaluations, coverage, catalogs, read_contract):
     """Les analyseurs d'apres leurs couvertures enregistrees : `catalogs` donne les relations de chaque
     analyseur, `read_contract(catalog_id, catalog_version)` ce que lit un contrat, demande seulement pour un
@@ -50,7 +58,7 @@ def from_coverage(evaluations, coverage, catalogs, read_contract):
     for item in evaluations:
         identifier = item['evaluator_id']
         own = tuple(fact for fact in coverage if fact.get('produced_by', {}).get('producer_id') == identifier)
-        reads = read_contract(*_catalog(own[0])) if own else Reads.unknown()
+        reads = recorded_contract(own, read_contract)
         found.append(Analyzer(identifier, _relations(item, catalogs), item.get('status') == 'FAILED', own, reads,
                               item.get('status') == 'UNSUPPORTED'))
     return found
@@ -83,9 +91,6 @@ def recorded_contracts(executions, reads_of):
     contrats differents, aucun ne serait choisi a la place des autres : le contrat serait inconnu."""
     found = {}
     for execution in executions:
-        if execution.producer_type != 'EVALUATOR':
-            continue
-        reads = reads_of(vars(execution))
-        known = found.get(execution.producer_id, reads)
-        found[execution.producer_id] = reads if known == reads else Reads.unknown()
-    return found
+        if execution.producer_type == 'EVALUATOR':
+            found.setdefault(execution.producer_id, []).append(reads_of(vars(execution)))
+    return {producer: Reads.combined(readings, Reads.unknown()) for producer, readings in found.items()}

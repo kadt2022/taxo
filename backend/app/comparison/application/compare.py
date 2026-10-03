@@ -82,16 +82,12 @@ class CompareAnalyses:
     def _read(self, executions):
         """Ce que lit le contrat de ces executions. Un contrat que ce Taxo ne connait pas ne lit rien de connu,
         comme pour les verdicts. Seul un evaluateur nomme un catalogue : une projection n'en a pas, et n'est
-        liee a aucun contrat. Plusieurs contrats lies a des langages lisent leur union. Sans contrats fournis,
-        aucune regle de langage ne s'applique."""
+        liee a aucun contrat. Plusieurs executions d'un producteur suivent la regle commune (`Reads.combined`) :
+        leur contrat commun, sinon inconnu. Sans contrats fournis, aucune regle de langage ne s'applique."""
         if not self.contracts:
             return Reads.any()
-        found = [self.contracts.reads(item.catalog_id, item.catalog_version) for item in executions or ()
-                 if item.producer_type == 'EVALUATOR']
-        if not all(item.known for item in found):
-            return Reads.unknown()
-        declared = [item.languages for item in found if not item.independent]
-        return Reads.declared(frozenset().union(*declared)) if declared else Reads.any()
+        return Reads.combined([self.contracts.reads(item.catalog_id, item.catalog_version)
+                               for item in executions or () if item.producer_type == 'EVALUATOR'], Reads.any())
 
     def _producers(self, before, after, unread=None):
         """Chaque producteur et ce que dit de lui chaque cote. `unread`, s'il est donne, recoit pour chaque

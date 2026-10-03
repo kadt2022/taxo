@@ -88,9 +88,8 @@ langage ») venait exactement de là, `None` signifiant « indépendant » à un
    - la migration 004 n'a créé d'exécution que pour une entrée du résumé, une par évaluateur.
    Un test le vérifie en relançant une analyse sous le même identifiant. Par prudence, le voisinage ne choisit
    aucune exécution à la place d'une autre : des contrats différents pour un même producteur sont inconnus.
-   Le verdict (contrat de la première couverture) et la comparaison (union des contrats) s'appuient sur le
-   même invariant sans le dire. Tant qu'il tient, rien ne diverge. `AnalysisKnowledge` (tranche C) portera
-   une seule règle pour ce cas.
+   Le verdict (contrat de la première couverture) et la comparaison (union des contrats) s'appuyaient sur le
+   même invariant sans le dire. Tranche C3 : une seule règle partout, `Reads.combined`.
 
 ## 4. Audit par classe
 
@@ -238,7 +237,7 @@ l'intérieur de l'échange.
 | **C — Connaissance** | `Reads`, `CatalogContracts`, `AnalysisKnowledge`, chargeur ; consommateurs migrés un par un (verdict, enveloppe, voisinage, comparaison) | inchangé : les trois divergences du § 3 sont corrigées avant, à part |
 | ↳ C1 — `Reads` (fait) | `Reads` (`ANY` / `LANGUAGES` / `UNKNOWN`) et `CatalogContracts` dans `evaluations/domain/capability.py` ; une seule valeur construite par la composition ; verdict (`Analyzer.reads`), enveloppe, `describe`, voisinage, comparaison et `/coverage` lisent `Reads` ; `capability.applicable` et `Analyzer.reads_present` ne font plus qu'un prédicat | inchangé, prouvé : sorties publiques identiques octet pour octet sur 8 scénarios (Java, Python, mixte ; langages oubliés, catalogues oubliés, contrat retiré, moteur antérieur) |
 | ↳ C2 — `AnalysisKnowledge` (fait) | `app/knowledge/` : `AnalysisKnowledge` (langages présents, inventaire complet, analyseurs vus) et ses prédicats (`capable`, `reaching`, `not_analysed`, `languages_unknown`), `Analyzer` et `contains` sortis du verdict ; le chargeur lit les langages d'une analyse en un seul endroit (protocole, restitution, comparaison) et nomme les deux vues des analyseurs (couvertures pour le verdict, résumé borné pour le voisinage) ; le verdict juge sur `AnalysisKnowledge` ; « zone non lue » n'a plus qu'une définition (`UNREAD_COVERAGE`, 7 → 1) | inchangé, prouvé : instantané identique octet pour octet (§ 9) ; l'ordre et les conditions d'évaluation d'origine sont conservés (un contrat n'est lu que pour un analyseur qui a des couvertures ; les langages, que pour une relation) |
-| ↳ C3 — règle multi-exécutions (à décider) | une seule règle quand plusieurs exécutions d'un producteur nomment des contrats différents : aujourd'hui le verdict prend la première couverture, la comparaison l'union, le voisinage « inconnu ». Le cas n'arrive pas (invariant prouvé par #78), mais un test peut le construire : unifier change donc une règle | **modifié** dans un cas construit seulement ; PR séparée et annoncée, jamais dans un refactoring |
+| ↳ C3 — règle multi-exécutions (fait) | une seule règle, `Reads.combined`, quand plusieurs exécutions d'un producteur se mêlent : leur contrat commun, sinon inconnu ; aucun contrat n'est choisi à la place d'un autre. Elle remplace trois règles : le verdict et la restitution `/coverage` d'un résumé antérieur prenaient la première couverture (un seul `recorded_contract` désormais, dans le chargeur), la comparaison l'union, le voisinage « inconnu ». Chacun garde ce que vaut l'absence d'exécution (inconnu ; indépendant du langage pour une comparaison sans exécution d'évaluateur) | inchangé sur toute analyse réelle (invariant prouvé par #78 ; instantané identique) ; **modifié** dans le seul cas construit, fixé par `tests/test_multi_executions.py`, qui échoue sur la base (trois réponses différentes pour les mêmes exécutions) |
 | **B — Protocole** | `call()` découpé, table d'opérations, collaborateur historique, interface étroite pour le voisinage, port des faits déclaré | inchangé |
 | **D — Comparaison** | `choices` séparé ; comparabilité via la connaissance | inchangé |
 | **E — Garde-fous** | tests d'architecture du § 7, ARCHITECTURE.md (frontières retenues), mesures après | inchangé |
