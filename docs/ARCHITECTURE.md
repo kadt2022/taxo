@@ -763,7 +763,7 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 | `get_commit` | ce que Git sait d'un commit, sans contenu | Existant |
 | `get_diff` | blocs modifiés d'un fichier touché, sous double consentement | Existant |
 | `verify_claim` | verdict sur une affirmation structurée | Existant |
-| `diff_facts` | faits introduits, modifiés ou retirés par un commit | Existant |
+| `diff_facts` | faits introduits, modifiés ou retirés par un commit ; depuis les analyses enregistrées du commit et de son parent quand elles existent (`source`, `analyses`), sinon en relisant le dépôt (TAXO-01F, tranche E) | Existant |
 | `get_neighborhood` | voisinage explicite à un saut, avec reprise et preuves accessibles | Première tranche implémentée ; multi-niveaux et profils à construire (§ 9) |
 | `find_callers`, `find_callees`, `find_dependencies`, `find_configuration`, `trace_access_control`, `find_endpoint` | questions génériques | réservées, activées par les analyseurs |
 | `get_source` | code d'un **symbole**, jamais un fichier entier, sous son propre consentement | réservée |

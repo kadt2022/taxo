@@ -18,13 +18,14 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
    - **Une page par fonction** : Overview devient un tableau de bord, Analyses et Comparaisons ont leur
      page ([TAXO-UI-05](TAXO-UI-05-navigation-par-pages.md)), avant la tranche D de 01F. Livrée (#70 à #72).
    - **Tranche D** : le résultat d'une comparaison, par domaine, en phrases. Livrée (#73).
-   - Tranche E **suspendue** jusqu'à la PR B de TAXO-COV-01.
-   - → **Couverture bornée** : une absence de preuve n'est jamais une preuve d'absence
-     ([TAXO-COV-01](TAXO-COV-01-couverture-bornee.md)), découverte par l'exercice « Taxo analyse Taxo ». PR A
-     livrée (#74), PR B (restitution) en cours.
-   - Ensuite : assainissement architectural ([TAXO-ARCH-REF-01](TAXO-ARCH-REF-01-assainissement-architectural.md)),
-     puis la tranche E de 01F.
-5. Tuile multi-niveaux et couverture locale détaillée ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
+   - **Couverture bornée** : une absence de preuve n'est jamais une preuve d'absence
+     ([TAXO-COV-01](TAXO-COV-01-couverture-bornee.md)), découverte par l'exercice « Taxo analyse Taxo ».
+     Livrée (#74, #75).
+   - Assainissement architectural ([TAXO-ARCH-REF-01](TAXO-ARCH-REF-01-assainissement-architectural.md)).
+     Terminé (#76 à #82).
+   - Tranche E : l'impact d'un commit depuis les analyses enregistrées, sans relire le dépôt. Livrée ;
+     TAXO-01F est terminé.
+5. → Tuile multi-niveaux et couverture locale détaillée ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
 6. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 7. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
 8. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
@@ -65,7 +66,7 @@ l'historique Git.
 | --- | --- | --- | --- |
 | 01E | Mémoire versionnée : un fait existe une fois, chaque exécution ajoute une **occurrence** (exécution, instantané, provenance) ; identité stable indexée | les faits sont stockés par analyse, une ligne par fait, sans occurrence ni identité indexée (`scans/infrastructure/sqlalchemy/fact_store.py` le dit lui-même) | réalisée : [TAXO-01E](TAXO-01E-memoire-versionnee-des-faits.md) |
 | 01E | Une réanalyse du même instantané ne crée pas de nouvelle identité ; chaque nouvelle analyse ou exécution conserve sa propre occurrence ; deux versions de producteur distinguées par leurs occurrences | chaque analyse enregistre ses propres faits | réalisée : TAXO-01E |
-| 01F | Comparer deux instantanés **depuis les faits persistés**, sans relire le dépôt | l'impact d'un commit réexécute les évaluateurs sur le parent et sur le commit (`history/application/queries.py`) | livrée : [TAXO-01F](TAXO-01F-comparaison-persistee.md), tranche A (#67) |
+| 01F | Comparer deux instantanés **depuis les faits persistés**, sans relire le dépôt | l'impact d'un commit réexécute les évaluateurs sur le parent et sur le commit (`history/application/queries.py`) | livrée : [TAXO-01F](TAXO-01F-comparaison-persistee.md), tranche A (#67) ; l'impact d'un commit lit la mémoire quand les deux analyses existent, tranche E |
 | 01F | `EVIDENCE_CHANGED` : un fait dont seule la preuve se déplace reste inchangé, et ce déplacement est signalé à part avec les deux preuves | le fait est compté inchangé, sans signal distinct (`history/domain/impact.py`) | livrée : TAXO-01F, tranche A (#67) |
 | 01F | Changement de statut à identité constante signalé | compté inchangé (ARCHITECTURE § 5.2) | livrée : TAXO-01F, tranche A (#67) |
 | 01F | Banc Git scénarisé A, B, C, et deux versions d'évaluateur sur un même commit | « non comparable » est déclaré quand les catalogues diffèrent ; pas de banc scénarisé dédié | livrée : TAXO-01F, tranche A (#67) |

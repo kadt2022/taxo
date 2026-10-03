@@ -26,6 +26,7 @@ from app.platform.api.health import router as health_router
 from app.platform.api.errors import register_errors
 from app.hypotheses.infrastructure.model_store import ModelStore
 from app.history.application.queries import ProjectHistory
+from app.history.application.recorded import RecordedImpact
 from app.history.infrastructure.git_history import GitHistoryReader
 from app.history.api.router import create_router as history_router
 from app.minia.application.ask import AskMinia
@@ -84,9 +85,6 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     run = RunScan(projects, scans, paths, GitSnapshotReader(), inventory, RunEvaluator(),
                   others=tuple(item for item in registry.all() if item is not inventory), facts=facts,
                   provenance=facts)
-    # L'impact d'un commit compare le contenu de deux instantanes : l'historique Git n'y entre pas.
-    history = ProjectHistory(projects, paths, GitHistoryReader(), GitSnapshotReader(),
-                             registry.content(), RunEvaluator())
     # Mode hypotheses : les poids sont prepares et verifies au demarrage ; aucune API ne les expose
     # tant que TAXO-LAB-01 n'a pas conclu (ARCHITECTURE § 13).
     store = model_store or ModelStore()
@@ -102,9 +100,13 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     # et le protocole (TAXO-ARCH-REF-01).
     contracts = CatalogContracts(item.catalog for item in registry.all())
     api.include_router(scans_router(projects, scans, run, facts, AnalysisJobs(run, projects), contracts))
-    api.include_router(history_router(history))
     store = SqlAlchemyComparisonStore(engine)
     comparison = CompareAnalyses(projects, scans, store, contracts)
+    # L'impact d'un commit compare le contenu de deux etats : l'historique Git n'y entre pas. Depuis les analyses
+    # enregistrees du commit et de son parent s'il y en a, sinon en relisant le depot (TAXO-01F, tranche E).
+    history = ProjectHistory(projects, paths, GitHistoryReader(), GitSnapshotReader(),
+                             registry.content(), RunEvaluator(), RecordedImpact(scans, comparison))
+    api.include_router(history_router(history))
     api.include_router(comparison_router(comparison, AnalysisChoices(projects, scans, store)))
     # La requete selectionne parmi les faits conserves ; elle ne relit jamais le depot (TAXO-QUERY-01).
     query = ProjectQuery(projects, scans, facts)

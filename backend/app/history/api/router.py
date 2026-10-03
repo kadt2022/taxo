@@ -1,12 +1,15 @@
 from dataclasses import asdict
 
+from typing import Annotated
+
 from fastapi import APIRouter, Query
 
 from app.history.domain.commit import MAX_COMMITS
 
 _ERRORS = {
-    404: {'description': 'Projet, commit, parent ou fichier introuvable.'},
-    422: {'description': 'Historique illisible, par exemple « NOT_A_GIT_REPOSITORY : … ».'},
+    404: {'description': 'Projet, commit, parent, fichier ou analyse introuvable.'},
+    422: {'description': ('Historique illisible, par exemple « NOT_A_GIT_REPOSITORY : … », ou paire '
+                          "d'analyses incompatible (« INCOMPATIBLE_ANALYSES : … »).")},
 }
 
 
@@ -36,8 +39,12 @@ def create_router(history):
         return history.diff_facts(project_id, sha, path, parent)
 
     @router.get('/api/projects/{project_id}/history/commits/{sha}/impact', responses=_ERRORS)
-    def impact(project_id: str, sha: str, parent: str | None = None):
-        found, base, evaluations = history.impact(project_id, sha, parent)
-        return {'commit': _commit(found), 'parent': base, 'evaluations': evaluations}
+    def impact(project_id: str, sha: str, parent: str | None = None,
+               before: Annotated[str | None, Query(description="Analyse du parent ; à nommer avec `after`.")] = None,
+               after: Annotated[str | None, Query(description='Analyse du commit ; à nommer avec `before`.')] = None):
+        """Ce que chaque évaluateur de contenu voit changer : depuis les analyses enregistrées du parent et du
+        commit (`source` MEMORY, `analyses` les nomme), sinon en relisant le dépôt (`source` REREAD)."""
+        found = history.understand(project_id, sha, parent, before, after)
+        return {**found, 'commit': _commit(found['commit'])}
 
     return router

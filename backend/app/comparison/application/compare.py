@@ -162,8 +162,35 @@ class CompareAnalyses:
         return {'category': category, 'evaluator_id': producer, 'relation': relation, 'items': items,
                 'next': page[-1][0] if more else None}
 
+    def facts_changed(self, before, after, producers):
+        """Pour l'impact d'un commit (TAXO-01F, tranche E), par producteur : la raison qui empeche de le comparer,
+        sinon les faits de chaque cote dont l'identite n'est pas de l'autre cote, le nombre d'identites communes et
+        les zones que chaque cote n'a pas interpretees. Les signaux d'une identite commune (preuve, statut,
+        occurrences) n'en font pas partie : l'impact compte ces faits inchanges."""
+        sides = self._producers(before, after)
+        found = {}
+        for producer in producers:
+            reason = comparability(*sides.get(producer, (None, None)))
+            # Ne pas comparer les faits ne fait pas oublier ce que chaque cote n'a pas interprete.
+            unread = {'before': self.store.unread(before.id, producer), 'after': self.store.unread(after.id, producer)}
+            if reason is not None:
+                found[producer] = {'reason': reason, 'message': REASONS[reason], 'unread': unread}
+                continue
+            changed = self._compute(before, after, producer)
+            removed = changed[REMOVED] + [old for old, _ in changed[MODIFIED]]
+            added = changed[ADDED] + [new for _, new in changed[MODIFIED]]
+            found[producer] = {'reason': None, 'unchanged': changed[UNCHANGED], 'unread': unread,
+                               'before': _flat(self._facts(before, producer, removed)),
+                               'after': _flat(self._facts(after, producer, added))}
+        return found
+
     def _facts(self, scan, producer, identity_hashes):
         return self.store.facts(scan.id, producer, identity_hashes) if identity_hashes else {}
+
+
+def _flat(found):
+    """Les faits rebatis, chaque identite dans l'ordre de ses occurrences."""
+    return [fact for identity_hash in sorted(found) for fact in found[identity_hash]]
 
 
 def _page(found, category, relation, cursor, limit):

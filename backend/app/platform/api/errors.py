@@ -1,7 +1,7 @@
 from fastapi.responses import JSONResponse
 from app.projects.domain.project import ProjectError
 from app.scans.domain.scan import ScanError
-from app.history.domain.errors import UNKNOWN_COMMIT, UNKNOWN_PARENT, UNKNOWN_PATH, HistoryError
+from app.history.domain.errors import UNKNOWN_ANALYSIS, UNKNOWN_COMMIT, UNKNOWN_PARENT, UNKNOWN_PATH, HistoryError
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, UNKNOWN_PROVIDER, MiniaError
 
@@ -17,7 +17,7 @@ def register_errors(api):
 
     @api.exception_handler(HistoryError)
     async def history_error(request, exc):
-        status = 404 if exc.code in {UNKNOWN_COMMIT, UNKNOWN_PARENT, UNKNOWN_PATH} else 422
+        status = 404 if exc.code in {UNKNOWN_COMMIT, UNKNOWN_PARENT, UNKNOWN_PATH, UNKNOWN_ANALYSIS} else 422
         return JSONResponse(status_code=status, content={'detail': f'{exc.code} : {exc}'})
 
     @api.exception_handler(MiniaError)
