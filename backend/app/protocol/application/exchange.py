@@ -77,6 +77,8 @@ _ARGUMENTS = {
                          'max_work': '1..2000 (au-delà de 1000 : neighborhood/2)',
                          'max_fanout': '1..200 (neighborhood/2, facultatif)',
                          'evidence': 'NONE|SUMMARY (neighborhood/2)',
+                         'form': 'FULL|COMPACT (neighborhood/2 ; COMPACT : instantané et provenance une fois, '
+                                 'renvois par indice)',
                          'continuation': 'reprise d’une adjacence coupée (facultatif)'},
     'find_references': {'analysis': 'identifiant de l’analyse', 'prefix': 'début de la clé (après le type), 1..200',
                         'type': 'type de référence (facultatif)', 'limit': '1..50', 'after': 'reprise (facultatif)'},

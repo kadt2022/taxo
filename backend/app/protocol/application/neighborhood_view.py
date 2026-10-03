@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from app.neighborhood.domain import handle
 from app.neighborhood.domain.continuation import V1, V2
 from app.neighborhood.domain.frontier import DEPTH, UNKNOWN
+from app.protocol.application.neighborhood_form import COMPACT, compact
 from app.protocol.application.neighborhood_request import SUMMARY
 from app.protocol.domain.envelope import BUDGET, Response, size
 
@@ -160,6 +161,12 @@ class LayeredView(TileView):
 
     def baseline(self):
         return Enrichment(local_total=_RESERVED, summaries=self.demand.evidence == SUMMARY)
+
+    def render(self, tile, enrichment=Enrichment()):
+        response = super().render(tile, enrichment)
+        if self.demand.form == COMPACT:
+            response.envelope = compact(response.envelope)
+        return response
 
     def _bounds(self, request):
         return {**super()._bounds(request), 'max_fanout': request.max_fanout}
