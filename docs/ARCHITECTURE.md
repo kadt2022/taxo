@@ -1035,3 +1035,8 @@ sur une projection indexée des références de chaque analyse. Migrations 007 (
 **2026-10-03** — Explorateur de la Maille (TAXO-01J, PR 2) : forme compacte de `neighborhood/2` (`form`), page
 Explorer du portail sur le seul protocole, liens d'entrée depuis Routes, Sécurité, Architecture et Historique,
 garde-fous du découpage du portail, et un parcours de bout en bout dans Chromium en CI.
+
+**2026-10-03** — Mesures et essai réel (TAXO-01J, PR 3) : essai reproductible sur deux dépôts réels (Taxo à
+`33f0bd0`, spring-petclinic), plafond de 32 000 octets par opération maintenu. L'essai a trouvé qu'une lecture
+d'adjacence pouvait lire tout le voisinage d'un nœud de fort degré sur PostgreSQL ; la page est désormais choisie
+par l'index d'ancre seul, et un garde-fou vérifie le plan d'exécution sur les deux moteurs.

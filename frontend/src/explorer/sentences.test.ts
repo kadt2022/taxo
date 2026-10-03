@@ -62,6 +62,7 @@ describe('ce qui n’a pas été transmis', ()=>{
   it('dit où le retrouver, en comptes', ()=>{
     expect(notSentText({what:'evidence_summary', count:3, reason:'BUDGET'})).toBe('Preuves résumées non transmises pour 3 éléments : chacune se charge depuis son lien.');
     expect(notSentText({what:'local_coverage', count:1, reason:'BUDGET'})).toContain('1 zone non lue sans place pour être située');
+    expect(notSentText({what:'local_coverage', count:3, reason:'BUDGET'})).toContain('Au moins 3 zones non lues sans place pour être situées');
     expect(notSentText({what:'items', count:2, reason:'BUDGET'})).toBe('2 items non transmis (BUDGET).');
   });
 });

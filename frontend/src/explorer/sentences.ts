@@ -107,6 +107,9 @@ export const endName=(value:string|undefined, named:Naming=nodeName)=>value===un
 export function notSentText(entry:NotSent){
   const count=entry.count??1;
   if(entry.what==='evidence_summary')return `Preuves résumées non transmises pour ${plural(count, 'élément')} : chacune se charge depuis son lien.`;
-  if(entry.what==='local_coverage')return `Au moins ${plural(count, 'zone non lue')} sans place pour être ${count>1?'situées':'située'} sur un nœud : ce que Taxo n’a pas lu reste dit pour l’analyse entière.`;
+  if(entry.what==='local_coverage'){
+    const zones=count>1?`${count} zones non lues sans place pour être situées`:'1 zone non lue sans place pour être située';
+    return `Au moins ${zones} sur un nœud : ce que Taxo n’a pas lu reste dit pour l’analyse entière.`;
+  }
   return `${count} ${entry.what} non transmis (${entry.reason}).`;
 }
