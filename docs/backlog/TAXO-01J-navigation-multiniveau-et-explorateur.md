@@ -1,8 +1,8 @@
 # TAXO-01J — Navigation multiniveau et explorateur de la Maille
 
 Statut : rédigé le 2026-10-03, révisé le même jour après la première revue (#84), validé. PR 1 (moteur et
-protocole, tranches A, B, C) livrée par la PR de la branche `feat/taxo-01j-moteur-multiniveau` ; PR 2
-(explorateur) et PR 3 (mesures) à venir. Étape 5 du [PLAN](PLAN.md). Ce récit
+protocole, tranches A, B, C) livrée (#85) ; PR 2 (forme compacte et explorateur, tranches D, E) livrée par la PR
+de la branche `feat/taxo-01j-explorateur` ; PR 3 (mesures) à venir. Étape 5 du [PLAN](PLAN.md). Ce récit
 reprend et termine les critères laissés ouverts par [TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md) :
 plusieurs niveaux, sens combiné, couverture locale. Il ajoute le premier usage humain du voisinage : un
 explorateur dans le portail.
@@ -712,3 +712,28 @@ fait avec instantané, provenance et poignée), et le plafond de 32 000 octets p
 30 éléments, bien en deçà de `max_edges`. L'explorateur devra donc enchaîner les EXPAND. À trancher en
 tranche F : une forme compacte des éléments (l'instantané et la provenance, communs, une seule fois) ou un
 plafond par opération plus haut pour `get_neighborhood`. Aucun des deux n'est fait ici.
+
+## Précisions apportées par la PR 2 (explorateur)
+
+1. **Forme compacte, décidée avant la tranche F.** `form: COMPACT` (`FULL` par défaut) représente la même
+   réponse : ce que les faits ont en commun sans l'affirmer est écrit une fois (`shared.common`), `via` renvoie au
+   nœud et au pas par indice, `node_details` s'aligne sur `nodes`. Rien n'est retiré : un inverse écrit dans les
+   tests à partir du contrat reconstruit la forme complète à l'identique, sur huit formes de Tuile et les deux
+   stockages. La forme n'est pas un paramètre de sélection : une reprise émise sous une forme sert l'autre.
+   Mesure : un nœud de 300 voisins, 32 000 octets, **31 éléments en forme complète, 54 en compacte**, préfixe de
+   la même séquence ; sur le dépôt scénarisé, environ 230 octets économisés par élément. Le plafond par opération
+   ne change pas ; la tranche F dira s'il faut aller plus loin.
+2. **Fusion des Tuiles dans le portail.** Les niveaux d'une Tuile développée sont décalés du niveau de son nœud ;
+   une revisite est recalculée sur la vue (une extrémité déjà présente dans la vue, même nouvelle pour la Tuile
+   reçue) ; une Tuile d'une autre génération de faits n'est jamais mêlée à la vue, qui le dit et propose de la
+   recharger. L'état de la vue se dit sur toute la vue, jamais sur la dernière Tuile reçue.
+3. **Développer** ouvre une Tuile depuis le nœud, de profondeur `max(1, remaining_depth)` ; **voir la suite**
+   reprend l'adjacence coupée avec son jeton ; **recentrer** change l'adresse, que précédent et suivant suivent.
+4. **Relations proposées** : celles que `describe` annonce, par domaine du portail ; suivies par défaut celles qui
+   ont des faits (16 au plus) ; une relation qu'aucun analyseur exécuté ne produit est désactivée, avec sa raison.
+5. **Nommage** : le dépôt par le nom de son projet, le reste par le vocabulaire du portail, un type inconnu brut.
+6. **Liens d'entrée** : une route et chacun de ses faits (Routes, Sécurité), un module (Architecture), un commit
+   et chaque fichier qu'il touche (Historique). L'explorateur s'ouvre sur l'analyse affichée.
+7. **Bout en bout** : un parcours Playwright (rechercher, développer, consulter une preuve) contre une API réelle
+   sur le dépôt scénarisé, job CI « Taxo Explorer E2E ». Une fois la page affichée, l'explorateur n'appelle que
+   `taxo-query`.

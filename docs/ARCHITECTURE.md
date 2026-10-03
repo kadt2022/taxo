@@ -569,6 +569,19 @@ des faits avant de lire et la vérifient après ; un ajout entre-temps fait refu
 Lacunes locales puis résumés s'ajoutent à la sélection déjà fixée, dans l'ordre, tant qu'ils tiennent ; le
 reste est compté dans `not_sent`.
 
+**Forme compacte.** Avec `form: COMPACT`, la même réponse est écrite autrement : ce que les faits ont en commun
+sans l'affirmer (nature, version du contrat, statut, validité, instantané, provenance) figure une fois dans
+`shared.common`, chaque élément y renvoie par `common` ; `via` renvoie au nœud et au pas par indice ;
+`node_details` s'aligne sur `nodes`. Rien n'est retiré : la forme complète se reconstruit à l'identique. La
+sélection et les reprises ne dépendent pas de la forme ; seule la taille change (31 éléments en forme complète,
+54 en compacte, pour 32 000 octets).
+
+**Explorateur.** La page Explorer du portail consomme `neighborhood/2` (forme compacte, preuves résumées),
+`find_references` et `get_evidence` par poignée, par le seul protocole : recherche d'ancre, vues en couches et
+en liste, développer, voir la suite, recentrer, précédent et suivant, détail de chaque occurrence, et frontières
+dites par nature. Ses modules de règles (`graph`, `layout`, `sentences`, `state`, `relations`, `protocol`)
+n'importent ni React ni le réseau ; aucune ligne n'y nomme une relation ou un type de référence.
+
 La couverture d'analyse reste un résumé nommé `ANALYSIS_SUMMARY`. L’ordre des voisins est matérialisé en rangs
 à l’enregistrement (référence canonique UTF-16, identité, empreinte d’occurrence), dans des index de taille
 fixe ; ce coût est à l’ingestion et a été mesuré (TAXO-01J). Une modification des faits détectée pendant le
@@ -1018,3 +1031,7 @@ conservées une à une, revisites, budgets avec arrêt au premier refus et lectu
 localisée, lacunes locales, poignées d'occurrence et preuves résumées. Nouvelle opération `find_references`,
 sur une projection indexée des références de chaque analyse. Migrations 007 (ancre des couvertures) et 008
 (références).
+
+**2026-10-03** — Explorateur de la Maille (TAXO-01J, PR 2) : forme compacte de `neighborhood/2` (`form`), page
+Explorer du portail sur le seul protocole, liens d'entrée depuis Routes, Sécurité, Architecture et Historique,
+garde-fous du découpage du portail, et un parcours de bout en bout dans Chromium en CI.
