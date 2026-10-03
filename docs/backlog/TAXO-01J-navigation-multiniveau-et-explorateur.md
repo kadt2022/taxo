@@ -1,7 +1,8 @@
 # TAXO-01J — Navigation multiniveau et explorateur de la Maille
 
-Statut : rédigé le 2026-10-03, révisé le même jour après la première revue (#84) ; soumis à nouvelle
-revue. Aucune ligne de code avant validation du contrat corrigé. Étape 5 du [PLAN](PLAN.md). Ce récit
+Statut : rédigé le 2026-10-03, révisé le même jour après la première revue (#84), validé. PR 1 (moteur et
+protocole, tranches A, B, C) livrée par la PR de la branche `feat/taxo-01j-moteur-multiniveau` ; PR 2
+(explorateur) et PR 3 (mesures) à venir. Étape 5 du [PLAN](PLAN.md). Ce récit
 reprend et termine les critères laissés ouverts par [TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md) :
 plusieurs niveaux, sens combiné, couverture locale. Il ajoute le premier usage humain du voisinage : un
 explorateur dans le portail.
@@ -662,3 +663,49 @@ Déjà proposées, inchangées :
 10. Vue en couches maison (CSS et SVG) ; une bibliothèque de mise en page pourra venir avec la Forêt.
 11. Hypothesis ajoutée aux dépendances de test, pour la réduction automatique des contre-exemples.
 12. Un seul parcours Playwright dans le portail, lancé en CI.
+
+## Précisions apportées par l'implémentation de la PR 1
+
+Le contrat validé est tenu. L'implémentation l'a précisé sur ces points, sans en changer le sens :
+
+1. **Reprise d'un nœud non développé.** `DEPTH` et `NOT_REACHED` ne portent pas de jeton : il n'y a aucune
+   position à reprendre, et EXPAND est une nouvelle Tuile depuis ce nœud, avec `remaining_depth`. Seule une
+   adjacence coupée (`NODES`, `EDGES`, `WORK`, `BYTES`, `FANOUT`) porte un jeton, lié à son nœud et à ses pas.
+2. **`discovered_by`** est l'indice, dans `items`, de l'élément qui a découvert le nœud : un `F…` peut être
+   partagé par deux éléments de même contenu.
+3. **Ce qui s'ajoute sans changer la sélection.** `evidence` n'est pas un paramètre de forme : la séquence des
+   éléments est la même avec ou sans résumés. Les lacunes locales, puis les résumés, s'ajoutent dans l'ordre
+   tant qu'ils tiennent ; le reste est compté dans `not_sent` (`local_coverage`, `evidence_summary`). La jauge
+   du parcours réserve la place de le dire.
+4. **Tuile admise.** Un élément n'est admis que si la Tuile tient, arrêtée juste après lui (coupure et
+   reprise comprises). Si la Tuile finale ne tient pas (une coupure sur un nœud de longue référence, par
+   exemple), `neighborhood/2` rend la plus grande Tuile admise, arrêtée par les octets ; `neighborhood/1`
+   refuse, comme avant.
+5. **Lacunes locales bornées par un nombre de références** (2 000 : les nœuds et les fichiers cités par les
+   preuves), plutôt que par le budget de travail, qui reste celui de l'adjacence et ne change pas de sens.
+6. **`find_references`** : le préfixe porte sur la clé de la référence (après son type) ; l'ordre est celui
+   de la clé, puis de l'empreinte de la référence. L'index garde l'**orthographe soumise** de chaque
+   référence : c'est celle que le parcours accepte comme ancre ; la comparaison, elle, est canonique et
+   repliée en casse, dans l'ordre des octets (collation explicite sur PostgreSQL : sans elle, une base de
+   collation de langue rangerait « é » entre « e » et « f »). Une page qui ne contient pas une seule référence
+   avec sa reprise est refusée, jamais rendue vide.
+7. **Requêtes invalides pour les deux versions** : refusées avec le motif de `neighborhood/2` ; seuls quatre
+   messages des réponses de référence changent, ceux des valeurs dont le domaine s'élargit.
+8. **Ancre des couvertures** : les occurrences de couverture gardent l'empreinte de leur sujet (relation et
+   rangs vides) ; elles ne sont jamais parcourues (migration 007).
+
+### Mesures (SQLite, poste de développement)
+
+| Mesure | Résultat |
+| --- | --- |
+| Tuile autour d'un nœud de degré 50 000, graphe de 100 040 occurrences, profondeur 3, éventail 20 | 69 ms, 25 requêtes, 7 lectures d'adjacence |
+| Même nœud, profondeur 1 | 62 ms, 7 requêtes, 1 lecture |
+| Profondeur 3, éventail 10, résumés de preuves | 87 ms, 57 requêtes, 31 lectures |
+| Requêtes d'une Tuile, nœud de degré 200 ou 2 000 | identiques (garde-fou permanent) |
+| Ingestion de 100 040 occurrences (rangs compris) | 105 s |
+
+**Constat pour la tranche F.** La borne effective est l'octet : un élément complet pèse environ 1 Ko (son
+fait avec instantané, provenance et poignée), et le plafond de 32 000 octets par opération tient environ
+30 éléments, bien en deçà de `max_edges`. L'explorateur devra donc enchaîner les EXPAND. À trancher en
+tranche F : une forme compacte des éléments (l'instantané et la provenance, communs, une seule fois) ou un
+plafond par opération plus haut pour `get_neighborhood`. Aucun des deux n'est fait ici.
