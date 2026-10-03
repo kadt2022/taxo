@@ -17,7 +17,8 @@ from app.evaluations.domain.status import EvaluationStatus
 from app.evaluators.inventory.evaluator import InventoryEvaluator
 from app.evaluators.spring_api.evaluator import SpringApiEvaluator
 from app.main import create_app
-from app.protocol.domain.verdict import NOT_ANALYSED, NOT_FOUND_IN_ANALYSED_SCOPE, NOT_PROVEN, Analyzer, judge
+from app.knowledge.domain.knowledge import AnalysisKnowledge, Analyzer
+from app.protocol.domain.verdict import NOT_ANALYSED, NOT_FOUND_IN_ANALYSED_SCOPE, NOT_PROVEN, judge
 from app.scans.infrastructure.sqlalchemy.scan_repository import ScanRow
 from test_spring_boot import controller, repository
 
@@ -173,7 +174,7 @@ def test_a_negative_verdict_needs_every_concerned_language_read_by_a_capable_exe
     claim = {'subject': 'endpoint:GET /x', 'relation': 'HANDLED_BY'}
 
     def reason(analyzers, present, needed=None):
-        return judge(claim, [], analyzers, present, needed).reason
+        return judge(claim, [], AnalysisKnowledge(present, True, tuple(analyzers)), needed).reason
     assert reason([java], ('Java',)) == NOT_FOUND_IN_ANALYSED_SCOPE
     assert reason([java], ('Java', 'Python')) == NOT_ANALYSED
     assert reason([java, structure], ('Java', 'Python')) == NOT_ANALYSED, \
@@ -257,7 +258,8 @@ def test_catalogs_declare_what_they_read():
 CORE = ('app/evaluations/domain/capability.py', 'app/evaluations/application/run_evaluator.py',
         'app/scans/application/run_scan.py', 'app/protocol/domain/verdict.py', 'app/protocol/application/exchange.py',
         'app/neighborhood/application/query.py', 'app/comparison/domain/comparison.py',
-        'app/comparison/application/compare.py')
+        'app/comparison/application/compare.py', 'app/knowledge/domain/knowledge.py',
+        'app/knowledge/application/loader.py')
 
 
 def test_the_core_knows_no_language_and_no_analyzer_by_name():

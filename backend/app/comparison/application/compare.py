@@ -9,6 +9,7 @@ from collections import OrderedDict
 from app.comparison.domain.comparison import (ADDED, CATEGORIES, MODIFIED, REASONS, REMOVED, Side,
                                               comparability, pair_modified, signals)
 from app.evaluations.domain.capability import CatalogContracts, Reads, languages_complete
+from app.knowledge.application.loader import recorded_languages
 from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
@@ -75,8 +76,8 @@ class CompareAnalyses:
 
     def _languages(self, scan):
         """Les langages de l'analyse : enregistres avec elle, ou relus dans ses faits si elle est anterieure."""
-        recorded = scan.result.get('languages')
-        return tuple(recorded) if recorded is not None else self.store.languages(scan.id)
+        recorded = recorded_languages(scan)
+        return recorded if recorded is not None else self.store.languages(scan.id)
 
     def _read(self, executions):
         """Ce que lit le contrat de ces executions. Un contrat que ce Taxo ne connait pas ne lit rien de connu,

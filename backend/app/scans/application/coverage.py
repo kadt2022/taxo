@@ -5,18 +5,10 @@ catalogue, celui qui est enregistre avec son execution. Un langage present qu'un
 dit « non analyse » par lui : jamais une absence constatee. Un contrat que Taxo ne connait plus ne lit rien
 de connu. Aucun langage ni analyseur n'est nomme ici.
 """
-from app.evaluations.domain.capability import LANGUAGE, WRITTEN_IN, languages_complete
+from app.evaluations.domain.capability import languages_complete
+from app.knowledge.application.loader import analysis_languages
 from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
-
-
-def _languages(scan, facts):
-    recorded = scan.result.get('languages')
-    if recorded is not None:
-        return tuple(recorded)
-    # Une analyse anterieure a TAXO-COV-01 : ses langages sont relus dans ses faits, sans en reconstruire aucun.
-    return tuple(value[len(LANGUAGE):] for value in facts.objects(scan.id, WRITTEN_IN)
-                 if value and value.startswith(LANGUAGE))
 
 
 def _recorded_contracts(scan, facts):
@@ -35,7 +27,8 @@ def analysis_coverage(project_id, scan_id, projects, scans, facts, contracts):
     scan = scans.get(project_id, scan_id)
     if scan is None:
         raise ProjectError('NOT_FOUND', 'Analyse introuvable.')
-    languages = _languages(scan, facts)
+    # Une analyse anterieure a TAXO-COV-01 : ses langages sont relus dans ses faits, sans en reconstruire aucun.
+    languages = analysis_languages(scan, facts)
     evaluations = scan.result.get('evaluations') or []
     # Un resume anterieur a TAXO-COV-01 ne nomme pas son catalogue : il est relu, une fois, dans les couvertures.
     recorded = (_recorded_contracts(scan, facts)

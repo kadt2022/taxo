@@ -148,15 +148,12 @@ def test_an_analysis_cannot_record_a_second_execution_of_a_producer(taxo_on):
 def test_executions_of_one_producer_naming_different_contracts_read_nothing_known():
     """Aucune execution n'est choisie a la place d'une autre : des contrats differents pour un meme producteur
     ne justifient aucune conclusion negative."""
-    from types import SimpleNamespace
     from app.facts.domain.provenance import ProducerExecution
-    from app.neighborhood.application.query import _recorded_contracts
+    from app.knowledge.application.loader import recorded_contracts
     contracts = CatalogContracts([catalog('spring', '1', ('Java',)), catalog('spring', '2', ('Java', 'Kotlin'))])
     executions = [ProducerExecution('EVALUATOR', 'api', '1', 'a', 'spring', '1'),
                   ProducerExecution('EVALUATOR', 'api', '1', 'b', 'spring', '2'),
                   ProducerExecution('EVALUATOR', 'git', '1', 'c', 'spring', '1'),
                   ProducerExecution('EVALUATOR', 'git', '1', 'd', 'spring', '1')]
-    service = SimpleNamespace(facts=SimpleNamespace(executions=lambda scan_id: executions),
-                              reads_of=lambda item: contracts.reads(item['catalog_id'], item['catalog_version']))
-    exchange = SimpleNamespace(service=service, scan=SimpleNamespace(id='scan'))
-    assert _recorded_contracts(exchange) == {'api': Reads.unknown(), 'git': Reads.declared(('Java',))}
+    found = recorded_contracts(executions, lambda item: contracts.reads(item['catalog_id'], item['catalog_version']))
+    assert found == {'api': Reads.unknown(), 'git': Reads.declared(('Java',))}

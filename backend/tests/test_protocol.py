@@ -8,8 +8,9 @@ from app.bootstrap.database import Base
 from app.main import create_app
 from app.protocol.application.exchange import MAX_OPERATIONS, MIN_EXCHANGE_BYTES
 from app.protocol.domain.envelope import MAX_ERROR_BYTES, OperationError, Response, error, size
+from app.knowledge.domain.knowledge import AnalysisKnowledge, Analyzer, contains
 from app.protocol.domain.verdict import (CONFIRMED, NOT_ANALYSED, NOT_FOUND_IN_ANALYSED_SCOPE,
-                                         NOT_INTERPRETED, NOT_PROVEN, REFUTED, Analyzer, contains, judge)
+                                         NOT_INTERPRETED, NOT_PROVEN, REFUTED, judge)
 
 AUTHOR = 'person:taxo@example.invalid'
 
@@ -340,22 +341,22 @@ CLAIM = {'subject': 'file:node_modules/x.js', 'relation': 'WRITTEN_IN', 'object'
 def test_an_excluded_scope_is_not_analysed_and_a_failed_analyzer_is_not_interpreted():
     excluded = Analyzer('a', frozenset({'WRITTEN_IN'}),
                         coverage=(coverage('repository:r', 'ANALYSED', exclude=['directory:node_modules']),))
-    assert judge(CLAIM, [], [excluded]).reason == NOT_ANALYSED
+    assert judge(CLAIM, [], AnalysisKnowledge(analyzers=(excluded,))).reason == NOT_ANALYSED
     failed = Analyzer('a', frozenset({'WRITTEN_IN'}), failed=True,
                       coverage=(coverage('repository:r', 'NOT_INTERPRETED'),))
-    assert judge(CLAIM, [], [failed]).reason == NOT_INTERPRETED
+    assert judge(CLAIM, [], AnalysisKnowledge(analyzers=(failed,))).reason == NOT_INTERPRETED
     unreadable = Analyzer('a', frozenset({'WRITTEN_IN'}),
                           coverage=(coverage('repository:r', 'ANALYSED'),
                                     coverage('file:node_modules/x.js', 'READ_ERROR')))
-    assert judge(CLAIM, [], [unreadable]).reason == NOT_INTERPRETED
+    assert judge(CLAIM, [], AnalysisKnowledge(analyzers=(unreadable,))).reason == NOT_INTERPRETED
 
 
 def test_a_confirmed_claim_wins_over_a_contradiction():
     analyzer = Analyzer('a', frozenset({'WRITTEN_IN'}), coverage=(coverage('repository:r', 'ANALYSED'),))
     same = {'subject': CLAIM['subject'], 'relation': 'WRITTEN_IN', 'object': 'language:JavaScript'}
     other = {**same, 'object': 'language:TypeScript'}
-    assert judge(CLAIM, [other, same], [analyzer]).verdict == CONFIRMED
-    assert judge(CLAIM, [other], [analyzer]).verdict == REFUTED
+    assert judge(CLAIM, [other, same], AnalysisKnowledge(analyzers=(analyzer,))).verdict == CONFIRMED
+    assert judge(CLAIM, [other], AnalysisKnowledge(analyzers=(analyzer,))).verdict == REFUTED
 
 
 def test_a_refusal_note_counts_in_the_budget():
