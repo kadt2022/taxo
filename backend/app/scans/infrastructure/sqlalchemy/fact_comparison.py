@@ -9,13 +9,12 @@ from sqlalchemy import and_, exists, false, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.comparison.domain.comparison import Occurrence
-from app.evaluations.domain.capability import LANGUAGE, WRITTEN_IN
+from app.evaluations.domain.capability import UNREAD_COVERAGE, WRITTEN_IN, languages_in
 from app.scans.infrastructure.sqlalchemy.fact_memory import (EVIDENCE_FIELDS, FactEvidenceRow, FactIdentityRow,
                                                              FactOccurrenceRow, ProducerExecutionRow,
                                                              SqlAlchemyFactMemory, _facts_of)
 
 _CHUNK = 2000
-_UNKNOWN = ('NOT_INTERPRETED', 'READ_ERROR')
 
 
 class SqlAlchemyComparisonStore:
@@ -131,8 +130,7 @@ class SqlAlchemyComparisonStore:
         return found
 
     def languages(self, scan_id):
-        return tuple(value[len(LANGUAGE):] for value in self.memory.objects(scan_id, WRITTEN_IN)
-                     if value and value.startswith(LANGUAGE))
+        return languages_in(self.memory.objects(scan_id, WRITTEN_IN))
 
     def unknown(self, scan_id):
         identity = FactIdentityRow
@@ -140,7 +138,7 @@ class SqlAlchemyComparisonStore:
             rows = db.execute(select(FactOccurrenceRow.identity_hash, identity.identity)
                               .join(identity, identity.identity_hash == FactOccurrenceRow.identity_hash)
                               .where(FactOccurrenceRow.scan_id == scan_id, identity.kind == 'COVERAGE')).all()
-        return len({identity_hash for identity_hash, value in rows if value.get('coverage_type') in _UNKNOWN})
+        return len({identity_hash for identity_hash, value in rows if value.get('coverage_type') in UNREAD_COVERAGE})
 
     def facts(self, scan_id, producer_id, identity_hashes):
         found = {}

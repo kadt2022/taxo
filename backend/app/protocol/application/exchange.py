@@ -12,7 +12,7 @@ import json
 import logging
 import re
 
-from app.evaluations.domain.capability import (INCOMPLETE, LANGUAGE, WRITTEN_IN, CatalogContracts, Reads,
+from app.evaluations.domain.capability import (INCOMPLETE, LANGUAGE, UNREAD_COVERAGE, WRITTEN_IN, CatalogContracts,
                                                languages_complete, present_languages)
 from app.facts import is_path, is_reference
 from app.facts.domain.fact import RELATIONS
@@ -23,7 +23,9 @@ from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INTERNAL, INVALID_ARGUMENT, MAX_ERROR_BYTES,
                                           NO_CONSENT, NOT_AVAILABLE, OUT_OF_SCOPE, PROTOCOL, OperationError,
                                           Response, error)
-from app.protocol.domain.verdict import Analyzer, contains, judge, not_analysed, unknown_languages
+from app.knowledge.application.loader import analysis_languages, from_coverage
+from app.knowledge.domain.knowledge import AnalysisKnowledge, contains
+from app.protocol.domain.verdict import judge
 from app.neighborhood.application.query import neighborhood
 
 logger = logging.getLogger(__name__)
@@ -70,7 +72,6 @@ _COMMIT = re.compile(r'[0-9a-f]{7,64}')
 # Syntaxe reservee type:cle : une valeur qui la prend est toujours lue comme une reference (ARCHITECTURE § 5).
 _REFERENCE_SYNTAX = re.compile(r'[a-z][a-z0-9-]*:')
 _HISTORY = 'HAS_COMMIT'
-_UNREADABLE = ('NOT_INTERPRETED', 'READ_ERROR')
 
 
 def _text(arguments, name, required=False):
@@ -126,11 +127,6 @@ def _coverage_entry(fact, reads):
     entry = {'subject': fact['subject'], 'type': fact['coverage_type'], 'scope': fact['scope'],
              'producer': fact.get('produced_by', {}).get('producer_id')}
     return entry if reads.independent else {**entry, _LANGUAGES: reads.listed()}
-
-
-def _catalog(fact):
-    produced = fact.get('produced_by', {})
-    return produced.get('catalog_id'), produced.get('catalog_version')
 
 
 class References:
@@ -231,14 +227,7 @@ class Exchange:
     def languages(self):
         """Les langages de l'analyse (TAXO-COV-01) ; une analyse anterieure les relit dans ses faits."""
         if self._languages is None:
-            recorded = self.scan.result.get(_LANGUAGES)
-            if recorded is not None:
-                self._languages = tuple(recorded)
-            elif hasattr(self.service.facts, 'objects'):
-                self._languages = tuple(value[len(LANGUAGE):] for value in self.service.facts.objects(
-                    self.scan.id, WRITTEN_IN) if value and value.startswith(LANGUAGE))
-            else:
-                self._languages = present_languages(self._query(relation=WRITTEN_IN, kind=_ASSERTION))
+            self._languages = analysis_languages(self.scan, self.service.facts)
         return self._languages
 
     @property
@@ -254,17 +243,14 @@ class Exchange:
         return None
 
     def analyzers(self):
-        found = []
-        for item in self.evaluations:
-            identifier = item['evaluator_id']
-            relations = self.service.catalogs.get(identifier, frozenset(item.get('relations', {})))
-            coverage = tuple(fact for fact in self.coverage
-                             if fact.get('produced_by', {}).get('producer_id') == identifier)
-            # Un contrat de catalogue inconnu ne justifie aucun « non trouve » : il ne lit rien de connu.
-            reads = self.service.contracts.reads(*_catalog(coverage[0])) if coverage else Reads.unknown()
-            found.append(Analyzer(identifier, relations, item.get('status') == 'FAILED', coverage, reads,
-                                  item.get('status') == 'UNSUPPORTED'))
-        return found
+        """Les analyseurs de l'analyse, d'apres leurs couvertures enregistrees."""
+        return from_coverage(self.evaluations, self.coverage, self.service.catalogs,
+                             lambda *catalog: self.service.contracts.reads(*catalog))
+
+    def knowledge(self, analyzers=None):
+        """Ce que l'analyse sait d'elle-meme : langages presents, inventaire complet, analyseurs vus."""
+        return AnalysisKnowledge(self.languages, self.complete,
+                                 tuple(self.analyzers() if analyzers is None else analyzers))
 
     def _envelope_coverage(self, relation=None, concerned=()):
         """Ou Taxo a cherche : la couverture du depot des analyseurs concernes, et celle des references
@@ -275,10 +261,12 @@ class Exchange:
         entries = [_coverage_entry(fact, analyzer.reads) for analyzer in chosen for fact in analyzer.coverage
                    if fact['subject'].startswith('repository:') or fact['subject'] in concerned]
         if relation is not None and chosen:
+            # Les langages ne sont lus que pour une relation : une analyse anterieure les relit dans ses faits.
+            knowledge = self.knowledge(analyzers)
             entries += [{'subject': f'{LANGUAGE}{language}', 'type': 'NOT_ANALYSED', 'scope': None,
                          'producer': None, 'relation': relation}
-                        for language in not_analysed(analyzers, relation, self.languages)]
-            if unknown_languages(analyzers, relation, self.languages, self.complete):
+                        for language in knowledge.not_analysed(relation)]
+            if knowledge.languages_unknown(relation):
                 entries.append({'subject': None, 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
                                 'relation': relation, 'reason': INCOMPLETE})
         return entries or [{'subject': None, 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
@@ -434,7 +422,7 @@ class Exchange:
         self._own(scope)
         facts = [fact for fact in self.coverage if scope is None or contains(scope, fact['subject'])]
         # Ce qui n'a pas ete lu passe avant ce qui l'a ete : c'est la limite de ce que Taxo sait.
-        facts.sort(key=lambda fact: fact['coverage_type'] not in _UNREADABLE)
+        facts.sort(key=lambda fact: fact['coverage_type'] not in UNREAD_COVERAGE)
         response = self._response('get_coverage', self._envelope_coverage(), max_bytes, count=len(facts))
         self._add_facts(response, facts)
         return response
@@ -536,7 +524,7 @@ class Exchange:
             claim['object'] = target
         established = [fact for fact in self._query(subject=subject, relation=relation, kind=_ASSERTION)
                        if fact.get('validity', 'VALID') == 'VALID']
-        verdict = judge(claim, established, self.analyzers(), self.languages, self.needed(subject), self.complete)
+        verdict = judge(claim, established, self.knowledge(self.analyzers()), self.needed(subject))
         response = self._response('verify_claim', self._envelope_coverage(relation, {subject, target} - {None}),
                                   max_bytes, claim=claim, verdict=verdict.verdict, reason=verdict.reason)
         self._add_facts(response, list(verdict.facts), evidence=True)

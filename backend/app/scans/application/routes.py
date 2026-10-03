@@ -5,6 +5,7 @@ methode qui le traite, l'application qui le sert (SERVED_BY), la regle qui le ca
 regle PERMITS_ALL ou AUTHORIZED_BY de la meme chaine de filtres), sa protection (PROTECTED_BY), et chaque
 zone non interpretee avec sa raison. Elle ne deduit rien : un etat n'est affiche que si un fait le porte.
 """
+from app.evaluations.domain.capability import UNREAD_COVERAGE
 from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
@@ -24,7 +25,7 @@ def analysis_routes(project_id, scan_id, projects, scans, facts):
     by_relation = {relation: facts.query(scan_id, relation=relation) for relation in (*RELATIONS, *RULES)}
     gaps = [fact for evaluator in EVALUATORS
             for fact in facts.query(scan_id, evaluator_id=evaluator, kind='COVERAGE')
-            if fact['coverage_type'] in ('NOT_INTERPRETED', 'READ_ERROR')]
+            if fact['coverage_type'] in UNREAD_COVERAGE]
     return project_routes(by_relation, gaps)
 
 

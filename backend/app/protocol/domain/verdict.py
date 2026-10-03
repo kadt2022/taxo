@@ -9,9 +9,9 @@
 
 « Non trouve » n'est jamais « faux ».
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from app.evaluations.domain.capability import Reads, unread
+from app.evaluations.domain.capability import UNREAD_COVERAGE
 
 CONFIRMED, REFUTED, NOT_PROVEN = 'CONFIRMED', 'REFUTED', 'NOT_PROVEN'
 NOT_FOUND_IN_ANALYSED_SCOPE = 'NOT_FOUND_IN_ANALYSED_SCOPE'
@@ -20,24 +20,7 @@ NOT_ANALYSED = 'NOT_ANALYSED'
 
 # Relations dont un sujet n'a qu'un objet : un autre objet etabli contredit l'affirmation.
 EXCLUSIVE = frozenset({'AUTHORED_BY', 'WRITTEN_IN'})
-_UNREADABLE = frozenset({'NOT_INTERPRETED', 'READ_ERROR'})
-_SCOPES = ('repository', 'module', 'directory', 'file')
 _TYPE = 'coverage_type'
-
-
-@dataclass(frozen=True)
-class Analyzer:
-    """Un analyseur de l'analyse : ce qu'il sait produire, s'il a abouti, et sa couverture.
-
-    `reads` : ce que son contrat de catalogue lit pour produire ses relations (TAXO-COV-01) : independant du
-    langage, ces langages, ou inconnu. `unsupported` : il n'avait rien a lire et n'a pas ete execute."""
-
-    analyzer_id: str
-    relations: frozenset
-    failed: bool = False
-    coverage: tuple = field(default=())
-    reads: Reads = Reads.any()
-    unsupported: bool = False
 
 
 @dataclass(frozen=True)
@@ -47,78 +30,19 @@ class Verdict:
     facts: tuple = ()
 
 
-def contains(scope, reference):
-    """Le perimetre `scope` (repository, module, directory, file) englobe-t-il `reference` ?"""
-    kind, _, key = scope.partition(':')
-    if scope == reference:
-        return True
-    if kind == 'repository':
-        # Un depot contient ses entites, jamais un autre depot.
-        return not reference.startswith('repository:')
-    if kind == 'directory':
-        _, _, target = reference.partition(':')
-        return reference.split(':', 1)[0] in _SCOPES[2:] and target.startswith(key.rstrip('/') + '/')
-    return False
-
-
-def _covers(coverage, reference):
-    """Une couverture `ANALYSED` du depot inclut `reference` et ne l'exclut pas."""
-    scope = coverage.get('scope', {})
-    return (any(contains(item, reference) for item in scope.get('include', []))
-            and not any(contains(item, reference) for item in scope.get('exclude', [])))
-
-
-def capable(analyzers, relation, subject):
-    """Analyseurs qui savent etablir `relation` et dont le perimetre couvre `subject`."""
-    found = []
-    for analyzer in analyzers:
-        if relation not in analyzer.relations:
-            continue
-        analysed = [item for item in analyzer.coverage if item[_TYPE] == 'ANALYSED']
-        if analyzer.failed or not analysed or any(_covers(item, subject) for item in analysed):
-            found.append(analyzer)
-    return found
-
-
-def reaching(analyzers, relation, present, subject=None):
-    """Executions abouties, capables de `relation`, qui ont lu un langage present et dont la couverture
-    `ANALYSED` englobe `subject` (ou existe, sans sujet) : celles qui peuvent justifier un « non trouve »."""
-    found = []
-    for analyzer in analyzers:
-        if relation not in analyzer.relations or analyzer.failed or analyzer.unsupported:
-            continue
-        analysed = [item for item in analyzer.coverage if item[_TYPE] == 'ANALYSED']
-        if analysed and analyzer.reads.reads_present(present) and (subject is None or any(_covers(item, subject)
-                                                                                     for item in analysed)):
-            found.append(analyzer)
-    return found
-
-
-def not_analysed(analyzers, relation, present, needed=None, subject=None):
-    """Les langages concernes qu'aucune execution capable de `relation` n'a lus (TAXO-COV-01)."""
-    readers = [item.reads for item in reaching(analyzers, relation, present, subject)]
-    return unread(present if needed is None else needed, readers)
-
-
-def unknown_languages(analyzers, relation, present, complete, subject=None):
-    """L'inventaire n'a pas tout lu : des langages presents peuvent manquer. Seule une execution capable et
-    independante du langage peut alors repondre de tout le depot."""
-    return not complete and not any(item.reads.independent for item in reaching(analyzers, relation, present, subject))
-
-
 def _unreadable(analyzer, references):
-    return analyzer.failed or any(item[_TYPE] in _UNREADABLE and item['subject'] in references
+    return analyzer.failed or any(item[_TYPE] in UNREAD_COVERAGE and item['subject'] in references
                                   for item in analyzer.coverage)
 
 
-def judge(claim, established, analyzers, present=(), needed=None, complete=True):
+def judge(claim, established, knowledge, needed=None):
     """Verdict sur `claim` ({subject, relation, object?}) d'apres les faits etablis `established` de meme
-    sujet et relation, et les analyseurs de l'analyse.
+    sujet et relation, et ce que l'analyse sait d'elle-meme (`AnalysisKnowledge`).
 
-    `present` : les langages de l'analyse ; `needed` : ceux ou le sujet aurait pu etre etabli (ceux de
-    son fichier, sinon tous les langages presents : le sujet n'a pas a exister dans le graphe). Un « non
-    trouve » exige que chacun ait ete lu par une execution capable de la relation (TAXO-COV-01), et que
-    l'inventaire soit `complete` quand le sujet n'est pas situe dans un fichier."""
+    `needed` : les langages ou le sujet aurait pu etre etabli (ceux de son fichier, sinon tous les langages
+    presents : le sujet n'a pas a exister dans le graphe). Un « non trouve » exige que chacun ait ete lu par
+    une execution capable de la relation (TAXO-COV-01), et que l'inventaire ait tout lu quand le sujet n'est
+    pas situe dans un fichier."""
     relation, target = claim['relation'], claim.get('object')
     same = tuple(fact for fact in established if fact.get('object') == target)
     if same:
@@ -127,23 +51,23 @@ def judge(claim, established, analyzers, present=(), needed=None, complete=True)
         other = tuple(fact for fact in established if fact.get('object') not in (None, target))
         if other:
             return Verdict(REFUTED, facts=other)
-    return Verdict(NOT_PROVEN, _not_proven(claim, analyzers, present, needed, complete))
+    return Verdict(NOT_PROVEN, _not_proven(claim, knowledge, needed))
 
 
-def _not_proven(claim, analyzers, present, needed, complete):
+def _not_proven(claim, knowledge, needed):
     """Pourquoi rien n'est etabli : personne ne sait produire la relation, une zone est illisible, ce qui
     est concerne n'a pas ete lu, ou c'est introuvable la ou Taxo a lu."""
     relation, subject = claim['relation'], claim['subject']
-    able = capable(analyzers, relation, subject)
+    able = knowledge.capable(relation, subject)
     if not able:
         return NOT_ANALYSED
     references = {subject, claim.get('object')} - {None}
     if any(_unreadable(analyzer, references) for analyzer in able):
         return NOT_INTERPRETED
-    if not reaching(analyzers, relation, present, subject):
+    if not knowledge.reaching(relation, subject):
         return NOT_ANALYSED
-    if not_analysed(analyzers, relation, present, needed, subject):
+    if knowledge.not_analysed(relation, needed, subject):
         return NOT_ANALYSED
-    if needed is None and unknown_languages(analyzers, relation, present, complete, subject):
+    if needed is None and knowledge.languages_unknown(relation, subject):
         return NOT_ANALYSED
     return NOT_FOUND_IN_ANALYSED_SCOPE

@@ -3,8 +3,9 @@
 La comparaison porte sur l'identite canonique des faits (ARCHITECTURE § 5) : une preuve qui se deplace ne change
 pas un fait. Les couvertures ne sont pas des changements ; elles disent ce qui reste non interprete.
 """
+from app.evaluations.domain.capability import UNREAD_COVERAGE
+
 INTRODUCED, REMOVED, MODIFIED = 'INTRODUCED', 'REMOVED', 'MODIFIED'
-_UNKNOWN_COVERAGE = {'NOT_INTERPRETED', 'READ_ERROR'}
 
 
 def _describe(fact):
@@ -42,7 +43,7 @@ def same_schema(before, after):
 
 
 def unknowns(coverage):
-    return sorted({fact['subject'] for fact in coverage if fact['coverage_type'] in _UNKNOWN_COVERAGE})
+    return sorted({fact['subject'] for fact in coverage if fact['coverage_type'] in UNREAD_COVERAGE})
 
 
 def compare(before, after, identity):

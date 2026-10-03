@@ -9,7 +9,8 @@ from dataclasses import dataclass
 
 LANGUAGE = 'language:'
 WRITTEN_IN = 'WRITTEN_IN'
-_UNREAD = ('NOT_INTERPRETED', 'READ_ERROR')
+# Une zone non lue : ce qui s'y trouve est inconnu. La seule definition (TAXO-ARCH-REF-01).
+UNREAD_COVERAGE = frozenset({'NOT_INTERPRETED', 'READ_ERROR'})
 INCOMPLETE = ("L'inventaire n'a pas tout lu : des fichiers aux langages inconnus n'ont été lus par aucun "
               "analyseur de cette relation.")
 
@@ -19,6 +20,11 @@ def present_languages(facts):
     return tuple(sorted({fact['object'][len(LANGUAGE):] for fact in facts
                          if fact.get('kind') == 'ASSERTION' and fact.get('relation') == WRITTEN_IN
                          and str(fact.get('object', '')).startswith(LANGUAGE)}))
+
+
+def languages_in(objects):
+    """Les langages nommes par les objets de faits `WRITTEN_IN`, dans leur ordre."""
+    return tuple(value[len(LANGUAGE):] for value in objects if value and value.startswith(LANGUAGE))
 
 
 ANY, LANGUAGES, UNKNOWN = 'ANY', 'LANGUAGES', 'UNKNOWN'
@@ -114,7 +120,7 @@ def languages_complete(summary):
     sans zone illisible ni non interpretee. Sinon, des fichiers non lus ont des langages inconnus."""
     if not summary or summary.get('status') != 'SUCCESS':
         return False
-    return not any(item.get('coverage_type') in _UNREAD for item in summary.get('coverage', []))
+    return not any(item.get('coverage_type') in UNREAD_COVERAGE for item in summary.get('coverage', []))
 
 
 def unsupported_reason(languages):

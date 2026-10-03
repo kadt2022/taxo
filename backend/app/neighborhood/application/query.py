@@ -8,8 +8,9 @@ import hashlib
 import json
 
 from app.facts import is_reference
-from app.evaluations.domain.capability import Reads, languages_complete
-from app.protocol.domain.verdict import Analyzer, not_analysed, unknown_languages
+from app.evaluations.domain.capability import UNREAD_COVERAGE, languages_complete
+from app.knowledge.application.loader import from_summary
+from app.knowledge.domain.knowledge import AnalysisKnowledge
 from app.facts.domain.fact import RELATIONS
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INVALID_ARGUMENT,
                                           OperationError, Response, size)
@@ -114,7 +115,7 @@ def _summaries(exchange, relations):
         coverage.append({'producer': identifier, 'scope': 'ANALYSIS_SUMMARY',
                          'status': evaluation['status'], 'coverage': evaluation.get('coverage', [])})
         gaps = [item for item in evaluation.get('coverage', [])
-                if item[_TYPE] in ('NOT_INTERPRETED', 'READ_ERROR')]
+                if item[_TYPE] in UNREAD_COVERAGE]
         if evaluation['status'] in ('FAILED', 'PARTIAL') or gaps:
             frontier.append(_knowledge('ANALYSIS_INCOMPLETE', producer=identifier))
     return coverage, frontier, capabilities
@@ -131,14 +132,15 @@ def _unread_languages(exchange, relations):
         present = exchange.languages
     if present is None:
         return []
-    summarized = _summarized(exchange)
-    complete = languages_complete(exchange.scan.result.get('evaluation_summary'))
+    summarized = tuple(_summarized(exchange))
+    knowledge = AnalysisKnowledge(present, languages_complete(exchange.scan.result.get('evaluation_summary')),
+                                  summarized)
     frontier = []
     for relation in relations:
-        unread = not_analysed(summarized, relation, present)
+        unread = knowledge.not_analysed(relation)
         if unread:
             frontier.append(_knowledge('NOT_ANALYSED', relation=relation, languages=list(unread)))
-        if unknown_languages(summarized, relation, present, complete):
+        if knowledge.languages_unknown(relation):
             frontier.append(_knowledge('LANGUAGES_UNKNOWN', relation=relation))
     return frontier
 
@@ -149,38 +151,12 @@ def _knowledge(reason, **fields):
 
 
 def _summarized(exchange):
-    """Les analyseurs tels que le resume de l'analyse les decrit : statut, relations, couvertures et
-    langages de leur contrat de catalogue (TAXO-COV-01)."""
-    found, recorded = [], None
-    for evaluation in exchange.evaluations:
-        identifier = evaluation['evaluator_id']
-        relations = exchange.service.catalogs.get(identifier, frozenset(evaluation.get('relations', {})))
-        # Le resume ne garde que les types de couverture : assez pour savoir si l'execution a analyse.
-        coverage = tuple({_TYPE: item[_TYPE]} for item in evaluation.get('coverage', []))
-        if evaluation.get('catalog_id') is None and recorded is None:
-            recorded = _recorded_contracts(exchange)
-        reads = (recorded.get(identifier, Reads.unknown()) if evaluation.get('catalog_id') is None
-                 else exchange.service.reads_of(evaluation))
-        found.append(Analyzer(identifier, relations, evaluation['status'] == 'FAILED', coverage, reads,
-                              evaluation['status'] == 'UNSUPPORTED'))
-    return found
-
-
-def _recorded_contracts(exchange):
-    """Un resume anterieur a TAXO-COV-01 ne nomme pas son catalogue : chaque execution est lue selon le contrat
-    enregistre avec elle, celui que portent ses couvertures et que lisent les verdicts, jamais selon le
-    catalogue actuel de son analyseur. Une lecture bornee : une ligne par execution, aucun fait. Sans
-    execution enregistree, son contrat est inconnu : il ne lit rien de connu. Une analyse n'a qu'une execution
-    par evaluateur (par construction, pas par la base) ; si plusieurs executions d'un producteur nommaient des
-    contrats differents, aucun ne serait choisi a la place des autres : le contrat serait inconnu."""
-    found = {}
-    for execution in exchange.service.facts.executions(exchange.scan.id):
-        if execution.producer_type != 'EVALUATOR':
-            continue
-        reads = exchange.service.reads_of(vars(execution))
-        known = found.get(execution.producer_id, reads)
-        found[execution.producer_id] = reads if known == reads else Reads.unknown()
-    return found
+    """Les analyseurs tels que le resume de l'analyse les decrit (TAXO-COV-01) : une lecture bornee."""
+    # Le contrat et les executions ne sont lus que s'ils servent : une execution qui nomme son catalogue, un
+    # resume anterieur qui ne le nomme pas.
+    return from_summary(exchange.evaluations, exchange.service.catalogs,
+                        lambda evaluation: exchange.service.reads_of(evaluation),
+                        lambda: exchange.service.facts.executions(exchange.scan.id))
 
 
 class _Neighborhood:
