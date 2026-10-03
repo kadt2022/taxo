@@ -13,6 +13,7 @@ import {isUnknown, readNothing, readingOf, unreadBy, useCoverage} from './readin
 import {apiUrl} from './api';
 import {openStream} from './sse';
 import {AnalysisProgress, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
+import {ExplorerPage} from './explorer/Explorer';
 
 export async function request<T>(path:string, init?:RequestInit):Promise<T> {
   const response = await fetch(apiUrl(path), init);
@@ -107,6 +108,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
       unread={unreadBy(coverage, [filter==='ALL'?'taxo.spring-api':'taxo.spring-security'])} unknown={isUnknown(coverage)}/></>;
     switch(route.page){
     case 'interroger':return <AskTaxo key={panelKey('ask',selected)} base={base} request={request} minia={minia}/>;
+    case 'explorer':return <ExplorerPage key={selected} base={base} request={request} scanId={current.id} route={route} revision={revision} project={project}/>;
     case 'technologies':return <>{note}<TechnologiesPage scan={current}/></>;
     case 'routes':return routesOf('ALL');
     case 'securite':return routesOf('PROTECTED', 'Sécurité des routes', 'Règles de protection observées par Taxo : pour chaque route, la règle qui la capture, ce qu’elle exige, et la preuve dans le code. Ce n’est pas encore une analyse de sécurité complète : seules les routes HTTP et leurs règles sont lues.');

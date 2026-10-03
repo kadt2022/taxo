@@ -34,7 +34,7 @@ export function verdictText(statement:Extract<Statement,{type:'claim'}>){
 }
 
 /** Une deduction de Taxo, premisse par premisse (ARCHITECTURE § 12) : ce qui la fonde, et ce qu'elle ne sait pas. */
-function DerivationView({derivation}:Readonly<{derivation:Derivation}>){
+export function DerivationView({derivation}:Readonly<{derivation:Derivation}>){
   return <div className="derivation">
     <p>Déduit par Taxo, règle <code>{derivation.rule}</code>, à partir de :</p>
     <ul>{derivation.premises.map(item=><li key={`p:${item}`}>{item}</li>)}</ul>
