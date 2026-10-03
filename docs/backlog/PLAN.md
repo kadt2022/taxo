@@ -27,8 +27,8 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
      TAXO-01F est terminé.
 5. → Navigation multiniveau et explorateur de la Maille ([TAXO-01J](TAXO-01J-navigation-multiniveau-et-explorateur.md)),
    qui termine [TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md) : plusieurs niveaux, sens combiné, couverture
-   locale. PR 1 (moteur et protocole) livrée (#85) ; PR 2 (forme compacte et explorateur) livrée par la PR de
-   cette branche ; PR 3 (mesures et essai réel) ensuite.
+   locale. PR 1 (moteur et protocole) livrée (#85) ; PR 2 (forme compacte et explorateur) livrée (#86) ; PR 3
+   (mesures et essai réel) livrée par la PR de cette branche. Récit terminé.
 6. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 7. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
 8. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.

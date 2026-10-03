@@ -1,8 +1,8 @@
 # TAXO-01J — Navigation multiniveau et explorateur de la Maille
 
 Statut : rédigé le 2026-10-03, révisé le même jour après la première revue (#84), validé. PR 1 (moteur et
-protocole, tranches A, B, C) livrée (#85) ; PR 2 (forme compacte et explorateur, tranches D, E) livrée par la PR
-de la branche `feat/taxo-01j-explorateur` ; PR 3 (mesures) à venir. Étape 5 du [PLAN](PLAN.md). Ce récit
+protocole, tranches A, B, C) livrée (#85) ; PR 2 (forme compacte et explorateur, tranches D, E) livrée (#86) ;
+PR 3 (mesures et essai réel, tranche F) livrée par la PR de la branche `perf/taxo-01j-mesures`. Récit terminé. Étape 5 du [PLAN](PLAN.md). Ce récit
 reprend et termine les critères laissés ouverts par [TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md) :
 plusieurs niveaux, sens combiné, couverture locale. Il ajoute le premier usage humain du voisinage : un
 explorateur dans le portail.
@@ -737,3 +737,84 @@ plafond par opération plus haut pour `get_neighborhood`. Aucun des deux n'est f
 7. **Bout en bout** : un parcours Playwright (rechercher, développer, consulter une preuve) contre une API réelle
    sur le dépôt scénarisé, job CI « Taxo Explorer E2E ». Une fois la page affichée, l'explorateur n'appelle que
    `taxo-query`.
+
+## Mesures et essai réel (PR 3, tranche F)
+
+L'essai est reproductible : `backend/scripts/neighborhood_trial.py <dépôt> <commit> [--database URL]` analyse le
+dépôt au commit donné, puis mesure par l'API du protocole des Tuiles `neighborhood/2` (profondeur 1 à 3, les deux
+sens, toutes les relations présentes, budget « standard », preuves résumées, forme complète et compacte) depuis la
+référence la plus connectée de chaque type, et `find_references`. Les ancres sont choisies par leur degré, sans
+qu'aucun type ni aucune relation soit nommé. Temps médians de trois appels, dans le processus, poste de
+développement : des mesures, jamais des promesses.
+
+### Dépôts
+
+| Dépôt | Analyse | Assertions | Relations |
+| --- | --- | --- | --- |
+| Taxo à `33f0bd0` (l'analyse de référence de TAXO-COV-01) | 4,9 s | 3 364 | 9 |
+| spring-petclinic à `500158f` | 15,7 s (SQLite), 22 s (PostgreSQL) | 10 019 | 11 |
+
+### Ce que tient une Tuile de 32 000 octets
+
+| Ancres | Forme complète | Forme compacte |
+| --- | --- | --- |
+| Profondeur 1, éventail 20 (dépôt, commit, fichier, personne) | 20 éléments, 27 à 31 Ko | 20 éléments, 18 à 23 Ko |
+| Profondeur 2 et 3, nœuds denses (fichiers, commits, langages) | 20 à 23 éléments, arrêt `BYTES` | 32 à 43 éléments, arrêt `BYTES` |
+| Profondeur 2 et 3, autour des routes Spring (faits déduits) | 14 à 15 éléments | 19 à 22 éléments |
+
+- **L'octet est la borne effective** dès la profondeur 2 : les budgets de nœuds, de liens et de travail ne sont
+  jamais atteints avec le préréglage « standard ». La forme compacte rend 1,6 à 1,9 fois plus d'éléments sur les
+  faits observés.
+- **Autour des routes Spring, la dérivation pèse.** Un fait `SERVED_BY` déduit porte ses prémisses (environ 600
+  octets) ; la dérivation fait partie de ce que le fait affirme et reste dans chaque élément (§ 7). Le gain de la
+  forme compacte y tombe à 1,3 à 1,5.
+- **Les preuves résumées tiennent rarement** à la borne : la sélection est fixée d'abord, et les résumés ne
+  s'ajoutent que dans la place qui reste (§ 7, précision 3). L'explorateur les charge alors par poignée,
+  occurrence par occurrence ; le décompte de ce qui n'a pas tenu est dit.
+
+### Temps
+
+| Mesure | SQLite | PostgreSQL 16 |
+| --- | --- | --- |
+| Tuile, forme complète, profondeur 2 et 3 | 86 à 139 ms | 115 à 161 ms |
+| Tuile, forme compacte, profondeur 2 et 3 | 137 à 324 ms | 344 à 499 ms |
+| `find_references`, page de 50 | 14 à 40 ms | — |
+
+La forme compacte coûte plus parce qu'elle admet plus d'éléments, non parce qu'elle compacte (19 ms sur 297
+mesurées) : la jauge rend la Tuile provisoire après chaque élément admis, environ 3 ms pour une enveloppe de 32 Ko,
+et le nombre de rendus suit celui des éléments. Ce coût est borné par le plafond d'octets.
+
+### Défaut trouvé par l'essai, corrigé
+
+**Une lecture d'adjacence pouvait lire tout le voisinage sur PostgreSQL.** Avec les statistiques d'une vraie base,
+le planificateur joignait d'abord toutes les identités dont le sujet est l'ancre, puis triait pour garder la page :
+pour un nœud de degré 1 047, 1 047 occurrences lues et 8 872 identités écartées, pour 21 rendues. L'acceptation 6
+(« un nœud à fort degré n'est jamais lu en entier ») n'était tenue que sur SQLite. Le garde-fou de la PR 1 comptait
+les requêtes et vérifiait la présence d'une borne, pas ce que le moteur lit.
+
+- **Garde-fou ajouté** (`test_neighborhood_performance.py`, les deux stockages, SQLite et PostgreSQL en CI) : sur
+  un nœud de degré 1 000 parmi 10 000 occurrences, statistiques calculées, le plan de chaque lecture d'adjacence ne
+  touche pas plus de lignes que sa page (PostgreSQL : `EXPLAIN ANALYZE`) ; sur SQLite, le plan le prouve par sa
+  forme (index d'ancre et rang, aucune table parcourue, aucun tri sous la lecture). Il échoue sur l'ancienne
+  requête : 1 000 lignes lues pour une page de 11.
+- **Correction** : la page est choisie par l'index d'ancre seul, en sous-requête bornée, puis ses occurrences sont
+  chargées ; l'orthographe soumise est vérifiée sur la page chargée et, si elle écartait une occurrence (deux
+  références de même empreinte), la lecture reprend après la page. Une requête par lecture, comme avant. Une
+  collision d'empreinte forcée prouve qu'aucune occurrence n'est perdue ni prise à l'autre ancre.
+- Une première correction en deux requêtes bornait aussi la lecture, mais ralentissait la Tuile (aller-retour
+  supplémentaire par lecture, jusqu'à 810 ms) : écartée au profit d'une seule requête.
+
+### Défauts d'affichage trouvés par l'essai, corrigés
+
+Les références réelles sont longues et sans espace (une méthode Java, un chemin) : elles débordaient du panneau de
+lien et de la liste ; elles se coupent maintenant. Le panneau latéral défile seul quand la liste des frontières
+dépasse l'écran. « 3 zone non lues » est devenu « 3 zones non lues ».
+
+### Décisions
+
+1. **Plafond par opération maintenu à 32 000 octets.** La forme compacte, que l'explorateur emploie, donne la
+   marge attendue ; relever le plafond allongerait chaque réponse et le coût de la jauge sans rien changer à la
+   navigation, qui enchaîne les développements.
+2. **Pistes notées, non faites** (aucune n'est requise par l'acceptation) : une jauge incrémentale plutôt qu'un
+   rendu complet par élément ; l'instantané de l'analyse relu à chaque lot (27 fois pour une Tuile) et une
+   transaction par lecture ; des prémisses de dérivation qui répètent des références déjà présentes dans la Tuile.
