@@ -61,6 +61,16 @@ class Reads:
         """Ce que declare un catalogue : `None` pour un catalogue independant du langage."""
         return cls.any() if languages is None else cls(LANGUAGES, frozenset(languages))
 
+    @classmethod
+    def combined(cls, readings, absent):
+        """Ce que lisent ensemble les executions d'un meme producteur dans une analyse : leur contrat commun.
+        Aucun n'est choisi a la place des autres : des contrats differents sont inconnus, et ne justifient
+        aucune conclusion negative. `absent` : ce que vaut l'absence d'execution, selon qui la lit."""
+        distinct = set(readings)
+        if not distinct:
+            return absent
+        return distinct.pop() if len(distinct) == 1 else cls.unknown()
+
     @property
     def known(self):
         return self.kind != UNKNOWN

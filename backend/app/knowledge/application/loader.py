@@ -50,7 +50,9 @@ def from_coverage(evaluations, coverage, catalogs, read_contract):
     for item in evaluations:
         identifier = item['evaluator_id']
         own = tuple(fact for fact in coverage if fact.get('produced_by', {}).get('producer_id') == identifier)
-        reads = read_contract(*_catalog(own[0])) if own else Reads.unknown()
+        # Une seule regle si plusieurs executions s'y melent : leur contrat commun, sinon inconnu.
+        reads = Reads.combined([read_contract(*key) for key in dict.fromkeys(_catalog(fact) for fact in own)],
+                               Reads.unknown())
         found.append(Analyzer(identifier, _relations(item, catalogs), item.get('status') == 'FAILED', own, reads,
                               item.get('status') == 'UNSUPPORTED'))
     return found
@@ -83,9 +85,6 @@ def recorded_contracts(executions, reads_of):
     contrats differents, aucun ne serait choisi a la place des autres : le contrat serait inconnu."""
     found = {}
     for execution in executions:
-        if execution.producer_type != 'EVALUATOR':
-            continue
-        reads = reads_of(vars(execution))
-        known = found.get(execution.producer_id, reads)
-        found[execution.producer_id] = reads if known == reads else Reads.unknown()
-    return found
+        if execution.producer_type == 'EVALUATOR':
+            found.setdefault(execution.producer_id, []).append(reads_of(vars(execution)))
+    return {producer: Reads.combined(readings, Reads.unknown()) for producer, readings in found.items()}
