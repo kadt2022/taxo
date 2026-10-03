@@ -12,8 +12,10 @@ from sqlalchemy import (JSON, BigInteger, Column, ForeignKey, Index, Integer, St
 from sqlalchemy.orm import Session
 from app.platform.database.base import Base
 from app.evaluations.domain.capability import UNREAD_COVERAGE
+from app.facts import is_reference
 from app.neighborhood.domain.traversal import Adjacent
 from app.scans.domain.fact_order import adjacency_keys
+from app.scans.infrastructure.sqlalchemy import reference_index
 
 
 class AnalysisFactRow(Base):
@@ -54,6 +56,11 @@ def _rank_analysis(db, scan_id):
         if values:
             db.execute(update(row.__table__).where(row.id == bindparam('_id'))
                        .values({f'{side}_rank': bindparam('_rank')}), values)
+
+
+def _searched(reference):
+    kind, _, key = reference.partition(':')
+    return kind, reference_index.search_key(key), reference_index.reference_hash(reference)
 
 
 def _identity(fact):
@@ -127,6 +134,20 @@ class SqlAlchemyAnalysisFacts:
                         found.append({'subject': fact['subject'], 'coverage_type': fact['coverage_type'],
                                       'producer': fact.get('produced_by', {}).get('producer_id')})
         return sorted(found, key=lambda item: (item['subject'], item['coverage_type'], item['producer'] or ''))
+
+    def references(self, scan_id, prefix, kind, after, limit):
+        """The same search over this fallback table, which is no longer fed: it keeps no index of references,
+        and reads the references of the analysis to sort them. Kept for the equivalence tests only."""
+        row = AnalysisFactRow
+        with Session(self.engine) as db:
+            named = set(db.scalars(select(row.subject).where(row.scan_id == scan_id, row.kind == 'ASSERTION')))
+            named |= {value for value in db.scalars(select(row.object).where(
+                row.scan_id == scan_id, row.kind == 'ASSERTION')) if isinstance(value, str) and is_reference(value)}
+        found = sorted((key, hash_, reference, kind_) for reference in named
+                       for kind_, key, hash_ in [_searched(reference)]
+                       if (kind is None or kind_ == kind) and key.startswith(prefix)
+                       and (after is None or (key, hash_) > tuple(after)))
+        return found[:limit], len(found) > limit
 
     def revision(self, scan_id):
         """Append-only fact generation, read through a fixed-size index."""

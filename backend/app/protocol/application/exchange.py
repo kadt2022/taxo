@@ -27,7 +27,8 @@ from app.protocol.application.arguments import claim_object as _claim_object, no
 from app.protocol.application.arguments import reference as _reference, relation as _relation, text as _text
 from app.knowledge.domain.knowledge import AnalysisKnowledge, contains
 from app.protocol.domain.verdict import judge
-from app.neighborhood.domain import handle
+from app.neighborhood.application.references import find_references
+from app.neighborhood.domain import handle, references
 from app.protocol.application.neighborhood_operation import neighborhood
 
 logger = logging.getLogger(__name__)
@@ -42,11 +43,13 @@ ERROR_RESERVE = MAX_OPERATIONS * MAX_ERROR_BYTES
 MIN_EXCHANGE_BYTES = ERROR_RESERVE + 6_000
 
 _ASSERTION, _LANGUAGES = 'ASSERTION', 'languages'
+# Les types de reference que le vocabulaire peut nommer, de part et d'autre de ses relations.
+_REFERENCE_TYPES = frozenset(kind for sources, targets, _ in RELATIONS.values() for kind in (*sources, *targets))
 NATURES = (_ASSERTION, 'ABSENCE', 'COVERAGE')
 V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'get_diff', 'verify_claim')
 # Operations reservees d'ARCHITECTURE § 12 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
 # commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01).
-ACTIVATED = ('diff_facts', 'get_neighborhood')
+ACTIVATED = ('diff_facts', 'get_neighborhood', 'find_references')
 OPERATIONS = V1 + ACTIVATED
 RESERVED = ('find_endpoint', 'trace_access_control', 'find_callers', 'find_callees', 'find_dependencies',
             'find_configuration', 'get_source')
@@ -75,6 +78,8 @@ _ARGUMENTS = {
                          'max_fanout': '1..200 (neighborhood/2, facultatif)',
                          'evidence': 'NONE|SUMMARY (neighborhood/2)',
                          'continuation': 'reprise d’une adjacence coupée (facultatif)'},
+    'find_references': {'analysis': 'identifiant de l’analyse', 'prefix': 'début de la clé (après le type), 1..200',
+                        'type': 'type de référence (facultatif)', 'limit': '1..50', 'after': 'reprise (facultatif)'},
 }
 
 
@@ -283,7 +288,8 @@ class Exchange:
             item['evaluator_id'], frozenset(item.get('relations', {}))) for item in self.evaluations)
 
     def available(self):
-        operations = ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'verify_claim', 'get_neighborhood']
+        operations = ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'verify_claim', 'get_neighborhood',
+                      'find_references']
         if self._history_available():
             operations += ['get_commit', 'diff_facts']
             if self.diff_allowed:
@@ -447,6 +453,40 @@ class Exchange:
             raise OperationError(INVALID_ARGUMENT, handle.REFUSED)
         return fact
 
+    def find_references(self, arguments, max_bytes):
+        """Les references de l'analyse qui commencent par un prefixe (TAXO-01J) : une page bornee, dans l'ordre
+        de leur cle, avec une reprise. Une liste ordonnee : ni score ni compte de degre."""
+        _no_other(arguments, ('analysis', 'prefix', 'type', 'limit', 'after'))
+        if arguments.get('analysis') != self.scan.id:
+            raise OperationError(INVALID_ARGUMENT, 'analysis doit identifier l’analyse de cet échange (describe).')
+        prefix = arguments.get('prefix')
+        if not isinstance(prefix, str) or not 1 <= len(prefix) <= references.MAX_PREFIX:
+            raise OperationError(INVALID_ARGUMENT, f'prefix : de 1 à {references.MAX_PREFIX} caractères.')
+        kind = arguments.get('type')
+        if kind is not None and kind not in _REFERENCE_TYPES:
+            raise OperationError(INVALID_ARGUMENT, 'type : un type de référence du vocabulaire.')
+        limit = arguments.get('limit', references.DEFAULT_LIMIT)
+        if type(limit) is not int or not 1 <= limit <= references.MAX_LIMIT:
+            raise OperationError(INVALID_ARGUMENT, f'limit doit être un entier entre 1 et {references.MAX_LIMIT}.')
+        revision, folded = self.facts.revision(self.scan.id), references.fold(prefix)
+        try:
+            after = references.decode(arguments.get('after'), self.scan.id, revision, folded, kind)
+        except references.ReferenceSearchError as exc:
+            raise OperationError(INVALID_ARGUMENT, str(exc)) from exc
+        rows, more = find_references(self.facts, self.scan.id, prefix, kind, after, limit)
+        coverage = self.envelope_coverage()
+        # La page la plus longue qui tient avec sa reprise : celle-ci est mesurée avec la page, jamais ajoutée après.
+        for count in range(len(rows), 0 if rows else -1, -1):
+            following = count < len(rows) or more
+            last = rows[count - 1][:2] if following else None
+            response = self.response('find_references', coverage, max_bytes, prefix=prefix, type=kind,
+                                      next=references.encode(self.scan.id, revision, folded, kind, last) if last else None)
+            if all(response.add('items', {'reference': reference, 'type': found_kind})
+                   for _, _, reference, found_kind in rows[:count]):
+                response.skip('items', len(rows) - count)
+                return response
+        raise OperationError(BUDGET_EXHAUSTED, 'Le budget ne contient pas une seule référence.')
+
     def get_coverage(self, arguments, max_bytes):
         _no_other(arguments, ('scope',))
         scope = _reference(arguments, 'scope')
@@ -506,4 +546,5 @@ _SERVED = {
     'verify_claim': Exchange.verify_claim,
     'diff_facts': Exchange.diff_facts,
     'get_neighborhood': Exchange.get_neighborhood,
+    'find_references': Exchange.find_references,
 }

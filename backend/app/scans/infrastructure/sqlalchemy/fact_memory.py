@@ -20,11 +20,13 @@ from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
 from app.evaluations.domain.capability import UNREAD_COVERAGE
+from app.facts import is_reference
 from app.facts.domain.provenance import EXECUTABLE, ProducerExecution
 from app.neighborhood.domain.traversal import Adjacent
 from app.platform.database.base import Base
 from app.scans.domain.fact_order import occurrence_fingerprint, order_key
 from app.scans.domain.occurrence import EVIDENCE_FIELDS, Occurrence, OccurrenceError, rebuild, split
+from app.scans.infrastructure.sqlalchemy import reference_index
 
 _SCAN = 'scans.id'
 
@@ -130,6 +132,17 @@ def _producer(fact, evaluator_id, executions):
 
 def _reference_hash(reference):
     return hashlib.sha256((reference or '').encode()).hexdigest()
+
+
+def _references(facts):
+    """Les références que nomment des assertions (leur sujet, et leur objet quand c'en est une), telles qu'elles
+    ont été soumises : c'est cette orthographe que le parcours accepte comme ancre. La recherche, elle, compare
+    leur forme canonique."""
+    for fact in facts:
+        if fact['kind'] == 'ASSERTION':
+            yield fact['subject']
+            if isinstance(fact.get('object'), str) and is_reference(fact['object']):
+                yield fact['object']
 
 
 def _anchors(fact):
@@ -256,6 +269,7 @@ class SqlAlchemyFactMemory:
                        for position, item in enumerate(occurrence.evidence or ()))
             db.flush()
             _rank_adjacencies(db, scan_id, anchors)
+            reference_index.record(db, reference_index.rows(scan_id, _references(fact for fact, _, _ in prepared)))
             db.commit()
 
     def query(self, scan_id, **filters):
@@ -332,6 +346,11 @@ class SqlAlchemyFactMemory:
                           for subject, value, machine, human in rows
                           if value.get('coverage_type') in UNREAD_COVERAGE]
         return sorted(found, key=lambda item: (item['subject'], item['coverage_type'], item['producer'] or ''))
+
+    def references(self, scan_id, prefix, kind, after, limit):
+        """References of the analysis whose key starts with `prefix`: one range read of a fixed-size index."""
+        with Session(self.engine) as db:
+            return reference_index.search(db, scan_id, prefix, kind, after, limit)
 
     def revision(self, scan_id):
         """Append-only fact generation, read through a fixed-size index."""
