@@ -6,6 +6,7 @@ lecture et bornees par l'analyse. Aucune n'ecrit ; aucune ne relit le depot.
 from typing import Protocol
 
 from app.facts.domain.provenance import ProducerExecution
+from app.neighborhood.domain.traversal import Adjacent
 
 
 class FactReading(Protocol):
@@ -24,6 +25,15 @@ class FactReading(Protocol):
     def has_reference(self, scan_id: str, root: str) -> bool:
         """Une assertion de l'analyse nomme-t-elle cette reference ?"""
 
-    def neighbor(self, scan_id: str, root: str, relation: str, direction: str,
-                 after: str = '') -> tuple[str, dict] | None:
-        """Le fait adjacent suivant de `root` pour une relation et une direction, apres `after`."""
+    def neighbors(self, scan_id: str, root: str, relation: str, direction: str, after: str,
+                  limit: int) -> list[Adjacent]:
+        """Au plus `limit` occurrences adjacentes de `root` pour une relation et un sens, apres `after`, dans
+        l'ordre des rangs : une lecture indexee, jamais toute l'adjacence (TAXO-01J)."""
+
+    def occurrence(self, scan_id: str, key: str) -> dict | None:
+        """Le fait d'une occurrence de l'analyse, par sa cle stable (celle que rend `neighbors`) ; None si
+        l'analyse n'en a pas de telle (TAXO-01J)."""
+
+    def unread(self, scan_id: str, references: list[str]) -> list[dict]:
+        """Les couvertures de l'analyse qui disent qu'une de ces references n'a pas ete lue (`subject`,
+        `coverage_type`, `producer`) : une lecture par l'ancre du sujet, jamais un parcours (TAXO-01J)."""

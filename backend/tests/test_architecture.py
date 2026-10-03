@@ -1,5 +1,6 @@
 """Executable dependency boundaries for ARCHITECTURE § 3."""
 import ast
+import re
 from importlib.util import resolve_name
 from pathlib import Path
 import subprocess
@@ -299,7 +300,8 @@ def _reads_inside(path, holder):
 def test_the_exchange_is_read_through_its_public_interface():
     """TAXO-ARCH-REF-01 : le voisinage et l'historique lisent l'echange par son interface publique et etroite,
     jamais son interieur (membres prives, services de l'echange)."""
-    readers = [APP / 'neighborhood/application/query.py', APP / 'protocol/application/commits.py']
+    readers = [APP / 'protocol/application' / name for name in (
+        'neighborhood_operation.py', 'neighborhood_request.py', 'neighborhood_view.py', 'commits.py')]
     assert [found for path in readers for found in _reads_inside(path, 'exchange')] == []
 
 
@@ -323,3 +325,47 @@ def test_the_core_reads_its_ports_without_probing_them():
     found = [str(path.relative_to(APP)) for capability in core for path in (APP / capability).rglob('*.py')
              if 'hasattr(' in path.read_text(encoding='utf-8')]
     assert found == []
+
+
+def test_the_neighborhood_layers_depend_only_inward():
+    """TAXO-01J, découpage : le domaine du voisinage n'importe que lui-même et la bibliothèque standard ; son
+    application n'importe que son domaine, la connaissance et le contrat des faits ; aucun ne connaît le
+    protocole, le stockage ou un évaluateur."""
+    allowed = {'domain': ('app.neighborhood.domain',),
+               'application': ('app.neighborhood.', 'app.knowledge.domain', 'app.evaluations.domain', 'app.facts')}
+    violations = []
+    for layer, prefixes in allowed.items():
+        for path in (APP / 'neighborhood' / layer).glob('*.py'):
+            for name in imports(path):
+                if name.startswith('app') and not name.startswith(prefixes):
+                    violations.append(f'{path.relative_to(APP)} importe {name}')
+                elif not name.startswith('app') and name.split('.')[0] not in sys.stdlib_module_names:
+                    violations.append(f'{path.relative_to(APP)} importe {name}')
+    assert violations == []
+
+
+def _named(files):
+    """Les lignes qui nomment une relation, ou construisent une référence d'un type de nœud. Seul `file:` est
+    admis : c'est la règle du contrat qui fait d'un chemin de preuve une référence (couverture locale)."""
+    from app.facts.domain.fact import RELATIONS
+    kinds = {kind for sources, targets, _ in RELATIONS.values() for kind in (*sources, *targets)} - {'file'}
+    relations = re.compile(r"""['"](%s)['"]""" % '|'.join(map(re.escape, sorted(RELATIONS))))
+    references = re.compile(r"""['"](%s):""" % '|'.join(map(re.escape, sorted(kinds))))
+    return [f'{path.name}:{number}' for path in files
+            for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1)
+            if relations.search(line) or references.search(line)]
+
+
+def test_the_neighborhood_names_no_relation_and_no_node_type():
+    """Le parcours ne dépend que des faits : le vocabulaire est lu, jamais recopié, dans le moteur comme dans
+    son adaptateur."""
+    files = [*(APP / 'neighborhood').rglob('*.py'), *(APP / 'protocol/application').glob('neighborhood_*.py')]
+    assert _named(files) == []
+
+
+def test_the_genericity_guard_detects_a_named_relation_or_node_type(tmp_path):
+    probe = tmp_path / 'probe.py'
+    probe.write_text("if relation == 'HANDLED_BY' or root.startswith('endpoint:') or path == 'file:x':\n    pass\n")
+    assert _named([probe]) == ['probe.py:1']
+    probe.write_text("fields = ('path', 'symbol')\nreference = 'file:' + path\n")
+    assert _named([probe]) == [], 'un nom de champ de preuve et la règle du contrat sur les chemins sont admis'

@@ -160,7 +160,10 @@ jobs:
         # Last step: these suites drop and recreate every table of the test database.
         env:
           TAXO_TEST_POSTGRES_URL: ${{ env.DATABASE_URL }}
-        run: python -m pytest -q tests/test_fact_memory.py tests/test_neighborhood_conformance.py tests/test_fact_memory_migration.py tests/test_comparison_store.py
+        run: >-
+          python -m pytest -q tests/test_fact_memory.py tests/test_neighborhood_conformance.py
+          tests/test_fact_memory_migration.py tests/test_comparison_store.py tests/test_neighborhood_v1_golden.py
+          tests/test_neighborhood_v2.py tests/test_find_references.py tests/test_neighborhood_performance.py
 
   containers:
     name: Taxo Docker Smoke

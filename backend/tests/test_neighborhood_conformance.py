@@ -250,14 +250,14 @@ def test_append_invalidates_the_continuation_on_both(twin):
 def test_mutation_during_the_walk_refuses_the_page(twin, monkeypatch, name):
     twin.add([edge()])
     store = twin.stores[name]
-    neighbor = store.neighbor
+    neighbors = store.neighbors
 
     def mutate(*args, **kwargs):
-        found = neighbor(*args, **kwargs)
+        found = neighbors(*args, **kwargs)
         store.add('analysis-1', 'fixture', [edge('module:a')])
         return found
 
-    monkeypatch.setattr(store, 'neighbor', mutate)
+    monkeypatch.setattr(store, 'neighbors', mutate)
     exchange = twin.exchange(name)
     assert twin.ask(exchange, max_edges=1)['error']['code'] == 'INVALID_ARGUMENT'
     assert not exchange.refs.facts

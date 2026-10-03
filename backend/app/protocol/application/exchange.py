@@ -27,7 +27,9 @@ from app.protocol.application.arguments import claim_object as _claim_object, no
 from app.protocol.application.arguments import reference as _reference, relation as _relation, text as _text
 from app.knowledge.domain.knowledge import AnalysisKnowledge, contains
 from app.protocol.domain.verdict import judge
-from app.neighborhood.application.query import neighborhood
+from app.neighborhood.application.references import find_references
+from app.neighborhood.domain import handle, references
+from app.protocol.application.neighborhood_operation import neighborhood
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +43,13 @@ ERROR_RESERVE = MAX_OPERATIONS * MAX_ERROR_BYTES
 MIN_EXCHANGE_BYTES = ERROR_RESERVE + 6_000
 
 _ASSERTION, _LANGUAGES = 'ASSERTION', 'languages'
+# Les types de reference que le vocabulaire peut nommer, de part et d'autre de ses relations.
+_REFERENCE_TYPES = frozenset(kind for sources, targets, _ in RELATIONS.values() for kind in (*sources, *targets))
 NATURES = (_ASSERTION, 'ABSENCE', 'COVERAGE')
 V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'get_diff', 'verify_claim')
 # Operations reservees d'ARCHITECTURE § 12 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
 # commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01).
-ACTIVATED = ('diff_facts', 'get_neighborhood')
+ACTIVATED = ('diff_facts', 'get_neighborhood', 'find_references')
 OPERATIONS = V1 + ACTIVATED
 RESERVED = ('find_endpoint', 'trace_access_control', 'find_callers', 'find_callees', 'find_dependencies',
             'find_configuration', 'get_source')
@@ -55,17 +59,27 @@ _CLAIM_ARGUMENTS = {'subject': 'reference', 'relation': 'relation', 'object': 'r
 _ARGUMENTS = {
     'describe': {},
     'find_facts': {**_CLAIM_ARGUMENTS, 'nature': '|'.join(NATURES)},
-    'get_evidence': {'fact': 'F…'},
+    'get_evidence': {'fact': 'F… de cet échange', 'occurrence': 'poignée d’occurrence (au lieu de fact)'},
     'get_coverage': {'scope': 'reference (facultatif)'},
     'get_commit': _COMMIT_ARGUMENT,
     'get_diff': {**_COMMIT_ARGUMENT, 'path': 'chemin d’un fichier touche'},
     'verify_claim': _CLAIM_ARGUMENTS,
     'diff_facts': _COMMIT_ARGUMENT,
-    'get_neighborhood': {'analysis': 'identifiant de l’analyse', 'root': 'reference',
-                         'follow': 'liste de relations', 'direction': 'INCOMING|OUTGOING',
-                         'depth': '1 (première tranche)', 'priority': 'ordre de follow (facultatif)',
-                         'max_nodes': '1..200', 'max_edges': '1..200', 'max_work': '1..1000',
-                         'continuation': 'reprise du même voisinage (facultatif)'},
+    'get_neighborhood': {'engine': 'neighborhood/1|neighborhood/2 (facultatif ; sinon neighborhood/1 pour une '
+                                   'demande qui y est valide, neighborhood/2 pour toute autre)',
+                         'analysis': 'identifiant de l’analyse', 'root': 'reference',
+                         'steps': 'liste de {relation, direction} (neighborhood/2 ; exclut follow, direction, '
+                                  'priority)',
+                         'follow': 'liste de relations', 'direction': 'INCOMING|OUTGOING|BOTH (BOTH : neighborhood/2)',
+                         'depth': '1..4 (au-delà de 1 : neighborhood/2)',
+                         'priority': 'ordre de follow (facultatif)',
+                         'max_nodes': '1..200', 'max_edges': '1..400 (au-delà de 200 : neighborhood/2)',
+                         'max_work': '1..2000 (au-delà de 1000 : neighborhood/2)',
+                         'max_fanout': '1..200 (neighborhood/2, facultatif)',
+                         'evidence': 'NONE|SUMMARY (neighborhood/2)',
+                         'continuation': 'reprise d’une adjacence coupée (facultatif)'},
+    'find_references': {'analysis': 'identifiant de l’analyse', 'prefix': 'début de la clé (après le type), 1..200',
+                        'type': 'type de référence (facultatif)', 'limit': '1..50', 'after': 'reprise (facultatif)'},
 }
 
 
@@ -100,6 +114,21 @@ class References:
         ref = f'F{len(self.facts) + 1}'
         self.facts[ref], self.by_key[key] = fact, ref
         return ref, True
+
+    def preview(self, keys):
+        """Les references qu'auraient ces faits, donnes par leur cle (`key`), sans en creer aucune : une reponse
+        provisoire se mesure avec les references qu'elle aurait."""
+        refs, pending = [], {}
+        for key in keys:
+            ref = self.by_key.get(key) or pending.get(key)
+            if ref is None:
+                ref = pending[key] = f'F{len(self.facts) + len(pending) + 1}'
+            refs.append(ref)
+        return refs
+
+    @classmethod
+    def key(cls, fact):
+        return cls._key(fact)
 
     def forget(self, ref):
         """Retire la derniere reference creee : son fait n'a pas ete transmis."""
@@ -259,7 +288,8 @@ class Exchange:
             item['evaluator_id'], frozenset(item.get('relations', {}))) for item in self.evaluations)
 
     def available(self):
-        operations = ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'verify_claim', 'get_neighborhood']
+        operations = ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'verify_claim', 'get_neighborhood',
+                      'find_references']
         if self._history_available():
             operations += ['get_commit', 'diff_facts']
             if self.diff_allowed:
@@ -393,17 +423,63 @@ class Exchange:
         return response
 
     def get_evidence(self, arguments, max_bytes):
-        _no_other(arguments, ('fact',))
-        ref = _text(arguments, 'fact', required=True)
-        if ref not in self.refs.facts:
-            raise OperationError(INVALID_ARGUMENT, f'{ref} n’a pas été transmis dans cet échange.')
-        fact = self.refs.facts[ref]
+        _no_other(arguments, ('fact', 'occurrence'))
+        if ('fact' in arguments) == ('occurrence' in arguments):
+            raise OperationError(INVALID_ARGUMENT, 'fact (F… de cet échange) ou occurrence (poignée), l’un des deux.')
+        if 'occurrence' in arguments:
+            fact = self._handled(arguments['occurrence'])
+            ref, _ = self.refs.fact(fact)
+        else:
+            ref = _text(arguments, 'fact', required=True)
+            if ref not in self.refs.facts:
+                raise OperationError(INVALID_ARGUMENT, f'{ref} n’a pas été transmis dans cet échange.')
+            fact = self.refs.facts[ref]
         producer = fact.get('produced_by', {}).get('producer_id')
         coverage = [entry for entry in self.envelope_coverage(fact.get('relation'), {fact.get('subject')})
                     if entry['producer'] in (producer, None)]
         response = self.response('get_evidence', coverage, max_bytes, fact=ref)
         self._add_evidence(response, ref, fact)
         return response
+
+    def _handled(self, value):
+        """Le fait d'une poignée d'occurrence (TAXO-01J) : seulement de l'analyse de cet échange, à sa génération
+        de faits, fixée avant la lecture et vérifiée après ; le même refus quelle que soit la raison."""
+        revision = self.facts.revision(self.scan.id)
+        try:
+            key = handle.decode(value, self.scan.id, revision)
+        except handle.HandleError as exc:
+            raise OperationError(INVALID_ARGUMENT, str(exc)) from exc
+        fact = self.facts.occurrence(self.scan.id, key)
+        # La génération est vérifiée encore après la lecture : un ajout entre-temps fait refuser la poignée.
+        if fact is None or self.facts.revision(self.scan.id) != revision:
+            raise OperationError(INVALID_ARGUMENT, handle.REFUSED)
+        return fact
+
+    def find_references(self, arguments, max_bytes):
+        """Les references de l'analyse qui commencent par un prefixe (TAXO-01J) : une page bornee, dans l'ordre
+        de leur cle, avec une reprise. Une liste ordonnee : ni score ni compte de degre."""
+        prefix, kind, limit = _search(arguments, self.scan.id)
+        revision = self.facts.revision(self.scan.id)
+        try:
+            folded = references.prefix_key(prefix)
+            after = references.decode(arguments.get('after'), self.scan.id, revision, folded, kind)
+        except references.ReferenceSearchError as exc:
+            raise OperationError(INVALID_ARGUMENT, str(exc)) from exc
+        rows, more = find_references(self.facts, self.scan.id, prefix, kind, after, limit)
+        if self.facts.revision(self.scan.id) != revision:
+            # Comme une Tuile : une page ne mêle jamais deux générations, et sa reprise ne lie que la sienne.
+            raise OperationError(INVALID_ARGUMENT, 'Les faits de cette analyse ont changé pendant la recherche ; '
+                                                   'recommencer sans reprise.')
+        coverage = self.envelope_coverage()
+        # La page la plus longue qui tient avec sa reprise : celle-ci est mesuree avec la page, jamais ajoutee apres.
+        for count in range(len(rows), 0 if rows else -1, -1):
+            last = rows[count - 1][:2] if count < len(rows) or more else None
+            token = references.encode(self.scan.id, revision, folded, kind, last) if last else None
+            response = self.response('find_references', coverage, max_bytes, prefix=prefix, type=kind, next=token)
+            if all(response.add('items', {'reference': row[2], 'type': row[3]}) for row in rows[:count]):
+                response.skip('items', len(rows) - count)
+                return response
+        raise OperationError(BUDGET_EXHAUSTED, 'Le budget ne contient pas une seule référence.')
 
     def get_coverage(self, arguments, max_bytes):
         _no_other(arguments, ('scope',))
@@ -447,6 +523,23 @@ class Exchange:
         return response
 
 
+def _search(arguments, analysis):
+    """Les arguments d'une recherche de references, verifies : prefixe, type, taille de page."""
+    _no_other(arguments, ('analysis', 'prefix', 'type', 'limit', 'after'))
+    if arguments.get('analysis') != analysis:
+        raise OperationError(INVALID_ARGUMENT, 'analysis doit identifier l’analyse de cet échange (describe).')
+    prefix = arguments.get('prefix')
+    if not isinstance(prefix, str) or not 1 <= len(prefix) <= references.MAX_PREFIX:
+        raise OperationError(INVALID_ARGUMENT, f'prefix : de 1 à {references.MAX_PREFIX} caractères.')
+    kind = arguments.get('type')
+    if kind is not None and kind not in _REFERENCE_TYPES:
+        raise OperationError(INVALID_ARGUMENT, 'type : un type de référence du vocabulaire.')
+    limit = arguments.get('limit', references.DEFAULT_LIMIT)
+    if type(limit) is not int or not 1 <= limit <= references.MAX_LIMIT:
+        raise OperationError(INVALID_ARGUMENT, f'limit doit être un entier entre 1 et {references.MAX_LIMIT}.')
+    return prefix, kind, limit
+
+
 def _operation(request):
     """Le nom de l'operation demandee, s'il est du protocole : jamais une valeur arbitraire de l'appelant."""
     operation = request.get('operation') if isinstance(request, dict) else None
@@ -464,4 +557,5 @@ _SERVED = {
     'verify_claim': Exchange.verify_claim,
     'diff_facts': Exchange.diff_facts,
     'get_neighborhood': Exchange.get_neighborhood,
+    'find_references': Exchange.find_references,
 }

@@ -257,7 +257,12 @@ def test_catalogs_declare_what_they_read():
 
 CORE = ('app/evaluations/domain/capability.py', 'app/evaluations/application/run_evaluator.py',
         'app/scans/application/run_scan.py', 'app/protocol/domain/verdict.py', 'app/protocol/application/exchange.py',
-        'app/neighborhood/application/query.py', 'app/comparison/domain/comparison.py',
+        *(f'app/neighborhood/{name}.py' for name in (
+            'domain/request', 'domain/budget', 'domain/frontier', 'domain/continuation', 'domain/traversal',
+            'domain/handle', 'domain/references', 'application/ports', 'application/tile',
+            'application/knowledge_frontier', 'application/references')),
+        *(f'app/protocol/application/neighborhood_{name}.py' for name in ('operation', 'request', 'view')),
+        'app/comparison/domain/comparison.py',
         'app/comparison/application/compare.py', 'app/knowledge/domain/knowledge.py',
         'app/knowledge/application/loader.py', 'app/protocol/application/commits.py',
         'app/protocol/application/arguments.py', 'app/protocol/application/ports.py',

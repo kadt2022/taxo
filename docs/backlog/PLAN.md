@@ -25,7 +25,9 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
      Terminé (#76 à #82).
    - Tranche E : l'impact d'un commit depuis les analyses enregistrées, sans relire le dépôt. Livrée ;
      TAXO-01F est terminé.
-5. → Tuile multi-niveaux et couverture locale détaillée ([TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md)).
+5. → Navigation multiniveau et explorateur de la Maille ([TAXO-01J](TAXO-01J-navigation-multiniveau-et-explorateur.md)),
+   qui termine [TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md) : plusieurs niveaux, sens combiné, couverture
+   locale. PR 1 (moteur et protocole) livrée par la PR de cette branche ; PR 2 (explorateur) ensuite.
 6. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 7. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
 8. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.

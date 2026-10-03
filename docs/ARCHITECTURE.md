@@ -507,7 +507,7 @@ garde que des résumés bornés. Lecture :
 stockage. Un autre moteur ne se justifierait que par une limite mesurée. Les dépendances d'invalidation
 entre projections sont des métadonnées techniques ; elles ne redéfinissent pas la Maille.
 
-## 9. Tuile et Tuile adaptative (première tranche explicite implémentée)
+## 9. Tuile et Tuile adaptative (parcours explicite multiniveau implémenté)
 
 Une Tuile est une projection bornée de la Maille autour d'une ancre. Elle a toujours deux dimensions
 **indépendantes** :
@@ -520,43 +520,62 @@ Tuile = instantané  (QUEL logiciel : analyse, commit)
 Une Tuile peut décrire un commit ancien ; son adaptation au consommateur ne dépend pas de sa date. Il n'y
 a pas de hiérarchie « Tuile statique, puis dynamique, puis adaptative ».
 
-### Première tranche implémentée : voisinage explicite à un saut
+### Implémenté : `neighborhood/1` (un saut) et `neighborhood/2` (plusieurs niveaux, TAXO-01J)
 
 `get_neighborhood` lit uniquement les faits persistés de l’analyse indiquée. Le protocole accepte
 `analysis` dans l’enveloppe d’échange pour la sélectionner ; l’opération répète cet identifiant.
-Les accès entrants et sortants sont indexés. Les preuves restent accessibles par `get_evidence`
-dans le même échange. Les relations gardent leur orientation, y compris en parcours entrant.
+Les accès entrants et sortants sont indexés. Les relations gardent leur orientation, y compris en parcours
+entrant. Un seul moteur sert les deux versions, découpé en un domaine pur (demande, budgets, parcours,
+frontière, reprises), un cas d'usage, des ports de lecture, et un adaptateur du protocole qui choisit la
+version, mesure les octets et présente la Tuile (récit TAXO-01J, « Découpage architectural »).
 
-Cette tranche accepte uniquement `depth: 1`. Toute profondeur supérieure et le sens combiné sont
-refusés. Les voisins non développés portent une frontière de profondeur avec décompte `UNKNOWN`.
-La couverture est un résumé explicitement nommé `ANALYSIS_SUMMARY` ; une lacune est signalée
-à l’échelle de l’analyse, sans prétendre la localiser exactement dans cette Tuile. La couverture
-locale détaillée et le parcours multi-niveaux restent à construire.
+**Version.** Sans argument `engine`, une demande est servie par `neighborhood/1` si et seulement si elle y est
+valide exactement (ses arguments, ses valeurs, ses plafonds, une reprise qu'il a émise), et sa réponse est
+inchangée à l'octet ; toute autre demande relève de `neighborhood/2`. Une requête invalide pour les deux est
+refusée avec le motif de `neighborhood/2`. Une reprise d'une version n'est jamais acceptée par l'autre.
 
-La priorité ordonne les relations ; les voisins sont départagés par référence canonique UTF-16,
-identité du fait puis empreinte de l’occurrence. `max_work` compte les requêtes d’adjacence, y compris
-les réponses vides ; l’existence de l’ancre utilise au plus deux recherches indexées supplémentaires,
-et deux lectures indexées contrôlent la génération de faits au début et à la fin de la requête.
-L’ordre est matérialisé en rangs à l’enregistrement. Les index portent des empreintes d’ancre et des
-rangs de taille fixe ; les références complètes et les clés canoniques restent hors des index.
-La référence originale est aussi comparée pour éviter de confondre deux ancres en cas de collision.
-L’ajout de faits recalcule les rangs de l’analyse dans la même transaction : ce coût de tri et de
-réécriture est à l’ingestion, pas au parcours, et devra être mesuré sur les grandes analyses.
-Les nœuds, arêtes, octets et frontières sont bornés. Les comptes omis restent `UNKNOWN` sauf si une
-arête non transmise a effectivement été lue (`AT_LEAST: 1`). Une enveloppe trop grande est refusée.
+**Parcours `neighborhood/2`.** En largeur, profondeur 1 à 4. Pas : `steps` (relation, sens), ou `follow` +
+`direction`, `BOTH` suivant chaque relation en sortant puis en entrant. L'unité rendue est l'**occurrence** :
+deux occurrences d'une même identité restent deux éléments, chacun avec sa provenance, son statut, sa
+dérivation et ses preuves ; une clé `identity` permet seulement de les regrouper à l'affichage. Une même
+occurrence atteinte par deux pas n'est rendue qu'une fois. Un nœud apparaît une fois, à son niveau minimal
+dans la Tuile ; un élément vers un nœud déjà présent est rendu, marqué `revisit`, jamais redéveloppé. Chaque
+élément dit son pas (`via`) et son niveau ; chaque nœud ses parents rendus et l'élément qui l'a découvert
+(`discovered_by`, indice dans `items`).
 
-Une continuation reprend après la dernière occurrence rendue, dans un seul voisinage. Elle est
-liée à l’analyse, au moteur, à l’ancre, aux relations, au sens et à la priorité ; les budgets de page
-peuvent changer, notamment pour transmettre un fait trop grand pour la page précédente. Elle est un
-repère de sélection, jamais une autorisation. Un changement d’analyse ou un ajout de faits à cette
-analyse invalide la reprise. `facts_revision` indique cette génération locale au stockage, pas une
-identité portable de la Maille. Une modification détectée pendant le parcours fait refuser la réponse.
-La déduplication des nœuds est **locale à chaque page** ; une reprise repart de l’ancre et peut
-renvoyer un voisin déjà vu. Le client fusionne les nœuds par référence entre pages.
-`ADJACENCY_COMPLETE` signifie que les relations demandées à cette ancre ont été parcourues ; cela
-ne signifie ni que les voisins ont été développés ni que le logiciel est entièrement connu.
+**Budgets.** Nœuds, éléments, éventail par nœud (`max_fanout`), travail (lectures d'adjacence, y compris
+vides ; une lecture par lots compte pour une), octets. L'adjacence se lit par lots bornés par ce qui reste à
+rendre plus un : un nœud à fort degré n'est jamais lu en entier. Un budget global arrête le parcours au
+**premier refus**, sans jamais sauter un élément : à paramètres de forme égaux (ancre, pas, profondeur,
+éventail), la Tuile d'un budget plus petit est un préfixe de celle d'un plus grand ; augmenter la profondeur
+prolonge la même séquence ; l'éventail, qui change l'ordre, ne garantit qu'une inclusion ; la frontière n'est
+pas monotone. Une Tuile n'est admise que si elle tient arrêtée juste après son dernier élément ; si la Tuile
+finale ne tient pas, `neighborhood/2` rend la plus grande Tuile admise, arrêtée par les octets.
 
-Les paragraphes suivants décrivent aussi la cible multi-niveaux et les profils, encore absents.
+**Frontière.** Les trois natures du § 9.3, localisées. Sélection : `DEPTH` (profondeur atteinte) et
+`NOT_REACHED` (nœud découvert, non développé quand un budget a coupé), avec la profondeur restante, se
+poursuivent par une nouvelle Tuile depuis ce nœud ; une adjacence coupée (`NODES`, `EDGES`, `WORK`, `BYTES`,
+`FANOUT`) porte sa reprise, liée à la version, à l'instantané, aux pas, à la génération et au nœud. Les
+décomptes restent `UNKNOWN`, sauf `AT_LEAST: 1` quand une occurrence non rendue a effectivement été lue.
+Connaissance : les lacunes de l'analyse par pas, et des lacunes **locales** — une couverture non lue qui porte
+sur un nœud rendu, ou sur un fichier cité par une preuve d'un élément qui l'atteint — lues par l'ancre du
+sujet des couvertures, au plus 2 000 références ; au-delà, la Tuile le dit et la lacune reste à l'échelle de
+l'analyse.
+
+**Preuves.** Chaque élément porte une poignée d'occurrence : `get_evidence` la sert dans un autre échange, et
+refuse sans rien révéler une poignée d'une autre analyse, d'une autre génération ou inconnue ; elle n'est
+jamais une autorisation. Comme le parcours, la lecture par poignée et `find_references` fixent la génération
+des faits avant de lire et la vérifient après ; un ajout entre-temps fait refuser la réponse. Avec `evidence: SUMMARY`, chaque élément porte ses preuves résumées en localisations.
+Lacunes locales puis résumés s'ajoutent à la sélection déjà fixée, dans l'ordre, tant qu'ils tiennent ; le
+reste est compté dans `not_sent`.
+
+La couverture d'analyse reste un résumé nommé `ANALYSIS_SUMMARY`. L’ordre des voisins est matérialisé en rangs
+à l’enregistrement (référence canonique UTF-16, identité, empreinte d’occurrence), dans des index de taille
+fixe ; ce coût est à l’ingestion et a été mesuré (TAXO-01J). Une modification des faits détectée pendant le
+parcours fait refuser la réponse. `ADJACENCY_COMPLETE` signifie que les pas demandés ont été parcourus
+jusqu'à la profondeur demandée dans les faits enregistrés, jamais que le logiciel est entièrement connu.
+
+Les paragraphes suivants décrivent aussi la cible des profils, encore absente.
 
 ### 9.1 Entrée (mode explicite)
 
@@ -564,7 +583,7 @@ Les paragraphes suivants décrivent aussi la cible multi-niveaux et les profils,
 | --- | --- |
 | Analyse et ancre | une analyse précise et une référence |
 | Relations | liste explicite, validée contre le vocabulaire et les catalogues des évaluateurs exécutés |
-| Sens | entrant **ou** sortant ; le sens combiné est une extension ultérieure |
+| Sens | entrant, sortant, ou les deux (`BOTH`, `neighborhood/2`) ; ou des pas `steps` (relation, sens) |
 | Profondeur | expansion maximale depuis l'ancre |
 | Priorité | ordre des relations, puis ordre stable des voisins ; il décide ce qui est retenu quand un budget coupe. Par défaut : l'ordre de la liste des relations |
 | Budgets de sortie | nœuds, arêtes, octets sérialisés |
@@ -665,8 +684,8 @@ de `HANDLED_BY`). Deux voies, à trancher avant ce profil :
   comme telle : ce n'est pas une arête de la Maille, et la Tuile la présente comme un saut de recherche,
   jamais comme un lien établi (§ 11).
 
-Il demande aussi le sens combiné (sortant depuis le commit, entrant vers les routes), prévu après la
-première tranche.
+Il demande aussi le sens combiné (sortant depuis le commit, entrant vers les routes), disponible depuis
+TAXO-01J (`steps`).
 
 Un profil `performance` (service, repository, SQL, appels externes) n'a pas encore de relations derrière
 lui : il rendrait une frontière de contexte.
@@ -758,13 +777,14 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 | --- | --- | --- |
 | `describe` | opérations disponibles pour ce projet, relations et références présentes, analyseurs et couverture | Existant |
 | `find_facts` | faits selon `subject`, `relation`, `object`, `nature` | Existant |
-| `get_evidence` | preuves d'un fait reçu | Existant |
+| `get_evidence` | preuves d'un fait reçu (`F…` de l'échange), ou d'une occurrence par sa poignée (TAXO-01J) | Existant |
 | `get_coverage` | couverture d'un périmètre | Existant |
 | `get_commit` | ce que Git sait d'un commit, sans contenu | Existant |
 | `get_diff` | blocs modifiés d'un fichier touché, sous double consentement | Existant |
 | `verify_claim` | verdict sur une affirmation structurée | Existant |
 | `diff_facts` | faits introduits, modifiés ou retirés par un commit ; depuis les analyses enregistrées du commit et de son parent quand elles existent (`source`, `analyses`), sinon en relisant le dépôt (TAXO-01F, tranche E) | Existant |
-| `get_neighborhood` | voisinage explicite à un saut, avec reprise et preuves accessibles | Première tranche implémentée ; multi-niveaux et profils à construire (§ 9) |
+| `get_neighborhood` | voisinage explicite, à un saut (`neighborhood/1`) ou sur plusieurs niveaux (`neighborhood/2`), avec reprises, frontière localisée et preuves accessibles | Existant ; profils à construire (§ 9.5) |
+| `find_references` | références de l'analyse qui commencent par un préfixe, page bornée avec reprise | Existant (TAXO-01J) |
 | `find_callers`, `find_callees`, `find_dependencies`, `find_configuration`, `trace_access_control`, `find_endpoint` | questions génériques | réservées, activées par les analyseurs |
 | `get_source` | code d'un **symbole**, jamais un fichier entier, sous son propre consentement | réservée |
 
@@ -907,7 +927,8 @@ Une **hypothèse** n'est pas un fait. Le contrat ne change pas : ni statut, ni p
 | Page Routes, raison exacte des zones non interprétées | Existant (#51) |
 | Protocole `taxo-query/1`, verdicts, Minia (exploration et paquet) | Existants |
 | `get_neighborhood` explicite à un saut, budgets et reprise | Première tranche implémentée après le commit de référence |
-| Voisinage multi-niveaux, couverture locale détaillée, profils adaptatifs | À construire |
+| Voisinage multiniveau, sens combiné, couverture locale, `find_references` | Implémentés par TAXO-01J (moteur), après le commit de référence |
+| Profils adaptatifs, Arbre, Forêt | À construire |
 | Arbres et Forêt | Proposé |
 | Cache, déduplication, invalidation incrémentale | Proposé |
 | `CALLS` Java | Proposé (§ 14) |
@@ -989,3 +1010,11 @@ arguments, l'historique et le diff (collaborateur avec son propre état) et un p
 déclaré ; la comparaison sépare le choix des analyses. Inchangés par décision : le parcours du voisinage,
 `RunScan`, le moteur d'évaluation, la mémoire des faits, `References`. Trois divergences trouvées par l'audit
 ont été corrigées à part, avant toute restructuration.
+
+**2026-10-03** — Navigation multiniveau (TAXO-01J, moteur) : le moteur à un saut devient le moteur multiniveau,
+sans second moteur ; `neighborhood/1` est inchangé à l'octet (réponses de référence et instantané de
+comportement). `neighborhood/2` : parcours en largeur jusqu'à quatre niveaux, sens combiné et pas, occurrences
+conservées une à une, revisites, budgets avec arrêt au premier refus et lecture d'adjacence par lots, frontière
+localisée, lacunes locales, poignées d'occurrence et preuves résumées. Nouvelle opération `find_references`,
+sur une projection indexée des références de chaque analyse. Migrations 007 (ancre des couvertures) et 008
+(références).
