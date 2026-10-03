@@ -16,6 +16,7 @@ from app.evaluators.spring_security.evaluator import SpringSecurityEvaluator
 from app.evaluators.structure.evaluator import StructureEvaluator
 from app.scans.infrastructure.sqlalchemy.fact_memory import SqlAlchemyFactMemory
 from app.scans.infrastructure.sqlalchemy.fact_comparison import SqlAlchemyComparisonStore
+from app.comparison.application.choices import AnalysisChoices
 from app.comparison.application.compare import CompareAnalyses
 from app.comparison.api.router import create_router as comparison_router
 from app.evaluations.application.registry import EvaluatorRegistry
@@ -102,8 +103,9 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     contracts = CatalogContracts(item.catalog for item in registry.all())
     api.include_router(scans_router(projects, scans, run, facts, AnalysisJobs(run, projects), contracts))
     api.include_router(history_router(history))
-    comparison = CompareAnalyses(projects, scans, SqlAlchemyComparisonStore(engine), contracts)
-    api.include_router(comparison_router(comparison))
+    store = SqlAlchemyComparisonStore(engine)
+    comparison = CompareAnalyses(projects, scans, store, contracts)
+    api.include_router(comparison_router(comparison, AnalysisChoices(projects, scans, store)))
     # La requete selectionne parmi les faits conserves ; elle ne relit jamais le depot (TAXO-QUERY-01).
     query = ProjectQuery(projects, scans, facts)
     api.include_router(query_router(query))

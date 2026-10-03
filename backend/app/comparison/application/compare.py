@@ -6,10 +6,12 @@ analyses are read. Counts first; each category then lists its facts, page by pag
 import threading
 from collections import OrderedDict
 
+from app.comparison.application.analyses import described
 from app.comparison.domain.comparison import (ADDED, CATEGORIES, MODIFIED, REASONS, REMOVED, Side,
                                               comparability, pair_modified, signals)
 from app.evaluations.domain.capability import CatalogContracts, Reads, languages_complete
 from app.knowledge.application.loader import recorded_languages
+from app.knowledge.domain.knowledge import AnalysisKnowledge
 from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
@@ -21,28 +23,20 @@ MAX_PAGE = 200
 KEPT_COMPARISONS = 8
 
 
-def _side(executions, statuses, reads, present, complete=True):
-    """`reads` : ce que lit le contrat de ces executions. Une absence de langage ne se deduit que d'un
-    inventaire `complete`, et d'un contrat connu."""
+def _side(executions, statuses, reads, knowledge):
+    """`reads` : ce que lit le contrat de ces executions ; `knowledge` : ce que l'analyse sait d'elle-meme. Une
+    absence de langage ne se deduit que d'un inventaire complet, et d'un contrat connu."""
     if executions is None:
         return None
     return Side(frozenset((item.catalog_id, item.catalog_version) for item in executions),
                 frozenset(item.producer_version for item in executions),
                 any(statuses.get(item.execution_id) == 'FAILED' for item in executions),
                 not any(statuses.get(item.execution_id) == 'UNSUPPORTED' for item in executions)
-                and (not complete or reads.reads_present(present)), reads.known)
+                and (not knowledge.complete or reads.reads_present(knowledge.languages)), reads.known)
 
 
 def _statuses(scan):
     return {item.get('execution_id'): item.get('status') for item in scan.result.get('evaluations', [])}
-
-
-def _snapshot(scan):
-    return (scan.result.get('evaluation_summary') or {}).get('snapshot') or scan.result.get('snapshot')
-
-
-def _describe(scan):
-    return {'id': scan.id, 'created_at': scan.created_at, 'snapshot': _snapshot(scan)}
 
 
 class CompareAnalyses:
@@ -52,21 +46,6 @@ class CompareAnalyses:
         self.contracts = contracts or CatalogContracts()
         self._kept, self._lock = OrderedDict(), threading.Lock()
 
-    def choices(self, project_id):
-        """The complete analyses of the project, newest first, each described enough to be recognised.
-
-        The commit is described from the analysis's own Git facts, never by reading the repository again.
-        """
-        require_project(self.projects, project_id)
-        return [self._choice(scan) for scan in self.scans.list(project_id)]
-
-    def _choice(self, scan):
-        sha = (_snapshot(scan) or {}).get('commit')
-        evaluations = scan.result.get('evaluations', [])
-        return {**_describe(scan), 'commit': self.store.commit(scan.id, sha) if sha else None,
-                'fact_count': sum(item.get('fact_count') or 0 for item in evaluations),
-                'failed': sorted(item.get('evaluator_id') for item in evaluations if item.get('status') == 'FAILED')}
-
     def _analyses(self, project_id, before_id, after_id):
         require_project(self.projects, project_id)
         found = [self.scans.get(project_id, scan_id) for scan_id in (before_id, after_id)]
@@ -74,10 +53,12 @@ class CompareAnalyses:
             raise ProjectError('NOT_FOUND', 'Analyse introuvable pour ce projet, ou interrompue.')
         return found
 
-    def _languages(self, scan):
-        """Les langages de l'analyse : enregistres avec elle, ou relus dans ses faits si elle est anterieure."""
+    def _knowledge(self, scan):
+        """Ce que l'analyse sait d'elle-meme pour etre comparee : ses langages (enregistres avec elle, ou relus
+        dans ses faits si elle est anterieure) et si son inventaire a tout lu."""
         recorded = recorded_languages(scan)
-        return recorded if recorded is not None else self.store.languages(scan.id)
+        languages = recorded if recorded is not None else self.store.languages(scan.id)
+        return AnalysisKnowledge(languages, languages_complete(scan.result.get('evaluation_summary')))
 
     def _read(self, executions):
         """Ce que lit le contrat de ces executions. Un contrat que ce Taxo ne connait pas ne lit rien de connu,
@@ -92,18 +73,15 @@ class CompareAnalyses:
     def _producers(self, before, after, unread=None):
         """Chaque producteur et ce que dit de lui chaque cote. `unread`, s'il est donne, recoit pour chaque
         producteur les langages presents de chaque cote que son catalogue ne lit pas."""
-        sides = [(scan, self.store.producers(scan.id), self._languages(scan)) for scan in (before, after)]
+        sides = [(scan, self.store.producers(scan.id), self._knowledge(scan)) for scan in (before, after)]
         names = sorted({name for _, found, _ in sides for name in found})
         if unread is not None:
-            unread.update({name: {side: self._unread(found.get(name), present)
-                                  for side, (_, found, present) in zip(('before', 'after'), sides)}
+            unread.update({name: {side: self._unread(found.get(name), knowledge.languages)
+                                  for side, (_, found, knowledge) in zip(('before', 'after'), sides)}
                            for name in names})
-        return {name: [self._side_of(scan, found.get(name), present) for scan, found, present in sides]
+        return {name: [_side(found.get(name), _statuses(scan), self._read(found.get(name)), knowledge)
+                       for scan, found, knowledge in sides]
                 for name in names}
-
-    def _side_of(self, scan, executions, present):
-        return _side(executions, _statuses(scan), self._read(executions), present,
-                     languages_complete(scan.result.get('evaluation_summary')))
 
     def _unread(self, executions, present):
         """Les langages presents que le catalogue de ces executions ne lit pas (TAXO-COV-01)."""
@@ -142,26 +120,32 @@ class CompareAnalyses:
 
     def summary(self, project_id, before_id, after_id):
         before, after = self._analyses(project_id, before_id, after_id)
-        evaluators, totals = [], dict.fromkeys((*CATEGORIES, UNCHANGED), 0)
         unread = {}
-        for producer, (left, right) in self._producers(before, after, unread).items():
-            reason = comparability(left, right)
-            entry = {'evaluator_id': producer, 'comparable': reason is None,
-                     'versions': {'before': sorted(left.versions) if left else [],
-                                  'after': sorted(right.versions) if right else []},
-                     'not_analysed': unread[producer]}
-            if reason is not None:
-                entry |= {'reason': reason, 'message': REASONS[reason]}
-            else:
-                found = self._compute(before, after, producer)
-                entry['counts'] = {name: found[name] if name == UNCHANGED else len(found[name])
-                                   for name in (*CATEGORIES, UNCHANGED)}
-                for name, count in entry['counts'].items():
-                    totals[name] += count
-                entry['relations'] = _relations(found)
-            evaluators.append(entry)
-        return {'before': _describe(before), 'after': _describe(after), 'evaluators': evaluators, 'totals': totals,
+        producers = self._producers(before, after, unread)
+        evaluators = [self._evaluator(before, after, producer, sides, unread[producer])
+                      for producer, sides in producers.items()]
+        totals = dict.fromkeys((*CATEGORIES, UNCHANGED), 0)
+        for entry in evaluators:
+            for name, count in entry.get('counts', {}).items():
+                totals[name] += count
+        return {'before': described(before), 'after': described(after), 'evaluators': evaluators, 'totals': totals,
                 'unknown': {'before': self.store.unknown(before.id), 'after': self.store.unknown(after.id)}}
+
+    def _evaluator(self, before, after, producer, sides, not_analysed):
+        """Ce que la comparaison dit d'un evaluateur : comparable, avec ses comptes, ou pourquoi il ne l'est pas."""
+        left, right = sides
+        reason = comparability(left, right)
+        entry = {'evaluator_id': producer, 'comparable': reason is None,
+                 'versions': {'before': sorted(left.versions) if left else [],
+                              'after': sorted(right.versions) if right else []},
+                 'not_analysed': not_analysed}
+        if reason is not None:
+            return entry | {'reason': reason, 'message': REASONS[reason]}
+        found = self._compute(before, after, producer)
+        entry['counts'] = {name: found[name] if name == UNCHANGED else len(found[name])
+                           for name in (*CATEGORIES, UNCHANGED)}
+        entry['relations'] = _relations(found)
+        return entry
 
     def changes(self, project_id, before_id, after_id, category, producer, cursor=None, limit=50, relation=None):
         if category not in CATEGORIES:
@@ -171,20 +155,25 @@ class CompareAnalyses:
         reason = comparability(left, right)
         if reason is not None:
             raise ProjectError('INVALID_ARGUMENT', f'{producer} : {REASONS[reason]}')
-        found = self._compute(before, after, producer)
-        pairs = [_pair(category, entry) for entry in found[category]
-                 if relation is None or found[LABELS].get(_pair(category, entry)[0]) == relation]
-        remaining = [pair for pair in pairs if cursor is None or pair[0] > cursor]
-        page = remaining[:max(1, min(limit, MAX_PAGE))]
+        page, more = _page(self._compute(before, after, producer), category, relation, cursor, limit)
         facts_before = self._facts(before, producer, [old for old, _ in page] if category != ADDED else [])
         facts_after = self._facts(after, producer, [new for _, new in page] if category != REMOVED else [])
         items = [{'before': facts_before.get(old, []), 'after': facts_after.get(new, [])} for old, new in page]
-        more = len(remaining) > len(page)
         return {'category': category, 'evaluator_id': producer, 'relation': relation, 'items': items,
                 'next': page[-1][0] if more else None}
 
     def _facts(self, scan, producer, identity_hashes):
         return self.store.facts(scan.id, producer, identity_hashes) if identity_hashes else {}
+
+
+def _page(found, category, relation, cursor, limit):
+    """Une page des differences d'une categorie, eventuellement d'une seule relation, apres `cursor` ; et s'il
+    en reste ensuite."""
+    pairs = [_pair(category, entry) for entry in found[category]
+             if relation is None or found[LABELS].get(_pair(category, entry)[0]) == relation]
+    remaining = [pair for pair in pairs if cursor is None or pair[0] > cursor]
+    page = remaining[:max(1, min(limit, MAX_PAGE))]
+    return page, len(remaining) > len(page)
 
 
 def _pair(category, entry):
