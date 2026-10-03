@@ -1,15 +1,19 @@
 """TAXO-ARCH-REF-01, tranche C3 : une seule regle quand plusieurs executions d'un producteur se melent.
 
 Une analyse n'a qu'une execution par evaluateur (invariant prouve par #78) ; ce cas ne se construit qu'en test.
-Avant C3, trois regles y coexistaient : le verdict prenait le contrat de la premiere couverture, la comparaison
-l'union des contrats, le voisinage « inconnu ». Desormais, partout : leur contrat commun, sinon inconnu. Aucun
+Avant C3, plusieurs regles y coexistaient : le verdict et la restitution `/coverage` prenaient le contrat de la
+premiere couverture, la comparaison l'union des contrats, le voisinage « inconnu ». Desormais, partout : leur
+contrat commun, sinon inconnu. Aucun
 contrat n'est choisi a la place d'un autre ; des contrats differents ne justifient aucune conclusion negative.
 """
+from types import SimpleNamespace
+
 from app.comparison.application.compare import CompareAnalyses
 from app.evaluations.domain.capability import CatalogContracts, Reads
 from app.evaluations.domain.evaluator import EvaluatorCatalog
 from app.facts.domain.provenance import ProducerExecution
 from app.knowledge.application.loader import from_coverage, recorded_contracts
+from app.scans.application.coverage import _recorded_contracts as coverage_contracts
 
 CONTRACTS = CatalogContracts([EvaluatorCatalog('api', '1', languages=('Java',)),
                               EvaluatorCatalog('api', '2', languages=('Java', 'Kotlin'))])
@@ -44,6 +48,13 @@ def by_summary(*versions):
     return found['taxo.api']
 
 
+def by_endpoint(*versions):
+    """La restitution `/coverage` d'un resume anterieur relit le contrat dans les couvertures."""
+    facts = [coverage(f'e{index}', version) for index, version in enumerate(versions)]
+    store = SimpleNamespace(query=lambda scan_id, kind: facts)
+    return coverage_contracts(SimpleNamespace(id='scan'), store, CONTRACTS)['taxo.api']
+
+
 def test_the_rule_keeps_a_common_contract_and_never_chooses_between_different_ones():
     assert Reads.combined([JAVA, JAVA], Reads.unknown()) == JAVA
     assert Reads.combined([JAVA, WIDER], Reads.any()) == Reads.unknown()
@@ -62,7 +73,14 @@ def test_the_comparison_no_longer_reads_the_union_of_different_contracts():
     assert by_comparison('2', '2') == WIDER
 
 
+def test_the_coverage_endpoint_no_longer_keeps_the_first_recorded_contract():
+    assert by_endpoint('1', '2') == Reads.unknown()
+    assert by_endpoint('2', '1') == Reads.unknown()
+    assert by_endpoint('2', '2') == WIDER
+
+
 def test_every_operation_reads_the_same_contract_from_the_same_executions():
     for versions in (('1',), ('2',), ('1', '1'), ('1', '2'), ('2', '1')):
-        readings = {by_coverage(*versions), by_comparison(*versions), by_summary(*versions)}
+        readings = {by_coverage(*versions), by_comparison(*versions), by_summary(*versions),
+                    by_endpoint(*versions)}
         assert len(readings) == 1, f'{versions} : {readings}'

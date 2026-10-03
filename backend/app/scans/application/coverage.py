@@ -5,19 +5,19 @@ catalogue, celui qui est enregistre avec son execution. Un langage present qu'un
 dit « non analyse » par lui : jamais une absence constatee. Un contrat que Taxo ne connait plus ne lit rien
 de connu. Aucun langage ni analyseur n'est nomme ici.
 """
-from app.evaluations.domain.capability import languages_complete
-from app.knowledge.application.loader import analysis_languages
+from app.evaluations.domain.capability import Reads, languages_complete
+from app.knowledge.application.loader import analysis_languages, recorded_contract
 from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
 
-def _recorded_contracts(scan, facts):
-    """Le catalogue de chaque execution, tel que ses couvertures l'ont enregistre."""
-    found = {}
+def _recorded_contracts(scan, facts, contracts):
+    """Ce que lit le contrat de chaque producteur, tel que ses couvertures l'ont enregistre : la regle commune
+    a toutes les operations quand plusieurs executions s'y melent (TAXO-ARCH-REF-01, C3)."""
+    coverage = {}
     for fact in facts.query(scan.id, kind='COVERAGE'):
-        produced = fact.get('produced_by', {})
-        found.setdefault(produced.get('producer_id'), (produced.get('catalog_id'), produced.get('catalog_version')))
-    return found
+        coverage.setdefault(fact.get('produced_by', {}).get('producer_id'), []).append(fact)
+    return {producer: recorded_contract(own, contracts.reads) for producer, own in coverage.items()}
 
 
 def analysis_coverage(project_id, scan_id, projects, scans, facts, contracts):
@@ -31,7 +31,7 @@ def analysis_coverage(project_id, scan_id, projects, scans, facts, contracts):
     languages = analysis_languages(scan, facts)
     evaluations = scan.result.get('evaluations') or []
     # Un resume anterieur a TAXO-COV-01 ne nomme pas son catalogue : il est relu, une fois, dans les couvertures.
-    recorded = (_recorded_contracts(scan, facts)
+    recorded = (_recorded_contracts(scan, facts, contracts)
                 if any(item.get('catalog_id') is None for item in evaluations) else {})
     return {'languages': list(languages), 'complete': languages_complete(scan.result.get('evaluation_summary')),
             'evaluators': [_reading(item, languages, contracts, recorded) for item in evaluations]}
@@ -39,10 +39,10 @@ def analysis_coverage(project_id, scan_id, projects, scans, facts, contracts):
 
 def _reading(item, languages, contracts, recorded):
     """Ce qu'un analyseur lit selon son contrat, et les langages presents qu'il n'a pas lus."""
-    key = (item.get('catalog_id'), item.get('catalog_version'))
-    if key[0] is None:
-        key = recorded.get(item['evaluator_id'], (None, None))
-    reads = contracts.reads(*key)
+    if item.get('catalog_id') is None:
+        reads = recorded.get(item['evaluator_id'], Reads.unknown())
+    else:
+        reads = contracts.reads(item['catalog_id'], item.get('catalog_version'))
     return {'evaluator_id': item['evaluator_id'], 'status': item.get('status'),
             'contract': 'KNOWN' if reads.known else 'UNKNOWN',
             'reads': reads.listed(), 'unread': list(reads.unread(languages))}
