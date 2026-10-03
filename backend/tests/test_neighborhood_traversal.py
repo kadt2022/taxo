@@ -172,8 +172,9 @@ def test_the_byte_gauge_stops_before_the_element_that_does_not_fit_and_keeps_the
     assert edges(tile) == [(A, B), (A, C)]
     assert (tile.stop.reason, tile.stop.found) == (BYTES, True)
     assert len(traversal.admitted.elements) == 2
+    refused = Traversal(request, graph, (DEP,), lambda tile: False, is_node)
     with pytest.raises(EnvelopeTooLarge):
-        Traversal(request, graph, (DEP,), lambda tile: False, is_node).run()
+        refused.run()
 
 
 # ——— Propriétés, contre l'oracle ———

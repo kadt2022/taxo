@@ -135,7 +135,8 @@ def test_the_version_is_chosen_by_exact_validity(twin, arguments, expected):
 def test_a_continuation_is_never_accepted_by_the_other_version_nor_elsewhere(twin, name):
     v1 = ask(twin, name, max_edges=1)
     v2 = ask(twin, name, max_edges=1, depth=2, **V2)
-    assert v1['continuation'] and v2['continuation']
+    assert v1['continuation']
+    assert v2['continuation']
     refused = [ask(twin, name, continuation=v1['continuation'], **V2),
                ask(twin, name, continuation=v2['continuation'], engine='neighborhood/1'),
                ask(twin, name, continuation=v2['continuation'], **{**V2, 'root': B}),

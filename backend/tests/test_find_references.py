@@ -127,7 +127,8 @@ def test_the_versioned_memory_reads_a_bounded_index_range_never_the_facts(twin):
     search(twin, 'fact_memory', prefix='ord', limit=2)
     reads = [sql for sql in statements if 'analysis_references' in sql]
     assert len(reads) == 1, 'une seule lecture pour la recherche'
-    assert 'LIMIT' in reads[0] and 'fact_identities' not in reads[0], 'une plage de l’index, jamais les faits'
+    assert 'LIMIT' in reads[0], 'une plage bornée de l’index'
+    assert 'fact_identities' not in reads[0], 'jamais les faits'
 
 
 MIGRATION = Path(__file__).parents[1] / 'migrations/versions/008_analysis_references.py'

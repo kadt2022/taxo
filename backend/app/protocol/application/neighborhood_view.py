@@ -106,7 +106,7 @@ class TileView:
                 'evidence_count': len(fact.get('evidence', []))}
 
     def _nodes(self, tile):
-        return {}
+        raise NotImplementedError
 
     def _selection(self, tile):
         raise NotImplementedError
@@ -135,6 +135,9 @@ class AnchorView(TileView):
     """`neighborhood/1` : le voisinage de l'ancre, dans sa forme d'origine."""
 
     version = V1
+
+    def _nodes(self, tile):
+        return {}
 
     def _selection(self, tile):
         boundaries = [{'nature': 'SELECTION', 'node': node.reference, 'reason': DEPTH, 'count': UNKNOWN}
@@ -180,7 +183,7 @@ class LayeredView(TileView):
         cuts = {cut.position.node: cut for cut in tile.cuts}
         if tile.known and tile.stop is not None:
             cuts[tile.stop.position.node] = tile.stop
-        waiting = dict((node.reference, reason) for node, reason in tile.unexpanded()) if tile.known else {}
+        waiting = {node.reference: reason for node, reason in tile.unexpanded()} if tile.known else {}
         boundaries = []
         for node in tile.nodes:
             if node.reference in cuts:
