@@ -168,6 +168,7 @@ Stockage versionné, index de voisinage, lectures bornées. `_rank_adjacencies` 
 
 Les contrats de catalogue y prennent deux formes : `registry.all()` pour `TaxoQuery`, un dictionnaire
 construit à la main pour `CompareAnalyses`. Une seule valeur devrait être construite et injectée.
+→ Fait en tranche C1 : un seul `CatalogContracts`, injecté dans la restitution, la comparaison et le protocole.
 
 ## 5. Frontières proposées
 
@@ -235,6 +236,8 @@ l'intérieur de l'échange.
 | --- | --- | --- |
 | **A — Audit** | ce document ; deux tests qui exposent les divergences du § 3 (`tests/test_knowledge_divergences.py`, seule l’assertion divergente est attendue en échec (`divergence`, équivalent strict d’`xfail`) : les étapes préalables restent vérifiées, et la marque devra être retirée quand la divergence sera corrigée) ; mesures | inchangé |
 | **C — Connaissance** | `Reads`, `CatalogContracts`, `AnalysisKnowledge`, chargeur ; consommateurs migrés un par un (verdict, enveloppe, voisinage, comparaison) | inchangé : les trois divergences du § 3 sont corrigées avant, à part |
+| ↳ C1 — `Reads` (fait) | `Reads` (`ANY` / `LANGUAGES` / `UNKNOWN`) et `CatalogContracts` dans `evaluations/domain/capability.py` ; une seule valeur construite par la composition ; verdict (`Analyzer.reads`), enveloppe, `describe`, voisinage, comparaison et `/coverage` lisent `Reads` ; `capability.applicable` et `Analyzer.reads_present` ne font plus qu'un prédicat | inchangé, prouvé : sorties publiques identiques octet pour octet sur 8 scénarios (Java, Python, mixte ; langages oubliés, catalogues oubliés, contrat retiré, moteur antérieur) |
+| ↳ C2 — `AnalysisKnowledge` | langages présents, inventaire complet, exécutions vues et prédicats « zone non lue » en un seul objet, et son chargeur ; une seule règle pour plusieurs exécutions d'un producteur | inchangé |
 | **B — Protocole** | `call()` découpé, table d'opérations, collaborateur historique, interface étroite pour le voisinage, port des faits déclaré | inchangé |
 | **D — Comparaison** | `choices` séparé ; comparabilité via la connaissance | inchangé |
 | **E — Garde-fous** | tests d'architecture du § 7, ARCHITECTURE.md (frontières retenues), mesures après | inchangé |
@@ -243,3 +246,27 @@ l'intérieur de l'échange.
 
 Chaque tranche est une PR réversible. Les sorties publiques (enveloppes, verdicts, comparaisons, erreurs)
 restent identiques : les tests existants sont la référence, et aucune attente n'est modifiée sans le dire.
+
+## 9. Preuve de non-régression
+
+Une tranche « comportement inchangé » le prouve en comparant les sorties publiques de Taxo avant et après,
+sur les mêmes scénarios. `backend/tests/test_behaviour_snapshot.py` les écrit, normalisées (identifiants,
+dates, empreintes) pour être déterministes. Il est désactivé par défaut : seul, il ne vérifie rien.
+
+Les huit scénarios couvrent un dépôt Java, Python ou mixte, avec ou sans langages enregistrés, catalogues
+nommés dans le résumé, contrat retiré, et le moteur d'avant COV-01. Pour chacun, deux analyses, avec
+`describe`, `verify_claim`, `get_coverage`, `find_facts`, `get_neighborhood`, `/coverage` et leur comparaison.
+
+```bash
+cd backend
+git worktree add /tmp/taxo-base origin/main            # la base de la PR
+cp tests/test_behaviour_snapshot.py /tmp/taxo-base/backend/tests/   # si la base ne l'a pas encore
+(cd /tmp/taxo-base/backend && TAXO_BEHAVIOUR_SNAPSHOT=/tmp/base.json python -m pytest -q tests/test_behaviour_snapshot.py)
+TAXO_BEHAVIOUR_SNAPSHOT=/tmp/branch.json python -m pytest -q tests/test_behaviour_snapshot.py
+cmp /tmp/base.json /tmp/branch.json && echo identique
+git worktree remove /tmp/taxo-base
+```
+
+Vérifié avant usage : trois exécutions sur la même base donnent un fichier identique, et une régression
+volontaire (la forme publique d'un contrat indépendant du langage, `[]` au lieu de `null`) change 224 lignes.
+Une tranche qui change un comportement voulu ne s'en sert pas : elle le dit, et ses tests le fixent.

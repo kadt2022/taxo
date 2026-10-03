@@ -3,6 +3,7 @@ from typing import Literal
 from fastapi import APIRouter, Header
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
+from app.evaluations.domain.capability import CatalogContracts
 from app.scans.application.coverage import analysis_coverage
 from app.scans.application.queries import analysis_facts, list_scans
 from app.scans.application.routes import analysis_routes
@@ -53,7 +54,7 @@ def create_router(projects, repository, run, facts=None, jobs=None, contracts=No
     def scan_coverage(project_id: str, scan_id: str):
         """Ce que l'analyse a lu : ses langages, et pour chaque analyseur ceux qu'il lit et ceux qu'il n'a pas
         lus (TAXO-COV-01). Un langage non lu n'est jamais une absence constatee."""
-        return analysis_coverage(project_id, scan_id, projects, repository, facts, contracts or {})
+        return analysis_coverage(project_id, scan_id, projects, repository, facts, contracts or CatalogContracts())
 
     @router.get('/api/projects/{project_id}/scans/{scan_id}/routes',
                 responses={404: {'description': 'Projet ou analyse introuvable.'}})

@@ -5,6 +5,8 @@ l'inventaire), la capacite d'un analyseur (les relations de son catalogue et les
 les produire) et sa couverture effective (ses faits `COVERAGE` et son statut). Ce module ne connait aucun
 analyseur ni aucun langage par son nom : il compare ce que les catalogues declarent a ce qui est present.
 """
+from dataclasses import dataclass
+
 LANGUAGE = 'language:'
 WRITTEN_IN = 'WRITTEN_IN'
 _UNREAD = ('NOT_INTERPRETED', 'READ_ERROR')
@@ -19,25 +21,91 @@ def present_languages(facts):
                          and str(fact.get('object', '')).startswith(LANGUAGE)}))
 
 
-def reads(languages, present):
-    """Les langages presents qu'une capacite lit ; `None` si elle est independante du langage."""
-    if languages is None:
-        return None
-    return tuple(sorted(set(languages) & set(present)))
+ANY, LANGUAGES, UNKNOWN = 'ANY', 'LANGUAGES', 'UNKNOWN'
+
+
+@dataclass(frozen=True)
+class Reads:
+    """Ce que lit un contrat de catalogue : trois cas, jamais confondus (TAXO-ARCH-REF-01).
+
+    - `ANY` : independant du langage ; il lit tout ce qu'il couvre (le depot, son historique).
+    - `LANGUAGES` : ces langages, et eux seuls.
+    - `UNKNOWN` : un contrat que ce Taxo ne connait pas ; il ne lit rien de connu et ne justifie aucune
+      conclusion negative. Ce n'est jamais « independant du langage »."""
+
+    kind: str
+    languages: frozenset = frozenset()
+
+    def __post_init__(self):
+        if self.kind not in (ANY, LANGUAGES, UNKNOWN):
+            raise ValueError(f'Lecture inconnue : {self.kind}.')
+        if (self.kind == LANGUAGES) != bool(self.languages):
+            raise ValueError('Seul un contrat lie a des langages en nomme, et il en nomme au moins un.')
+
+    @classmethod
+    def any(cls):
+        return cls(ANY)
+
+    @classmethod
+    def unknown(cls):
+        return cls(UNKNOWN)
+
+    @classmethod
+    def declared(cls, languages):
+        """Ce que declare un catalogue : `None` pour un catalogue independant du langage."""
+        return cls.any() if languages is None else cls(LANGUAGES, frozenset(languages))
+
+    @property
+    def known(self):
+        return self.kind != UNKNOWN
+
+    @property
+    def independent(self):
+        return self.kind == ANY
+
+    def reads_present(self, present):
+        """A-t-il lu quelque chose ? Lie a des langages, il faut qu'un d'eux soit present ; inconnu, jamais."""
+        return self.independent or bool(self.languages & set(present))
+
+    def unread(self, present):
+        """Les langages presents qu'il ne lit pas, tries ; aucun s'il est independant du langage."""
+        return () if self.independent else tuple(sorted(set(present) - self.languages))
+
+    def listed(self):
+        """Sa forme publique : `None` s'il est independant du langage, sinon ses langages tries (aucun s'il
+        est inconnu)."""
+        return None if self.independent else sorted(self.languages)
+
+
+class CatalogContracts:
+    """Ce que lit chaque contrat de catalogue connu, par identite et version : une seule valeur, construite
+    par la composition. Un contrat absent est inconnu, jamais independant du langage."""
+
+    def __init__(self, catalogs=()):
+        self._reads = {(item.catalog_id, item.catalog_version): Reads.declared(item.languages) for item in catalogs}
+
+    def __bool__(self):
+        return bool(self._reads)
+
+    def knows(self, catalog_id, catalog_version):
+        return (catalog_id, catalog_version) in self._reads
+
+    def reads(self, catalog_id, catalog_version):
+        return self._reads.get((catalog_id, catalog_version), Reads.unknown())
 
 
 def applicable(languages, present):
     """Une capacite liee a des langages ne s'applique que si l'un d'eux est present."""
-    return languages is None or bool(reads(languages, present))
+    return Reads.declared(languages).reads_present(present)
 
 
 def unread(present, readers):
-    """Les langages presents qu'aucun lecteur ne lit. `readers` : les langages de chaque lecteur, `None`
-    pour un lecteur independant du langage, qui lit tout ce qu'il couvre."""
+    """Les langages presents qu'aucun lecteur ne lit. `readers` : ce que lit chacun (`Reads`) ; un lecteur
+    independant du langage lit tout ce qu'il couvre."""
     readers = list(readers)
-    if any(item is None for item in readers):
+    if any(item.independent for item in readers):
         return ()
-    covered = set().union(*readers) if readers else set()
+    covered = set().union(*(item.languages for item in readers))
     return tuple(sorted(set(present) - covered))
 
 

@@ -11,7 +11,7 @@
 """
 from dataclasses import dataclass, field
 
-from app.evaluations.domain.capability import unread
+from app.evaluations.domain.capability import Reads, unread
 
 CONFIRMED, REFUTED, NOT_PROVEN = 'CONFIRMED', 'REFUTED', 'NOT_PROVEN'
 NOT_FOUND_IN_ANALYSED_SCOPE = 'NOT_FOUND_IN_ANALYSED_SCOPE'
@@ -29,19 +29,15 @@ _TYPE = 'coverage_type'
 class Analyzer:
     """Un analyseur de l'analyse : ce qu'il sait produire, s'il a abouti, et sa couverture.
 
-    `languages` : ce que son catalogue lit pour produire ses relations (TAXO-COV-01), `None` s'il est
-    independant du langage. `unsupported` : il n'avait rien a lire et n'a pas ete execute."""
+    `reads` : ce que son contrat de catalogue lit pour produire ses relations (TAXO-COV-01) : independant du
+    langage, ces langages, ou inconnu. `unsupported` : il n'avait rien a lire et n'a pas ete execute."""
 
     analyzer_id: str
     relations: frozenset
     failed: bool = False
     coverage: tuple = field(default=())
-    languages: frozenset | None = None
+    reads: Reads = Reads.any()
     unsupported: bool = False
-
-    def reads_present(self, present):
-        """A-t-il lu quelque chose ? Lie a des langages, il faut qu'un d'eux soit present."""
-        return self.languages is None or bool(self.languages & set(present))
 
 
 @dataclass(frozen=True)
@@ -92,7 +88,7 @@ def reaching(analyzers, relation, present, subject=None):
         if relation not in analyzer.relations or analyzer.failed or analyzer.unsupported:
             continue
         analysed = [item for item in analyzer.coverage if item[_TYPE] == 'ANALYSED']
-        if analysed and analyzer.reads_present(present) and (subject is None or any(_covers(item, subject)
+        if analysed and analyzer.reads.reads_present(present) and (subject is None or any(_covers(item, subject)
                                                                                      for item in analysed)):
             found.append(analyzer)
     return found
@@ -100,15 +96,14 @@ def reaching(analyzers, relation, present, subject=None):
 
 def not_analysed(analyzers, relation, present, needed=None, subject=None):
     """Les langages concernes qu'aucune execution capable de `relation` n'a lus (TAXO-COV-01)."""
-    readers = [None if item.languages is None else item.languages
-               for item in reaching(analyzers, relation, present, subject)]
+    readers = [item.reads for item in reaching(analyzers, relation, present, subject)]
     return unread(present if needed is None else needed, readers)
 
 
 def unknown_languages(analyzers, relation, present, complete, subject=None):
     """L'inventaire n'a pas tout lu : des langages presents peuvent manquer. Seule une execution capable et
     independante du langage peut alors repondre de tout le depot."""
-    return not complete and not any(item.languages is None for item in reaching(analyzers, relation, present, subject))
+    return not complete and not any(item.reads.independent for item in reaching(analyzers, relation, present, subject))
 
 
 def _unreadable(analyzer, references):

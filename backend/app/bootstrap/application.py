@@ -19,6 +19,7 @@ from app.scans.infrastructure.sqlalchemy.fact_comparison import SqlAlchemyCompar
 from app.comparison.application.compare import CompareAnalyses
 from app.comparison.api.router import create_router as comparison_router
 from app.evaluations.application.registry import EvaluatorRegistry
+from app.evaluations.domain.capability import CatalogContracts
 from app.evaluations.application.run_evaluator import RunEvaluator
 from app.platform.api.health import router as health_router
 from app.platform.api.errors import register_errors
@@ -96,9 +97,9 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     api.include_router(health_router)
     api.include_router(projects_router(projects, paths))
     # Analyse observable : lancee en tache de fond, ses evenements reels sont diffuses (TAXO-UX-02).
-    # Ce que lit chaque contrat de catalogue (TAXO-COV-01) : une seule valeur pour la restitution et la comparaison.
-    contracts = {(item.catalog.catalog_id, item.catalog.catalog_version): item.catalog.languages
-                 for item in registry.all()}
+    # Ce que lit chaque contrat de catalogue (TAXO-COV-01) : une seule valeur pour la restitution, la comparaison
+    # et le protocole (TAXO-ARCH-REF-01).
+    contracts = CatalogContracts(item.catalog for item in registry.all())
     api.include_router(scans_router(projects, scans, run, facts, AnalysisJobs(run, projects), contracts))
     api.include_router(history_router(history))
     comparison = CompareAnalyses(projects, scans, SqlAlchemyComparisonStore(engine), contracts)
@@ -109,7 +110,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     # Protocole Taxo (ARCHITECTURE § 12) : operations en lecture seule sur la derniere analyse ; le diff reste soumis
     # au meme double consentement que pour Minia (ARCHITECTURE § 12.6).
     source = settings.minia_source_context(source_context)
-    api.state.taxo_query = TaxoQuery(projects, scans, facts, history, registry.all(), source)
+    api.state.taxo_query = TaxoQuery(projects, scans, facts, history, registry.all(), source, contracts)
     api.include_router(protocol_router(api.state.taxo_query))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ARCHITECTURE § 2, principe 5).
     # Plusieurs fournisseurs peuvent servir Minia (Ollama local, Claude distant) : chaque demande choisit.

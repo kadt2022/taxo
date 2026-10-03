@@ -29,9 +29,8 @@ def _recorded_contracts(scan, facts):
 
 
 def analysis_coverage(project_id, scan_id, projects, scans, facts, contracts):
-    """`contracts` : (catalog_id, catalog_version) -> langages lus, `None` pour un catalogue independant du
-    langage. Rend les langages de l'analyse, si l'inventaire a tout lu, et pour chaque analyseur ce qu'il lit
-    et ce qu'il n'a pas lu."""
+    """`contracts` : ce que lit chaque contrat de catalogue connu (`CatalogContracts`). Rend les langages de
+    l'analyse, si l'inventaire a tout lu, et pour chaque analyseur ce qu'il lit et ce qu'il n'a pas lu."""
     require_project(projects, project_id)
     scan = scans.get(project_id, scan_id)
     if scan is None:
@@ -50,9 +49,7 @@ def _reading(item, languages, contracts, recorded):
     key = (item.get('catalog_id'), item.get('catalog_version'))
     if key[0] is None:
         key = recorded.get(item['evaluator_id'], (None, None))
-    known = key in contracts
-    reads = contracts[key] if known else ()
+    reads = contracts.reads(*key)
     return {'evaluator_id': item['evaluator_id'], 'status': item.get('status'),
-            'contract': 'KNOWN' if known else 'UNKNOWN',
-            'reads': None if reads is None else sorted(reads),
-            'unread': [] if reads is None else sorted(set(languages) - set(reads))}
+            'contract': 'KNOWN' if reads.known else 'UNKNOWN',
+            'reads': reads.listed(), 'unread': list(reads.unread(languages))}

@@ -8,7 +8,7 @@ import hashlib
 import json
 
 from app.facts import is_reference
-from app.evaluations.domain.capability import languages_complete
+from app.evaluations.domain.capability import Reads, languages_complete
 from app.protocol.domain.verdict import Analyzer, not_analysed, unknown_languages
 from app.facts.domain.fact import RELATIONS
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INVALID_ARGUMENT,
@@ -159,9 +159,9 @@ def _summarized(exchange):
         coverage = tuple({_TYPE: item[_TYPE]} for item in evaluation.get('coverage', []))
         if evaluation.get('catalog_id') is None and recorded is None:
             recorded = _recorded_contracts(exchange)
-        languages = (recorded.get(identifier, frozenset()) if evaluation.get('catalog_id') is None
-                     else exchange.service.languages_of(evaluation))
-        found.append(Analyzer(identifier, relations, evaluation['status'] == 'FAILED', coverage, languages,
+        reads = (recorded.get(identifier, Reads.unknown()) if evaluation.get('catalog_id') is None
+                 else exchange.service.reads_of(evaluation))
+        found.append(Analyzer(identifier, relations, evaluation['status'] == 'FAILED', coverage, reads,
                               evaluation['status'] == 'UNSUPPORTED'))
     return found
 
@@ -177,9 +177,9 @@ def _recorded_contracts(exchange):
     for execution in exchange.service.facts.executions(exchange.scan.id):
         if execution.producer_type != 'EVALUATOR':
             continue
-        languages = exchange.service.languages_of(vars(execution))
-        known = found.get(execution.producer_id, languages)
-        found[execution.producer_id] = languages if known == languages else frozenset()
+        reads = exchange.service.reads_of(vars(execution))
+        known = found.get(execution.producer_id, reads)
+        found[execution.producer_id] = reads if known == reads else Reads.unknown()
     return found
 
 

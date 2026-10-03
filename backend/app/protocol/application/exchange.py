@@ -12,8 +12,8 @@ import json
 import logging
 import re
 
-from app.evaluations.domain.capability import (INCOMPLETE, LANGUAGE, WRITTEN_IN, languages_complete,
-                                               present_languages)
+from app.evaluations.domain.capability import (INCOMPLETE, LANGUAGE, WRITTEN_IN, CatalogContracts, Reads,
+                                               languages_complete, present_languages)
 from app.facts import is_path, is_reference
 from app.facts.domain.fact import RELATIONS
 from app.history.domain.errors import UNKNOWN_COMMIT, UNKNOWN_PATH, HistoryError
@@ -119,12 +119,13 @@ def _without_evidence(fact):
     return {key: value for key, value in fact.items() if key != 'evidence'}
 
 
-def _coverage_entry(fact, languages=None):
+def _coverage_entry(fact, reads):
     """Une couverture, et les langages que son producteur lit quand il en lit en propre : elle ne vaut que
-    pour eux (TAXO-COV-01). Un producteur independant du langage n'en porte pas."""
+    pour eux (TAXO-COV-01). Un producteur independant du langage n'en porte pas ; un contrat inconnu n'en
+    nomme aucun."""
     entry = {'subject': fact['subject'], 'type': fact['coverage_type'], 'scope': fact['scope'],
              'producer': fact.get('produced_by', {}).get('producer_id')}
-    return entry if languages is None else {**entry, _LANGUAGES: sorted(languages)}
+    return entry if reads.independent else {**entry, _LANGUAGES: reads.listed()}
 
 
 def _catalog(fact):
@@ -166,23 +167,19 @@ class References:
 class TaxoQuery:
     """Ouvre des echanges du protocole sur les projets analyses."""
 
-    def __init__(self, projects, scans, facts, history, analyzers, source_context):
+    def __init__(self, projects, scans, facts, history, analyzers, source_context, contracts=None):
         # `analyzers` : les evaluateurs enregistres ; seuls leur identifiant et leur catalogue servent.
         self.projects, self.scans, self.facts, self.history = projects, scans, facts, history
         self.catalogs = {item.evaluator_id: frozenset(item.catalog.relations) for item in analyzers}
         # Ce que chaque contrat de catalogue lit (TAXO-COV-01), par identite et version : une couverture
-        # enregistree s'interprete selon le contrat du producteur qui l'a ecrite.
-        self.capabilities = {(item.catalog.catalog_id, item.catalog.catalog_version):
-                             None if item.catalog.languages is None else frozenset(item.catalog.languages)
-                             for item in analyzers}
+        # enregistree s'interprete selon le contrat du producteur qui l'a ecrite. La composition fournit la
+        # meme valeur a toutes les operations ; a defaut, elle se deduit des evaluateurs.
+        self.contracts = contracts if contracts is not None else CatalogContracts(item.catalog for item in analyzers)
         self.source_context = source_context
 
-    def languages_of(self, evaluation):
-        """Les langages du contrat de catalogue qu'une execution resumee nomme. `None` est reserve a un contrat
-        connu independant du langage ; un contrat inconnu, ou non nomme, ne lit rien de connu, comme pour les
-        verdicts."""
-        key = (evaluation.get('catalog_id'), evaluation.get('catalog_version'))
-        return self.capabilities[key] if key in self.capabilities else frozenset()
+    def reads_of(self, evaluation):
+        """Ce que lit le contrat de catalogue qu'une execution resumee nomme ; inconnu s'il n'en nomme aucun."""
+        return self.contracts.reads(evaluation.get('catalog_id'), evaluation.get('catalog_version'))
 
     def open(self, project_id, diff_consent=False, max_bytes=None, analysis_id=None):
         project = require_project(self.projects, project_id)
@@ -264,8 +261,8 @@ class Exchange:
             coverage = tuple(fact for fact in self.coverage
                              if fact.get('produced_by', {}).get('producer_id') == identifier)
             # Un contrat de catalogue inconnu ne justifie aucun « non trouve » : il ne lit rien de connu.
-            languages = self.service.capabilities.get(_catalog(coverage[0]), frozenset()) if coverage else frozenset()
-            found.append(Analyzer(identifier, relations, item.get('status') == 'FAILED', coverage, languages,
+            reads = self.service.contracts.reads(*_catalog(coverage[0])) if coverage else Reads.unknown()
+            found.append(Analyzer(identifier, relations, item.get('status') == 'FAILED', coverage, reads,
                                   item.get('status') == 'UNSUPPORTED'))
         return found
 
@@ -275,7 +272,7 @@ class Exchange:
         qu'aucune execution capable n'a lu est nomme : une absence de preuve, jamais une preuve d'absence."""
         analyzers = self.analyzers()
         chosen = [item for item in analyzers if relation is None or relation in item.relations]
-        entries = [_coverage_entry(fact, analyzer.languages) for analyzer in chosen for fact in analyzer.coverage
+        entries = [_coverage_entry(fact, analyzer.reads) for analyzer in chosen for fact in analyzer.coverage
                    if fact['subject'].startswith('repository:') or fact['subject'] in concerned]
         if relation is not None and chosen:
             entries += [{'subject': f'{LANGUAGE}{language}', 'type': 'NOT_ANALYSED', 'scope': None,
@@ -392,7 +389,7 @@ class Exchange:
         for analyzer, evaluation in zip(self.analyzers(), self.evaluations):
             response.add('items', {'kind': 'analyzer', 'analyzer': analyzer.analyzer_id,
                                    'status': evaluation.get('status'), 'relations': sorted(analyzer.relations),
-                                   _LANGUAGES: None if analyzer.languages is None else sorted(analyzer.languages)})
+                                   _LANGUAGES: analyzer.reads.listed()})
         present = {}
         for evaluation in self.evaluations:
             for relation, count in evaluation.get('relations', {}).items():

@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.bootstrap.database import Base
+from app.evaluations.domain.capability import Reads
 from app.evaluations.domain.status import EvaluationStatus
 from app.evaluators.inventory.evaluator import InventoryEvaluator
 from app.evaluators.spring_api.evaluator import SpringApiEvaluator
@@ -163,12 +164,12 @@ def coverage(kind='ANALYSED'):
 
 
 def test_a_negative_verdict_needs_every_concerned_language_read_by_a_capable_execution():
-    java = Analyzer('j', frozenset({'HANDLED_BY'}), coverage=(coverage(),), languages=frozenset({'Java'}))
-    structure = Analyzer('s', frozenset({'CONTAINS'}), coverage=(coverage(),), languages=frozenset({'Java', 'Python'}))
-    unknown = Analyzer('u', frozenset({'HANDLED_BY'}), coverage=(coverage(),), languages=frozenset())
+    java = Analyzer('j', frozenset({'HANDLED_BY'}), coverage=(coverage(),), reads=Reads.declared(('Java',)))
+    structure = Analyzer('s', frozenset({'CONTAINS'}), coverage=(coverage(),), reads=Reads.declared(('Java', 'Python')))
+    unknown = Analyzer('u', frozenset({'HANDLED_BY'}), coverage=(coverage(),), reads=Reads.unknown())
     anywhere = Analyzer('a', frozenset({'HANDLED_BY'}), coverage=(coverage(),))
     unsupported = Analyzer('j', frozenset({'HANDLED_BY'}), coverage=(coverage('OUT_OF_SCOPE'),),
-                           languages=frozenset({'Java'}), unsupported=True)
+                           reads=Reads.declared(('Java',)), unsupported=True)
     claim = {'subject': 'endpoint:GET /x', 'relation': 'HANDLED_BY'}
 
     def reason(analyzers, present, needed=None):
@@ -272,11 +273,12 @@ def test_an_unknown_catalog_contract_reads_nothing_known_in_the_neighborhood_too
     from app.evaluators.git.evaluator import GitEvaluator
     from app.protocol.application.exchange import TaxoQuery
     query = TaxoQuery(None, None, None, None, [GitEvaluator(), SpringApiEvaluator()], 'off')
-    assert query.languages_of({'catalog_id': 'removed', 'catalog_version': '1'}) == frozenset()
-    assert query.languages_of({'catalog_id': 'spring-api', 'catalog_version': '1'}) == frozenset()
+    assert query.reads_of({'catalog_id': 'removed', 'catalog_version': '1'}) == Reads.unknown()
+    assert query.reads_of({'catalog_id': 'spring-api', 'catalog_version': '1'}) == Reads.unknown()
     # Un resume anterieur ne nomme pas son catalogue : le voisinage le relit dans ses couvertures, jamais dans le
     # catalogue actuel de son analyseur (TAXO-ARCH-REF-01, divergence 3).
-    assert query.languages_of({}) == frozenset()
+    assert query.reads_of({}) == Reads.unknown()
+    assert query.reads_of({'catalog_id': 'git', 'catalog_version': GitEvaluator().catalog.catalog_version}) == Reads.any()
 
 
 def partial_inventory(monkeypatch):
