@@ -26,6 +26,9 @@ class ComparisonStore(Protocol):
     def unknown(self, scan_id: str) -> int:
         """Zones the analysis could not interpret (NOT_INTERPRETED, READ_ERROR coverage)."""
 
+    def unread(self, scan_id: str, producer_id: str) -> list[str]:
+        """Subjects the producer could not interpret in the analysis (NOT_INTERPRETED, READ_ERROR coverage)."""
+
     def facts(self, scan_id: str, producer_id: str, identity_hashes: list[str]) -> dict[str, list[dict]]:
         """The facts of these identities in the analysis, rebuilt exactly."""
 

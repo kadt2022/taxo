@@ -5,6 +5,7 @@ import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
 import {MiniaChoice, MiniaView, SourceConsent, sourceConsent, withProvider, type MiniaAnswer, type MiniaStatus} from './minia';
 import {ConsultForm} from './consult';
+import {impactSource, notComparable, type ImpactOrigin} from './history';
 import {panelKey} from './overview';
 import {EVALUATORS, label} from './vocabulary';
 import {openStream} from './sse';
@@ -15,7 +16,7 @@ type Commit = {sha:string; parents:string[]; author:string; authored_at:string; 
 type ChangedFile = {path:string; status:string; old_path:string|null; additions:number|null; deletions:number|null; confidential:boolean};
 type CommitDetail = {commit:Commit; parent:string|null; files:ChangedFile[]};
 type Evaluation = {evaluator_id:string; producer_version:string; comparable:boolean; failures:string[]; changes:FactChange[]; unchanged_count:number; not_interpreted_before:string[]; not_interpreted_after:string[]};
-type Impact = {commit:Commit; parent:string|null; evaluations:Evaluation[]};
+type Impact = ImpactOrigin&{commit:Commit; parent:string|null; evaluations:Evaluation[]};
 const FILE_LABELS:Record<string,string>={ADDED:'Ajouté',MODIFIED:'Modifié',DELETED:'Supprimé',RENAMED:'Renommé',COPIED:'Copié',TYPE_CHANGED:'Type modifié'};
 
 function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:MiniaStatus|null}>){
@@ -103,9 +104,10 @@ function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:Minia
       {live?.result?.commit===detail.commit.sha?<MiniaView answer={live.result}/>:live&&!live.result&&<MiniaProgress live={live} onStop={()=>stopper.current?.stop()}/>}
     </section>}
     {impact&&impact.commit.sha===detail?.commit.sha&&<section className="impact" aria-label="Impact compris par Taxo">
+      <p className="muted">{impactSource(impact)}</p>
       {impact.evaluations.map(e=><div key={e.evaluator_id}>
         <h2>Impact selon {label(EVALUATORS,e.evaluator_id)} <span className="muted">{e.evaluator_id} v{e.producer_version}</span></h2>
-        {!e.comparable?<p role="alert" className="error">Comparaison impossible : l’analyse a échoué ({e.failures.join(' ; ')}). Taxo n’affiche aucun changement plutôt que d’en inventer.</p>:e.changes.length?<div className="table-wrap"><table><thead><tr><th>Changement</th><th>Sujet</th><th>Relation</th><th>Avant</th><th>Après</th><th>Statut</th></tr></thead><tbody>
+        {!e.comparable?<p role="alert" className="error">{notComparable(e.failures)}</p>:e.changes.length?<div className="table-wrap"><table><thead><tr><th>Changement</th><th>Sujet</th><th>Relation</th><th>Avant</th><th>Après</th><th>Statut</th></tr></thead><tbody>
           {e.changes.map(c=><tr key={c.change+c.subject+c.relation+(c.before??'')+(c.after??'')}><td>{CHANGE_LABELS[c.change]}</td><td><code>{c.subject}</code></td><td>{c.relation??c.kind}</td><td><code>{c.before??''}</code></td><td><code>{c.after??''}</code></td><td>{c.status}</td></tr>)}
         </tbody></table></div>:<p className="muted">Aucun fait changé parmi ceux que cet évaluateur sait produire.</p>}
         {e.comparable&&<footer>{e.unchanged_count.toLocaleString('fr-CA')} faits inchangés. {gaps('avant le commit',e.not_interpreted_before)} {gaps('après le commit',e.not_interpreted_after)} Seuls les faits que cet évaluateur sait produire sont comparés : l’absence de changement ici ne prouve pas l’absence de changement ailleurs.</footer>}

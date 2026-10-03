@@ -140,6 +140,15 @@ class SqlAlchemyComparisonStore:
                               .where(FactOccurrenceRow.scan_id == scan_id, identity.kind == 'COVERAGE')).all()
         return len({identity_hash for identity_hash, value in rows if value.get('coverage_type') in UNREAD_COVERAGE})
 
+    def unread(self, scan_id, producer_id):
+        identity = FactIdentityRow
+        with Session(self.engine) as db:
+            mine = self._of(db, FactOccurrenceRow, scan_id, producer_id)
+            rows = db.execute(select(identity.subject, identity.identity)
+                              .join(FactOccurrenceRow, identity.identity_hash == FactOccurrenceRow.identity_hash)
+                              .where(mine, identity.kind == 'COVERAGE')).all()
+        return sorted({subject for subject, value in rows if value.get('coverage_type') in UNREAD_COVERAGE})
+
     def facts(self, scan_id, producer_id, identity_hashes):
         found = {}
         with Session(self.engine) as db:

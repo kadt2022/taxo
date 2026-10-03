@@ -93,13 +93,15 @@ class CommitOperations:
         de reference `F…`, et leurs preuves sont des localisations."""
         no_other(arguments, ('commit',))
         reference, _ = self.resolve(arguments)
-        _, base, evaluations = self.history.impact(self.exchange.project_id, reference.split(':', 1)[1])
+        found = self.history.understand(self.exchange.project_id, reference.split(':', 1)[1])
+        base, evaluations = found['parent'], found['evaluations']
         coverage = [{'subject': self.exchange.repository, 'type': 'ANALYSED' if item['comparable'] else 'NOT_INTERPRETED',
                      'scope': None, 'producer': item['evaluator_id'],
                      'not_interpreted': item['not_interpreted_after']} for item in evaluations]
         changes = [_change(change, item['evaluator_id']) for item in evaluations for change in item['changes']]
         response = self.exchange.response('diff_facts', coverage or self.exchange.envelope_coverage(), max_bytes,
-                                  commit=reference, parent=f'commit:{base}' if base else None, count=len(changes))
+                                  commit=reference, parent=f'commit:{base}' if base else None, count=len(changes),
+                                  source=found['source'], analyses=_analyses(found['analyses']))
         for index, change in enumerate(changes):
             if not response.add('items', change):
                 response.skip('items', len(changes) - index - 1)
@@ -123,3 +125,8 @@ def _side(rows, side):
 def _hunk(hunk):
     return {'before_start': hunk['before_start'], 'after_start': hunk['after_start'],
             'before': _side(hunk['rows'], 'before'), 'after': _side(hunk['rows'], 'after')}
+
+
+def _analyses(analyses):
+    """Les analyses persistees qui ont servi, par leur identifiant ; None pour une relecture du depot."""
+    return {side: item['id'] if item else None for side, item in analyses.items()}

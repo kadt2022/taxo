@@ -1,10 +1,10 @@
 # TAXO-01F — Comparer deux analyses depuis la mémoire, sans relire le dépôt
 
-Statut : rédigé le 2026-10-01, complété le 2026-10-02. Priorité active du plan ([PLAN](PLAN.md)), après
-TAXO-01E. Tranches A (API, #67), B (écran de résultat, #68), C (choisir les deux analyses, #69) et D
-(comprendre les changements, #73) livrées. Tranche E suspendue jusqu'à la PR B de
-[TAXO-COV-01](TAXO-COV-01-couverture-bornee.md) : un analyseur qui n'avait rien à lire d'un côté n'est
-jamais comparé comme « aucun changement » (raisons `NOT_SUPPORTED_BEFORE`, `NOT_SUPPORTED_AFTER`).
+Statut : rédigé le 2026-10-01, complété le 2026-10-02 et le 2026-10-03. Tranches A (API, #67), B (écran
+de résultat, #68), C (choisir les deux analyses, #69) et D (comprendre les changements, #73) livrées.
+Tranche E livrée par la PR de cette branche, après la PR B de [TAXO-COV-01](TAXO-COV-01-couverture-bornee.md) :
+un analyseur qui n'avait rien à lire d'un côté n'est jamais comparé comme « aucun changement » (raisons
+`NOT_SUPPORTED_BEFORE`, `NOT_SUPPORTED_AFTER`). Le récit est terminé.
 
 Source de vérité : [ARCHITECTURE § 5.2, § 8 et § 15](../ARCHITECTURE.md). En cas de divergence, le
 document cible prévaut.
@@ -192,6 +192,37 @@ Répond à : « Qu'est-ce qui a réellement changé dans mon logiciel ? »
   L'API accepte aussi deux identifiants d'analyse explicites. Les règles de comparabilité (catalogue, échec)
   s'appliquent ensuite, évaluateur par évaluateur.
 - Sinon, le comportement actuel est conservé et la réponse dit qu'il a fallu relire le dépôt.
+
+Contrat livré (décisions du 2026-10-03) :
+
+1. **Forme inchangée.** La réponse garde la forme historique de l'impact, lue par ses quatre consommateurs
+   (API et portail, faits du diff, opération `diff_facts` du protocole, Minia). Seuls les évaluateurs de
+   contenu sont comparés ; Git n'y entre pas. Catégories : `ADDED` devient `INTRODUCED`, `REMOVED` et
+   `MODIFIED` restent ; chaque évaluateur dit aussi `reason`, dans les termes de la comparaison.
+2. **`source` et `analyses`.** `source: MEMORY` signifie que l'impact a été construit depuis les faits
+   persistés des deux analyses que nomme `analyses` (`kind: ANALYSIS`, identifiant, commit, date) : aucun
+   instantané ouvert, aucun évaluateur exécuté. Seules les métadonnées du commit sont lues dans Git, pour
+   désigner son parent. `source: REREAD` signifie que le dépôt a été relu ; `analyses` décrit alors deux
+   lectures temporaires (`kind: REREAD`, sans identifiant), jamais une analyse enregistrée.
+3. **Choix automatique.** Seules les analyses complètes du projet, en mode `COMMIT`, dont le commit est
+   exactement celui demandé. La plus récente selon sa date d'enregistrement, puis son identifiant en cas
+   d'égalité. La date est posée quand les évaluateurs ont fini, avant la consolidation de la mémoire :
+   aucune autre date de finalisation n'est enregistrée. S'il manque l'une des deux analyses, ou si le
+   commit n'a pas de parent, le dépôt est relu.
+4. **Paire explicite** (`?before=…&after=…`). Les deux sont exigées. Une analyse introuvable pour ce
+   projet est refusée (404, `UNKNOWN_ANALYSIS`) ; une analyse qui n'est pas celle, en mode `COMMIT`, du
+   parent ou du commit demandé est refusée (422, `INCOMPATIBLE_ANALYSES`). Jamais de relecture à la place.
+5. **Comparabilité.** Les règles de la tranche A s'appliquent évaluateur par évaluateur : absence, échec
+   (les avertissements enregistrés de l'exécution en échec sont rendus), contrat inconnu, rien à lire,
+   catalogue différent. Un tel évaluateur est `comparable: false`, avec le message de sa raison.
+6. **Preuve déplacée.** Un fait dont seule la preuve change reste compté inchangé dans l'impact, comme à la
+   relecture. La comparaison depuis la mémoire continue de le signaler (`EVIDENCE_CHANGED`). Un test
+   verrouille cette différence de lecture.
+7. **Validation.** Le banc `tests/test_commit_impact_memory.py` confronte chaque chemin à une vérité écrite
+   à la main depuis les commits du scénario (gestionnaire renommé, route ajoutée, code déplacé, route
+   retirée, fichier illisible). Il vérifie ensuite que les deux chemins rendent les mêmes changements,
+   preuves comprises, partout où les deux comparent. Différence assumée : relu, un analyseur sans rien à
+   lire « ne voit rien changer » ; depuis la mémoire, il n'est pas comparable.
 
 ## Hors périmètre
 
