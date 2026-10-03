@@ -15,7 +15,8 @@ from app.protocol.domain.envelope import INVALID_ARGUMENT, OperationError
 BOTH = 'BOTH'
 _V1_FIELDS = frozenset({'analysis', 'root', 'follow', 'direction', 'depth', 'priority', 'max_nodes', 'max_edges',
                         'max_work', 'continuation'})
-_V2_FIELDS = _V1_FIELDS | {'engine', 'steps', 'max_fanout'}
+_V2_FIELDS = _V1_FIELDS | {'engine', 'steps', 'max_fanout', 'evidence'}
+NONE, SUMMARY = 'NONE', 'SUMMARY'
 # (défaut, plafond) de chaque budget, par version.
 _LIMITS = {V1: {'max_nodes': (30, 200), 'max_edges': (60, 200), 'max_work': (100, 1000)},
            V2: {'max_nodes': (30, 200), 'max_edges': (60, 400), 'max_work': (100, 2000)}}
@@ -26,10 +27,13 @@ MAX_STEPS = 16
 
 @dataclass(frozen=True)
 class NeighborhoodDemand:
+    """Une demande lue : la Tuile à construire, et ce qui ne regarde que sa présentation (les preuves résumées
+    s'ajoutent à une sélection déjà fixée, sans jamais la changer)."""
     version: str
     request: TileRequest
     parameters: dict
     continuation: str | None
+    evidence: str = NONE
 
 
 def _invalid(message):
@@ -130,10 +134,13 @@ def _v2(exchange, arguments):
     fanout = arguments.get('max_fanout')
     if fanout is not None:
         fanout = _integer(arguments, 'max_fanout', None, MAX_FANOUT)
+    evidence = arguments.get('evidence', NONE)
+    if evidence not in (NONE, SUMMARY):
+        _invalid('evidence : NONE ou SUMMARY.')
     request = TileRequest(root, steps, depth, limits, fanout)
     parameters = {'root': root, 'steps': [{'relation': step.relation, 'direction': step.direction} for step in steps],
-                  'depth': depth, 'max_fanout': fanout}
-    return NeighborhoodDemand(V2, request, parameters, arguments.get('continuation'))
+                  'depth': depth, 'max_fanout': fanout, 'evidence': evidence}
+    return NeighborhoodDemand(V2, request, parameters, arguments.get('continuation'), evidence)
 
 
 def _accepted_by_v1(exchange, arguments):

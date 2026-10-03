@@ -11,6 +11,7 @@ from sqlalchemy import (JSON, BigInteger, Column, ForeignKey, Index, Integer, St
                         bindparam, column, select, table, update)
 from sqlalchemy.orm import Session
 from app.platform.database.base import Base
+from app.evaluations.domain.capability import UNREAD_COVERAGE
 from app.neighborhood.domain.traversal import Adjacent
 from app.scans.domain.fact_order import adjacency_keys
 
@@ -102,6 +103,30 @@ class SqlAlchemyAnalysisFacts:
         with Session(self.engine) as db:
             found = db.execute(statement.order_by(rank).limit(limit)).all()
         return [Adjacent(str(position), str(identifier), _identity(fact), fact) for position, identifier, fact in found]
+
+    def occurrence(self, scan_id, key):
+        """The fact of one row of the analysis, by the key `neighbors` gives; None if it has none."""
+        if not (isinstance(key, str) and key.isascii() and key.isdigit() and len(key) <= 19):
+            return None
+        row = AnalysisFactRow
+        with Session(self.engine) as db:
+            return db.scalar(select(row.fact).where(row.scan_id == scan_id, row.id == int(key)))
+
+    def unread(self, scan_id, references):
+        """The coverage of the analysis that says one of these references was not read, by subject anchor."""
+        row = AnalysisFactRow
+        wanted = sorted(set(references))
+        found = []
+        with Session(self.engine) as db:
+            for start in range(0, len(wanted), 500):
+                chunk = wanted[start:start + 500]
+                for fact in db.scalars(select(row.fact).where(
+                        row.scan_id == scan_id, row.kind == 'COVERAGE',
+                        row.subject_hash.in_([_reference_hash(item) for item in chunk]), row.subject.in_(chunk))):
+                    if fact.get('coverage_type') in UNREAD_COVERAGE:
+                        found.append({'subject': fact['subject'], 'coverage_type': fact['coverage_type'],
+                                      'producer': fact.get('produced_by', {}).get('producer_id')})
+        return sorted(found, key=lambda item: (item['subject'], item['coverage_type'], item['producer'] or ''))
 
     def revision(self, scan_id):
         """Append-only fact generation, read through a fixed-size index."""

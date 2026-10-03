@@ -27,6 +27,7 @@ from app.protocol.application.arguments import claim_object as _claim_object, no
 from app.protocol.application.arguments import reference as _reference, relation as _relation, text as _text
 from app.knowledge.domain.knowledge import AnalysisKnowledge, contains
 from app.protocol.domain.verdict import judge
+from app.neighborhood.domain import handle
 from app.protocol.application.neighborhood_operation import neighborhood
 
 logger = logging.getLogger(__name__)
@@ -55,17 +56,25 @@ _CLAIM_ARGUMENTS = {'subject': 'reference', 'relation': 'relation', 'object': 'r
 _ARGUMENTS = {
     'describe': {},
     'find_facts': {**_CLAIM_ARGUMENTS, 'nature': '|'.join(NATURES)},
-    'get_evidence': {'fact': 'F…'},
+    'get_evidence': {'fact': 'F… de cet échange', 'occurrence': 'poignée d’occurrence (au lieu de fact)'},
     'get_coverage': {'scope': 'reference (facultatif)'},
     'get_commit': _COMMIT_ARGUMENT,
     'get_diff': {**_COMMIT_ARGUMENT, 'path': 'chemin d’un fichier touche'},
     'verify_claim': _CLAIM_ARGUMENTS,
     'diff_facts': _COMMIT_ARGUMENT,
-    'get_neighborhood': {'analysis': 'identifiant de l’analyse', 'root': 'reference',
-                         'follow': 'liste de relations', 'direction': 'INCOMING|OUTGOING',
-                         'depth': '1 (première tranche)', 'priority': 'ordre de follow (facultatif)',
-                         'max_nodes': '1..200', 'max_edges': '1..200', 'max_work': '1..1000',
-                         'continuation': 'reprise du même voisinage (facultatif)'},
+    'get_neighborhood': {'engine': 'neighborhood/1|neighborhood/2 (facultatif ; sinon neighborhood/1 pour une '
+                                   'demande qui y est valide, neighborhood/2 pour toute autre)',
+                         'analysis': 'identifiant de l’analyse', 'root': 'reference',
+                         'steps': 'liste de {relation, direction} (neighborhood/2 ; exclut follow, direction, '
+                                  'priority)',
+                         'follow': 'liste de relations', 'direction': 'INCOMING|OUTGOING|BOTH (BOTH : neighborhood/2)',
+                         'depth': '1..4 (au-delà de 1 : neighborhood/2)',
+                         'priority': 'ordre de follow (facultatif)',
+                         'max_nodes': '1..200', 'max_edges': '1..400 (au-delà de 200 : neighborhood/2)',
+                         'max_work': '1..2000 (au-delà de 1000 : neighborhood/2)',
+                         'max_fanout': '1..200 (neighborhood/2, facultatif)',
+                         'evidence': 'NONE|SUMMARY (neighborhood/2)',
+                         'continuation': 'reprise d’une adjacence coupée (facultatif)'},
 }
 
 
@@ -408,17 +417,35 @@ class Exchange:
         return response
 
     def get_evidence(self, arguments, max_bytes):
-        _no_other(arguments, ('fact',))
-        ref = _text(arguments, 'fact', required=True)
-        if ref not in self.refs.facts:
-            raise OperationError(INVALID_ARGUMENT, f'{ref} n’a pas été transmis dans cet échange.')
-        fact = self.refs.facts[ref]
+        _no_other(arguments, ('fact', 'occurrence'))
+        if ('fact' in arguments) == ('occurrence' in arguments):
+            raise OperationError(INVALID_ARGUMENT, 'fact (F… de cet échange) ou occurrence (poignée), l’un des deux.')
+        if 'occurrence' in arguments:
+            fact = self._handled(arguments['occurrence'])
+            ref, _ = self.refs.fact(fact)
+        else:
+            ref = _text(arguments, 'fact', required=True)
+            if ref not in self.refs.facts:
+                raise OperationError(INVALID_ARGUMENT, f'{ref} n’a pas été transmis dans cet échange.')
+            fact = self.refs.facts[ref]
         producer = fact.get('produced_by', {}).get('producer_id')
         coverage = [entry for entry in self.envelope_coverage(fact.get('relation'), {fact.get('subject')})
                     if entry['producer'] in (producer, None)]
         response = self.response('get_evidence', coverage, max_bytes, fact=ref)
         self._add_evidence(response, ref, fact)
         return response
+
+    def _handled(self, value):
+        """Le fait d'une poignée d'occurrence (TAXO-01J) : seulement de l'analyse de cet échange, à sa génération
+        de faits ; le même refus quelle que soit la raison."""
+        try:
+            key = handle.decode(value, self.scan.id, self.facts.revision(self.scan.id))
+        except handle.HandleError as exc:
+            raise OperationError(INVALID_ARGUMENT, str(exc)) from exc
+        fact = self.facts.occurrence(self.scan.id, key)
+        if fact is None:
+            raise OperationError(INVALID_ARGUMENT, handle.REFUSED)
+        return fact
 
     def get_coverage(self, arguments, max_bytes):
         _no_other(arguments, ('scope',))

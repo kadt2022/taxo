@@ -29,3 +29,11 @@ class FactReading(Protocol):
                   limit: int) -> list[Adjacent]:
         """Au plus `limit` occurrences adjacentes de `root` pour une relation et un sens, apres `after`, dans
         l'ordre des rangs : une lecture indexee, jamais toute l'adjacence (TAXO-01J)."""
+
+    def occurrence(self, scan_id: str, key: str) -> dict | None:
+        """Le fait d'une occurrence de l'analyse, par sa cle stable (celle que rend `neighbors`) ; None si
+        l'analyse n'en a pas de telle (TAXO-01J)."""
+
+    def unread(self, scan_id: str, references: list[str]) -> list[dict]:
+        """Les couvertures de l'analyse qui disent qu'une de ces references n'a pas ete lue (`subject`,
+        `coverage_type`, `producer`) : une lecture par l'ancre du sujet, jamais un parcours (TAXO-01J)."""

@@ -17,6 +17,12 @@ class AdjacencyReading(Protocol):
         lecture indexée, jamais toute l'adjacence."""
 
 
+class CoverageReading(Protocol):
+    def unread(self, scan_id: str, references: list[str]) -> list[dict]:
+        """Les couvertures non lues (NOT_INTERPRETED, READ_ERROR) dont le sujet est l'une de ces références :
+        `subject`, `coverage_type`, `producer`. Une lecture par l'ancre du sujet, jamais un parcours."""
+
+
 class AnalysisSummary(Protocol):
     """Ce que le résumé d'une analyse dit de ses analyseurs, sans parcourir ses faits."""
 

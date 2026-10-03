@@ -3,6 +3,11 @@
 Lu dans le résumé de l'analyse, sans parcourir ses faits : la couverture de chaque analyseur des relations
 suivies, ses lacunes, les relations qu'aucune exécution capable ne produit (frontière de contexte), et les
 langages présents qu'aucune exécution capable n'a lus (frontière de connaissance).
+
+Les lacunes locales (TAXO-01J) se lisent ensuite, sur la Tuile construite : une couverture non lue qui porte sur
+un nœud rendu, ou sur un fichier cité dans une preuve d'un élément qui l'atteint. Une lecture par l'ancre du
+sujet, bornée ; au-delà de la borne, rien n'est localisé et la Tuile le dit : la lacune reste à l'échelle de
+l'analyse, où elle est toujours dite.
 """
 from dataclasses import dataclass
 
@@ -10,6 +15,9 @@ from app.evaluations.domain.capability import UNREAD_COVERAGE, languages_complet
 from app.knowledge.domain.knowledge import AnalysisKnowledge
 
 _TYPE = 'coverage_type'
+# Références dont la couverture locale est lue au plus : les nœuds et les fichiers cités par les preuves.
+MAX_LOCAL_REFERENCES = 2000
+FILE = 'file:'
 
 
 @dataclass(frozen=True)
@@ -76,3 +84,28 @@ def _unread_languages(summary, relations):
 def _knowledge(reason, **fields):
     """Une frontiere de connaissance : ce que seule une capacite d'analyse amelioree ferait connaitre."""
     return {'nature': 'KNOWLEDGE', 'scope': 'ANALYSIS', **fields, 'reason': reason, 'count': {'kind': 'UNKNOWN'}}
+
+
+def local_frontier(reader, scan_id, tile):
+    """Les lacunes de connaissance rattachées aux nœuds de la Tuile, dans l'ordre des nœuds."""
+    if not tile.known:
+        return []
+    order = {node.reference: index for index, node in enumerate(tile.nodes)}
+    concerned = {reference: [reference] for reference in order}
+    for element in tile.elements:
+        fact = element.adjacent.fact
+        reached = tile.request.steps[element.step].far_end(fact)
+        if reached not in order:
+            continue
+        for proof in fact.get('evidence', []):
+            if proof.get('path'):
+                concerned.setdefault(FILE + proof['path'], []).append(reached)
+    if len(concerned) > MAX_LOCAL_REFERENCES:
+        return [_knowledge('LOCAL_COVERAGE_NOT_READ')]
+    entries = {}
+    for gap in reader.unread(scan_id, sorted(concerned)):
+        for node in concerned[gap['subject']]:
+            key = (order[node], gap['subject'], gap[_TYPE], gap['producer'] or '')
+            entries[key] = {'nature': 'KNOWLEDGE', 'scope': 'NODE', 'node': node, 'subject': gap['subject'],
+                            'reason': gap[_TYPE], 'producer': gap['producer'], 'count': {'kind': 'UNKNOWN'}}
+    return [entries[key] for key in sorted(entries)]

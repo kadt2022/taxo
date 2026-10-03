@@ -50,7 +50,7 @@ def test_a_three_level_tile_is_written_by_hand(twin, name):
         'frontier': [], 'stop': 'ADJACENCY_COMPLETE', 'consumed': {'nodes': 4, 'edges': 6, 'work': 4}}
     assert result['continuation'] is None
     assert result['parameters'] == {'root': A, 'steps': [{'relation': 'DEPENDS_ON', 'direction': 'OUTGOING'}],
-                                    'depth': 3, 'max_fanout': None}
+                                    'depth': 3, 'max_fanout': None, 'evidence': 'NONE'}
 
 
 @pytest.mark.parametrize('name', STORAGES)
@@ -187,3 +187,149 @@ def test_when_the_final_cut_does_not_fit_the_largest_admitted_tile_is_served(tmp
     fallbacks = [budget for budget, reason in served.items() if reason == 'BYTES']
     assert fallbacks, served
     assert all(served[budget] != 'BUDGET_EXHAUSTED' for budget in served if budget >= fallbacks[0])
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_evidence_summaries_are_locations_and_handles_retrieve_them_in_another_exchange(twin, name):
+    result = ask(twin, name, depth=2, evidence='SUMMARY', **V2)
+    first = result['items'][0]
+    assert first['evidence'] == [{'path': 'build.gradle', 'line_start': 1, 'line_end': 1,
+                                  'method': 'fixture.build'}], 'une localisation, jamais un contenu ni une empreinte'
+    other = twin.exchange(name)
+    proof = other.call({'operation': 'get_evidence', 'arguments': {'occurrence': first['occurrence']}})
+    assert proof['outcome'] == 'OK'
+    assert proof['evidence'][0]['location']['path'] == 'build.gradle'
+    assert proof['fact'] == 'F1', 'la poignée donne au fait une référence de cet échange'
+    assert all('evidence' not in item for item in ask(twin, name, depth=2, **V2)['items'])
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_a_handle_never_opens_another_analysis_another_generation_or_anything_else(twin, name):
+    from app.neighborhood.domain import handle
+    result = ask(twin, name, **V2)
+    occurrence = result['items'][0]['occurrence']
+    key = handle.decode(occurrence, 'analysis-1', result['facts_revision'])
+    foreign = handle.encode('analysis-2', result['facts_revision'], key)
+
+    def evidence(**arguments):
+        found = twin.exchange(name).call({'operation': 'get_evidence', 'arguments': arguments})
+        return found['outcome'] if found['outcome'] == 'OK' else (found['error']['code'], found['error']['message'])
+
+    refused = ('INVALID_ARGUMENT', handle.REFUSED)
+    assert evidence(occurrence=foreign) == refused
+    assert evidence(occurrence=handle.encode('analysis-1', result['facts_revision'], '999999')) == refused
+    assert evidence(occurrence='not a handle') == refused
+    assert evidence(occurrence=occurrence, fact='F1')[0] == 'INVALID_ARGUMENT'
+    twin.add([edge('module:e', subject=A)])
+    assert evidence(occurrence=occurrence) == refused, 'une autre génération de faits'
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_summaries_are_added_in_order_while_they_fit_and_the_rest_is_counted(twin, name):
+    complete = ask(twin, name, depth=3, evidence='SUMMARY', max_bytes=30_000, **V2)
+    assert all(item['evidence'] for item in complete['items'])
+    assert not any(entry['what'] == 'evidence_summary' for entry in complete['not_sent'])
+    partial = None
+    for budget in range(complete['bytes'] - 1, 3000, -40):
+        result = ask(twin, name, depth=3, evidence='SUMMARY', max_bytes=budget, **V2)
+        if result['outcome'] != 'OK':
+            break
+        assert result['bytes'] <= budget
+        sent = [item['evidence'] is not None for item in result['items']]
+        assert sent == sorted(sent, reverse=True), 'les résumés suivent l’ordre des éléments'
+        missing = sent.count(False)
+        counted = [entry['count'] for entry in result['not_sent'] if entry['what'] == 'evidence_summary']
+        assert counted == ([missing] if missing else [])
+        if 0 < missing < len(sent):
+            partial = result
+    assert partial is not None, 'un budget où les éléments tiennent, mais pas tous leurs résumés'
+
+
+def gap(subject, kind):
+    from app.facts.contract import validate_fact
+    from test_neighborhood_conformance import RUN, SNAPSHOT
+    fact = {'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED', 'validity': 'VALID', 'subject': subject,
+            'coverage_type': kind, 'scope': {'include': [subject]}, 'snapshot': dict(SNAPSHOT),
+            'produced_by': RUN.produced_by()}
+    validate_fact(fact)
+    return fact
+
+
+def local(result):
+    return [(entry['node'], entry['subject'], entry['reason']) for entry in result['frontier']
+            if entry['nature'] == 'KNOWLEDGE' and entry.get('scope') == 'NODE']
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_local_gaps_are_attached_to_the_nodes_they_concern(twin, name):
+    """Écrit à la main : D n'a pas été interprété ; le fichier cité par chaque preuve n'a pas pu être lu, ce qui
+    concerne chaque nœud atteint par un élément (A, B, C, D) ; une couverture lue n'est pas une lacune."""
+    twin.add([gap(D, 'NOT_INTERPRETED'), gap('file:build.gradle', 'READ_ERROR'), gap(B, 'ANALYSED')])
+    result = ask(twin, name, depth=3, **V2)
+    assert local(result) == [(A, 'file:build.gradle', 'READ_ERROR'), (B, 'file:build.gradle', 'READ_ERROR'),
+                             (C, 'file:build.gradle', 'READ_ERROR'), (D, 'file:build.gradle', 'READ_ERROR'),
+                             (D, D, 'NOT_INTERPRETED')]
+    assert local(ask(twin, name, depth=1, **V2)) == [
+        (A, 'file:build.gradle', 'READ_ERROR'), (B, 'file:build.gradle', 'READ_ERROR'),
+        (C, 'file:build.gradle', 'READ_ERROR')], 'seulement les nœuds rendus'
+    assert local(ask(twin, name, root='module:missing', **V2)) == []
+    assert local(ask(twin, name, depth=1)) == [], 'neighborhood/1 ne change pas'
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_local_gaps_are_never_read_beyond_their_bound_and_the_tile_says_so(twin, name, monkeypatch):
+    twin.add([gap(D, 'NOT_INTERPRETED')])
+    monkeypatch.setattr('app.neighborhood.application.knowledge_frontier.MAX_LOCAL_REFERENCES', 2)
+    result = ask(twin, name, depth=3, **V2)
+    assert local(result) == []
+    assert [entry['reason'] for entry in result['frontier'] if entry['nature'] == 'KNOWLEDGE'] == [
+        'LOCAL_COVERAGE_NOT_READ']
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_local_gaps_that_do_not_fit_are_counted_never_silently_dropped(twin, name):
+    twin.add([gap(D, 'NOT_INTERPRETED'), gap('file:build.gradle', 'READ_ERROR')])
+    complete = ask(twin, name, depth=3, max_bytes=30_000, **V2)
+    seen = set()
+    for budget in range(complete['bytes'], 3000, -60):
+        result = ask(twin, name, depth=3, max_bytes=budget, **V2)
+        if result['outcome'] != 'OK':
+            break
+        rendered = {node['reference'] for node in result['node_details']}
+        concerned = [entry for entry in local(complete) if entry[0] in rendered]
+        counted = sum(entry['count'] for entry in result['not_sent'] if entry['what'] == 'local_coverage')
+        assert len(local(result)) + counted == len(concerned), 'ce qui manque est compté, exactement'
+        assert local(result) == concerned[:len(local(result))], 'dans l’ordre, sans trou'
+        seen.add((len(local(result)) == len(concerned), counted > 0))
+    assert (False, True) in seen, 'un budget où des lacunes locales ne tiennent pas, et sont comptées'
+
+
+def test_migration_007_anchors_existing_coverage_and_downgrades(tmp_path):
+    import os
+    import subprocess
+    import sys
+    from sqlalchemy import create_engine, text
+    url = f'sqlite:///{tmp_path / "anchor.db"}'
+    env = {**os.environ, 'DATABASE_URL': url}
+
+    def migrate(action, target):
+        return subprocess.run([sys.executable, '-m', 'alembic', action, target], check=True, env=env,
+                              capture_output=True, text=True).stdout
+    migrate('upgrade', '006')
+    engine = create_engine(url)
+    with engine.begin() as db:
+        db.execute(text("INSERT INTO projects (id, name, path) VALUES ('p', 'p', '/p')"))
+        db.execute(text("INSERT INTO scans (id, project_id, created_at, result) VALUES ('s', 'p', '2026-10-03', '{}')"))
+        db.execute(text("INSERT INTO fact_identities (identity_hash, kind, subject, identity) VALUES "
+                        "('c', 'COVERAGE', 'file:a.java', '{}'), ('x', 'ASSERTION', 'module:a', '{}')"))
+        db.execute(text("INSERT INTO fact_occurrences (scan_id, identity_hash, status, validity, has_evidence) VALUES "
+                        "('s', 'c', 'OBSERVED', 'VALID', 0), ('s', 'x', 'OBSERVED', 'VALID', 0)"))
+    assert '1 couvertures ancrées' in migrate('upgrade', '007')
+    import hashlib
+    with engine.connect() as db:
+        anchors = dict(db.execute(text('SELECT identity_hash, subject_hash FROM fact_occurrences')).all())
+    assert anchors == {'c': hashlib.sha256(b'file:a.java').hexdigest(), 'x': None}
+    migrate('downgrade', '006')
+    with engine.connect() as db:
+        assert db.scalar(text('SELECT count(*) FROM fact_occurrences WHERE subject_hash IS NOT NULL')) == 0
+    engine.dispose()

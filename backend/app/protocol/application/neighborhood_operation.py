@@ -4,12 +4,12 @@ Un adaptateur entrant : il lit la demande et sa version, fixe la génération de
 construire la Tuile par le cas d'usage, puis la présente. La présentation fournit la jauge d'octets ; le
 parcours, lui, ne connaît ni le protocole ni le stockage.
 """
-from app.neighborhood.application.knowledge_frontier import analysis_frontier
+from app.neighborhood.application.knowledge_frontier import analysis_frontier, local_frontier
 from app.neighborhood.application.tile import BuildTile, FactsChanged
 from app.neighborhood.domain.continuation import V1, V2, AnchorCursor, ContinuationError, NodeCursor, binding
 from app.neighborhood.domain.traversal import EnvelopeTooLarge
-from app.protocol.application.neighborhood_request import read_demand
-from app.protocol.application.neighborhood_view import AnchorView, LayeredView
+from app.protocol.application.neighborhood_request import SUMMARY, read_demand
+from app.protocol.application.neighborhood_view import AnchorView, Enrichment, LayeredView, largest
 from app.protocol.domain.envelope import BUDGET_EXHAUSTED, INVALID_ARGUMENT, OperationError
 
 
@@ -73,5 +73,19 @@ def neighborhood(exchange, arguments, max_bytes):
             raise OperationError(BUDGET_EXHAUSTED, 'Le budget ne contient pas la réponse et sa frontière.')
         tile = built.admitted
     view.register(tile)
-    return view.render(tile)
+    local = local_frontier(exchange.facts, exchange.scan.id, tile) if demand.version == V2 else []
+    return view.render(tile, _enrichment(view, tile, demand, local))
+
+
+def _enrichment(view, tile, demand, local):
+    """Les lacunes locales d'abord (ce que Taxo ne sait pas), puis les preuves résumées, chacune dans l'ordre et
+    tant qu'elle tient : la sélection, elle, est déjà fixée."""
+    if demand.version == V1:
+        return Enrichment()
+    summaries = demand.evidence == SUMMARY
+    attached = largest(len(local), lambda count: view.fits(tile, Enrichment(local[:count], len(local), summaries)))
+    local = tuple(local[:attached]), len(local)
+    summarized = largest(len(tile.elements), lambda count: view.fits(tile, Enrichment(*local, True, count))) \
+        if summaries else 0
+    return Enrichment(*local, summaries, summarized)
 

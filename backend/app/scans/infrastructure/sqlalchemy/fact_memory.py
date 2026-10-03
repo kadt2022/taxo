@@ -19,6 +19,7 @@ from sqlalchemy import (JSON, BigInteger, Boolean, Column, ForeignKey, Index, In
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
+from app.evaluations.domain.capability import UNREAD_COVERAGE
 from app.facts.domain.provenance import EXECUTABLE, ProducerExecution
 from app.neighborhood.domain.traversal import Adjacent
 from app.platform.database.base import Base
@@ -76,7 +77,9 @@ class FactOccurrenceRow(Base):
     raw_identity = Column(JSON(none_as_null=True))
     details = Column(JSON(none_as_null=True))
     has_evidence = Column(Boolean, nullable=False)
-    # Traversal of assertions only: relation and anchors are left empty for absences and coverage.
+    # Traversal of assertions only: relation, ranks and the object anchor are left empty for absences and
+    # coverage. A coverage keeps the anchor of its subject (TAXO-01J): what is unread about a node is read
+    # by that node, through the same fixed-size index, never by walking the analysis.
     relation = Column(String)
     subject_hash = Column(String(64))
     object_hash = Column(String(64))
@@ -130,6 +133,8 @@ def _reference_hash(reference):
 
 
 def _anchors(fact):
+    if fact['kind'] == 'COVERAGE':
+        return {'subject_hash': _reference_hash(fact.get('subject'))}
     if fact['kind'] != 'ASSERTION':
         return {}
     return {'relation': fact.get('relation'), 'subject_hash': _reference_hash(fact.get('subject')),
@@ -157,7 +162,7 @@ def _adjacency_rows(db, scan_id, direction, groups):
 def _rank_adjacencies(db, scan_id, anchors):
     """Rank again, from 1, each adjacency touched by the batch; the others are not read."""
     for direction, (_, fingerprint, rank, _) in _SIDES.items():
-        groups = sorted({(item[fingerprint.key], item['relation']) for item in anchors if item})
+        groups = sorted({(item[fingerprint.key], item['relation']) for item in anchors if item.get('relation')})
         for start in range(0, len(groups), _GROUPS):
             members = {}
             for row in _adjacency_rows(db, scan_id, direction, groups[start:start + _GROUPS]):
@@ -297,6 +302,36 @@ class SqlAlchemyFactMemory:
         with Session(self.engine) as db:
             found = self.load_rows(db, scan_id, statement)
         return [Adjacent(str(row[3]), str(row[0].id), row[0].identity_hash, fact) for row, fact in found]
+
+    def occurrence(self, scan_id, key):
+        """The fact of one occurrence of the analysis, by the key `neighbors` gives; None if it has none."""
+        if not (isinstance(key, str) and key.isascii() and key.isdigit() and len(key) <= 19):
+            return None
+        statement = _facts_of(scan_id).where(FactOccurrenceRow.id == int(key))
+        with Session(self.engine) as db:
+            found = self.load_rows(db, scan_id, statement)
+        return found[0][1] if found else None
+
+    def unread(self, scan_id, references):
+        """The coverage of the analysis that says one of these references was not read (NOT_INTERPRETED,
+        READ_ERROR): its subject, type and producer. Read by subject anchor, a batch of references at a time."""
+        occurrence, identity, execution = FactOccurrenceRow, FactIdentityRow, ProducerExecutionRow
+        wanted = sorted(set(references))
+        found = []
+        with Session(self.engine) as db:
+            for start in range(0, len(wanted), _GROUPS):
+                chunk = wanted[start:start + _GROUPS]
+                rows = db.execute(
+                    select(identity.subject, identity.identity, execution.producer_id, occurrence.human_producer_id)
+                    .join(identity, identity.identity_hash == occurrence.identity_hash)
+                    .outerjoin(execution, execution.id == occurrence.execution)
+                    .where(occurrence.scan_id == scan_id, occurrence.relation.is_(None),
+                           occurrence.subject_hash.in_([_reference_hash(item) for item in chunk]),
+                           identity.kind == 'COVERAGE', identity.subject.in_(chunk))).all()
+                found += [{'subject': subject, 'coverage_type': value.get('coverage_type'), 'producer': machine or human}
+                          for subject, value, machine, human in rows
+                          if value.get('coverage_type') in UNREAD_COVERAGE]
+        return sorted(found, key=lambda item: (item['subject'], item['coverage_type'], item['producer'] or ''))
 
     def revision(self, scan_id):
         """Append-only fact generation, read through a fixed-size index."""

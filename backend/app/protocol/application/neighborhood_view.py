@@ -5,11 +5,40 @@ Le format seul : le parcours est décidé ailleurs. `neighborhood/1` garde sa fo
 La même présentation sert de jauge : une Tuile provisoire est mesurée telle qu'elle serait rendue, avec les
 références qu'elle aurait, sans en créer aucune.
 """
+from dataclasses import dataclass
+
+from app.neighborhood.domain import handle
 from app.neighborhood.domain.continuation import V1, V2
 from app.neighborhood.domain.frontier import DEPTH, UNKNOWN
-from app.protocol.domain.envelope import Response, size
+from app.protocol.application.neighborhood_request import SUMMARY
+from app.protocol.domain.envelope import BUDGET, Response, size
 
 COMPLETE, ROOT_UNKNOWN = 'ADJACENCY_COMPLETE', 'ROOT_UNKNOWN'
+_SUMMARY_FIELDS = ('path', 'line_start', 'line_end', 'symbol', 'method')
+# La place réservée pour compter des lacunes locales non transmises : un décompte à quatre chiffres.
+_RESERVED = 9999
+
+
+@dataclass(frozen=True)
+class Enrichment:
+    """Ce qui s'ajoute à une sélection déjà fixée, sans jamais la changer : les lacunes locales et les preuves
+    résumées, chacune dans l'ordre, tant qu'elles tiennent. Ce qui n'a pas tenu est compté dans `not_sent`."""
+    local: tuple = ()
+    local_total: int = 0
+    summaries: bool = False
+    summarized: int = 0
+
+
+def largest(count, fits):
+    """Le plus grand préfixe (0 à `count`) qui tient, `fits` croissant avec la taille du préfixe."""
+    low, high = 0, count
+    while low < high:
+        middle = (low + high + 1) // 2
+        if fits(middle):
+            low = middle
+        else:
+            high = middle - 1
+    return low
 
 
 class TileView:
@@ -22,15 +51,20 @@ class TileView:
         self.cursor, self.revision, self.max_bytes = cursor, revision, max_bytes
         self._keys = {}
 
-    def fits(self, tile):
-        return size(self.render(tile).close()) <= self.max_bytes
+    def baseline(self):
+        """Ce que la jauge du parcours mesure : la Tuile sans rien d'ajouté, mais avec la place de dire ce qui
+        n'aurait pas tenu. Une Tuile admise reste donc valable une fois enrichie de zéro ajout."""
+        return Enrichment()
+
+    def fits(self, tile, enrichment=None):
+        return size(self.render(tile, enrichment or self.baseline()).close()) <= self.max_bytes
 
     def register(self, tile):
         """Les références de la Tuile rendue sont créées, dans l'ordre de ses éléments."""
         for element in tile.elements:
             self.exchange.refs.fact(element.adjacent.fact)
 
-    def render(self, tile):
+    def render(self, tile, enrichment=Enrichment()):
         refs = self.exchange.refs.preview([self._key(element) for element in tile.elements])
         stop_reason, continuation = self._stop(tile)
         request = tile.request
@@ -40,9 +74,11 @@ class TileView:
                             consumed={'nodes': len(tile.nodes), 'edges': len(tile.elements), 'work': tile.work},
                             anchor={'reference': request.root, 'known': tile.known},
                             nodes=[node.reference for node in tile.nodes], **self._nodes(tile),
-                            frontier=[*self.analysis.frontier, *self._selection(tile)], stop_reason=stop_reason,
-                            continuation=continuation)
-        response.envelope['items'] = [self._item(element, ref, tile) for element, ref in zip(tile.elements, refs)]
+                            frontier=[*self.analysis.frontier, *self._selection(tile), *enrichment.local],
+                            stop_reason=stop_reason, continuation=continuation)
+        response.envelope['items'] = [self._item(element, ref, tile, enrichment, index)
+                                      for index, (element, ref) in enumerate(zip(tile.elements, refs))]
+        response.envelope['not_sent'] += _omitted(tile, enrichment)
         return response
 
     def _key(self, element):
@@ -75,8 +111,24 @@ class TileView:
     def _selection(self, tile):
         raise NotImplementedError
 
-    def _item(self, element, ref, tile):
+    def _item(self, element, ref, tile, enrichment, index):
         raise NotImplementedError
+
+
+def _omitted(tile, enrichment):
+    omitted = []
+    if enrichment.local_total > len(enrichment.local):
+        omitted.append({'what': 'local_coverage', 'count': enrichment.local_total - len(enrichment.local),
+                        'reason': BUDGET})
+    if enrichment.summaries and len(tile.elements) > enrichment.summarized:
+        omitted.append({'what': 'evidence_summary', 'count': len(tile.elements) - enrichment.summarized,
+                        'reason': BUDGET})
+    return omitted
+
+
+def summary(fact):
+    """Les preuves d'un fait, résumées en localisations : jamais de contenu."""
+    return [{name: proof[name] for name in _SUMMARY_FIELDS if name in proof} for proof in fact.get('evidence', [])]
 
 
 class AnchorView(TileView):
@@ -94,7 +146,7 @@ class AnchorView(TileView):
                                'count': tile.stop.count, 'continuation': self.cursor.encode(position)})
         return boundaries
 
-    def _item(self, element, ref, tile):
+    def _item(self, element, ref, tile, enrichment, index):
         return {'ref': ref, **self._fact(element)}
 
 
@@ -102,6 +154,9 @@ class LayeredView(TileView):
     """`neighborhood/2` : plusieurs niveaux, une frontière par nœud, le chemin de chaque élément."""
 
     version = V2
+
+    def baseline(self):
+        return Enrichment(local_total=_RESERVED, summaries=self.demand.evidence == SUMMARY)
 
     def _bounds(self, request):
         return {**super()._bounds(request), 'max_fanout': request.max_fanout}
@@ -140,8 +195,12 @@ class LayeredView(TileView):
                                    'count': UNKNOWN, 'remaining_depth': depth - node.level})
         return boundaries
 
-    def _item(self, element, ref, tile):
+    def _item(self, element, ref, tile, enrichment, index):
         step = tile.request.steps[element.step]
-        return {'ref': ref, **self._fact(element), 'identity': element.adjacent.identity,
+        item = {'ref': ref, **self._fact(element), 'identity': element.adjacent.identity,
+                'occurrence': handle.encode(self.exchange.scan.id, self.revision, element.adjacent.occurrence),
                 'via': {'from': element.origin, 'relation': step.relation, 'direction': step.direction},
                 'level': element.level, 'revisit': element.revisit}
+        if enrichment.summaries:
+            item['evidence'] = summary(element.adjacent.fact) if index < enrichment.summarized else None
+        return item
