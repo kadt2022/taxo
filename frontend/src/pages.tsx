@@ -8,6 +8,7 @@ import {AnalysisLimits, evaluationsOf, gapsOf, ProjectOverview, technologiesOf, 
 import type {CoverageView} from './reading';
 import {ChoiceCard, ComparePicker, matches, NO_SEARCH, SearchFields, Source, type Choice, type Search} from './picker';
 import {EVALUATORS, STATUSES, label} from './vocabulary';
+import {explorerHref} from './explorer/entry';
 
 type Request=<T>(path:string)=>Promise<T>;
 type Project={id:string; name:string; path?:string};
@@ -170,7 +171,8 @@ export function ArchitecturePage({base, request, scanId, project}:Readonly<{base
       const items=found.filter(fact=>fact.relation===group.relation);
       return <div className="architecture-group" key={group.relation}><h3>{group.title} <span className="count-pill">{items.length}</span></h3>
         {items.length?<ul className="change-list">{items.map(fact=><li key={`${fact.subject}|${fact.object}`}>
-          <p className="change-fact"><Phrase value={sentence(fact, project)}/></p>
+          <p className="change-fact"><Phrase value={sentence(fact, project)}/>
+            {fact.subject&&<> <a className="explore-link" href={explorerHref(fact.subject.startsWith('repository:')&&fact.object?fact.object:fact.subject)}>Explorer</a></>}</p>
           {fact.evidence?.[0]&&<p className="change-proof"><span className="proof">{proof(fact.evidence[0])}</span></p>}</li>)}</ul>
           :<p className="muted">{group.empty}</p>}</div>;})}
   </section>;

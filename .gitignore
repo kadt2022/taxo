@@ -16,3 +16,5 @@ analyses/
 *-scan-latest.json
 .coverage
 frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/

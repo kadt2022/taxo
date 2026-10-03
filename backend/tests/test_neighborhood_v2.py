@@ -50,7 +50,7 @@ def test_a_three_level_tile_is_written_by_hand(twin, name):
         'frontier': [], 'stop': 'ADJACENCY_COMPLETE', 'consumed': {'nodes': 4, 'edges': 6, 'work': 4}}
     assert result['continuation'] is None
     assert result['parameters'] == {'root': A, 'steps': [{'relation': 'DEPENDS_ON', 'direction': 'OUTGOING'}],
-                                    'depth': 3, 'max_fanout': None, 'evidence': 'NONE'}
+                                    'depth': 3, 'max_fanout': None, 'evidence': 'NONE', 'form': 'FULL'}
 
 
 @pytest.mark.parametrize('name', STORAGES)
@@ -118,6 +118,10 @@ VERSIONS = [
     ({'steps': [{'relation': 'DEPENDS_ON', 'direction': 'OUTGOING'}] * 2}, 'INVALID_ARGUMENT'),
     ({'steps': [{'relation': 'DEPENDS_ON', 'direction': 'BOTH'}]}, 'INVALID_ARGUMENT'),
     ({'steps': [{'relation': ['DEPENDS_ON'], 'direction': 'OUTGOING'}]}, 'INVALID_ARGUMENT'),
+    ({'form': 'COMPACT'}, 'neighborhood/2'),
+    ({'form': 'FULL'}, 'neighborhood/2'),
+    ({'engine': 'neighborhood/1', 'form': 'COMPACT'}, 'INVALID_ARGUMENT'),
+    ({'form': 'SHORT'}, 'INVALID_ARGUMENT'),
 ]
 
 

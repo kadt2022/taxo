@@ -8,6 +8,7 @@ import {ConsultForm} from './consult';
 import {impactSource, notComparable, type ImpactOrigin} from './history';
 import {panelKey} from './overview';
 import {EVALUATORS, label} from './vocabulary';
+import {explorerHref} from './explorer/entry';
 import {openStream} from './sse';
 import {App, request} from './app';
 import {ask as askMinia, askButton, createStop, MiniaProgress, questionInit, startMinia, type MiniaLive, type MiniaStop} from './minia-live';
@@ -80,14 +81,14 @@ function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:Minia
       {commits.map(c=><tr key={c.sha} className={detail?.commit.sha===c.sha?'current':''}><td><button type="button" className="link" disabled={busy} onClick={()=>open(c.sha)}><code>{c.sha.slice(0,7)}</code></button>{c.parents.length>1&&<span className="muted"> fusion</span>}</td><td>{c.subject}</td><td>{c.author}</td><td>{date(c.authored_at)}</td></tr>)}
     </tbody></table></div>:consulted&&!error&&<p className="empty">Aucun commit dans ce dépôt.</p>}
     {detail&&<section className="commit-detail" aria-label="Fiche du commit">
-      <h2>Commit <code>{detail.commit.sha.slice(0,12)}</code></h2>
+      <h2>Commit <code>{detail.commit.sha.slice(0,12)}</code> <a className="explore-link" href={explorerHref(`commit:${detail.commit.sha}`)}>Explorer ce commit</a></h2>
       <dl>
         <div><dt>Message</dt><dd>{detail.commit.subject}</dd></div>
         <div><dt>Auteur</dt><dd>{detail.commit.author} · {date(detail.commit.authored_at)}</dd></div>
         <div><dt>Comparé à</dt><dd>{detail.parent?<code>{detail.parent.slice(0,12)}</code>:'aucun parent : commit racine'}{detail.commit.parents.length>1&&' (premier parent d’une fusion)'}</dd></div>
       </dl>
       <div className="table-wrap"><table><thead><tr><th>Fichier</th><th>Changement</th><th>+ / −</th></tr></thead><tbody>
-        {detail.files.map(f=><tr key={f.path}><td><button type="button" className="link" disabled={busy} onClick={()=>compare(detail.commit.sha,f.path,detail.parent)} aria-pressed={fileDiff?.path===f.path&&fileDiff.commit===detail.commit.sha}><code>{f.old_path?`${f.old_path} → ${f.path}`:f.path}</code></button>{f.confidential&&<span className="muted"> · confidentiel, contenu jamais affiché</span>}</td><td>{FILE_LABELS[f.status]??f.status}</td><td>{f.additions===null?'binaire':`+${f.additions} / −${f.deletions}`}</td></tr>)}
+        {detail.files.map(f=><tr key={f.path}><td><button type="button" className="link" disabled={busy} onClick={()=>compare(detail.commit.sha,f.path,detail.parent)} aria-pressed={fileDiff?.path===f.path&&fileDiff.commit===detail.commit.sha}><code>{f.old_path?`${f.old_path} → ${f.path}`:f.path}</code></button>{f.confidential&&<span className="muted"> · confidentiel, contenu jamais affiché</span>} <a className="explore-link" href={explorerHref(`file:${f.path}`)}>Explorer</a></td><td>{FILE_LABELS[f.status]??f.status}</td><td>{f.additions===null?'binaire':`+${f.additions} / −${f.deletions}`}</td></tr>)}
       </tbody></table></div>
       {fileDiff&&fileDiff.commit===detail.commit.sha&&<>
         <DiffView diff={fileDiff} links={linksFor(links,fileDiff)}/>

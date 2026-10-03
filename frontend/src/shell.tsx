@@ -11,7 +11,8 @@ export type NavItem = {id:Page; label:string; count?:string; apart?:boolean; mut
 export const ICON_PATHS:Record<string,string>={overview:'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z',
   projets:'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
   analyses:'M9 4h6M9 3h6v3H9zM6 5H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-1M8 12h8M8 16h5',
-  comparaisons:'M4 7h11M12 4l3 3-3 3M20 17H9M12 14l-3 3 3 3', interroger:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM9 9h6M9 13h4',
+  comparaisons:'M4 7h11M12 4l3 3-3 3M20 17H9M12 14l-3 3 3 3',
+  explorer:'M7 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM21 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM21 19a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM7 11l10-5M7 13l10 5', interroger:'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM9 9h6M9 13h4',
   architecture:'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   technologies:'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5', routes:'M8 7l-5 5 5 5M16 7l5 5-5 5', details:'M4 6h16M4 12h16M4 18h10',
   limites:'M12 3l10 18H2zM12 10v5M12 18v.5', historique:'M12 7v5l3 2M3 12a9 9 0 1 0 3-6.7M3 4v5h5', securite:'M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z',
@@ -64,7 +65,7 @@ export function since(iso?:string, now:number=Date.now()){
 export function navItemsOf(technologies:number, counts:(id:string)=>string|undefined, routes?:RouteCounts, analyses?:number):NavItem[]{
   return [{id:'overview', label:'Overview'},
     {id:'analyses', label:'Analyses', count:analyses?String(analyses):undefined, apart:true}, {id:'comparaisons', label:'Comparaisons'},
-    {id:'interroger', label:'Interroger Taxo'},
+    {id:'explorer', label:'Explorer'}, {id:'interroger', label:'Interroger Taxo'},
     {id:'technologies', label:'Technologies', count:technologies?String(technologies):undefined, apart:true},
     {id:'routes', label:'Routes', count:counts('api')}, {id:'architecture', label:'Architecture', count:counts('architecture')},
     {id:'securite', label:'Sécurité', count:routes?String(routes.PROTECTED):undefined},

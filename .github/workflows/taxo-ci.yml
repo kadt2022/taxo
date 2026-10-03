@@ -112,6 +112,42 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  explorer:
+    name: Taxo Explorer E2E
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Install locked frontend dependencies and Chromium
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Search an anchor, expand, read a proof (real API, Chromium)
+        working-directory: frontend
+        run: npx playwright test
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: taxo-explorer-e2e
+          path: frontend/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
   database:
     name: Taxo PostgreSQL
     needs: preflight
@@ -243,9 +279,9 @@ jobs:
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.sources=backend/app,frontend/src
-            -Dsonar.exclusions=frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx
+            -Dsonar.exclusions=frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx,frontend/src/**/__fixtures__/**
             -Dsonar.tests=backend/tests,frontend/src
-            -Dsonar.test.inclusions=backend/tests/**,frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx
+            -Dsonar.test.inclusions=backend/tests/**,frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx,frontend/src/**/__fixtures__/**
             -Dsonar.python.version=3.12
             -Dsonar.python.coverage.reportPaths=backend/reports/coverage.xml
             -Dsonar.javascript.lcov.reportPaths=frontend/coverage/lcov.info
@@ -267,7 +303,7 @@ jobs:
 
   status:
     name: Taxo CI Status
-    needs: [preflight, backend, frontend, database, containers, sonar, quality-gate]
+    needs: [preflight, backend, frontend, explorer, database, containers, sonar, quality-gate]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -285,7 +321,7 @@ jobs:
 
           summary "## Taxo CI Status"
           summary ""
-          for job in preflight backend frontend database containers; do
+          for job in preflight backend frontend explorer database containers; do
             r="$(result "$job")"
             summary "- $job: $r"
             [ "$r" = "success" ] || failed=1

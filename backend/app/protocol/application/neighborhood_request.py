@@ -10,12 +10,13 @@ from app.facts import is_reference
 from app.facts.domain.fact import RELATIONS
 from app.neighborhood.domain.continuation import V1, V2, is_v2
 from app.neighborhood.domain.request import DIRECTIONS, INCOMING, OUTGOING, Limits, Step, TileRequest
+from app.protocol.application.neighborhood_form import FORMS, FULL
 from app.protocol.domain.envelope import INVALID_ARGUMENT, OperationError
 
 BOTH = 'BOTH'
 _V1_FIELDS = frozenset({'analysis', 'root', 'follow', 'direction', 'depth', 'priority', 'max_nodes', 'max_edges',
                         'max_work', 'continuation'})
-_V2_FIELDS = _V1_FIELDS | {'engine', 'steps', 'max_fanout', 'evidence'}
+_V2_FIELDS = _V1_FIELDS | {'engine', 'steps', 'max_fanout', 'evidence', 'form'}
 NONE, SUMMARY = 'NONE', 'SUMMARY'
 # (défaut, plafond) de chaque budget, par version.
 _LIMITS = {V1: {'max_nodes': (30, 200), 'max_edges': (60, 200), 'max_work': (100, 1000)},
@@ -28,12 +29,13 @@ MAX_STEPS = 16
 @dataclass(frozen=True)
 class NeighborhoodDemand:
     """Une demande lue : la Tuile à construire, et ce qui ne regarde que sa présentation (les preuves résumées
-    s'ajoutent à une sélection déjà fixée, sans jamais la changer)."""
+    s'ajoutent à une sélection déjà fixée, la forme compacte la représente : ni l'une ni l'autre ne la change)."""
     version: str
     request: TileRequest
     parameters: dict
     continuation: str | None
     evidence: str = NONE
+    form: str = FULL
 
 
 def _invalid(message):
@@ -137,10 +139,13 @@ def _v2(exchange, arguments):
     evidence = arguments.get('evidence', NONE)
     if evidence not in (NONE, SUMMARY):
         _invalid('evidence : NONE ou SUMMARY.')
+    form = arguments.get('form', FULL)
+    if form not in FORMS:
+        _invalid('form : FULL ou COMPACT.')
     request = TileRequest(root, steps, depth, limits, fanout)
     parameters = {'root': root, 'steps': [{'relation': step.relation, 'direction': step.direction} for step in steps],
-                  'depth': depth, 'max_fanout': fanout, 'evidence': evidence}
-    return NeighborhoodDemand(V2, request, parameters, arguments.get('continuation'), evidence)
+                  'depth': depth, 'max_fanout': fanout, 'evidence': evidence, 'form': form}
+    return NeighborhoodDemand(V2, request, parameters, arguments.get('continuation'), evidence, form)
 
 
 def _accepted_by_v1(exchange, arguments):

@@ -4,6 +4,7 @@ import {useState} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, label} from './vocabulary';
 import type {Derivation} from './query';
+import {explorerHref} from './explorer/entry';
 
 export type Proof = {path?:string; line_start?:number; line_end?:number; method?:string};
 export type RouteFact = {subject:string; relation:string; object?:string; status?:string;
@@ -78,7 +79,8 @@ function Facts({title, facts, render}:Readonly<{title:string; facts:RouteFact[];
   if(!facts.length)return null;
   return <div className="route-facts"><h4>{title}</h4>
     {facts.map(fact=><div key={`${fact.relation}${fact.subject}${fact.object}`} className="route-fact">
-      <p><strong>{render(fact)}</strong> <span className="muted">{fact.relation} · {fact.status==='INFERRED'?'déduit':'observé'}</span></p>
+      <p><strong>{render(fact)}</strong> <span className="muted">{fact.relation} · {fact.status==='INFERRED'?'déduit':'observé'}</span>
+        {fact.object&&<> <a className="explore-link" href={explorerHref(fact.object)}>Explorer</a></>}</p>
       {fact.evidence?.length?<ul className="proofs">{fact.evidence.map(proof=><li key={proofText(proof)+proof.method}><code>{proofText(proof)}</code></li>)}</ul>:null}
       {fact.derivation&&<details><summary>Prémisses</summary><ul>{fact.derivation.premises.map(item=><li key={item}>{item}</li>)}</ul>
         {fact.derivation.counter_examples_checked.length>0&&<><p className="muted">Écarté</p><ul>{fact.derivation.counter_examples_checked.map(item=><li key={item}>{item}</li>)}</ul></>}
@@ -90,7 +92,8 @@ function Facts({title, facts, render}:Readonly<{title:string; facts:RouteFact[];
 
 export function RouteDetail({row}:Readonly<{row:RouteRow}>){
   return <section className="route-detail" aria-label={`Route ${row.verb} ${row.path}`}>
-    <h3><code>{row.verb} {row.path}</code> <span className={`state state-${row.state.toLowerCase()}`}>{STATES[row.state]}</span></h3>
+    <h3><code>{row.verb} {row.path}</code> <span className={`state state-${row.state.toLowerCase()}`}>{STATES[row.state]}</span>
+      <a className="explore-link" href={explorerHref(row.endpoint)}>Explorer depuis cette route</a></h3>
     <Facts title="Traitée par" facts={row.handlers} render={fact=>shortSymbol(fact.object)}/>
     <Facts title="Servie par" facts={row.applications} render={fact=>applicationName(fact.object)}/>
     <Facts title="Règle qui la capture" facts={row.matched} render={fact=>`${(fact.object??'').replace(/^route-pattern:/, '')} · chaîne ${chainName(fact)}`}/>
