@@ -259,7 +259,8 @@ CORE = ('app/evaluations/domain/capability.py', 'app/evaluations/application/run
         'app/scans/application/run_scan.py', 'app/protocol/domain/verdict.py', 'app/protocol/application/exchange.py',
         *(f'app/neighborhood/{name}.py' for name in (
             'domain/request', 'domain/budget', 'domain/frontier', 'domain/continuation', 'domain/traversal',
-            'application/ports', 'application/tile', 'application/knowledge_frontier')),
+            'domain/handle', 'domain/references', 'application/ports', 'application/tile',
+            'application/knowledge_frontier', 'application/references')),
         *(f'app/protocol/application/neighborhood_{name}.py' for name in ('operation', 'request', 'view')),
         'app/comparison/domain/comparison.py',
         'app/comparison/application/compare.py', 'app/knowledge/domain/knowledge.py',

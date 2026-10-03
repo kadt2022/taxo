@@ -91,15 +91,7 @@ def local_frontier(reader, scan_id, tile):
     if not tile.known:
         return []
     order = {node.reference: index for index, node in enumerate(tile.nodes)}
-    concerned = {reference: [reference] for reference in order}
-    for element in tile.elements:
-        fact = element.adjacent.fact
-        reached = tile.request.steps[element.step].far_end(fact)
-        if reached not in order:
-            continue
-        for proof in fact.get('evidence', []):
-            if proof.get('path'):
-                concerned.setdefault(FILE + proof['path'], []).append(reached)
+    concerned = _concerned(tile, order)
     if len(concerned) > MAX_LOCAL_REFERENCES:
         return [_knowledge('LOCAL_COVERAGE_NOT_READ')]
     entries = {}
@@ -109,3 +101,16 @@ def local_frontier(reader, scan_id, tile):
             entries[key] = {'nature': 'KNOWLEDGE', 'scope': 'NODE', 'node': node, 'subject': gap['subject'],
                             'reason': gap[_TYPE], 'producer': gap['producer'], 'count': {'kind': 'UNKNOWN'}}
     return [entries[key] for key in sorted(entries)]
+
+
+def _concerned(tile, order):
+    """Chaque référence dont une lacune concernerait un nœud rendu, et les nœuds qu'elle concerne : le nœud
+    lui-même, et les fichiers cités par les preuves des éléments qui l'atteignent."""
+    concerned = {reference: [reference] for reference in order}
+    for element in tile.elements:
+        fact = element.adjacent.fact
+        reached = tile.request.steps[element.step].far_end(fact)
+        if reached in order:
+            for path in dict.fromkeys(proof['path'] for proof in fact.get('evidence', []) if proof.get('path')):
+                concerned.setdefault(FILE + path, []).append(reached)
+    return concerned

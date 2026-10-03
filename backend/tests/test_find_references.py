@@ -112,7 +112,8 @@ def test_a_continuation_is_bound_to_its_analysis_generation_prefix_and_type(twin
     assert search(twin, name, prefix='o', after=token)['error']['code'] == 'INVALID_ARGUMENT'
 
 
-@pytest.mark.parametrize('arguments', [{'prefix': ''}, {'prefix': 'x' * 201}, {'prefix': 3}, {'prefix': 'a', 'limit': 0},
+@pytest.mark.parametrize('arguments', [{'prefix': ''}, {'prefix': 'x' * 201}, {'prefix': 3},
+                                       {'prefix': 'a', 'limit': 0},
                                        {'prefix': 'a', 'limit': 51}, {'prefix': 'a', 'type': 'nope'},
                                        {'prefix': 'a', 'analysis': 'analysis-2'}, {'prefix': 'a', 'extra': 1}])
 def test_bad_searches_are_refused(twin, arguments):
@@ -172,8 +173,9 @@ def test_migration_008_indexes_existing_analyses_and_downgrades(tmp_path):
     assert '3 références indexées pour 1 analyses' in migrate('upgrade', '008')
     with engine.connect() as db:
         rows = db.execute(text('SELECT reference, type, search_key FROM analysis_references ORDER BY reference')).all()
-    assert [tuple(row) for row in rows] == [('endpoint:GET /x', 'endpoint', 'get /x'), ('module:Root', 'module', 'root'),
-                                            ('module:b', 'module', 'b')], 'une valeur littérale n’est pas une référence'
+    assert [tuple(row) for row in rows] == [
+        ('endpoint:GET /x', 'endpoint', 'get /x'), ('module:Root', 'module', 'root'), ('module:b', 'module', 'b')], \
+        'une valeur littérale n’est pas une référence'
     migrate('downgrade', '007')
     with engine.connect() as db:
         assert 'analysis_references' not in {name for (name,) in db.execute(
@@ -189,9 +191,21 @@ def test_describe_offers_the_search(twin):
 @pytest.mark.parametrize('name', STORAGES)
 def test_every_reference_found_is_accepted_as_an_anchor(twin, name):
     """Ce que la recherche propose, le parcours l'accepte : orthographe soumise comprise (NFD ici)."""
-    assert found(search(twin, name, prefix='\u00f3r')) == ['module:o\u0301rders'], 'comparée en NFC, rendue telle quelle'
+    assert found(search(twin, name, prefix='\u00f3r')) == ['module:o\u0301rders'], \
+        'comparée en NFC, rendue telle quelle'
     for reference in found(search(twin, name, prefix='o', limit=50)) + found(search(twin, name, prefix='st')):
         tile = twin.ask(twin.exchange(name), root=reference, direction='INCOMING',
                         follow=['CONTAINS' if reference.startswith('file:') else 'DEPENDS_ON'])
         assert tile['anchor']['known'], reference
         assert [item['fact']['subject'] for item in tile['items']] == ['module:root']
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_a_prefix_range_follows_code_points_whatever_the_database_language(tmp_path, name):
+    """Dans une collation de langue, « é » se range entre « e » et « f » : la plage du préfixe « e » y prendrait
+    « éclair ». L'index compare dans l'ordre des octets, partout : « e » ne trouve pas « é »."""
+    twin = Twin(tmp_path)
+    twin.add([edge(target, subject='module:root') for target in ('module:eclair', 'module:éclair', 'module:fable')])
+    assert found(search(twin, name, prefix='e')) == ['module:eclair']
+    assert found(search(twin, name, prefix='é')) == ['module:éclair']
+    assert found(search(twin, name, prefix='ecl')) == ['module:eclair']

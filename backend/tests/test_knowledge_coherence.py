@@ -43,15 +43,23 @@ CASES = {
 }
 
 
-def unread_by_each_operation(taxo, before, after):
-    verdict, tile = taxo.ask(('verify_claim', HEALTH), ('get_neighborhood', {'analysis': after, **ROOT}),
-                             analysis=after)
-    named = sorted(entry['subject'].split(':', 1)[1] for entry in verdict['coverage']
-                   if entry['type'] == 'NOT_ANALYSED' and (entry['subject'] or '').startswith('language:'))
+def _unread(tile):
     frontier = [language for item in tile['frontier'] if item.get('reason') == 'NOT_ANALYSED'
                 and item.get('relation') == RELATION for language in item['languages']]
     if any(item.get('reason') == NO_ANALYZER and item.get('relation') == RELATION for item in tile['frontier']):
         frontier = [NO_ANALYZER, *frontier]
+    return frontier
+
+
+def unread_by_each_operation(taxo, before, after):
+    verdict, tile, layered = taxo.ask(
+        ('verify_claim', HEALTH), ('get_neighborhood', {'analysis': after, **ROOT}),
+        ('get_neighborhood', {'analysis': after, **ROOT, 'engine': 'neighborhood/2', 'depth': 2}), analysis=after)
+    named = sorted(entry['subject'].split(':', 1)[1] for entry in verdict['coverage']
+                   if entry['type'] == 'NOT_ANALYSED' and (entry['subject'] or '').startswith('language:'))
+    frontier = _unread(tile)
+    # TAXO-01J : la Tuile multiniveau dit, de ce qui n'a pas été lu, exactement ce que dit la Tuile à un saut.
+    assert _unread(layered) == frontier
     reading = taxo.client.get(f'{taxo.base}/scans/{after}/coverage').json()
     restituted, = [item['unread'] for item in reading['evaluators'] if item['evaluator_id'] == PRODUCER]
     compared = taxo.compare(before, after)[PRODUCER]['not_analysed']['after']

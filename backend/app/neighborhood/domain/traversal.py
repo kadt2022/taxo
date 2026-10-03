@@ -152,18 +152,10 @@ class Traversal:
     def _walk_step(self, expansion, step):
         """Parcourt un pas d'un nœud : None quand son adjacence est épuisée, `_NEXT_NODE` quand l'éventail du
         nœud est plein (le parcours continue), sinon la coupure qui arrête la Tuile."""
-        fanout = self.request.max_fanout
         while True:
-            refusal = self.budget.before_read(len(self.elements))
-            if refusal is not None:
-                return Cut(expansion.position(), refusal, False)
-            if step.relation not in self.capable:
-                return None
-            left = None if fanout is None else fanout - expansion.rendered
-            if left == 0:
-                self.cuts.append(Cut(expansion.position(), FANOUT, False))
-                return _NEXT_NODE
-            limit = self.budget.batch(len(self.elements), left, self.request.batched)
+            blocked, limit = self._before_read(expansion, step)
+            if limit is None:
+                return blocked
             self.budget.read()
             batch = self.adjacency.read(expansion.node.reference, step, expansion.after, limit)
             for adjacent in batch:
@@ -172,6 +164,21 @@ class Traversal:
                     return outcome
             if len(batch) < limit:
                 return None
+
+    def _before_read(self, expansion, step):
+        """Ce qui empêche une nouvelle lecture (et l'issue du pas), sinon combien d'occurrences lire. Dans cet
+        ordre : le travail et les éléments, la capacité de la relation, l'éventail du nœud."""
+        refusal = self.budget.before_read(len(self.elements))
+        if refusal is not None:
+            return Cut(expansion.position(), refusal, False), None
+        if step.relation not in self.capable:
+            return None, None
+        fanout = self.request.max_fanout
+        left = None if fanout is None else fanout - expansion.rendered
+        if left == 0:
+            self.cuts.append(Cut(expansion.position(), FANOUT, False))
+            return _NEXT_NODE, None
+        return None, self.budget.batch(len(self.elements), left, self.request.batched)
 
     def _offer(self, expansion, step, adjacent):
         """Propose une occurrence lue : rendue, ignorée (déjà rendue), ou refusée par un budget."""

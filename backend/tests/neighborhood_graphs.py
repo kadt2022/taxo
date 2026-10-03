@@ -29,7 +29,8 @@ class Graph:
         self._adjacency = {}
         for index, fact in enumerate(self.facts):
             identity = json.dumps([fact['subject'], fact['relation'], fact['object']])
-            for direction, anchor, far in ((OUT, fact['subject'], fact['object']), (IN, fact['object'], fact['subject'])):
+            sides = ((OUT, fact['subject'], fact['object']), (IN, fact['object'], fact['subject']))
+            for direction, anchor, far in sides:
                 self._adjacency.setdefault((anchor, fact['relation'], direction), []).append((far, identity, index))
         for members in self._adjacency.values():
             members.sort()

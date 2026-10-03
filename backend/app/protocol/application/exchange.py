@@ -456,18 +456,7 @@ class Exchange:
     def find_references(self, arguments, max_bytes):
         """Les references de l'analyse qui commencent par un prefixe (TAXO-01J) : une page bornee, dans l'ordre
         de leur cle, avec une reprise. Une liste ordonnee : ni score ni compte de degre."""
-        _no_other(arguments, ('analysis', 'prefix', 'type', 'limit', 'after'))
-        if arguments.get('analysis') != self.scan.id:
-            raise OperationError(INVALID_ARGUMENT, 'analysis doit identifier l’analyse de cet échange (describe).')
-        prefix = arguments.get('prefix')
-        if not isinstance(prefix, str) or not 1 <= len(prefix) <= references.MAX_PREFIX:
-            raise OperationError(INVALID_ARGUMENT, f'prefix : de 1 à {references.MAX_PREFIX} caractères.')
-        kind = arguments.get('type')
-        if kind is not None and kind not in _REFERENCE_TYPES:
-            raise OperationError(INVALID_ARGUMENT, 'type : un type de référence du vocabulaire.')
-        limit = arguments.get('limit', references.DEFAULT_LIMIT)
-        if type(limit) is not int or not 1 <= limit <= references.MAX_LIMIT:
-            raise OperationError(INVALID_ARGUMENT, f'limit doit être un entier entre 1 et {references.MAX_LIMIT}.')
+        prefix, kind, limit = _search(arguments, self.scan.id)
         revision, folded = self.facts.revision(self.scan.id), references.fold(prefix)
         try:
             after = references.decode(arguments.get('after'), self.scan.id, revision, folded, kind)
@@ -475,14 +464,12 @@ class Exchange:
             raise OperationError(INVALID_ARGUMENT, str(exc)) from exc
         rows, more = find_references(self.facts, self.scan.id, prefix, kind, after, limit)
         coverage = self.envelope_coverage()
-        # La page la plus longue qui tient avec sa reprise : celle-ci est mesurée avec la page, jamais ajoutée après.
+        # La page la plus longue qui tient avec sa reprise : celle-ci est mesuree avec la page, jamais ajoutee apres.
         for count in range(len(rows), 0 if rows else -1, -1):
-            following = count < len(rows) or more
-            last = rows[count - 1][:2] if following else None
-            response = self.response('find_references', coverage, max_bytes, prefix=prefix, type=kind,
-                                      next=references.encode(self.scan.id, revision, folded, kind, last) if last else None)
-            if all(response.add('items', {'reference': reference, 'type': found_kind})
-                   for _, _, reference, found_kind in rows[:count]):
+            last = rows[count - 1][:2] if count < len(rows) or more else None
+            token = references.encode(self.scan.id, revision, folded, kind, last) if last else None
+            response = self.response('find_references', coverage, max_bytes, prefix=prefix, type=kind, next=token)
+            if all(response.add('items', {'reference': row[2], 'type': row[3]}) for row in rows[:count]):
                 response.skip('items', len(rows) - count)
                 return response
         raise OperationError(BUDGET_EXHAUSTED, 'Le budget ne contient pas une seule référence.')
@@ -527,6 +514,23 @@ class Exchange:
                                   max_bytes, claim=claim, verdict=verdict.verdict, reason=verdict.reason)
         self.add_facts(response, list(verdict.facts), evidence=True)
         return response
+
+
+def _search(arguments, analysis):
+    """Les arguments d'une recherche de references, verifies : prefixe, type, taille de page."""
+    _no_other(arguments, ('analysis', 'prefix', 'type', 'limit', 'after'))
+    if arguments.get('analysis') != analysis:
+        raise OperationError(INVALID_ARGUMENT, 'analysis doit identifier l’analyse de cet échange (describe).')
+    prefix = arguments.get('prefix')
+    if not isinstance(prefix, str) or not 1 <= len(prefix) <= references.MAX_PREFIX:
+        raise OperationError(INVALID_ARGUMENT, f'prefix : de 1 à {references.MAX_PREFIX} caractères.')
+    kind = arguments.get('type')
+    if kind is not None and kind not in _REFERENCE_TYPES:
+        raise OperationError(INVALID_ARGUMENT, 'type : un type de référence du vocabulaire.')
+    limit = arguments.get('limit', references.DEFAULT_LIMIT)
+    if type(limit) is not int or not 1 <= limit <= references.MAX_LIMIT:
+        raise OperationError(INVALID_ARGUMENT, f'limit doit être un entier entre 1 et {references.MAX_LIMIT}.')
+    return prefix, kind, limit
 
 
 def _operation(request):

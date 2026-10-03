@@ -56,8 +56,8 @@ def neighborhood(exchange, arguments, max_bytes):
     except ContinuationError as exc:
         raise OperationError(INVALID_ARGUMENT, str(exc)) from exc
     frontier = analysis_frontier(_Summary(exchange), request.root, request.relations)
-    view = (AnchorView if demand.version == V1 else LayeredView)(exchange, demand, frontier, cursor, revision,
-                                                                   max_bytes)
+    presented = AnchorView if demand.version == V1 else LayeredView
+    view = presented(exchange, demand, frontier, cursor, revision, max_bytes)
     try:
         built = BuildTile(exchange.facts)(exchange.scan.id, request, frontier.capable, view.fits, start, revision)
     except EnvelopeTooLarge as exc:
@@ -85,7 +85,7 @@ def _enrichment(view, tile, demand, local):
     summaries = demand.evidence == SUMMARY
     attached = largest(len(local), lambda count: view.fits(tile, Enrichment(local[:count], len(local), summaries)))
     local = tuple(local[:attached]), len(local)
-    summarized = largest(len(tile.elements), lambda count: view.fits(tile, Enrichment(*local, True, count))) \
-        if summaries else 0
+    summarized = 0
+    if summaries:
+        summarized = largest(len(tile.elements), lambda count: view.fits(tile, Enrichment(*local, True, count)))
     return Enrichment(*local, summaries, summarized)
-

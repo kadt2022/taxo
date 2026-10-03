@@ -115,7 +115,7 @@ def test_the_element_budget_cut_says_at_least_one_only_when_an_unrendered_occurr
     single = walk(graph, limits=Limits(200, 2, 2000), batched=False)
     assert (single.stop.reason, single.stop.found, single.work) == (EDGES, False, 2)
     exhausted = walk(Graph([(A, DEP, B), (A, DEP, C)]), limits=Limits(200, 2, 2000))
-    assert exhausted.stop is None, 'deux occurrences, deux rendues : la lecture de trois a montré qu’il n’y en a pas d’autre'
+    assert exhausted.stop is None, 'deux rendues : la lecture de trois a montré qu’il n’y en a pas d’autre'
 
 
 def test_a_high_degree_node_is_read_in_bounded_batches_and_resumed_to_the_last_neighbour():
@@ -243,7 +243,8 @@ def test_every_level_is_the_distance_in_the_rendered_tile(case, bounds):
     tile = run(case, bounds)
     distance = {tile.request.root: 0}
     for item in tile.elements:  # en largeur : l'origine est toujours placée avant ses éléments
-        far = item.adjacent.fact['object'] if tile.request.steps[item.step].direction == OUT else item.adjacent.fact['subject']
+        fact = item.adjacent.fact
+        far = fact['object'] if tile.request.steps[item.step].direction == OUT else fact['subject']
         distance.setdefault(far, distance[item.origin] + 1)
         assert item.level == distance[item.origin] + 1
     assert {node.reference: node.level for node in tile.nodes} == distance
@@ -269,7 +270,8 @@ def test_raising_the_fanout_only_includes_and_only_without_a_global_stop(case, f
     """§ 4, propriété 4 : l'éventail change l'ordre ; seule l'inclusion vaut, et seulement sans arrêt global."""
     little, big = run(case, fanout=fanout), run(case, fanout=fanout + extra)
     if big.stop is None:
-        assert {item.adjacent.occurrence for item in little.elements} <= {item.adjacent.occurrence for item in big.elements}
+        smaller = {item.adjacent.occurrence for item in little.elements}
+        assert smaller <= {item.adjacent.occurrence for item in big.elements}
 
 
 def test_raising_the_fanout_is_not_a_prefix():

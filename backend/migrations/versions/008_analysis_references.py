@@ -1,7 +1,8 @@
 """The references of each analysis, searchable by prefix (TAXO-01J, `find_references`).
 
 A projection of the versioned memory: one row per reference named by an assertion of the analysis (its
-subject, and its object when it is a reference), as it was submitted: the spelling a traversal accepts. New analyses write it with their facts; this migration
+subject, and its object when it is a reference), as it was submitted: the spelling a traversal accepts.
+New analyses write it with their facts; this migration
 fills it for the existing ones, analysis by analysis, from the identity rows. Its rules are frozen here,
 copied from the application at the time of writing (a test checks that they still agree): a migration never
 imports the application, which may change after it.
@@ -47,11 +48,14 @@ def row(scan_id, reference):
 
 _INDEXES = {'ix_analysis_references_key': ['scan_id', 'search_key', 'reference_hash'],
             'ix_analysis_references_type': ['scan_id', 'type', 'search_key', 'reference_hash']}
-_COLUMNS = (lambda: [sa.Column('scan_id', sa.String, sa.ForeignKey('scans.id'), primary_key=True),
-                     sa.Column('reference_hash', _ordered(64), primary_key=True),
-                     sa.Column('search_key', _ordered(KEY_LENGTH), nullable=False),
-                     sa.Column('type', sa.String, nullable=False),
-                     sa.Column('reference', sa.Text, nullable=False)])
+
+
+def _columns():
+    return [sa.Column('scan_id', sa.String, sa.ForeignKey('scans.id'), primary_key=True),
+            sa.Column('reference_hash', _ordered(64), primary_key=True),
+            sa.Column('search_key', _ordered(KEY_LENGTH), nullable=False),
+            sa.Column('type', sa.String, nullable=False),
+            sa.Column('reference', sa.Text, nullable=False)]
 
 
 def _create():
@@ -59,10 +63,10 @@ def _create():
     inspector = sa.inspect(op.get_bind())
     if 'analysis_references' in inspector.get_table_names():
         _say('Table analysis_references déjà présente (reprise).')
-        table = sa.Table('analysis_references', sa.MetaData(), *_COLUMNS())
+        table = sa.Table('analysis_references', sa.MetaData(), *_columns())
         present = {index['name'] for index in inspector.get_indexes('analysis_references')}
     else:
-        table = op.create_table('analysis_references', *_COLUMNS())
+        table = op.create_table('analysis_references', *_columns())
         present = set()
     for name, columns in _INDEXES.items():
         if name not in present:
