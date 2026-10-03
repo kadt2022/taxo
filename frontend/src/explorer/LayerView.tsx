@@ -15,7 +15,7 @@ export function LayerView({view, links, selected, onSelect}:Readonly<{view:View;
   onSelect:(selected:Selected)=>void}>){
   const arrow=useId(), named=useNaming();
   const placed=useMemo(()=>layout(view, links), [view, links]);
-  const levels=[...new Set(placed.nodes.map(node=>node.level))];
+  const levels=[...new Set([...placed.nodes, ...placed.leaves].map(node=>node.level))];
   const nodes=new Map(view.nodes.map(node=>[node.reference, node]));
   return <div className="explorer-layers"><div className="explorer-canvas" style={{width:placed.width, height:placed.height}}>
     <svg width={placed.width} height={placed.height} aria-hidden="true">
@@ -33,6 +33,14 @@ export function LayerView({view, links, selected, onSelect}:Readonly<{view:View;
         aria-label={`${factText(edge.link, named)}, ${edge.count} occurrence${edge.count>1?'s':''}${edge.dashed?', revisite':''}`}
         onClick={()=>onSelect({kind:'link', identity:edge.link.identity})}>{edge.count>1?`×${edge.count}`:''}</button>;
     })}
+    {placed.leaves.map(leaf=><button type="button" key={leaf.reference} className="explorer-node explorer-value"
+      style={{left:leaf.x, top:leaf.y, width:GEOMETRY.width, height:GEOMETRY.height}}
+      aria-pressed={selected?.kind==='link'&&selected.identity===leaf.reference}
+      aria-label={leaf.value===undefined?'Aucun objet : ce fait n’en a pas':`Valeur ${leaf.value}, pas un nœud`}
+      onClick={()=>onSelect({kind:'link', identity:leaf.reference})}>
+      <span className="explorer-node-name">{leaf.value??'aucun objet'}</span>
+      <span className="explorer-node-mark">{leaf.value===undefined?'ce fait n’a pas d’objet':'valeur, pas un nœud'}</span>
+    </button>)}
     {placed.nodes.map(node=>{
       const marks=nodeMarks(nodes.get(node.reference)!, view.selection[node.reference], view.knowledge);
       const chosen=selected?.kind==='node'&&selected.reference===node.reference;

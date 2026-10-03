@@ -21,7 +21,8 @@ const TILES:Record<string, Tile>={
   [ROUTE]:tile({root:ROUTE, stop:'DEPTH', items:[
     element(ROUTE, HANDLER, {relation:'HANDLED_BY', evidence:[{path:'A.java', line_start:9, method:'java.spring.request-mapping'}]}),
     element(ROUTE, PATTERN, {relation:'MATCHED_BY', evidence:null, count:2}),
-    element(REPOSITORY, ROUTE, {relation:'CONTAINS', direction:'INCOMING'})],
+    element(REPOSITORY, ROUTE, {relation:'CONTAINS', direction:'INCOMING'}),
+    element(ROUTE, undefined, {relation:'PERMITS_ALL'}), element(ROUTE, 'authenticated()', {relation:'AUTHORIZED_BY'})],
   nodes:[[ROUTE, 0, false], [HANDLER, 1, false], [PATTERN, 1, false], [REPOSITORY, 1, false]],
   frontier:[depthCut(HANDLER), edgesCut(PATTERN, 'reprise-P'), depthCut(REPOSITORY), gap, noAnalyzer]}),
   [HANDLER]:tile({root:HANDLER, items:[element(HANDLER, CALLED, {relation:'CALLS'})], nodes:[[HANDLER, 0, true], [CALLED, 1, false]],
@@ -149,6 +150,11 @@ describe('l’explorateur', ()=>{
     expect(shown.textContent).toContain('dépôt Boutique');
     expect(named(/^route GET \/orders est traité par symbole java:A#get\(\), 1 occurrence$/)).toBeTruthy();
     expect(named(/^dépôt Boutique contient route GET \/orders, 1 occurrence$/), 'un fait lu en entrant garde son sens').toBeTruthy();
+    expect(named(/^route GET \/orders est ouvert à tous, 1 occurrence$/), 'un fait sans objet').toBeTruthy();
+    expect(named(/^route GET \/orders est autorisé par authenticated\(\), 1 occurrence$/), 'une valeur littérale').toBeTruthy();
+    await click(named('Couches'));
+    expect(named('Aucun objet : ce fait n’en a pas')).toBeTruthy();
+    expect(named('Valeur authenticated(), pas un nœud')).toBeTruthy();
   });
 
   it('développe un nœud et voit la suite d’une adjacence coupée, sans recharger le reste', async()=>{

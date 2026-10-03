@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {linksAt, linksOf, merge, viewOf} from './graph';
+import {linksAt, linksOf, merge, omitted, viewOf} from './graph';
 import {depthCut, edgesCut, element, tile} from './__fixtures__/tiles';
 
 const [A, B, C, D]=['module:a', 'module:b', 'module:c', 'module:d'];
@@ -90,5 +90,29 @@ describe('les liens', ()=>{
     expect(links[0]).toMatchObject({subject:B, object:A});
     expect(linksAt(links, A).from).toHaveLength(1);
     expect(linksAt(links, B).to).toHaveLength(1);
+  });
+});
+
+describe('les extrémités qui ne sont pas des nœuds', ()=>{
+  // Un fait sans objet, et un fait dont l'objet est une valeur littérale : rendus par le moteur, sans nœud d'arrivée.
+  const open=element(A, undefined, {relation:'PERMITS_ALL'}), literal=element(A, 'authenticated()', {relation:'AUTHORIZED_BY'});
+  const view=viewOf(tile({items:[open, literal, element(A, B)], nodes:[[A, 0, true], [B, 1, false]]}));
+
+  it('gardent leurs éléments, sans nœud inventé ni revisite', ()=>{
+    expect(view.elements.map(item=>[item.fact.relation, item.far, item.revisit])).toEqual([
+      ['PERMITS_ALL', null, false], ['AUTHORIZED_BY', null, false], ['DEPENDS_ON', B, false]]);
+    expect(view.nodes.map(node=>node.reference)).toEqual([A, B]);
+    expect(linksOf(view).map(link=>link.object)).toEqual([undefined, 'authenticated()', B]);
+  });
+});
+
+describe('ce qui n’a pas été transmis', ()=>{
+  it('reste dit après un développement ; les preuves non résumées se comptent sur la vue', ()=>{
+    const cut={...first, items:first.items.map((item, index)=>index<2?{...item, evidence:null}:item),
+      not_sent:[{what:'evidence_summary', count:2, reason:'BUDGET'}, {what:'local_coverage', count:3, reason:'BUDGET'}]};
+    const view=merge(viewOf(cut), fromD, D);
+    expect(omitted(view)).toEqual([{what:'evidence_summary', count:2, reason:'BUDGET'}, {what:'local_coverage', count:3, reason:'BUDGET'}]);
+    const later=merge(view, {...fromD, root:B, items:[], not_sent:[{what:'local_coverage', count:1, reason:'BUDGET'}]} as never, B);
+    expect(omitted(later)).toContainEqual({what:'local_coverage', count:3, reason:'BUDGET'});
   });
 });

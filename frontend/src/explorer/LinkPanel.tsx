@@ -5,18 +5,18 @@ import {DerivationView, proofText} from '../exploration';
 import {EVALUATORS, ORIGINS, VALIDITIES, label} from '../vocabulary';
 import type {Link, ViewElement} from './graph';
 import {evidenceOf, type Location, type Query} from './protocol';
-import {verb} from './sentences';
+import {endName, verb} from './sentences';
 import {useNaming} from './Naming';
 
 export function LinkPanel({link, query, onClose}:Readonly<{link:Link; query:Query; onClose:()=>void}>){
   const named=useNaming();
   return <section className="explorer-panel" aria-label="Détail du lien">
-    <div className="explorer-panel-head"><h3>{named(link.subject)} <span className="explorer-verb">{verb(link.relation)}</span> {named(link.object)}</h3>
+    <div className="explorer-panel-head"><h3>{named(link.subject)} <span className="explorer-verb">{verb(link.relation)}</span> {endName(link.object, named)}</h3>
       <button type="button" className="link" onClick={onClose}>Fermer</button></div>
     <dl className="explorer-triple">
       <div><dt>Sujet</dt><dd><code>{link.subject}</code></dd></div>
       <div><dt>Relation</dt><dd><code>{link.relation}</code></dd></div>
-      <div><dt>Objet</dt><dd><code>{link.object}</code></dd></div>
+      <div><dt>Objet</dt><dd>{link.object===undefined?<span className="muted">aucun : ce fait n’a pas d’objet</span>:<code>{link.object}</code>}</dd></div>
     </dl>
     <h4>{link.elements.length} occurrence{link.elements.length>1?'s':''}</h4>
     <ol className="explorer-occurrences">{link.elements.map(element=><li key={element.occurrence}>

@@ -43,3 +43,13 @@ describe('la vue en couches', ()=>{
     expect(found.edges[0].path.startsWith(`M${GEOMETRY.margin+GEOMETRY.width} `)).toBe(true);
   });
 });
+
+describe('une extrémité qui n’est pas un nœud', ()=>{
+  it('est dessinée en feuille, à la colonne suivante de son sujet, au lieu d’être perdue', ()=>{
+    const found=placed([element(A, undefined, {relation:'PERMITS_ALL'}), element(A, 'authenticated()', {relation:'AUTHORIZED_BY'}),
+      element(A, B)], [[A, 0, true], [B, 1, false]]);
+    expect(found.edges.map(edge=>[edge.link.relation, edge.to.level])).toEqual([['PERMITS_ALL', 1], ['AUTHORIZED_BY', 1], ['DEPENDS_ON', 1]]);
+    expect(found.leaves.map(leaf=>[leaf.value, leaf.row])).toEqual([[undefined, 1], ['authenticated()', 2]]);
+    expect(found.nodes.map(node=>node.reference)).toEqual([A, B]);
+  });
+});

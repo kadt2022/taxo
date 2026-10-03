@@ -4,7 +4,7 @@
 import type {Link, View} from './graph';
 import {linksAt} from './graph';
 import {NodeActions, type NodeCommands} from './NodeActions';
-import {factText, nodeMarks, nodeType, verb} from './sentences';
+import {endName, factText, nodeMarks, nodeType, verb} from './sentences';
 import {useNaming} from './Naming';
 
 export function ListView({view, links, commands, busy, onSelect}:Readonly<{view:View; links:Link[]; commands:NodeCommands;
@@ -23,10 +23,10 @@ export function ListView({view, links, commands, busy, onSelect}:Readonly<{view:
           <NodeActions reference={node.reference} boundary={view.selection[node.reference]} commands={commands} busy={busy}
             anchor={node.reference===view.anchor}/></p>
         {found.length>0&&<ul className="explorer-links">{found.map(link=>{
-          const far=link.subject===node.reference?link.object:link.subject;
           const outgoing=link.subject===node.reference;
           const count=link.elements.length;
-          const said=outgoing?`${verb(link.relation)} ${named(far)}`:`${named(far)} ${verb(link.relation)} ce nœud`;
+          const said=outgoing?[verb(link.relation), endName(link.object, named)].filter(Boolean).join(' ')
+            :`${named(link.subject)} ${verb(link.relation)} ce nœud`;
           return <li key={link.identity}><button type="button" className="link" onClick={()=>onSelect(link.identity)}
             aria-label={`${factText(link, named)}, ${count} occurrence${count>1?'s':''}${link.revisit?', revisite':''}`}>
             {outgoing?'→':'←'} {said}</button>

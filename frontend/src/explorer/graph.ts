@@ -4,9 +4,10 @@
 import type {Boundary, Element, NotSent, Tile} from './protocol';
 
 export type ViewNode={reference:string; level:number; known:boolean; expanded:boolean};
-/** Un élément dans la vue : `level` et `revisit` y sont recalculés, la vue pouvant réunir plusieurs Tuiles. */
-export type ViewElement=Element & {far:string};
-export type Link={identity:string; subject:string; relation:string; object:string; elements:ViewElement[];
+/** Un élément dans la vue : `level` et `revisit` y sont recalculés, la vue pouvant réunir plusieurs Tuiles. `far` est
+ * le nœud qu'il atteint, ou `null` quand son extrémité n'en est pas un (aucun objet, ou une valeur littérale). */
+export type ViewElement=Element & {far:string|null};
+export type Link={identity:string; subject:string; relation:string; object?:string; elements:ViewElement[];
   revisit:boolean};
 export type View={anchor:string; known:boolean; revision:number; nodes:ViewNode[]; elements:ViewElement[];
   /** La coupure de sélection en cours de chaque nœud non développé : la plus récente, avec sa reprise. */
@@ -14,7 +15,7 @@ export type View={anchor:string; known:boolean; revision:number; nodes:ViewNode[
   /** Une Tuile d'une autre génération de faits est arrivée : elle n'a pas été mêlée à la vue. */
   stale:boolean};
 
-/** L'extrémité qu'un élément atteint : l'objet en sortant, le sujet en entrant. */
+/** L'extrémité qu'un élément atteint : l'objet en sortant, le sujet en entrant. Ce n'est pas toujours un nœud. */
 export const farEnd=(element:Element)=>element.via.direction==='OUTGOING'?element.fact.object:element.fact.subject;
 
 /** La vue d'une première Tuile. */
@@ -38,14 +39,17 @@ export function merge(view:View, tile:Tile, at?:string):View{
   // Une revisite : l'extrémité atteinte était déjà dans la vue. Recalculé ici : un nœud nouveau pour une Tuile ne
   // l'est pas forcément pour la vue.
   const present=new Set([...view.nodes.map(node=>node.reference), at??tile.anchor.reference]);
+  // Le moteur ne rend en nœud que les extrémités qui en sont : les autres n'atteignent rien, et ne revisitent rien.
+  const reached=new Set(tile.nodes);
   for(const item of tile.items){
     if(seen.has(item.occurrence))continue;
-    const far=farEnd(item);
-    elements.push({...item, level:offset+item.level, revisit:present.has(far), far});
-    seen.add(item.occurrence);present.add(far);
+    const end=farEnd(item), far=end!==undefined&&reached.has(end)?end:null;
+    elements.push({...item, level:offset+item.level, revisit:far!==null&&present.has(far), far});
+    seen.add(item.occurrence);
+    if(far!==null)present.add(far);
   }
   return {...view, nodes:[...nodes.values()], elements, selection:selectionOf(view, tile, nodes, at),
-    knowledge:knowledgeOf(view.knowledge, tile.frontier), notSent:tile.not_sent};
+    knowledge:knowledgeOf(view.knowledge, tile.frontier), notSent:noticesOf(view.notSent, tile.not_sent)};
 }
 
 function selectionOf(view:View, tile:Tile, nodes:Map<string, ViewNode>, at?:string){
@@ -56,6 +60,25 @@ function selectionOf(view:View, tile:Tile, nodes:Map<string, ViewNode>, at?:stri
     if(boundary.nature==='SELECTION'&&boundary.node&&!nodes.get(boundary.node)?.expanded)selection[boundary.node]=boundary;
   }
   return selection;
+}
+
+/** Ce qu'une Tuile n'a pas transmis reste dit après les suivantes : pour chaque nature, le plus grand décompte reçu,
+ * un minimum sûr (deux Tuiles peuvent taire la même lacune). Les preuves résumées se comptent sur la vue (`omitted`). */
+function noticesOf(known:NotSent[], added:NotSent[]){
+  const counts=new Map(known.map(entry=>[entry.what, entry]));
+  for(const entry of added){
+    if(entry.what==='evidence_summary')continue;
+    const past=counts.get(entry.what);
+    if(!past||(entry.count??1)>(past.count??1))counts.set(entry.what, entry);
+  }
+  return [...counts.values()];
+}
+
+/** Ce que la vue ne montre pas faute de place : les éléments dont les preuves résumées n'ont pas tenu, comptés sur la
+ * vue elle-même, puis ce que les Tuiles reçues ont dit avoir tu. */
+export function omitted(view:View):NotSent[]{
+  const unsummarized=view.elements.filter(element=>element.evidence===null&&element.evidence_count>0).length;
+  return [...(unsummarized?[{what:'evidence_summary', count:unsummarized, reason:'BUDGET'}]:[]), ...view.notSent];
 }
 
 /** Ce que Taxo ne sait pas, ou ne peut pas savoir, réuni sans doublon : un budget ne l'efface jamais. */

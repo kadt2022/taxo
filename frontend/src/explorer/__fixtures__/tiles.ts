@@ -6,13 +6,13 @@ type Options={relation?:string; direction?:Direction; level?:number; revisit?:bo
   producer?:string; evidence?:Element['evidence']; status?:string; count?:number};
 
 /** Un élément : `from` est le nœud d'où il a été lu ; le fait garde son orientation réelle. */
-export function element(subject:string, object:string, options:Options={}):Element{
+export function element(subject:string, object:string|undefined, options:Options={}):Element{
   const {relation='DEPENDS_ON', direction='OUTGOING', level=1, revisit=false, producer='fixture'}=options;
   return {ref:'F1', fact:{kind:'ASSERTION', subject, relation, object, status:options.status??'OBSERVED', validity:'VALID',
       produced_by:{producer_id:producer, producer_version:'1.0.0'}},
     evidence_count:options.count??1, identity:options.identity??`i:${subject}|${relation}|${object}`,
     occurrence:options.occurrence??`o:${subject}|${relation}|${object}|${producer}`,
-    via:{from:direction==='OUTGOING'?subject:object, relation, direction}, level, revisit, evidence:options.evidence};
+    via:{from:direction==='OUTGOING'?subject:object!, relation, direction}, level, revisit, evidence:options.evidence};
 }
 
 type Shape={root?:string; items?:Element[]; nodes?:[string, number, boolean][]; frontier?:Boundary[]; stop?:string;

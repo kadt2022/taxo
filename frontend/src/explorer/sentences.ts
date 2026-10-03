@@ -86,14 +86,17 @@ export function scopeText(relations:string[], direction:Direction|'BOTH', depth:
 }
 
 /** Un élément dit en clair : sujet, verbe, objet. */
-export const factText=(fact:{subject:string; relation:string; object:string}, named:Naming=nodeName)=>
-  `${named(fact.subject)} ${verb(fact.relation)} ${named(fact.object)}`;
+export const factText=(fact:{subject:string; relation:string; object?:string}, named:Naming=nodeName)=>
+  [named(fact.subject), verb(fact.relation), endName(fact.object, named)].filter(Boolean).join(' ');
+
+/** L'extrémité d'un fait : une référence nommée, une valeur littérale telle quelle, ou rien quand il n'a pas d'objet. */
+export const endName=(value:string|undefined, named:Naming=nodeName)=>value===undefined?'':named(value);
 
 
 /** Ce qu'une Tuile n'a pas transmis faute de place, et où le retrouver. */
 export function notSentText(entry:NotSent){
   const count=entry.count??1;
   if(entry.what==='evidence_summary')return `Preuves résumées non transmises pour ${plural(count, 'élément')} : chacune se charge depuis son lien.`;
-  if(entry.what==='local_coverage')return `${plural(count, 'zone non lue')} sans place pour être ${count>1?'situées':'située'} sur un nœud : ce que Taxo n’a pas lu reste dit pour l’analyse entière.`;
+  if(entry.what==='local_coverage')return `Au moins ${plural(count, 'zone non lue')} sans place pour être ${count>1?'situées':'située'} sur un nœud : ce que Taxo n’a pas lu reste dit pour l’analyse entière.`;
   return `${count} ${entry.what} non transmis (${entry.reason}).`;
 }

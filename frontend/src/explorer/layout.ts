@@ -5,25 +5,37 @@ import type {Link, View} from './graph';
 export type Geometry={column:number; row:number; width:number; height:number; margin:number};
 export const GEOMETRY:Geometry={column:280, row:60, width:210, height:40, margin:20};
 export type Placed={reference:string; level:number; row:number; x:number; y:number};
+/** L'extrémité d'un lien qui n'est pas un nœud (une valeur littérale, ou aucun objet) : dessinée à part, jamais un nœud
+ * qu'on développe ou recentre. `reference` est l'identité de son lien. */
+export type Leaf=Placed & {value?:string};
 /** Un lien placé : `lane` le sépare des autres liens entre les deux mêmes nœuds. */
 export type Edge={link:Link; from:Placed; to:Placed; lane:number; lanes:number; dashed:boolean; count:number;
   path:string; label:{x:number; y:number}};
-export type Layout={nodes:Placed[]; edges:Edge[]; width:number; height:number};
+export type Layout={nodes:Placed[]; leaves:Leaf[]; edges:Edge[]; width:number; height:number};
 
 export function layout(view:View, links:Link[], geometry:Geometry=GEOMETRY):Layout{
-  const rows=new Map<number, number>(), placed=new Map<string, Placed>();
-  for(const node of view.nodes){
-    const row=rows.get(node.level)??0;
-    rows.set(node.level, row+1);
-    placed.set(node.reference, {reference:node.reference, level:node.level, row,
-      x:geometry.margin+node.level*geometry.column, y:geometry.margin+row*geometry.row});
+  const rows=new Map<number, number>(), placed=new Map<string, Placed>(), leaves:Leaf[]=[];
+  const at=(reference:string, level:number):Placed=>{
+    const row=rows.get(level)??0;
+    rows.set(level, row+1);
+    return {reference, level, row, x:geometry.margin+level*geometry.column, y:geometry.margin+row*geometry.row};
+  };
+  for(const node of view.nodes)placed.set(node.reference, at(node.reference, node.level));
+  // Un lien dont l'objet n'est pas un nœud de la vue mène à une feuille, à la colonne suivante de son sujet.
+  const ends=new Map<string, Placed>();
+  for(const link of links){
+    const from=placed.get(link.subject);
+    if(!from||(link.object!==undefined&&placed.has(link.object)))continue;
+    const leaf={...at(link.identity, from.level+1), value:link.object};
+    leaves.push(leaf);ends.set(link.identity, leaf);
   }
+  const target=(link:Link)=>ends.get(link.identity)??(link.object===undefined?undefined:placed.get(link.object));
   const pairs=new Map<string, number>(), counts=new Map<string, number>();
-  const key=(link:Link)=>[link.subject, link.object].sort((a, b)=>a.localeCompare(b)).join('\u0000');
+  const key=(link:Link)=>[link.subject, target(link)?.reference??''].sort((a, b)=>a.localeCompare(b)).join('\u0000');
   for(const link of links)counts.set(key(link), (counts.get(key(link))??0)+1);
   const edges:Edge[]=[];
   for(const link of links){
-    const from=placed.get(link.subject), to=placed.get(link.object);
+    const from=placed.get(link.subject), to=target(link);
     if(!from||!to)continue;
     const lane=pairs.get(key(link))??0;
     pairs.set(key(link), lane+1);
@@ -31,9 +43,9 @@ export function layout(view:View, links:Link[], geometry:Geometry=GEOMETRY):Layo
     const {path, label}=route(from, to, lane-(lanes-1)/2, geometry);
     edges.push({link, from, to, lane, lanes, dashed:link.revisit, count:link.elements.length, path, label});
   }
-  const levels=Math.max(0, ...view.nodes.map(node=>node.level));
+  const levels=Math.max(0, ...view.nodes.map(node=>node.level), ...leaves.map(leaf=>leaf.level));
   const tallest=Math.max(1, ...rows.values());
-  return {nodes:[...placed.values()], edges, width:2*geometry.margin+levels*geometry.column+geometry.width+60,
+  return {nodes:[...placed.values()], leaves, edges, width:2*geometry.margin+levels*geometry.column+geometry.width+60,
     height:2*geometry.margin+(tallest-1)*geometry.row+geometry.height+30};
 }
 

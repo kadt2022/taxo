@@ -12,7 +12,7 @@ export type Count={kind:'UNKNOWN'}|{kind:'AT_LEAST'|'EXACT'; value:number};
 export type Location={path?:string; line_start?:number; line_end?:number; symbol?:string; method?:string; object?:string};
 export type Producer={producer_type?:string; producer_id?:string; producer_version?:string; execution_id?:string;
   catalog_id?:string; catalog_version?:string};
-export type Fact={kind?:string; subject:string; relation:string; object:string; status?:string; validity?:string;
+export type Fact={kind?:string; subject:string; relation:string; object?:string; status?:string; validity?:string;
   qualifiers?:Record<string, unknown>; produced_by?:Producer; derivation?:Derivation; snapshot?:Record<string, string>;
   contract_version?:number};
 /** Un élément : une occurrence d'un fait, dans son orientation réelle, et le chemin qui l'a atteinte. */
