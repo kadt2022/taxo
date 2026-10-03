@@ -86,9 +86,9 @@ flowchart TD
     V --> R["Réponse : verdicts et limites"]
 ```
 
-Capacités : `projects`, `snapshots`, `facts`, `scans`, `evaluations`, `evaluators`, `history`,
-`projection`, `protocol`, `minia`, `hypotheses`. `bootstrap` compose ; `platform` porte la base et les
-adaptateurs HTTP communs. Aucun package `utils` généraliste.
+Capacités : `projects`, `snapshots`, `facts`, `scans`, `evaluations`, `evaluators`, `knowledge`,
+`history`, `projection`, `protocol`, `neighborhood`, `comparison`, `minia`, `hypotheses`. `bootstrap`
+compose ; `platform` porte la base et les adaptateurs HTTP communs. Aucun package `utils` généraliste.
 
 Règles de dépendance :
 
@@ -104,6 +104,16 @@ Règles de dépendance :
 8. Un lecteur de langage ne connaît aucun framework ; un évaluateur de framework consomme ses primitives.
 9. Les projections lisent les faits ; elles ne relisent pas le dépôt.
 10. Chaque cas d'utilisation protège ses invariants, quel que soit son appelant.
+11. Ce qu'une analyse sait d'elle-même a un seul foyer, `knowledge` (TAXO-ARCH-REF-01) : ses langages
+    présents, si son inventaire a tout lu, ses analyseurs vus et ce que lit leur contrat de catalogue
+    (`Reads` : indépendant du langage, ces langages, ou inconnu). Le verdict, l'enveloppe, le voisinage, la
+    comparaison et la restitution `/coverage` la lisent ; aucun ne la reconstruit. Un contrat inconnu n'est
+    jamais indépendant du langage ; plusieurs exécutions d'un même producteur ne lisent que leur contrat
+    commun, sinon rien de connu ; « zone non lue » n'a qu'une définition.
+12. Les contrats de catalogue sont une seule valeur (`CatalogContracts`), construite par la composition.
+13. Un port est déclaré, jamais sondé (`hasattr`) ; une opération du protocole est servie par une table
+    explicite, jamais par un nom reçu de l'appelant ; le voisinage et l'historique lisent l'échange par son
+    interface publique, jamais son intérieur.
 
 | Responsabilité | Produit | Ne fait jamais |
 | --- | --- | --- |
@@ -970,3 +980,12 @@ pour une route Python. Décisions : un catalogue déclare les langages qu'il lit
 langages ; un évaluateur sans rien à lire est `UNSUPPORTED`, couverture `OUT_OF_SCOPE` ; un « non trouvé »
 exige que chaque langage concerné ait été lu par une exécution capable de la relation ; une couverture
 enregistrée s'interprète selon le contrat de son catalogue, sans réécriture des analyses antérieures.
+
+**2026-10-03** — Assainissement architectural (TAXO-ARCH-REF-01), sans changement de comportement prouvé par
+un instantané des sorties publiques rejouable. Frontières retenues : `knowledge` (connaissance d'une analyse et
+son chargeur, deux vues des analyseurs : par les couvertures pour le verdict, par le résumé borné pour le
+voisinage) ; le protocole compose l'échange (cycle de vie, budget, références, opérations sur les faits), les
+arguments, l'historique et le diff (collaborateur avec son propre état) et un port de lecture des faits
+déclaré ; la comparaison sépare le choix des analyses. Inchangés par décision : le parcours du voisinage,
+`RunScan`, le moteur d'évaluation, la mémoire des faits, `References`. Trois divergences trouvées par l'audit
+ont été corrigées à part, avant toute restructuration.

@@ -1,6 +1,7 @@
 # TAXO-ARCH-REF-01 — Assainissement architectural et responsabilités
 
-Statut : tranche A (audit) rédigée le 2026-10-02, sur `main` à `08bb050` (après TAXO-COV-01 PR A). Frontières
+Statut : tranches A et C (C1, C2, C3) livrées ; B, D et E dans la PR de clôture du récit (2026-10-03).
+Tranche A (audit) rédigée le 2026-10-02, sur `main` à `08bb050` (après TAXO-COV-01 PR A). Frontières
 validées le 2026-10-02, avec l'ordre A → C → B → D → E ; `_Neighborhood` et `RunScan` ne sont pas touchés. Les trois
 divergences sont corrigées par des PR dédiées avant la tranche C, jamais dans une restructuration.
 
@@ -240,7 +241,7 @@ l'intérieur de l'échange.
 | ↳ C3 — règle multi-exécutions (fait) | une seule règle, `Reads.combined`, quand plusieurs exécutions d'un producteur se mêlent : leur contrat commun, sinon inconnu ; aucun contrat n'est choisi à la place d'un autre. Elle remplace trois règles : le verdict et la restitution `/coverage` d'un résumé antérieur prenaient la première couverture (un seul `recorded_contract` désormais, dans le chargeur), la comparaison l'union, le voisinage « inconnu ». Chacun garde ce que vaut l'absence d'exécution (inconnu ; indépendant du langage pour une comparaison sans exécution d'évaluateur) | inchangé sur toute analyse réelle (invariant prouvé par #78 ; instantané identique) ; **modifié** dans le seul cas construit, fixé par `tests/test_multi_executions.py`, qui échoue sur la base (trois réponses différentes pour les mêmes exécutions) |
 | **B — Protocole** (fait) | `call()` découpé en *admettre la requête* (`_admitted`), *servir* (table explicite `_SERVED`, plus de `getattr`) et *traduire l'échec* (`_failure`) : complexité 20 → 2 ; arguments dans `arguments.py` ; historique et diff dans un collaborateur avec son propre état (`commits.py`, compteurs du diff de l'échange), créé au premier usage ; interface publique et étroite pour le voisinage (`own`, `facts`, `catalogs`, `reads_of`, `summary_analyzers`), qui ne lit plus ni membre privé ni `exchange.service` ; port de lecture des faits déclaré (`FactReading`), `hasattr` retiré (l'ancien magasin gagne `objects`, même sémantique) | inchangé, prouvé : instantané identique, étendu à l'historique, au diff et à chaque refus du protocole |
 | **D — Comparaison** (fait) | `choices` devient son propre cas d'usage (`AnalysisChoices`, `choices.py`), la description d'une analyse est partagée (`analyses.py`) ; chaque côté se compare d'après ce que l'analyse sait d'elle-même (`AnalysisKnowledge` : langages, inventaire complet) ; `summary` (18 → 4) et `changes` (16 → 10) découpés (`_evaluator`, `_page`) ; calcul, cache et pagination restent ensemble | inchangé, prouvé : instantané identique, étendu au choix des analyses et aux pages de changements (par catégorie, curseur, relation, refus) |
-| **E — Garde-fous** | tests d'architecture du § 7, ARCHITECTURE.md (frontières retenues), mesures après | inchangé |
+| **E — Garde-fous** (fait) | garde-fous du § 7 : l'échange se lit par son interface publique (voisinage, historique ; AST, avec un test qui prouve que le garde-fou détecte), table explicite des opérations, aucun `hasattr` dans le cœur, cœur générique étendu aux nouveaux modules, **cohérence** des langages non lus entre verdict, voisinage, `/coverage` et comparaison (`tests/test_knowledge_coherence.py`, qui échoue si l'on retire la correction de la divergence 2) ; ARCHITECTURE.md (§ 3 règles 11 à 13, capacités, historique) ; mesures après (§ 10) | inchangé |
 | Correction séparée (divergence 3) | le voisinage d'un résumé antérieur lit le contrat que ses couvertures ont enregistré, jamais le catalogue actuel | **modifié**, annoncé |
 | Correction séparée | les deux premières divergences du § 3 : un contrat inconnu n'est jamais comparé (`CONTRACT_UNKNOWN_*`, après `CATALOG_CHANGED`) ; le voisinage d'une analyse antérieure relit ses langages comme les verdicts | **modifié**, annoncé |
 
@@ -270,3 +271,43 @@ git worktree remove /tmp/taxo-base
 Vérifié avant usage : trois exécutions sur la même base donnent un fichier identique, et une régression
 volontaire (la forme publique d'un contrat indépendant du langage, `[]` au lieu de `null`) change 224 lignes.
 Une tranche qui change un comportement voulu ne s'en sert pas : elle le dit, et ses tests le fixent.
+
+## 10. Mesures après (tranche E)
+
+Même outil, mêmes modules qu'au § 1, plus les modules créés. Le chantier visait des responsabilités, pas des
+chiffres : ils ne sont que des indices.
+
+| Module | Avant | Après | Plus complexes après |
+| --- | --- | --- | --- |
+| `protocol/application/exchange.py` | 568 lignes (`Exchange` : 353, 27 méthodes) | 467 (`Exchange` : 304, 34 méthodes) | `envelope_coverage` 14, `_admitted` 10 ; `call` 20 → 2 |
+| `protocol/application/commits.py` (nouveau) | — | 125 | `get_diff` 15 (déplacé tel quel) |
+| `protocol/application/arguments.py`, `ports.py` (nouveaux) | — | 55, 29 | `claim_object` 6 |
+| `comparison/application/compare.py` | 198 | 191 | `_producers` 12, `changes` 10 ; `summary` 18 → 4, `changes` 16 → 10 |
+| `comparison/application/choices.py`, `analyses.py` (nouveaux) | — | 27, 10 | `_choice` 5 |
+| `neighborhood/application/query.py` | 278 | 268 | `_accept` 13, `_summaries` 11, `_walk` 11 (parcours inchangé, par décision) |
+| `knowledge/domain/knowledge.py`, `application/loader.py` (nouveaux) | — | 98, 94 | `reaching` 8, `from_summary` 8 |
+| `protocol/domain/verdict.py` | 154 | 73 | `judge` 10 |
+| `scans/application/run_scan.py`, `evaluations/application/run_evaluator.py`, `fact_memory.py` | inchangés, par décision | — | — |
+
+`Exchange` a plus de méthodes qu'avant : ce sont les petites méthodes de son interface publique (`facts`,
+`catalogs`, `reads_of`, `summary_analyzers`, `own`…), qui remplacent les lectures de son intérieur.
+
+Ce que le chantier a résorbé, compté :
+
+| Constat du § 3 | Avant | Après |
+| --- | --- | --- |
+| Connaissance d'une analyse reconstruite | 5 fois | 1 foyer (`knowledge`) |
+| « Zone non lue » définie | 7 fois | 1 (`UNREAD_COVERAGE`, garde-fou) |
+| Formes des contrats de catalogue dans la composition | 2 | 1 (`CatalogContracts`) |
+| Règles pour plusieurs exécutions d'un producteur | 4 | 1 (`Reads.combined`) |
+| `getattr` sur un nom reçu, `hasattr` sur un port | 1, 1 | 0, 0 (garde-fous) |
+| Lectures de l'intérieur de l'échange par le voisinage | `_own`, `service.*` | 0 (garde-fou) |
+
+Hors du chantier, signalé sans action : d'autres fonctions dépassent le seuil de complexité (évaluateurs,
+contrat des faits, Minia, historique, mémoire des faits). Elles étaient déjà là, et aucune n'est dans le cœur
+générique restructuré.
+
+Question ouverte, pour décision : sur une relation dont aucune exécution n'est capable (son analyseur n'avait
+rien à lire), le voisinage dit `NO_ANALYZER` (frontière de contexte, ARCHITECTURE § 9.3) là où le verdict, la
+restitution et la comparaison nomment les langages non lus. C'est la règle écrite, que le garde-fou de cohérence
+fixe ; nommer aussi les langages dans le voisinage serait un changement de comportement, donc une PR à part.

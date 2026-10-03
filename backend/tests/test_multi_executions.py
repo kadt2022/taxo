@@ -3,8 +3,8 @@
 Une analyse n'a qu'une execution par evaluateur (invariant prouve par #78) ; ce cas ne se construit qu'en test.
 Avant C3, plusieurs regles y coexistaient : le verdict et la restitution `/coverage` prenaient le contrat de la
 premiere couverture, la comparaison l'union des contrats, le voisinage « inconnu ». Desormais, partout : leur
-contrat commun, sinon inconnu. Aucun
-contrat n'est choisi a la place d'un autre ; des contrats differents ne justifient aucune conclusion negative.
+contrat commun, sinon inconnu. Aucun contrat n'est choisi a la place d'un autre ; des contrats differents ne
+justifient aucune conclusion negative.
 """
 from types import SimpleNamespace
 

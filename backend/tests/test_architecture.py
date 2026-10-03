@@ -280,3 +280,46 @@ def test_minia_explains_but_never_writes_facts_and_stays_apart_from_clochette():
             if parts[0] not in {'minia', 'bootstrap', 'platform'} and name.startswith('app.minia'):
                 violations.append(f'{path.relative_to(APP)} importe {name}')
     assert violations == []
+
+
+def _reads_inside(path, holder):
+    """Les acces a un membre prive, ou a `service`, d'un objet nomme `holder` (ou `self.holder`)."""
+    found = []
+    for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
+        if not isinstance(node, ast.Attribute):
+            continue
+        owner = node.value
+        named = (isinstance(owner, ast.Name) and owner.id == holder) or (
+            isinstance(owner, ast.Attribute) and owner.attr == holder)
+        if named and (node.attr.startswith('_') or node.attr == 'service'):
+            found.append(f'{path.name}:{node.lineno} {holder}.{node.attr}')
+    return found
+
+
+def test_the_exchange_is_read_through_its_public_interface():
+    """TAXO-ARCH-REF-01 : le voisinage et l'historique lisent l'echange par son interface publique et etroite,
+    jamais son interieur (membres prives, services de l'echange)."""
+    readers = [APP / 'neighborhood/application/query.py', APP / 'protocol/application/commits.py']
+    assert [found for path in readers for found in _reads_inside(path, 'exchange')] == []
+
+
+def test_the_guard_on_the_exchange_detects_an_inner_read(tmp_path):
+    probe = tmp_path / 'reader.py'
+    probe.write_text('def f(exchange, self):\n    exchange._own()\n    self.exchange.service.facts\n    exchange.own()\n')
+    assert _reads_inside(probe, 'exchange') == ['reader.py:2 exchange._own', 'reader.py:3 exchange.service']
+
+
+def test_every_operation_is_served_through_an_explicit_table():
+    """Aucune operation n'est trouvee par son nom recu de l'appelant (`getattr`) : la table les nomme toutes."""
+    from app.protocol.application.exchange import _SERVED, OPERATIONS
+    assert sorted(_SERVED) == sorted(OPERATIONS)
+    source = (APP / 'protocol/application/exchange.py').read_text(encoding='utf-8')
+    assert 'getattr(' not in source
+
+
+def test_the_core_reads_its_ports_without_probing_them():
+    """Les ports sont declares : le coeur n'interroge pas un adaptateur pour savoir ce qu'il sait faire."""
+    core = ['knowledge', 'protocol', 'neighborhood', 'comparison']
+    found = [str(path.relative_to(APP)) for capability in core for path in (APP / capability).rglob('*.py')
+             if 'hasattr(' in path.read_text(encoding='utf-8')]
+    assert found == []

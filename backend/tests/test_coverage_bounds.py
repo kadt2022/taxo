@@ -259,7 +259,9 @@ CORE = ('app/evaluations/domain/capability.py', 'app/evaluations/application/run
         'app/scans/application/run_scan.py', 'app/protocol/domain/verdict.py', 'app/protocol/application/exchange.py',
         'app/neighborhood/application/query.py', 'app/comparison/domain/comparison.py',
         'app/comparison/application/compare.py', 'app/knowledge/domain/knowledge.py',
-        'app/knowledge/application/loader.py')
+        'app/knowledge/application/loader.py', 'app/protocol/application/commits.py',
+        'app/protocol/application/arguments.py', 'app/protocol/application/ports.py',
+        'app/comparison/application/choices.py', 'app/comparison/application/analyses.py')
 
 
 def test_the_core_knows_no_language_and_no_analyzer_by_name():
