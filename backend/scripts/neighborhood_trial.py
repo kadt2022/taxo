@@ -85,23 +85,34 @@ def main():
     parser.add_argument('--repeat', type=int, default=5)
     options = parser.parse_args()
     repository = options.repository.resolve()
-    database = options.database or f'sqlite:///{tempfile.mkdtemp(prefix="taxo-trial-")}/taxo.db'
+    if options.database:
+        run(options.database, repository, options)
+        return
+    # Sans base donnée, une base SQLite temporaire, effacée à la fin de l'essai.
+    with tempfile.TemporaryDirectory(prefix='taxo-trial-') as folder:
+        run(f'sqlite:///{folder}/taxo.db', repository, options)
+
+
+def run(database, repository, options):
     app = create_app(database, [repository], minia={})
     Base.metadata.create_all(app.state.engine)
-    with TestClient(app) as client:
-        project = project_of(client, repository)
-        start = time.perf_counter()
-        scanned = client.post(f'/api/projects/{project}/scans', params={'commit': options.commit})
-        scanned.raise_for_status()
-        analysis_seconds = time.perf_counter() - start
-        trial = Trial(client, project, scanned.json()['id'], options.repeat)
-        described = trial.call('describe')['items']
-        relations = sorted(item['relation'] for item in described if item['kind'] == 'relation')
-        facts = sum(item['count'] for item in described if item['kind'] == 'relation')
-        print(f'# {repository.name} @ {options.commit[:7]} — {database.split(":", 1)[0]}\n')
-        print(f'Analyse : {analysis_seconds:.1f} s, {facts} assertions, {len(relations)} relations.\n')
-        report_tiles(trial, anchors(trial), relations)
-        report_search(trial)
+    try:
+        with TestClient(app) as client:
+            project = project_of(client, repository)
+            start = time.perf_counter()
+            scanned = client.post(f'/api/projects/{project}/scans', params={'commit': options.commit})
+            scanned.raise_for_status()
+            analysis_seconds = time.perf_counter() - start
+            trial = Trial(client, project, scanned.json()['id'], options.repeat)
+            described = trial.call('describe')['items']
+            relations = sorted(item['relation'] for item in described if item['kind'] == 'relation')
+            facts = sum(item['count'] for item in described if item['kind'] == 'relation')
+            print(f'# {repository.name} @ {options.commit[:7]} — {database.split(":", 1)[0]}\n')
+            print(f'Analyse : {analysis_seconds:.1f} s, {facts} assertions, {len(relations)} relations.\n')
+            report_tiles(trial, anchors(trial), relations)
+            report_search(trial)
+    finally:
+        app.state.engine.dispose()
 
 
 def report_tiles(trial, chosen, relations):
