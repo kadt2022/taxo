@@ -3,6 +3,10 @@
 Les réponses de référence ont été capturées sur le moteur à un saut d'avant TAXO-01J (commit 2ae4431), avec
 `TAXO_NEIGHBORHOOD_GOLDEN=write`. Le moteur multiniveau doit les rendre à l'identique, reprises comprises, sur
 les deux stockages : toute requête valide pour `neighborhood/1` reste servie par `neighborhood/1`.
+
+Une requête invalide pour les deux versions est refusée avec le motif de `neighborhood/2` (TAXO-01J, § 8,
+règle 3) : son code ne change pas ; seuls les messages des valeurs dont le domaine s'élargit changent, et ils
+sont écrits ici à la main.
 """
 import json
 import os
@@ -49,6 +53,9 @@ def requests():
     ]
 
 
+# Les messages qui changent, et seulement eux : le domaine accepté par `neighborhood/2` est plus large.
+WIDENED = {5: 'direction : INCOMING, OUTGOING ou BOTH.', 6: 'depth doit être un entier entre 1 et 4.',
+           7: 'depth doit être un entier entre 1 et 4.', 8: 'max_work doit être un entier entre 1 et 2000.'}
 ERRORS = [{'follow': []}, {'follow': ['NO_RELATION']}, {'follow': ['CALLS', 'CALLS']}, {'priority': ['CONTAINS']},
           {'priority': [{}]}, {'direction': 'SIDEWAYS'}, {'depth': 0}, {'depth': True}, {'max_work': 0},
           {'max_nodes': -1}, {'continuation': 'invalid'}, {'extra': 1}, {'analysis': 'analysis-2'},
@@ -81,4 +88,8 @@ def test_neighborhood_v1_is_unchanged(tmp_path, name):
     expected = json.loads(GOLDEN.read_text())[name]
     assert sorted(found) == sorted(expected)
     for label in expected:
-        assert found[label] == expected[label], label
+        if label != 'errors':
+            assert found[label] == expected[label], label
+    for index, (refused, recorded) in enumerate(zip(found['errors'], expected['errors'], strict=True)):
+        assert refused['error']['code'] == recorded['error']['code'], ERRORS[index]
+        assert refused['error']['message'] == WIDENED.get(index, recorded['error']['message']), ERRORS[index]

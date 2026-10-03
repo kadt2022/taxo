@@ -121,10 +121,19 @@ def test_work_empty_context_knowledge_and_analysis_boundaries(graph):
 
 
 @pytest.mark.parametrize('args', [{'follow': []}, {'follow': ['NO_RELATION']}, {'follow': ['CALLS', 'CALLS']},
-    {'priority': ['CONTAINS']}, {'priority': [{}]}, {'direction': 'BOTH'}, {'depth': 2}, {'depth': True},
-    {'max_work': 0}, {'max_nodes': -1}, {'max_edges': 201}, {'continuation': 'invalid'}, {'extra': 1}])
+    {'priority': ['CONTAINS']}, {'priority': [{}]}, {'direction': 'SIDEWAYS'}, {'depth': 5}, {'depth': True},
+    {'max_work': 0}, {'max_nodes': -1}, {'max_edges': 401}, {'continuation': 'invalid'}, {'extra': 1},
+    {'engine': 'neighborhood/3'}, {'engine': 'neighborhood/1', 'depth': 2}])
 def test_bad_arguments_are_refused(graph, args):
     assert ask(graph[1](), **args)['error']['code'] == 'INVALID_ARGUMENT'
+
+
+@pytest.mark.parametrize('args', [{'direction': 'BOTH'}, {'depth': 2}, {'max_edges': 201}, {'max_work': 1500}])
+def test_values_refused_by_the_first_version_are_served_by_the_second(graph, args):
+    """TAXO-01J, § 8 : une valeur nouvelle portée par un ancien nom relève de `neighborhood/2`."""
+    store, opened, _, _ = graph
+    store.add('analysis-1', 'fixture', [fact()])
+    assert ask(opened(), **args)['engine_version'] == 'neighborhood/2'
 
 
 def test_migration_backfill_and_downgrade_preserve_existing_facts(tmp_path):
@@ -217,12 +226,12 @@ def test_fact_append_invalidates_continuation_and_reorders_new_selection(graph):
 def test_fact_append_during_selection_refuses_mixed_page(graph, monkeypatch):
     store, opened, _, _ = graph
     store.add('analysis-1', 'fixture', [fact()])
-    neighbor = store.neighbor
+    neighbors = store.neighbors
     def mutate(*args, **kwargs):
-        result = neighbor(*args, **kwargs)
+        result = neighbors(*args, **kwargs)
         store.add('analysis-1', 'fixture', [fact('module:a')])
         return result
-    monkeypatch.setattr(store, 'neighbor', mutate)
+    monkeypatch.setattr(store, 'neighbors', mutate)
     exchange = opened()
     assert ask(exchange, max_edges=1)['error']['code'] == 'INVALID_ARGUMENT'
     assert not exchange.refs.facts

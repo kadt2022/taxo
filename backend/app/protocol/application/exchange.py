@@ -27,7 +27,7 @@ from app.protocol.application.arguments import claim_object as _claim_object, no
 from app.protocol.application.arguments import reference as _reference, relation as _relation, text as _text
 from app.knowledge.domain.knowledge import AnalysisKnowledge, contains
 from app.protocol.domain.verdict import judge
-from app.neighborhood.application.query import neighborhood
+from app.protocol.application.neighborhood_operation import neighborhood
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,21 @@ class References:
         ref = f'F{len(self.facts) + 1}'
         self.facts[ref], self.by_key[key] = fact, ref
         return ref, True
+
+    def preview(self, keys):
+        """Les references qu'auraient ces faits, donnes par leur cle (`key`), sans en creer aucune : une reponse
+        provisoire se mesure avec les references qu'elle aurait."""
+        refs, pending = [], {}
+        for key in keys:
+            ref = self.by_key.get(key) or pending.get(key)
+            if ref is None:
+                ref = pending[key] = f'F{len(self.facts) + len(pending) + 1}'
+            refs.append(ref)
+        return refs
+
+    @classmethod
+    def key(cls, fact):
+        return cls._key(fact)
 
     def forget(self, ref):
         """Retire la derniere reference creee : son fait n'a pas ete transmis."""

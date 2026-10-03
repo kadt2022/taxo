@@ -5,11 +5,13 @@ ecrit et lit la memoire versionnee (fact_memory.py) ; cette table reste en secou
 et sert de reference aux tests d'equivalence jusqu'a son retrait par une migration ulterieure.
 """
 import hashlib
+import json
 
 from sqlalchemy import (JSON, BigInteger, Column, ForeignKey, Index, Integer, String, Text,
                         bindparam, column, select, table, update)
 from sqlalchemy.orm import Session
 from app.platform.database.base import Base
+from app.neighborhood.domain.traversal import Adjacent
 from app.scans.domain.fact_order import adjacency_keys
 
 
@@ -53,6 +55,11 @@ def _rank_analysis(db, scan_id):
                        .values({f'{side}_rank': bindparam('_rank')}), values)
 
 
+def _identity(fact):
+    fields = {key: fact.get(key) for key in ('kind', 'subject', 'relation', 'object', 'qualifiers')}
+    return 'fields:' + hashlib.sha256(json.dumps(fields, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
 _FILTERS = ('evaluator_id', 'kind', 'subject', 'relation', 'object')
 
 
@@ -78,17 +85,23 @@ class SqlAlchemyAnalysisFacts:
             db.commit()
 
     def neighbor(self, scan_id, root, relation, direction, after=''):
-        """One indexed adjacent occurrence. Never materialize the complete adjacency."""
+        """One indexed adjacent occurrence, as (rank, fact). Never materialize the complete adjacency."""
+        found = self.neighbors(scan_id, root, relation, direction, after, 1)
+        return (found[0].key, found[0].fact) if found else None
+
+    def neighbors(self, scan_id, root, relation, direction, after, limit):
+        """At most `limit` adjacent facts, in rank order, after `after`: one indexed read. This table keeps no
+        identity: the key that groups the occurrences of one fact is computed from its identifying fields."""
         row = AnalysisFactRow
         anchor, fingerprint, rank = (
             (row.subject, row.subject_hash, row.outgoing_rank) if direction == 'OUTGOING'
             else (row.object, row.object_hash, row.incoming_rank))
-        statement = select(rank, row.fact).where(
+        statement = select(rank, row.id, row.fact).where(
             row.scan_id == scan_id, row.kind == 'ASSERTION', fingerprint == _reference_hash(root),
             anchor == root, row.relation == relation, rank > int(after or '0'))
         with Session(self.engine) as db:
-            found = db.execute(statement.order_by(rank).limit(1)).first()
-            return (str(found[0]), found[1]) if found else None
+            found = db.execute(statement.order_by(rank).limit(limit)).all()
+        return [Adjacent(str(position), str(identifier), _identity(fact), fact) for position, identifier, fact in found]
 
     def revision(self, scan_id):
         """Append-only fact generation, read through a fixed-size index."""

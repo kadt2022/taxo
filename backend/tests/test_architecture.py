@@ -299,7 +299,8 @@ def _reads_inside(path, holder):
 def test_the_exchange_is_read_through_its_public_interface():
     """TAXO-ARCH-REF-01 : le voisinage et l'historique lisent l'echange par son interface publique et etroite,
     jamais son interieur (membres prives, services de l'echange)."""
-    readers = [APP / 'neighborhood/application/query.py', APP / 'protocol/application/commits.py']
+    readers = [APP / 'protocol/application' / name for name in (
+        'neighborhood_operation.py', 'neighborhood_request.py', 'neighborhood_view.py', 'commits.py')]
     assert [found for path in readers for found in _reads_inside(path, 'exchange')] == []
 
 

@@ -20,6 +20,7 @@ from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
 from app.facts.domain.provenance import EXECUTABLE, ProducerExecution
+from app.neighborhood.domain.traversal import Adjacent
 from app.platform.database.base import Base
 from app.scans.domain.fact_order import occurrence_fingerprint, order_key
 from app.scans.domain.occurrence import EVIDENCE_FIELDS, Occurrence, OccurrenceError, rebuild, split
@@ -280,16 +281,22 @@ class SqlAlchemyFactMemory:
                                             identity.relation == relation)).all())
 
     def neighbor(self, scan_id, root, relation, direction, after=''):
-        """One indexed adjacent occurrence. Never materialize the complete adjacency."""
+        """One indexed adjacent occurrence, as (rank, fact). Never materialize the complete adjacency."""
+        found = self.neighbors(scan_id, root, relation, direction, after, 1)
+        return (found[0].key, found[0].fact) if found else None
+
+    def neighbors(self, scan_id, root, relation, direction, after, limit):
+        """At most `limit` adjacent occurrences, in rank order, after `after`: one indexed read, never the
+        whole adjacency. Each one with its rank, its occurrence (stable in the analysis) and its identity."""
         anchor, fingerprint, rank, _ = _SIDES[direction]
         statement = (_facts_of(scan_id).add_columns(rank)
                      .where(fingerprint == _reference_hash(root), FactOccurrenceRow.relation == relation,
                             _spelled(FactOccurrenceRow, getattr(FactIdentityRow, anchor), anchor, root),
                             rank > int(after or '0'))
-                     .order_by(rank).limit(1))
+                     .order_by(rank).limit(limit))
         with Session(self.engine) as db:
             found = self.load_rows(db, scan_id, statement)
-        return (str(found[0][0][3]), found[0][1]) if found else None
+        return [Adjacent(str(row[3]), str(row[0].id), row[0].identity_hash, fact) for row, fact in found]
 
     def revision(self, scan_id):
         """Append-only fact generation, read through a fixed-size index."""
