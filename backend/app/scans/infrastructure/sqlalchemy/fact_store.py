@@ -108,6 +108,13 @@ class SqlAlchemyAnalysisFacts:
                     return True
         return False
 
+    def objects(self, scan_id, relation):
+        """The distinct objects of one relation in the analysis, sorted, as the versioned memory gives them."""
+        row = AnalysisFactRow
+        with Session(self.engine) as db:
+            return sorted(db.scalars(select(row.object).distinct().where(
+                row.scan_id == scan_id, row.kind == 'ASSERTION', row.relation == relation)).all())
+
     def query(self, scan_id, **filters):
         statement = select(AnalysisFactRow.fact).where(AnalysisFactRow.scan_id == scan_id)
         for name in _FILTERS:

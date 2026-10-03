@@ -10,20 +10,21 @@ references du contrat (ARCHITECTURE § 5). Ce que sait chaque analyseur vient de
 """
 import json
 import logging
-import re
 
 from app.evaluations.domain.capability import (INCOMPLETE, LANGUAGE, UNREAD_COVERAGE, WRITTEN_IN, CatalogContracts,
                                                languages_complete, present_languages)
-from app.facts import is_path, is_reference
 from app.facts.domain.fact import RELATIONS
 from app.history.domain.errors import UNKNOWN_COMMIT, UNKNOWN_PATH, HistoryError
-from app.history.domain.disclosure import GENERATED, LIMIT, MAX_DIFF_BYTES, MAX_DIFF_FILES, MAX_DIFF_LINES, generated
 from app.projects.application.queries import require_project
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INTERNAL, INVALID_ARGUMENT, MAX_ERROR_BYTES,
                                           NO_CONSENT, NOT_AVAILABLE, OUT_OF_SCOPE, PROTOCOL, OperationError,
                                           Response, error)
-from app.knowledge.application.loader import analysis_languages, from_coverage
+from app.knowledge.application.loader import analysis_languages, from_coverage, from_summary
+from app.protocol.application.commits import HISTORY as _HISTORY, CommitOperations
+from app.protocol.application.ports import FactReading
+from app.protocol.application.arguments import claim_object as _claim_object, no_other as _no_other
+from app.protocol.application.arguments import reference as _reference, relation as _relation, text as _text
 from app.knowledge.domain.knowledge import AnalysisKnowledge, contains
 from app.protocol.domain.verdict import judge
 from app.neighborhood.application.query import neighborhood
@@ -38,7 +39,6 @@ MAX_OPERATIONS = 20
 # Chaque operation encore possible garde de quoi repondre par un refus : le budget n'est jamais depasse.
 ERROR_RESERVE = MAX_OPERATIONS * MAX_ERROR_BYTES
 MIN_EXCHANGE_BYTES = ERROR_RESERVE + 6_000
-MAX_ARGUMENT_LENGTH = 1000
 
 _ASSERTION, _LANGUAGES = 'ASSERTION', 'languages'
 NATURES = (_ASSERTION, 'ABSENCE', 'COVERAGE')
@@ -67,53 +67,6 @@ _ARGUMENTS = {
                          'max_nodes': '1..200', 'max_edges': '1..200', 'max_work': '1..1000',
                          'continuation': 'reprise du même voisinage (facultatif)'},
 }
-_LOCATION = ('path', 'line_start', 'line_end', 'symbol', 'method', 'object')
-_COMMIT = re.compile(r'[0-9a-f]{7,64}')
-# Syntaxe reservee type:cle : une valeur qui la prend est toujours lue comme une reference (ARCHITECTURE § 5).
-_REFERENCE_SYNTAX = re.compile(r'[a-z][a-z0-9-]*:')
-_HISTORY = 'HAS_COMMIT'
-
-
-def _text(arguments, name, required=False):
-    value = arguments.get(name)
-    if value is None:
-        if required:
-            raise OperationError(INVALID_ARGUMENT, f'Argument requis : {name}.')
-        return None
-    if not isinstance(value, str) or not value.strip() or len(value) > MAX_ARGUMENT_LENGTH:
-        raise OperationError(INVALID_ARGUMENT, f'Argument invalide : {name}.')
-    return value
-
-
-def _reference(arguments, name, required=False):
-    value = _text(arguments, name, required)
-    if value is not None and not is_reference(value):
-        raise OperationError(INVALID_ARGUMENT, f'{name} doit être une référence du contrat (type:clé).')
-    return value
-
-
-def _relation(arguments, required=False):
-    value = _text(arguments, 'relation', required)
-    if value is not None and value not in RELATIONS:
-        raise OperationError(INVALID_ARGUMENT, f'Relation hors du vocabulaire : {value}.')
-    return value
-
-
-def _no_other(arguments, allowed):
-    unknown = sorted(set(arguments) - set(allowed))
-    if unknown:
-        raise OperationError(INVALID_ARGUMENT, f'Argument inconnu : {", ".join(unknown)}.')
-
-
-def _claim_object(relation, target):
-    """L'objet d'une affirmation doit etre du type que la relation admet (ARCHITECTURE § 5, vocabulaire v1)."""
-    _, targets, _ = RELATIONS[relation]
-    if bool(targets) != (target is not None):
-        raise OperationError(INVALID_ARGUMENT, f'{relation} {"exige" if targets else "n’a pas"} d’objet.')
-    if target is None or (relation == 'AUTHORIZED_BY' and not _REFERENCE_SYNTAX.match(target)):
-        return
-    if not is_reference(target) or target.split(':', 1)[0] not in targets:
-        raise OperationError(INVALID_ARGUMENT, f'Objet attendu pour {relation} : {", ".join(sorted(targets))}.')
 
 
 def _without_evidence(fact):
@@ -163,8 +116,9 @@ class References:
 class TaxoQuery:
     """Ouvre des echanges du protocole sur les projets analyses."""
 
-    def __init__(self, projects, scans, facts, history, analyzers, source_context, contracts=None):
-        # `analyzers` : les evaluateurs enregistres ; seuls leur identifiant et leur catalogue servent.
+    def __init__(self, projects, scans, facts: FactReading, history, analyzers, source_context, contracts=None):
+        # `facts` : le port de lecture des faits (`FactReading`). `analyzers` : les evaluateurs enregistres ;
+        # seuls leur identifiant et leur catalogue servent.
         self.projects, self.scans, self.facts, self.history = projects, scans, facts, history
         self.catalogs = {item.evaluator_id: frozenset(item.catalog.relations) for item in analyzers}
         # Ce que chaque contrat de catalogue lit (TAXO-COV-01), par identite et version : une couverture
@@ -195,8 +149,6 @@ class Exchange:
         self.diff_allowed = service.source_context == 'diff'
         self.diff_consent = bool(diff_consent) and self.diff_allowed
         self.budget, self.used, self.calls = budget, 0, 0
-        # Ce que l'echange a deja transmis du diff : les limites d'ARCHITECTURE § 12.6 valent pour tout l'echange.
-        self.diff_files = self.diff_lines = self.diff_bytes = 0
         self.refs = References()
         evaluations = scan.result.get('evaluations', [])
         reference = next((item['snapshot'] for item in evaluations if item.get('snapshot')), {})
@@ -205,13 +157,36 @@ class Exchange:
         self.evaluations = evaluations
         self._coverage = None
         self._languages = None
+        self._commits = None
 
     # --- Contexte commun -------------------------------------------------------------------------
 
-    def _query(self, **filters):
+    @property
+    def facts(self):
+        """Le port des faits de l'analyse."""
+        return self.service.facts
+
+    @property
+    def catalogs(self):
+        """Les relations que chaque analyseur enregistre sait produire, d'apres son catalogue."""
+        return self.service.catalogs
+
+    def reads_of(self, evaluation):
+        """Ce que lit le contrat de catalogue qu'une execution resumee nomme."""
+        return self.service.reads_of(evaluation)
+
+    @property
+    def commits(self):
+        """L'historique et le diff : un collaborateur avec son propre etat (les limites du diff, pour tout
+        l'echange), cree au premier usage ; l'historique du projet n'est lu que par ces operations."""
+        if self._commits is None:
+            self._commits = CommitOperations(self, self.service.history)
+        return self._commits
+
+    def query(self, **filters):
         return self.service.facts.query(self.scan.id, **filters)
 
-    def _own(self, *references):
+    def own(self, *references):
         """Un echange ne franchit jamais la frontiere de son projet : un autre depot est hors perimetre."""
         for value in references:
             if value and value.startswith('repository:') and value != self.repository:
@@ -220,7 +195,7 @@ class Exchange:
     @property
     def coverage(self):
         if self._coverage is None:
-            self._coverage = self._query(kind='COVERAGE')
+            self._coverage = self.query(kind='COVERAGE')
         return self._coverage
 
     @property
@@ -239,7 +214,7 @@ class Exchange:
         """Ou un sujet aurait pu etre etabli : les langages de son fichier ; sinon `None`, tous les langages
         presents, et ceux des fichiers que l'inventaire n'a pas lus."""
         if subject.startswith('file:'):
-            return present_languages(self._query(subject=subject, relation=WRITTEN_IN, kind=_ASSERTION))
+            return present_languages(self.query(subject=subject, relation=WRITTEN_IN, kind=_ASSERTION))
         return None
 
     def analyzers(self):
@@ -247,12 +222,19 @@ class Exchange:
         return from_coverage(self.evaluations, self.coverage, self.service.catalogs,
                              lambda *catalog: self.service.contracts.reads(*catalog))
 
+    def summary_analyzers(self):
+        """Les analyseurs tels que le resume de l'analyse les decrit : une lecture bornee, sans aucun fait.
+        Le contrat et les executions ne sont lus que s'ils servent : une execution qui nomme son catalogue, un
+        resume anterieur qui ne le nomme pas."""
+        return from_summary(self.evaluations, self.catalogs, lambda evaluation: self.reads_of(evaluation),
+                            lambda: self.facts.executions(self.scan.id))
+
     def knowledge(self, analyzers=None):
         """Ce que l'analyse sait d'elle-meme : langages presents, inventaire complet, analyseurs vus."""
         return AnalysisKnowledge(self.languages, self.complete,
                                  tuple(self.analyzers() if analyzers is None else analyzers))
 
-    def _envelope_coverage(self, relation=None, concerned=()):
+    def envelope_coverage(self, relation=None, concerned=()):
         """Ou Taxo a cherche : la couverture du depot des analyseurs concernes, et celle des references
         visees. Toujours presente, meme pour un resultat vide. Pour une relation, chaque langage present
         qu'aucune execution capable n'a lu est nomme : une absence de preuve, jamais une preuve d'absence."""
@@ -284,7 +266,7 @@ class Exchange:
                 operations.append('get_diff')
         return [name for name in OPERATIONS if name in operations]
 
-    def _response(self, operation, coverage, max_bytes, **fields):
+    def response(self, operation, coverage, max_bytes, **fields):
         response = Response(operation, self.snapshot, coverage, max_bytes, **fields)
         if not response.fits:
             raise OperationError(BUDGET_EXHAUSTED, 'Plus assez de place pour cette réponse et sa couverture.')
@@ -309,7 +291,7 @@ class Exchange:
                 response.skip('evidence', len(fact['evidence']) - index - 1)
                 return
 
-    def _add_facts(self, response, facts, evidence=False):
+    def add_facts(self, response, facts, evidence=False):
         for index, fact in enumerate(facts):
             if not self._add_fact(response, fact, evidence):
                 response.skip('items', len(facts) - index - 1)
@@ -323,36 +305,43 @@ class Exchange:
         if self.calls >= MAX_OPERATIONS:
             raise RuntimeError(f'Échange clos : au plus {MAX_OPERATIONS} opérations.')
         self.calls += 1
-        operation = request.get('operation') if isinstance(request, dict) else None
-        # Seul un nom d'operation du protocole est renvoye : jamais une valeur arbitraire de l'appelant.
-        operation = operation if operation in OPERATIONS or operation in RESERVED else None
-        name = request.get('operation') if isinstance(request, dict) else None
+        operation = _operation(request)
         try:
-            if not isinstance(request, dict) or request.get('protocol', PROTOCOL) != PROTOCOL:
-                raise OperationError(INVALID_ARGUMENT, f'Protocole attendu : {PROTOCOL}.')
-            arguments = request.get('arguments') or {}
-            if not isinstance(arguments, dict):
-                raise OperationError(INVALID_ARGUMENT, 'Les arguments forment un objet.')
-            max_bytes = self._max_bytes(request.get('max_bytes'))
-            if operation in RESERVED:
-                raise OperationError(NOT_AVAILABLE, f'{operation} attend un analyseur qui le rende possible.')
-            if operation is None:
-                raise OperationError(INVALID_ARGUMENT, f'Opération inconnue : {str(name)[:100]}.')
-            if operation not in self.available():
-                if operation == 'get_diff' and self._history_available():
-                    raise OperationError(NO_CONSENT, 'La lecture du diff est désactivée pour ce Taxo.')
-                raise OperationError(NOT_AVAILABLE, f'{operation} : aucun analyseur ne le nourrit pour ce projet.')
-            result = getattr(self, operation)(arguments, max_bytes).close()
-        except OperationError as exc:
-            result = error(operation, self.snapshot, exc.code, str(exc))
-        except HistoryError as exc:
-            code = OUT_OF_SCOPE if exc.code in {UNKNOWN_COMMIT, UNKNOWN_PATH} else NOT_AVAILABLE
-            result = error(operation, self.snapshot, code, str(exc))
-        except Exception:  # une panne de Taxo reste un resultat, jamais une instruction ni un detail interne
-            logger.exception('Opération %s en échec', operation)
-            result = error(operation, self.snapshot, INTERNAL, 'Taxo n’a pas pu servir cette opération.')
+            arguments, max_bytes = self._admitted(request, operation)
+            result = _SERVED[operation](self, arguments, max_bytes).close()
+        except Exception as exc:  # noqa: BLE001 - chaque echec devient un resultat de l'enveloppe
+            result = self._failure(operation, exc)
         self.used += result['bytes']
         return result
+
+    def _admitted(self, request, operation):
+        """Les arguments et la taille permise d'une requete recevable ; sinon le refus du protocole."""
+        if not isinstance(request, dict) or request.get('protocol', PROTOCOL) != PROTOCOL:
+            raise OperationError(INVALID_ARGUMENT, f'Protocole attendu : {PROTOCOL}.')
+        arguments = request.get('arguments') or {}
+        if not isinstance(arguments, dict):
+            raise OperationError(INVALID_ARGUMENT, 'Les arguments forment un objet.')
+        max_bytes = self._max_bytes(request.get('max_bytes'))
+        if operation in RESERVED:
+            raise OperationError(NOT_AVAILABLE, f'{operation} attend un analyseur qui le rende possible.')
+        if operation is None:
+            raise OperationError(INVALID_ARGUMENT, f'Opération inconnue : {str(request.get("operation"))[:100]}.')
+        if operation not in self.available():
+            if operation == 'get_diff' and self._history_available():
+                raise OperationError(NO_CONSENT, 'La lecture du diff est désactivée pour ce Taxo.')
+            raise OperationError(NOT_AVAILABLE, f'{operation} : aucun analyseur ne le nourrit pour ce projet.')
+        return arguments, max_bytes
+
+    def _failure(self, operation, exc):
+        """Un echec devient un resultat de l'enveloppe ; une panne de Taxo reste un resultat, jamais une
+        instruction ni un detail interne. Appele pendant le traitement de l'exception, pour la tracer."""
+        if isinstance(exc, OperationError):
+            return error(operation, self.snapshot, exc.code, str(exc))
+        if isinstance(exc, HistoryError):
+            code = OUT_OF_SCOPE if exc.code in {UNKNOWN_COMMIT, UNKNOWN_PATH} else NOT_AVAILABLE
+            return error(operation, self.snapshot, code, str(exc))
+        logger.exception('Opération %s en échec', operation)
+        return error(operation, self.snapshot, INTERNAL, 'Taxo n’a pas pu servir cette opération.')
 
     def _max_bytes(self, requested):
         if requested is not None and (type(requested) is not int or requested < 1):
@@ -368,7 +357,7 @@ class Exchange:
 
     def describe(self, arguments, max_bytes):
         _no_other(arguments, ())
-        response = self._response('describe', self._envelope_coverage(), max_bytes,
+        response = self.response('describe', self.envelope_coverage(), max_bytes,
                                   consent={'diff': self.diff_consent})
         for name in self.available():
             response.add('items', {'kind': 'operation', 'operation': name, 'arguments': _ARGUMENTS[name]})
@@ -396,11 +385,11 @@ class Exchange:
             raise OperationError(INVALID_ARGUMENT, f'nature : {", ".join(NATURES)}.')
         if not any((subject, relation, target, nature)):
             raise OperationError(INVALID_ARGUMENT, 'Au moins un de subject, relation, object ou nature.')
-        self._own(subject, target)
-        facts = self._query(subject=subject, relation=relation, object=target, kind=nature)
-        coverage = self._envelope_coverage(relation, {subject, target} - {None})
-        response = self._response('find_facts', coverage, max_bytes, count=len(facts))
-        self._add_facts(response, facts)
+        self.own(subject, target)
+        facts = self.query(subject=subject, relation=relation, object=target, kind=nature)
+        coverage = self.envelope_coverage(relation, {subject, target} - {None})
+        response = self.response('find_facts', coverage, max_bytes, count=len(facts))
+        self.add_facts(response, facts)
         return response
 
     def get_evidence(self, arguments, max_bytes):
@@ -410,104 +399,31 @@ class Exchange:
             raise OperationError(INVALID_ARGUMENT, f'{ref} n’a pas été transmis dans cet échange.')
         fact = self.refs.facts[ref]
         producer = fact.get('produced_by', {}).get('producer_id')
-        coverage = [entry for entry in self._envelope_coverage(fact.get('relation'), {fact.get('subject')})
+        coverage = [entry for entry in self.envelope_coverage(fact.get('relation'), {fact.get('subject')})
                     if entry['producer'] in (producer, None)]
-        response = self._response('get_evidence', coverage, max_bytes, fact=ref)
+        response = self.response('get_evidence', coverage, max_bytes, fact=ref)
         self._add_evidence(response, ref, fact)
         return response
 
     def get_coverage(self, arguments, max_bytes):
         _no_other(arguments, ('scope',))
         scope = _reference(arguments, 'scope')
-        self._own(scope)
+        self.own(scope)
         facts = [fact for fact in self.coverage if scope is None or contains(scope, fact['subject'])]
         # Ce qui n'a pas ete lu passe avant ce qui l'a ete : c'est la limite de ce que Taxo sait.
         facts.sort(key=lambda fact: fact['coverage_type'] not in UNREAD_COVERAGE)
-        response = self._response('get_coverage', self._envelope_coverage(), max_bytes, count=len(facts))
-        self._add_facts(response, facts)
+        response = self.response('get_coverage', self.envelope_coverage(), max_bytes, count=len(facts))
+        self.add_facts(response, facts)
         return response
-
-    def _commit(self, arguments):
-        value = _text(arguments, 'commit', required=True).lower()
-        if not _COMMIT.fullmatch(value):
-            raise OperationError(INVALID_ARGUMENT, 'commit : identifiant hexadécimal de 7 caractères ou plus.')
-        if len(value) in (40, 64):
-            found = self._query(relation=_HISTORY, object=f'commit:{value}')
-        else:
-            found = [fact for fact in self._query(relation=_HISTORY) if fact['object'].startswith(f'commit:{value}')]
-        shas = sorted({fact['object'] for fact in found})
-        if not shas:
-            raise OperationError(OUT_OF_SCOPE, 'Ce commit n’appartient pas à l’historique de cette analyse.')
-        if len(shas) > 1:
-            raise OperationError(INVALID_ARGUMENT, 'Identifiant ambigu : donner plus de caractères.')
-        return shas[0], found[0]
 
     def get_commit(self, arguments, max_bytes):
-        _no_other(arguments, ('commit',))
-        reference, head = self._commit(arguments)
-        facts = [head, *self._query(subject=reference)]
-        response = self._response('get_commit', self._envelope_coverage(_HISTORY), max_bytes,
-                                  commit=reference, count=len(facts))
-        self._add_facts(response, facts)
-        return response
+        return self.commits.get_commit(arguments, max_bytes)
 
     def get_diff(self, arguments, max_bytes):
-        _no_other(arguments, ('commit', 'path'))
-        if not self.diff_consent:
-            raise OperationError(NO_CONSENT, 'La lecture du diff n’a pas été autorisée pour cet échange.')
-        reference, _ = self._commit(arguments)
-        path = _text(arguments, 'path', required=True)
-        if not is_path(path):
-            raise OperationError(INVALID_ARGUMENT, 'path : chemin relatif du dépôt, séparateurs /.')
-        if not self._query(subject=reference, relation='CHANGES', object=f'file:{path}'):
-            raise OperationError(OUT_OF_SCOPE, 'Ce fichier n’est pas touché par ce commit.')
-        if generated(path):
-            # Fichier produit par un outil (ARCHITECTURE § 12.6) : son contenu n'est pas lu.
-            response = self._response('get_diff', self._envelope_coverage(_HISTORY), max_bytes, commit=reference,
-                                      path=path)
-            response.not_sent({'what': 'diff', 'reason': GENERATED})
-            return response
-        diff = self.service.history.diff(self.project_id, reference.split(':', 1)[1], path)
-        fields = {'commit': reference, 'path': path, 'status': diff['status']}
-        if diff['old_path']:
-            fields['old_path'] = diff['old_path']
-        response = self._response('get_diff', self._envelope_coverage(_HISTORY), max_bytes, **fields)
-        if not diff['displayable']:
-            response.not_sent({'what': 'diff', 'reason': diff['reason']})
-            return response
-        hunks = [_hunk(hunk) for hunk in diff['hunks']]
-        lines = sum(len(hunk['rows']) for hunk in diff['hunks'])
-        size = sum(len(hunk[side].encode('utf-8')) for hunk in hunks for side in ('before', 'after'))
-        if (self.diff_files >= MAX_DIFF_FILES or self.diff_lines + lines > MAX_DIFF_LINES
-                or self.diff_bytes + size > MAX_DIFF_BYTES):
-            # Au-dela des limites de l'echange, un fichier n'est pas tronque : il n'est pas transmis.
-            response.not_sent({'what': 'diff', 'reason': LIMIT})
-            return response
-        self.diff_files, self.diff_lines, self.diff_bytes = self.diff_files + 1, self.diff_lines + lines, self.diff_bytes + size
-        for index, hunk in enumerate(hunks):
-            if not response.add('items', hunk):
-                response.skip('items', len(hunks) - index - 1)
-                break
-        return response
+        return self.commits.get_diff(arguments, max_bytes)
 
     def diff_facts(self, arguments, max_bytes):
-        """Les faits que le commit introduit, modifie ou retire, selon les evaluateurs de contenu compares
-        entre son premier parent et lui. Ce sont des changements, pas des faits de l'analyse : ils n'ont pas
-        de reference `F…`, et leurs preuves sont des localisations."""
-        _no_other(arguments, ('commit',))
-        reference, _ = self._commit(arguments)
-        _, base, evaluations = self.service.history.impact(self.project_id, reference.split(':', 1)[1])
-        coverage = [{'subject': self.repository, 'type': 'ANALYSED' if item['comparable'] else 'NOT_INTERPRETED',
-                     'scope': None, 'producer': item['evaluator_id'],
-                     'not_interpreted': item['not_interpreted_after']} for item in evaluations]
-        changes = [_change(change, item['evaluator_id']) for item in evaluations for change in item['changes']]
-        response = self._response('diff_facts', coverage or self._envelope_coverage(), max_bytes,
-                                  commit=reference, parent=f'commit:{base}' if base else None, count=len(changes))
-        for index, change in enumerate(changes):
-            if not response.add('items', change):
-                response.skip('items', len(changes) - index - 1)
-                break
-        return response
+        return self.commits.diff_facts(arguments, max_bytes)
 
     def verify_claim(self, arguments, max_bytes):
         _no_other(arguments, ('subject', 'relation', 'object'))
@@ -518,32 +434,34 @@ class Exchange:
         if subject.split(':', 1)[0] not in sources:
             raise OperationError(INVALID_ARGUMENT, f'{relation} ne s’applique pas à ce type de sujet.')
         _claim_object(relation, target)
-        self._own(subject, target)
+        self.own(subject, target)
         claim = {'subject': subject, 'relation': relation}
         if target is not None:
             claim['object'] = target
-        established = [fact for fact in self._query(subject=subject, relation=relation, kind=_ASSERTION)
+        established = [fact for fact in self.query(subject=subject, relation=relation, kind=_ASSERTION)
                        if fact.get('validity', 'VALID') == 'VALID']
         verdict = judge(claim, established, self.knowledge(self.analyzers()), self.needed(subject))
-        response = self._response('verify_claim', self._envelope_coverage(relation, {subject, target} - {None}),
+        response = self.response('verify_claim', self.envelope_coverage(relation, {subject, target} - {None}),
                                   max_bytes, claim=claim, verdict=verdict.verdict, reason=verdict.reason)
-        self._add_facts(response, list(verdict.facts), evidence=True)
+        self.add_facts(response, list(verdict.facts), evidence=True)
         return response
 
 
-def _change(change, producer):
-    """Un changement de fait, compact : ce qui change, avant, apres, et ou sont les preuves."""
-    located = [{key: proof[key] for key in _LOCATION if key in proof}
-               for proof in change['evidence_before'] + change['evidence_after']]
-    return {'kind': 'change', 'change': change['change'], 'nature': change['kind'], 'subject': change['subject'],
-            'relation': change['relation'], 'before': change['before'], 'after': change['after'],
-            'status': change['status'], 'producer': producer, 'evidence': located}
+def _operation(request):
+    """Le nom de l'operation demandee, s'il est du protocole : jamais une valeur arbitraire de l'appelant."""
+    operation = request.get('operation') if isinstance(request, dict) else None
+    return operation if operation in OPERATIONS or operation in RESERVED else None
 
 
-def _side(rows, side):
-    return '\n'.join(row[side]['text'] for row in rows if row[side] is not None)
-
-
-def _hunk(hunk):
-    return {'before_start': hunk['before_start'], 'after_start': hunk['after_start'],
-            'before': _side(hunk['rows'], 'before'), 'after': _side(hunk['rows'], 'after')}
+# Chaque operation du protocole et ce qui la sert : une table explicite, jamais un nom recu de l'appelant.
+_SERVED = {
+    'describe': Exchange.describe,
+    'find_facts': Exchange.find_facts,
+    'get_evidence': Exchange.get_evidence,
+    'get_coverage': Exchange.get_coverage,
+    'get_commit': Exchange.get_commit,
+    'get_diff': Exchange.get_diff,
+    'verify_claim': Exchange.verify_claim,
+    'diff_facts': Exchange.diff_facts,
+    'get_neighborhood': Exchange.get_neighborhood,
+}

@@ -179,7 +179,7 @@ def test_the_diff_needs_both_the_setting_and_the_exchange_consent(repo, tmp_path
 
 
 def test_the_diff_keeps_the_limits_of_adr_0008_across_the_exchange(make_repo, git, tmp_path, monkeypatch):
-    from app.protocol.application import exchange as module
+    from app.protocol.application import commits as module
     repo = make_repo({'a.txt': 'a\n', 'b.txt': 'b\n', 'package-lock.json': '{}\n'}, 'limites')
     for name in ('a.txt', 'b.txt', 'package-lock.json'):
         (repo / name).write_text('change\n')
