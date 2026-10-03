@@ -33,12 +33,23 @@ export function nodeType(value:string){
   return at<0?'':value.slice(0, at);
 }
 
+/** Un décompte connu, entre parenthèses ; rien quand Taxo ne le sait pas. */
+const counted=(count:Count)=>{
+  const said=countText(count);
+  return said?` (${said})`:'';
+};
+
+/** Le pas d'une coupure : sa relation, et son sens s'il est dit. */
+function stepText(boundary:Boundary){
+  if(!boundary.relation)return '';
+  const side=boundary.direction?`, ${DIRECTIONS[boundary.direction]}`:'';
+  return ` · ${verb(boundary.relation)}${side}`;
+}
+
 /** Une coupure de sélection en une phrase, avec son décompte s'il est connu. */
 export function selectionText(boundary:Boundary){
   const said=SELECTION[boundary.reason]??`Non développé (${boundary.reason})`;
-  const count=countText(boundary.count);
-  const step=boundary.relation?` · ${verb(boundary.relation)}${boundary.direction?`, ${DIRECTIONS[boundary.direction]}`:''}`:'';
-  return `${said}${count?` (${count})`:''}${step}`;
+  return `${said}${counted(boundary.count)}${stepText(boundary)}`;
 }
 
 /** Ce que Taxo ne sait pas, ou ne peut pas savoir : jamais levé par un budget. */
@@ -71,8 +82,7 @@ export function nodeMarks(node:ViewNode, selection:Boundary|undefined, knowledge
   const marks:string[]=[];
   if(!node.known)marks.push('inconnu de cette analyse');
   if(selection){
-    const count=countText(selection.count);
-    marks.push(selection.continuation?`suite disponible${count?` (${count})`:''}`:'non développé');
+    marks.push(selection.continuation?`suite disponible${counted(selection.count)}`:'non développé');
   }
   if(knowledge.some(entry=>entry.scope==='NODE'&&entry.node===node.reference))marks.push('zone non lue');
   if(knowledge.some(entry=>entry.nature==='CONTEXT'&&entry.node===node.reference))marks.push('aucun analyseur pour un pas');

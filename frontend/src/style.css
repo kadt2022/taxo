@@ -910,8 +910,9 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .explorer-scope{margin:0;padding:10px 12px;border-radius:var(--r);background:var(--info-soft);color:var(--info);font-size:13.5px}
 .explorer-pending{display:block;color:var(--muted);font-size:14px}
 .explorer-stop{margin:0;color:var(--text-2);font-size:14px}
-.explorer-empty{margin:0;padding:14px 16px;border-radius:var(--r);background:var(--surface-2);border:1px dashed var(--border-strong);color:var(--text-2)}
-.explorer-tabs{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r-sm);overflow:hidden;align-self:flex-start}
+.explorer-empty{display:block;margin:0;padding:14px 16px;border-radius:var(--r);background:var(--surface-2);border:1px dashed var(--border-strong);color:var(--text-2)}
+.explorer-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.explorer-tabs{margin:0;padding:0;min-inline-size:0;display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r-sm);overflow:hidden;align-self:flex-start}
 .explorer-tabs button{border:0;background:var(--surface);padding:7px 16px;font-weight:600;color:var(--text-2);cursor:pointer}
 .explorer-tabs button[aria-pressed=true]{background:var(--brand);color:#f4ffe8}
 .explorer-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:16px;align-items:start}

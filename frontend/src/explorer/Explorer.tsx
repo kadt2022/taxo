@@ -114,18 +114,18 @@ type BodyProps={view:View; selected:Selected; dispatch:(action:Action)=>void; co
 function Body({view, selected, dispatch, commands, busy, query, shape, onShape, onReload}:Readonly<BodyProps>){
   const named=useNaming();
   const links=useMemo(()=>linksOf(view), [view]);
-  if(!view.known)return <p className="explorer-empty" role="status">« {named(view.anchor)} » n’apparaît dans aucun fait de cette analyse : Taxo n’en sait rien ici, ni présence ni absence de liens.</p>;
+  if(!view.known)return <output className="explorer-empty">« {named(view.anchor)} » n’apparaît dans aucun fait de cette analyse : Taxo n’en sait rien ici, ni présence ni absence de liens.</output>;
   const link=selected?.kind==='link'?links.find(item=>item.identity===selected.identity):undefined;
   const node=selected?.kind==='node'?view.nodes.find(item=>item.reference===selected.reference):undefined;
   const select=(value:Selected)=>dispatch({type:'select', selected:value});
   return <>
-    {view.stale&&<p role="alert" className="error">Les faits de cette analyse ont changé depuis l’ouverture de la vue : la réponse reçue n’y a pas été mêlée.
+    {view.stale&&<p role="alert" className="error">Les faits de cette analyse ont changé depuis l’ouverture de la vue : la réponse reçue n’y a pas été mêlée.{' '}
       <button type="button" className="link" onClick={onReload}>Recharger la vue</button></p>}
     <p className="explorer-stop">{viewText(view)}</p>
-    {view.elements.length===0&&<p className="explorer-empty" role="status">Aucun lien pour les relations suivies depuis cette ancre, dans ce que l’analyse a enregistré. Ce que Taxo ne sait pas est dit plus bas.</p>}
-    <div className="explorer-tabs" role="group" aria-label="Forme de la vue">
+    {view.elements.length===0&&<output className="explorer-empty">Aucun lien pour les relations suivies depuis cette ancre, dans ce que l’analyse a enregistré. Ce que Taxo ne sait pas est dit plus bas.</output>}
+    <fieldset className="explorer-tabs"><legend className="explorer-hidden">Forme de la vue</legend>
       <button type="button" aria-pressed={shape==='couches'} onClick={()=>onShape('couches')}>Couches</button>
-      <button type="button" aria-pressed={shape==='liste'} onClick={()=>onShape('liste')}>Liste</button></div>
+      <button type="button" aria-pressed={shape==='liste'} onClick={()=>onShape('liste')}>Liste</button></fieldset>
     <div className="explorer-body">
       {shape==='couches'?<LayerView view={view} links={links} selected={selected} onSelect={select}/>
         :<ListView view={view} links={links} commands={commands} busy={busy} onSelect={identity=>select({kind:'link', identity})}/>}
