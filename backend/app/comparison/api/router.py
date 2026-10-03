@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query
 from app.comparison.domain.comparison import CATEGORIES
 
 
-def create_router(compare):
+def create_router(compare, choices):
     router = APIRouter()
     missing = {404: {'description': 'Projet ou analyse introuvable, ou analyse interrompue.'}}
 
@@ -17,7 +17,7 @@ def create_router(compare):
     @router.get('/api/projects/{project_id}/comparisons/analyses', responses={404: {'description': 'Projet introuvable.'}})
     def analyses(project_id: str):
         """Les analyses que l'on peut comparer, chacune décrite par ce qu'elle a lu et enregistré."""
-        return compare.choices(project_id)
+        return choices(project_id)
 
     @router.get('/api/projects/{project_id}/comparisons/changes',
                 responses={**missing, 422: {'description': 'Catégorie inconnue ou évaluateur non comparable.'}})

@@ -9,7 +9,7 @@ sans rien reconstruire. Les analyseurs se lisent de deux facons, nommees ici et 
 Dans les deux cas, une couverture se juge selon le contrat de catalogue de son producteur, jamais selon le
 catalogue actuel de son analyseur.
 """
-from app.evaluations.domain.capability import WRITTEN_IN, Reads, languages_in, present_languages
+from app.evaluations.domain.capability import WRITTEN_IN, Reads, languages_in
 from app.knowledge.domain.knowledge import Analyzer
 
 _LANGUAGES = 'languages'
@@ -27,9 +27,7 @@ def analysis_languages(scan, facts):
     recorded = recorded_languages(scan)
     if recorded is not None:
         return recorded
-    if hasattr(facts, 'objects'):
-        return languages_in(facts.objects(scan.id, WRITTEN_IN))
-    return present_languages(facts.query(scan.id, relation=WRITTEN_IN, kind='ASSERTION'))
+    return languages_in(facts.objects(scan.id, WRITTEN_IN))
 
 
 def _relations(evaluation, catalogs):

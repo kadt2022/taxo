@@ -9,7 +9,6 @@ import json
 
 from app.facts import is_reference
 from app.evaluations.domain.capability import UNREAD_COVERAGE, languages_complete
-from app.knowledge.application.loader import from_summary
 from app.knowledge.domain.knowledge import AnalysisKnowledge
 from app.facts.domain.fact import RELATIONS
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INVALID_ARGUMENT,
@@ -72,7 +71,7 @@ def _arguments(exchange, arguments):
     root = arguments.get('root')
     if not isinstance(root, str) or len(root) > 1000 or not is_reference(root):
         _invalid('root doit être une référence du contrat.')
-    exchange._own(root)
+    exchange.own(root)
     relations = _relations(arguments.get('follow'))
     priority = arguments.get('priority', relations)
     if (not isinstance(priority, list) or any(not isinstance(item, str) for item in priority)
@@ -106,7 +105,7 @@ def _summaries(exchange, relations):
     coverage, frontier, capabilities = [], [], set()
     for evaluation in exchange.evaluations:
         identifier = evaluation['evaluator_id']
-        produced = exchange.service.catalogs.get(identifier, frozenset(evaluation.get('relations', {})))
+        produced = exchange.catalogs.get(identifier, frozenset(evaluation.get('relations', {})))
         if not set(relations).intersection(produced):
             continue
         # TAXO-COV-01 : un analyseur qui n'avait rien a lire n'est pas une capacite de cette analyse.
@@ -132,7 +131,7 @@ def _unread_languages(exchange, relations):
         present = exchange.languages
     if present is None:
         return []
-    summarized = tuple(_summarized(exchange))
+    summarized = tuple(exchange.summary_analyzers())
     knowledge = AnalysisKnowledge(present, languages_complete(exchange.scan.result.get('evaluation_summary')),
                                   summarized)
     frontier = []
@@ -150,15 +149,6 @@ def _knowledge(reason, **fields):
     return {'nature': 'KNOWLEDGE', 'scope': 'ANALYSIS', **fields, 'reason': reason, 'count': {'kind': 'UNKNOWN'}}
 
 
-def _summarized(exchange):
-    """Les analyseurs tels que le resume de l'analyse les decrit (TAXO-COV-01) : une lecture bornee."""
-    # Le contrat et les executions ne sont lus que s'ils servent : une execution qui nomme son catalogue, un
-    # resume anterieur qui ne le nomme pas.
-    return from_summary(exchange.evaluations, exchange.service.catalogs,
-                        lambda evaluation: exchange.service.reads_of(evaluation),
-                        lambda: exchange.service.facts.executions(exchange.scan.id))
-
-
 class _Neighborhood:
     """Selection state for one page; rendering never advances the cursor."""
 
@@ -170,7 +160,7 @@ class _Neighborhood:
         self.root = parameters['root']
         self.priority = parameters['priority']
         self.direction = parameters['direction']
-        self.store = exchange.service.facts
+        self.store = exchange.facts
         self.revision = self.store.revision(exchange.scan.id)
         self.binding = hashlib.sha256(json.dumps(
             [VERSION, exchange.snapshot, parameters, self.revision], sort_keys=True).encode()).hexdigest()
