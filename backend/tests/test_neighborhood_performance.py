@@ -13,7 +13,7 @@ import time
 import pytest
 from sqlalchemy import event
 
-from test_neighborhood_conformance import Twin, edge
+from test_neighborhood_conformance import STORAGES, Twin, edge
 
 HUB = 'module:hub'
 
@@ -41,7 +41,8 @@ def measured(twin, **arguments):
 
 
 def adjacency(statements):
-    return [sql for sql in statements if 'outgoing_rank' in sql and sql.lstrip().upper().startswith('SELECT')]
+    """Les lectures de page d'une adjacence : celles qui bornent le rang."""
+    return [sql for sql in statements if 'outgoing_rank >' in sql and sql.lstrip().upper().startswith('SELECT')]
 
 
 def test_the_cost_of_a_tile_does_not_depend_on_the_degree(tmp_path):
@@ -56,6 +57,75 @@ def test_the_cost_of_a_tile_does_not_depend_on_the_degree(tmp_path):
         assert all('LIMIT' in sql for sql in reads), 'aucune lecture sans borne'
         found[degree] = (len(statements), result['consumed'], [item['fact']['object'] for item in result['items']])
     assert found[200] == found[2000]
+
+
+def _sqlite_bounded(plan):
+    """SQLite ne dit pas les lignes lues : le plan doit le prouver par sa forme. Aucune table parcourue en entier ;
+    l'adjacence lue par son index d'ancre, rang compris ; aucun tri sous la lecture de l'adjacence (un tri de la
+    page chargée, au plus sa borne, est permis)."""
+    parents = {node: parent for node, parent, _, _ in plan}
+    detail = {node: text for node, _, _, text in plan}
+
+    def under(node, ancestor):
+        while node in parents:
+            if node == ancestor:
+                return True
+            node = parents[node]
+        return False
+    reads = [node for node, text in detail.items() if 'outgoing_rank>?' in text or 'incoming_rank>?' in text]
+    assert reads, plan
+    assert not any(text.startswith('SCAN') for text in detail.values()), plan
+    for read in reads:
+        assert 'INDEX ix_fact_occurrences_' in detail[read] or 'INDEX ix_analysis_facts' in detail[read], plan
+        scope = parents[read]
+        assert not any('TEMP B-TREE' in text and under(node, scope) and scope != 0
+                       for node, text in detail.items()), plan
+    return True
+
+
+def _plan_rows(node):
+    """Les lignes que chaque nœud du plan PostgreSQL a réellement produites, boucles comprises, par table."""
+    rows = []
+    if 'Relation Name' in node:
+        rows.append((node['Relation Name'], node['Actual Rows'] * node.get('Actual Loops', 1)))
+    for child in node.get('Plans', []):
+        rows += _plan_rows(child)
+    return rows
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_an_adjacency_read_touches_its_page_only_in_the_engine_plan(tmp_path, name):
+    """Le garde-fou précédent vérifie que chaque lecture porte une borne ; celui-ci vérifie ce que le moteur de
+    base de données lit vraiment. Sur PostgreSQL, un plan qui joint toutes les identités avant la borne lirait
+    l'adjacence entière d'un nœud de fort degré (constaté sur un dépôt réel, TAXO-01J tranche F)."""
+    twin = Twin(tmp_path)
+    # Un nœud de degré 1 000 parmi 10 000 occurrences : les proportions d'un dépôt réel (spring-petclinic).
+    twin.add(graph(1000) + [edge(f'module:x{index:05}', subject=f'module:y{index % 500:03}') for index in range(9000)])
+    engine = twin.engines[name]
+    reads = []
+
+    def keep(conn, cursor, sql, parameters, context, many):
+        if 'outgoing_rank >' in sql or 'incoming_rank >' in sql:
+            reads.append((sql, parameters))
+    event.listen(engine, 'before_cursor_execute', keep)
+    try:
+        twin.ask(twin.exchange(name), root=HUB, engine='neighborhood/2', depth=1, max_fanout=10)
+    finally:
+        event.remove(engine, 'before_cursor_execute', keep)
+    assert reads
+    with engine.connect() as connection:
+        if engine.dialect.name == 'postgresql':
+            # Les statistiques que l'autovacuum tient à jour en service : sans elles, le planificateur ne voit pas
+            # qu'un sujet porte des milliers d'identités, et le plan d'une base neuve ne dit rien du réel.
+            connection.exec_driver_sql('ANALYZE')
+        for sql, parameters in reads:
+            if engine.dialect.name == 'postgresql':
+                (plan,), = connection.exec_driver_sql('EXPLAIN (ANALYZE, FORMAT JSON) ' + sql, parameters).all()
+                touched = _plan_rows(plan[0]['Plan'])
+                assert all(count <= 50 for _, count in touched), touched
+            else:
+                assert _sqlite_bounded([tuple(row) for row in
+                                        connection.exec_driver_sql('EXPLAIN QUERY PLAN ' + sql, parameters)])
 
 
 @pytest.mark.skipif(os.environ.get('TAXO_PERFORMANCE') != '1', reason='mesure lourde à la demande : TAXO_PERFORMANCE=1')

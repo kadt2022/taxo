@@ -363,3 +363,23 @@ def test_producer_execution_follows_the_contract():
                     ('PROJECTION', 'tree', '1', 'run', 'catalog', '1'), ('EVALUATOR', '', '1', 'run', 'c', '1')):
         with pytest.raises(ValueError):
             ProducerExecution(*invalid)
+
+
+def test_a_shared_anchor_fingerprint_never_shortens_nor_mixes_an_adjacency(memory, monkeypatch):
+    """Deux ancres dont l'empreinte coïncide (forcé ici : toutes les références ont la même) : chaque page lue par
+    l'index mêle leurs occurrences, et la lecture doit rendre exactement celles de l'ancre demandée, dans l'ordre, en
+    lisant au-delà d'une page écartée, sans rien perdre ni rien prendre à l'autre ancre (TAXO-01J, tranche F)."""
+    import app.scans.infrastructure.sqlalchemy.fact_memory as module
+    monkeypatch.setattr(module, '_reference_hash', lambda reference: 'h' if isinstance(reference, str) else None)
+    scan = memory.analysis('analysis-1', executions=[execution()])
+    facts = [assertion(f'module:a{index}', subject='module:x' if index % 3 else 'module:root') for index in range(12)]
+    memory.store.add(scan, 'fixture', facts)
+    wanted = [fact['object'] for fact in facts if fact['subject'] == 'module:root']
+    found, after = [], None
+    while True:
+        page = memory.store.neighbors(scan, 'module:root', 'DEPENDS_ON', 'OUTGOING', after, 2)
+        found += [item.fact['object'] for item in page]
+        if len(page) < 2:
+            break
+        after = page[-1].key
+    assert found == wanted

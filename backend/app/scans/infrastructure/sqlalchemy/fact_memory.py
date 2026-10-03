@@ -305,16 +305,29 @@ class SqlAlchemyFactMemory:
         return (found[0].key, found[0].fact) if found else None
 
     def neighbors(self, scan_id, root, relation, direction, after, limit):
-        """At most `limit` adjacent occurrences, in rank order, after `after`: one indexed read, never the
-        whole adjacency. Each one with its rank, its occurrence (stable in the analysis) and its identity."""
+        """At most `limit` adjacent occurrences, in rank order, after `after`: never the whole adjacency. Each one
+        with its rank, its occurrence (stable in the analysis) and its identity.
+
+        One statement: the page is chosen by the anchor index alone, in its order and under its limit, then its
+        occurrences are loaded. The bound holds whatever plan the database picks (TAXO-01J, tranche F: with real
+        statistics, PostgreSQL joined every identity of a high-degree anchor before the limit). The spelling is
+        checked on the loaded page: it only rules out another reference sharing the anchor fingerprint, and were
+        it to drop an occurrence, the read goes on after the page, so the result stays exact."""
         anchor, fingerprint, rank, _ = _SIDES[direction]
-        statement = (_facts_of(scan_id).add_columns(rank)
-                     .where(fingerprint == _reference_hash(root), FactOccurrenceRow.relation == relation,
-                            _spelled(FactOccurrenceRow, getattr(FactIdentityRow, anchor), anchor, root),
-                            rank > int(after or '0'))
-                     .order_by(rank).limit(limit))
+        found, position = [], int(after or '0')
         with Session(self.engine) as db:
-            found = self.load_rows(db, scan_id, statement)
+            while len(found) < limit:
+                wanted = limit - len(found)
+                page = (select(FactOccurrenceRow.id)
+                        .where(FactOccurrenceRow.scan_id == scan_id, fingerprint == _reference_hash(root),
+                               FactOccurrenceRow.relation == relation, rank > position)
+                        .order_by(rank).limit(wanted))
+                loaded = self.load_rows(db, scan_id, _facts_of(scan_id).add_columns(rank)
+                                        .where(FactOccurrenceRow.id.in_(page)).order_by(rank))
+                found += [(row, fact) for row, fact in loaded if fact.get(anchor) == root]
+                if len(loaded) < wanted:
+                    break
+                position = loaded[-1][0][3]
         return [Adjacent(str(row[3]), str(row[0].id), row[0].identity_hash, fact) for row, fact in found]
 
     def occurrence(self, scan_id, key):
