@@ -443,13 +443,15 @@ class Exchange:
 
     def _handled(self, value):
         """Le fait d'une poignée d'occurrence (TAXO-01J) : seulement de l'analyse de cet échange, à sa génération
-        de faits ; le même refus quelle que soit la raison."""
+        de faits, fixée avant la lecture et vérifiée après ; le même refus quelle que soit la raison."""
+        revision = self.facts.revision(self.scan.id)
         try:
-            key = handle.decode(value, self.scan.id, self.facts.revision(self.scan.id))
+            key = handle.decode(value, self.scan.id, revision)
         except handle.HandleError as exc:
             raise OperationError(INVALID_ARGUMENT, str(exc)) from exc
         fact = self.facts.occurrence(self.scan.id, key)
-        if fact is None:
+        # La génération est vérifiée encore après la lecture : un ajout entre-temps fait refuser la poignée.
+        if fact is None or self.facts.revision(self.scan.id) != revision:
             raise OperationError(INVALID_ARGUMENT, handle.REFUSED)
         return fact
 
@@ -464,6 +466,10 @@ class Exchange:
         except references.ReferenceSearchError as exc:
             raise OperationError(INVALID_ARGUMENT, str(exc)) from exc
         rows, more = find_references(self.facts, self.scan.id, prefix, kind, after, limit)
+        if self.facts.revision(self.scan.id) != revision:
+            # Comme une Tuile : une page ne mêle jamais deux générations, et sa reprise ne lie que la sienne.
+            raise OperationError(INVALID_ARGUMENT, 'Les faits de cette analyse ont changé pendant la recherche ; '
+                                                   'recommencer sans reprise.')
         coverage = self.envelope_coverage()
         # La page la plus longue qui tient avec sa reprise : celle-ci est mesuree avec la page, jamais ajoutee apres.
         for count in range(len(rows), 0 if rows else -1, -1):

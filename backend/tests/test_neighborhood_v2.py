@@ -348,3 +348,23 @@ def test_a_local_gap_on_a_reference_spelled_otherwise_than_nfc_is_found(tmp_path
     spelled = 'module:órders'
     twin.add([edge(spelled, subject=A), gap(spelled, 'NOT_INTERPRETED')])
     assert local(ask(twin, name, **V2)) == [(spelled, spelled, 'NOT_INTERPRETED')]
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_a_handle_read_while_facts_are_added_is_refused(twin, name, monkeypatch):
+    """La poignée est validée contre une génération, l'occurrence lue, puis la génération vérifiée encore : une
+    poignée de l'ancienne génération n'est jamais servie après un ajout."""
+    from app.neighborhood.domain import handle
+    occurrence = ask(twin, name, **V2)['items'][0]['occurrence']
+    store = twin.stores[name]
+    read = store.occurrence
+
+    def mutate(*args, **kwargs):
+        found = read(*args, **kwargs)
+        store.add('analysis-1', 'fixture', [edge('module:late', subject=A)])
+        return found
+    monkeypatch.setattr(store, 'occurrence', mutate)
+    exchange = twin.exchange(name)
+    refused = exchange.call({'operation': 'get_evidence', 'arguments': {'occurrence': occurrence}})
+    assert refused['error'] == {'code': 'INVALID_ARGUMENT', 'message': handle.REFUSED}
+    assert not exchange.refs.facts, 'aucune référence créée pour un fait refusé'

@@ -220,3 +220,19 @@ def test_a_prefix_that_folds_beyond_the_index_key_never_matches_wrongly(tmp_path
     twin.add([edge('module:' + 'ß' * 128 + 'x', subject='module:root')])
     assert search(twin, name, prefix='ß' * 129)['error']['code'] == 'INVALID_ARGUMENT'
     assert found(search(twin, name, prefix='ß' * 128)) == ['module:' + 'ß' * 128 + 'x']
+
+
+@pytest.mark.parametrize('name', STORAGES)
+def test_a_search_during_which_facts_are_added_is_refused(twin, name, monkeypatch):
+    """Comme une Tuile : la génération est fixée avant la lecture et vérifiée après ; une page ne mélange jamais
+    deux générations, et sa reprise ne peut pas être liée à l'ancienne."""
+    store = twin.stores[name]
+    references = store.references
+
+    def mutate(*args, **kwargs):
+        found = references(*args, **kwargs)
+        store.add('analysis-1', 'fixture', [edge('module:ordre-tardif', subject='module:root')])
+        return found
+    monkeypatch.setattr(store, 'references', mutate)
+    refused = search(twin, name, prefix='ord', limit=1)
+    assert refused['error']['code'] == 'INVALID_ARGUMENT'

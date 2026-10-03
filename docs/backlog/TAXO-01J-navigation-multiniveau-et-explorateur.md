@@ -691,7 +691,10 @@ Le contrat validé est tenu. L'implémentation l'a précisé sur ces points, san
    avec sa reprise est refusée, jamais rendue vide.
 7. **Requêtes invalides pour les deux versions** : refusées avec le motif de `neighborhood/2` ; seuls quatre
    messages des réponses de référence changent, ceux des valeurs dont le domaine s'élargit.
-8. **Ancre des couvertures** : les occurrences de couverture gardent l'empreinte de leur sujet (relation et
+8. **Une génération, fixée puis vérifiée.** Comme la Tuile, `find_references` et `get_evidence` par poignée
+   lisent la génération des faits avant leur lecture et la vérifient après : un ajout entre-temps fait
+   refuser la réponse (revue de #85).
+9. **Ancre des couvertures** : les occurrences de couverture gardent l'empreinte de leur sujet (relation et
    rangs vides) ; elles ne sont jamais parcourues (migration 007).
 
 ### Mesures (SQLite, poste de développement)

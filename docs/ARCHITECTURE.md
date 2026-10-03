@@ -564,7 +564,8 @@ l'analyse.
 
 **Preuves.** Chaque élément porte une poignée d'occurrence : `get_evidence` la sert dans un autre échange, et
 refuse sans rien révéler une poignée d'une autre analyse, d'une autre génération ou inconnue ; elle n'est
-jamais une autorisation. Avec `evidence: SUMMARY`, chaque élément porte ses preuves résumées en localisations.
+jamais une autorisation. Comme le parcours, la lecture par poignée et `find_references` fixent la génération
+des faits avant de lire et la vérifient après ; un ajout entre-temps fait refuser la réponse. Avec `evidence: SUMMARY`, chaque élément porte ses preuves résumées en localisations.
 Lacunes locales puis résumés s'ajoutent à la sélection déjà fixée, dans l'ordre, tant qu'ils tiennent ; le
 reste est compté dans `not_sent`.
 
