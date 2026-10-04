@@ -70,6 +70,12 @@ def test_a_single_gradle_project_is_a_module_at_the_root():
     assert modules(output) == {'.': ['gradle']}
 
 
+def test_a_single_gradle_project_with_settings_is_still_the_root_module():
+    output = evaluate({'settings.gradle': "rootProject.name = 'demo'\n",
+                       'build.gradle': 'plugins { id "java" }\n'})
+    assert modules(output) == {'.': ['gradle']}
+
+
 def test_what_gradle_reading_cannot_establish_is_declared_never_guessed():
     computed = evaluate({'settings.gradle': 'def names = ["a"]\ninclude names\ninclude "b"\n'})
     assert modules(computed) == {'b': ['gradle']}
