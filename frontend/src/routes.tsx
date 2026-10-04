@@ -111,7 +111,7 @@ export function RouteDetail({row}:Readonly<{row:RouteRow}>){
 }
 
 export function RoutesTable({routes, selected, onSelect}:Readonly<{routes:RouteRow[]; selected:string; onSelect:(endpoint:string)=>void}>){
-  return <div className="table-wrap"><table><thead><tr><th>Route</th><th>Traitée par</th><th>Application</th><th>Règle</th><th>Protection</th><th>État</th></tr></thead>
+  return <div className="table-wrap"><table><thead><tr><th>Route</th><th>Traitée par</th><th>Application</th><th>Règle</th><th>Protection</th><th>État</th><th>Action</th></tr></thead>
     <tbody>{routes.map(row=><tr key={row.endpoint} aria-selected={selected===row.endpoint}>
       <td><button type="button" className="link" onClick={()=>onSelect(row.endpoint)}><code>{row.verb} {row.path}</code></button></td>
       <td>{row.handlers.map(fact=>shortSymbol(fact.object)).join(', ')}</td>
@@ -119,6 +119,7 @@ export function RoutesTable({routes, selected, onSelect}:Readonly<{routes:RouteR
       <td>{row.rules.map(ruleText).join(', ')||<span className="muted">—</span>}</td>
       <td>{row.protections.map(protectionText).join(', ')||<span className="muted">—</span>}</td>
       <td><span className={`state state-${row.state.toLowerCase()}`}>{STATES[row.state]}</span>{row.gaps.length>0&&row.state!=='NOT_INTERPRETED'&&<div className="muted">avec réserve</div>}</td>
+      <td><a className="ghost" href={askTaxoHref(row)}>Ask Taxo</a></td>
     </tr>)}</tbody></table></div>;
 }
 

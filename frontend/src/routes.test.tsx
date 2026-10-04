@@ -67,6 +67,8 @@ describe('page Routes', ()=>{
     const html=renderToStaticMarkup(<RoutesTable routes={[admin, debug]} selected="" onSelect={()=>{}}/>);
     expect(html).toContain('GET /api/admin/users');
     expect(html).toContain('/** → TestSecurityConfig#adpAuthorizationManager()');
+    expect(html).toContain('Ask Taxo');
+    expect(html).toContain('#/interroger?q=Que+fait+GET+%2Fapi%2Fadmin%2Fusers+%3F');
     expect(html.match(/<tr/g)?.length).toBe(3);
   });
 });
