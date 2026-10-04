@@ -5,6 +5,7 @@ import {typed} from './consult';
 import {EVALUATORS, label} from './vocabulary';
 import type {Derivation} from './query';
 import {explorerHref} from './explorer/entry';
+import {href} from './nav';
 
 export type Proof = {path?:string; line_start?:number; line_end?:number; method?:string};
 export type RouteFact = {subject:string; relation:string; object?:string; status?:string;
@@ -64,6 +65,9 @@ export function proofText(proof:Proof){
   return proof.line_end&&proof.line_end!==proof.line_start?`${proof.path}:${proof.line_start}-${proof.line_end}`:`${proof.path}:${proof.line_start}`;
 }
 
+/** Ouvre l'unique Ask Taxo avec la route déjà placée dans la question ; la page Routes ne crée pas une Minia locale. */
+export const askTaxoHref=(row:Pick<RouteRow,'verb'|'path'>)=>href('interroger', undefined, {q:`Que fait ${row.verb} ${row.path} ?`});
+
 /** Filtre par chemin ou verbe (texte libre), puis par etat etabli. */
 export function filterRoutes(routes:RouteRow[], text:string, filter:string){
   const words=text.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -93,7 +97,8 @@ function Facts({title, facts, render}:Readonly<{title:string; facts:RouteFact[];
 export function RouteDetail({row}:Readonly<{row:RouteRow}>){
   return <section className="route-detail" aria-label={`Route ${row.verb} ${row.path}`}>
     <h3><code>{row.verb} {row.path}</code> <span className={`state state-${row.state.toLowerCase()}`}>{STATES[row.state]}</span>
-      <a className="explore-link" href={explorerHref(row.endpoint)}>Explorer depuis cette route</a></h3>
+      <a className="explore-link" href={explorerHref(row.endpoint)}>Explorer depuis cette route</a>
+      <a className="explore-link" href={askTaxoHref(row)}>Ask Taxo</a></h3>
     <Facts title="Traitée par" facts={row.handlers} render={fact=>shortSymbol(fact.object)}/>
     <Facts title="Servie par" facts={row.applications} render={fact=>applicationName(fact.object)}/>
     <Facts title="Règle qui la capture" facts={row.matched} render={fact=>`${(fact.object??'').replace(/^route-pattern:/, '')} · chaîne ${chainName(fact)}`}/>

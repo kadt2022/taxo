@@ -81,6 +81,8 @@ group('vues', ()=>{
     const html=renderToStaticMarkup(<AskTaxo base="/projects/p" request={run}/>);
     expect(html).toContain('id="taxo-query"');
     expect(html).toContain('value=""');
+    const anchored=renderToStaticMarkup(<AskTaxo base="/projects/p" request={run} initialText="Que fait GET /api/courses ?"/>);
+    expect(anchored).toContain('value="Que fait GET /api/courses ?"');
     expect(run).not.toHaveBeenCalled();
   });
 });

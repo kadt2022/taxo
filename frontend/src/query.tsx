@@ -148,8 +148,9 @@ export function actions(base:string, text:string, request:Run, set:PanelSetters,
   };
 }
 
-export function AskTaxo({base, request, stream, minia=null}:Readonly<{base:string; request:Run; stream?:Stream; minia?:MiniaStatus|null}>){
-  const [text,setText]=useState(''), [busy,setBusy]=useState(false), [error,setError]=useState('');
+export function AskTaxo({base, request, stream, minia=null, initialText=''}:Readonly<{base:string; request:Run; stream?:Stream;
+  minia?:MiniaStatus|null; initialText?:string}>){
+  const [text,setText]=useState(initialText), [busy,setBusy]=useState(false), [error,setError]=useState('');
   const [result,setResult]=useState<Selection|null>(null), [live,setLive]=useState<Live|null>(null), [provider,setProvider]=useState('');
   const control=useRef<MiniaStop|null>(null);
   // Quitter le panneau (changer de projet) arrete la demande a Minia en cours.

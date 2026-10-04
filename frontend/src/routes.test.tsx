@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {applicationName, chainName, filterRoutes, loadRoutes, RoutesExplorer, RoutesView, proofText, protectionText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow, type RoutesResult} from './routes';
+import {applicationName, askTaxoHref, chainName, filterRoutes, loadRoutes, RoutesExplorer, RoutesView, proofText, protectionText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow, type RoutesResult} from './routes';
 
 const admin:RouteRow={endpoint:'endpoint:GET /api/admin/users', verb:'GET', path:'/api/admin/users', state:'PROTECTED',
   handlers:[{subject:'endpoint:GET /api/admin/users', relation:'HANDLED_BY', object:'symbol:java:com.example.adp.test.controller.TestController#adminUsers(Authentication)',
@@ -34,6 +34,7 @@ describe('lecture des faits d’une route', ()=>{
     expect(chainName(admin.handlers[0])).toBe('');
     expect(proofText({path:'A.java', line_start:3, line_end:5})).toBe('A.java:3-5');
     expect(proofText({path:'build.gradle'})).toBe('build.gradle');
+    expect(askTaxoHref(admin)).toBe('#/interroger?q=Que+fait+GET+%2Fapi%2Fadmin%2Fusers+%3F');
   });
   it('filtre par chemin, verbe et état établi', ()=>{
     const rows=[admin, debug, open];
@@ -52,6 +53,8 @@ describe('page Routes', ()=>{
     expect(html).toContain('TestController.java:48');
     expect(html).toContain('SecurityConfig : non chargée (hors du classpath)');
     expect(html).toContain('Protégée');
+    expect(html).toContain('Ask Taxo');
+    expect(html).toContain('#/interroger?q=Que+fait+GET+%2Fapi%2Fadmin%2Fusers+%3F');
     expect(html).not.toMatch(/Minia|probablement/);
   });
   it('dit exactement pourquoi une route n’est pas interprétée', ()=>{

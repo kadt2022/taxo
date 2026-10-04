@@ -107,7 +107,10 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
       error={mine?.error??''} initialFilter={filter} title={title} intro={intro}
       unread={unreadBy(coverage, [filter==='ALL'?'taxo.spring-api':'taxo.spring-security'])} unknown={isUnknown(coverage)}/></>;
     switch(route.page){
-    case 'interroger':return <AskTaxo key={panelKey('ask',selected)} base={base} request={request} minia={minia}/>;
+    case 'interroger':{
+      const initial=route.params.get('q')??'';
+      return <AskTaxo key={`${panelKey('ask',selected)}:${initial}`} base={base} request={request} minia={minia} initialText={initial}/>;
+    }
     case 'explorer':return <ExplorerPage key={selected} base={base} request={request} scanId={current.id} route={route} revision={revision} project={project}/>;
     case 'technologies':return <>{note}<TechnologiesPage scan={current}/></>;
     case 'routes':return routesOf('ALL');
