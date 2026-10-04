@@ -120,6 +120,10 @@ def _gradle(settings, builds, reading):
                 # Un build.gradle qu'aucun settings n'inclut n'est pas un projet du build : non lu.
                 reading.gap(path, 'build.gradle hors des projets inclus')
                 continue
+            # Un build Gradle mono-module a souvent un settings.gradle qui ne contient aucun include :
+            # la racine est alors le seul projet du build et son build.gradle doit l'établir comme module.
+            if directory == root and len(projects) == 1:
+                reading.modules.append(readers.Module(directory, 'gradle', path, None))
         readers.gradle_dependencies(path, text, reading, projects)
 
 
