@@ -51,6 +51,22 @@ Quand la cible n'est pas établie, la chaîne doit s'arrêter avec une raison lo
 
 Cette capacité reste générique Java. Elle ne connaît ni `Controller`, ni `Service`, ni `Repository`, ni Spring Data par leur rôle métier.
 
+Objectif final du récit :
+
+```text
+Route
+  ↓ HANDLED_BY
+Contrôleur
+  ↓ CALLS
+Service
+  ↓ CALLS
+Autre composant / Repository
+  ↓
+FRONTIÈRE explicite lorsque Taxo ne peut plus établir la cible
+```
+
+**Priorité absolue : moins de `CALLS`, mais vrais et justifiables, plutôt que davantage de flèches approximatives.** Chaque fois qu'un choix du récit hésite entre couvrir plus et prouver mieux, il prouve mieux.
+
 ## Décision d'architecture proposée
 
 ### 1. `CALLS` désigne une déclaration, pas le corps réellement exécuté
@@ -95,7 +111,7 @@ Quand une classe des sources implémente explicitement une interface des sources
 Deux niveaux, deux statuts (décision proposée, à valider dans PR A) :
 
 - **type → type** : `symbol:java:<Impl>` `IMPLEMENTS` `symbol:java:<Interface>`, `OBSERVED`, car la clause `implements` est écrite ; preuve à la ligne de la clause ;
-- **méthode → méthode** : `symbol:java:<Impl>#m(…)` `IMPLEMENTS` `symbol:java:<Interface>#m(…)`, `INFERRED`, car aucune ligne ne l'écrit : c'est une déduction (même signature syntaxique normalisée, prémisse : l'`IMPLEMENTS` type → type). Règle `java.implements.same-signature/1`. Signature ambiguë ou supertype hors sources entre les deux : rien n'est produit. Seules les méthodes qui peuvent être implémentées comptent : une méthode `static` ou `private` de l'interface, ou une méthode `static` de la classe, n'est jamais reliée, même à signature égale (le lecteur doit donc fournir les modificateurs).
+- **méthode → méthode** : `symbol:java:<Impl>#m(…)` `IMPLEMENTS` `symbol:java:<Interface>#m(…)`, `INFERRED`, car aucune ligne ne l'écrit : c'est une déduction (même signature syntaxique normalisée ; prémisses : l'`IMPLEMENTS` type → type et les deux `CONTAINS` des méthodes). Règle `java.implements.same-signature/1`. Signature ambiguë ou supertype hors sources entre les deux : rien n'est produit. Seules les méthodes qui peuvent être implémentées comptent : une méthode `static` ou `private` de l'interface, ou une méthode `static` de la classe, n'est jamais reliée, même à signature égale (le lecteur doit donc fournir les modificateurs).
 
 Le niveau méthode est celui qui sert l'Explorer : il relie la déclaration appelée à son implémentation connue. Il demande d'ouvrir `INFERRED` à `IMPLEMENTS` dans le validateur (`backend/app/facts/domain/fact.py`, aujourd'hui `OBSERVED` seul) et dans `ARCHITECTURE § 5.6`.
 
@@ -119,14 +135,14 @@ Le dispatch dynamique sera un récit séparé lorsqu'un site d'appel sera une r�
 
 Le premier fragment utile couvre les appels de méthode écrits directement dans le corps d'une méthode ou d'un constructeur (hors lambda, classe anonyme ou locale), dont le receveur est :
 
-1. `this` ;
+1. `this`, ou aucun receveur (`f()`) ;
 2. un champ du type courant, écrit `champ` ou `this.champ` ;
-3. un paramètre de méthode ;
-4. une variable locale ;
 
-à condition que le lecteur Java connaisse le **type déclaré** du receveur et que ce type soit résolu vers **une déclaration unique présente dans l'instantané**.
+à condition que le **type déclaré** du receveur soit établi par un fait de la Maille (voir « Prémisses ») et résolu vers **une déclaration unique présente dans l'instantané**.
 
-Le type déclaré est le type **écrit** : `var`, paramètre de type générique (`T`) ou paramètre de lambda donnent `RECEIVER_TYPE_UNKNOWN`. Les arguments génériques sont ignorés (`List<Course>` vise `List`).
+Paramètres de méthode et variables locales sont **reportés** à un fragment suivant : ils n'ont pas de symbole, donc leur type déclaré ne peut pas être une prémisse de la Maille sans étendre davantage le contrat. Leurs sites sont `NOT_INTERPRETED` avec `RECEIVER_KIND_DEFERRED`. Le cas utile (`courseService` injecté dans un champ) reste couvert.
+
+Le type déclaré est le type **écrit** : un champ de type générique (`T`) donne `RECEIVER_TYPE_UNKNOWN`. Les arguments génériques sont ignorés (`List<Course>` vise `List`).
 
 Les appels sans receveur (`f()`) du type courant restent couverts selon les mêmes règles de résolution et remplacent le fragment trop étroit proposé actuellement au § 14, avec deux conditions qu'il gardait : aucun type englobant ne déclare `f` de même arité, et aucun import statique ne peut fournir `f`. Sinon : `OVERLOAD_AMBIGUOUS`.
 
@@ -291,12 +307,30 @@ Règle de dérivation initiale :
 java.calls.declared-receiver-unique-target/1
 ```
 
-Prémisses : le type déclaré du receveur et la ligne où il est déclaré, la déclaration cible retenue, les types de la hiérarchie parcourus. `counter_examples_checked` : les déclarations de même nom écartées (autre arité).
+### Prémisses : des faits, sans relâcher `ARCHITECTURE § 5.5`
 
-Ces prémisses sont des déclarations lues dans les sources, pas des faits de la Maille. Or `ARCHITECTURE § 5.5` exige qu'un `INFERRED` d'évaluateur applique sa règle à des **faits** du même instantané. PR A doit trancher, avant tout producteur :
+`ARCHITECTURE § 5.5` exige qu'un `INFERRED` d'évaluateur applique une règle nommée à des **faits** du même instantané. Cette règle **n'est pas assouplie** pour faciliter `CALLS`. Les déclarations dont la résolution a besoin deviennent donc d'abord des faits `OBSERVED`, chacun avec sa preuve à la ligne, produits par le même évaluateur dans la même exécution :
 
-- **choix par défaut proposé** : réviser § 5.5 pour qu'une prémisse puisse aussi être une déclaration du même instantané **citée en preuve** (preuve fichier à la ligne, `role: declaration`), et ajouter à la conformité un cas qui refuse une prémisse sans preuve ;
-- alternative : modéliser les déclarations comme faits (types, méthodes, champs), ce qui ajoute une relation et beaucoup de volume à la Maille.
+| Fait déclaratif | Relation | Statut |
+| --- | --- | --- |
+| le fichier déclare le type | `file:<chemin>` `CONTAINS` `symbol:java:<Type>` | `OBSERVED` |
+| le type déclare une méthode ou un constructeur | `symbol:java:<Type>` `CONTAINS` `symbol:java:<Type>#m(…)` | `OBSERVED` |
+| le type déclare un champ | `symbol:java:<Type>` `CONTAINS` `symbol:java:<Type>#<champ>` | `OBSERVED` |
+| le champ a un type déclaré | `symbol:java:<Type>#<champ>` `TYPED_AS` `symbol:java:<TypeDuChamp>` | `OBSERVED` |
+| le type étend une classe ou une interface | `symbol:java:<Type>` `EXTENDS` `symbol:java:<Super>` | `OBSERVED` |
+| la classe implémente une interface | `symbol:java:<Type>` `IMPLEMENTS` `symbol:java:<Interface>` | `OBSERVED` |
+
+Ces relations sont génériques (`symbol → symbol`, `file → symbol`), sans rôle Spring. Un supertype dont le nom écrit ne se résout pas n'est pas un fait : son type porte une couverture `NOT_INTERPRETED`.
+
+Un `CALLS` cite alors en `premises` les identités de ces faits : le `TYPED_AS` du champ receveur, les `EXTENDS` / `IMPLEMENTS` parcourus, le `CONTAINS` de la déclaration retenue. `counter_examples_checked` cite les `CONTAINS` de même nom écartés (autre arité). La preuve directe reste le site d'appel.
+
+Les conditions négatives (« aucune autre surcharge », « aucun supertype externe ») s'appuient sur l'ensemble des faits déclaratifs des types concernés **et** sur la couverture `ANALYSED` de leurs fichiers par ce même producteur, conformément à TAXO-COV-01 : si un fichier n'est pas `ANALYSED`, la condition n'est pas établie et le site est `NOT_INTERPRETED`.
+
+Contrat touché (PR A) : `CONTAINS` accepte `file → symbol` et `symbol → symbol` ; deux relations nouvelles `EXTENDS` et `TYPED_AS` ; forme de symbole pour un champ, `symbol:java:<type>#<champ>` (sans parenthèses), dans `java-symbol-syntactic`.
+
+Alternative écartée : permettre qu'une prémisse soit une simple ligne de code citée en preuve. Elle aurait relâché § 5.5 au seul profit de `CALLS`.
+
+Coût connu : un fait par type, méthode, champ et supertype. PR D le mesure. Ces faits servent aussi l'Arbre et toute projection future, sans que `CALLS` soit refait.
 
 Preuve : une preuve fichier par site, avec `symbol` = propriétaire lexical, et les champs proposés au § 14 (`column_start`, `column_end`, `role: call-site`). Ces champs n'existent pas encore dans `contract-v1.schema.json` : PR A les ajoute.
 
@@ -326,6 +360,7 @@ NO_MATCHING_DECLARATION
 OVERLOAD_AMBIGUOUS
 SUPER_TYPE_UNRESOLVED
 UNSUPPORTED_CALL_FORM
+RECEIVER_KIND_DEFERRED
 LAMBDA_OR_LOCAL_CONTEXT
 PARSE_ERROR
 ```
@@ -401,7 +436,7 @@ Elle contient explicitement :
 - type de receveur inconnu ;
 - méthode héritée d'une dépendance externe ;
 - méthode déclarée dans un type des sources qui étend un type externe (`SUPER_TYPE_UNRESOLVED`) ;
-- receveur `var` ou de type générique `T` ;
+- receveur paramètre de méthode (`RECEIVER_KIND_DEFERRED`) et champ de type générique `T` ;
 - appel dans une lambda ;
 - deux sites identiques entre les mêmes méthodes.
 
@@ -422,20 +457,21 @@ Un essai sur `spring-petclinic` mesure enfin le comportement sur un dépôt rée
 7. Les appels d'une lambda ne sont pas attribués à la méthode englobante.
 8. Un appel sur une méthode d'un type des sources qui étend un type externe donne `SUPER_TYPE_UNRESOLVED`, jamais un `CALLS`.
 9. Deux sites de `A` vers `B` ne créent pas deux identités `CALLS`, mais leurs deux preuves restent accessibles.
-10. Le voisinage montre les nouveaux faits sans modification spécifique au moteur ou à l'Explorer.
-11. Même instantané et même version d'évaluateur : mêmes faits, mêmes diagnostics, même ordre.
-12. Un dépôt sans Java rend l'évaluateur `UNSUPPORTED` selon TAXO-COV-01.
-13. Toute forme hors fragment est explicitement couverte comme non interprétée ; jamais une absence inventée.
+10. Chaque `CALLS` cite en prémisses des identités de faits présents dans la même analyse ; aucun `CALLS` sans prémisse vérifiable.
+11. Le voisinage montre les nouveaux faits sans modification spécifique au moteur ou à l'Explorer.
+12. Même instantané et même version d'évaluateur : mêmes faits, mêmes diagnostics, même ordre.
+13. Un dépôt sans Java rend l'évaluateur `UNSUPPORTED` selon TAXO-COV-01.
+14. Toute forme hors fragment est explicitement couverte comme non interprétée ; jamais une absence inventée.
 
 ## Découpage proposé
 
 ### PR A — Contrat et fixture
 
 - décider et mettre à jour `ARCHITECTURE § 14` ;
-- réviser `ARCHITECTURE § 5.5` sur les prémisses d'un `INFERRED` (déclarations citées en preuve), avec son cas de conformité ;
+- **ne pas** modifier `ARCHITECTURE § 5.5` ; ajouter les faits déclaratifs (`CONTAINS` étendu, `EXTENDS`, `TYPED_AS`, symbole de champ) au schéma, au validateur, au § 5.6 et aux libellés du portail ;
 - passer `CALLS` à `INFERRED` dans le vocabulaire (validateur `fact.py`, § 5.6) ;
 - valider la décision 3 sur `IMPLEMENTS` et ouvrir `INFERRED` au niveau méthode ;
-- ajouter au schéma les champs de preuve `column_start`, `column_end`, `role` (`call-site`, `declaration`) et le `diagnostic` de couverture ;
+- ajouter au schéma les champs de preuve `column_start`, `column_end`, `role` (`call-site`) et le `diagnostic` de couverture ;
 - compléter validateur et conformité (le cas `t16-02-absence-relation.json` cite déjà `CALLS`) ;
 - ajouter la fixture indépendante et ses vérités attendues ;
 - aucun producteur `CALLS` encore.
@@ -463,6 +499,18 @@ Un essai sur `spring-petclinic` mesure enfin le comportement sur un dépôt rée
 - mesure du coût supplémentaire dans les Tuiles ;
 - décision documentée sur le fragment suivant.
 
+## Compatibilité avec un futur protocole
+
+Ce récit ne conçoit ni n'implémente de nouveau protocole, et ne crée aucune API pour lui. Il garde seulement ce qui permettra à un consommateur futur de lire la Maille sans refaire 01K :
+
+- `CALLS`, `IMPLEMENTS`, `EXTENDS`, `TYPED_AS`, `CONTAINS` restent génériques (`symbol → symbol`, `file → symbol`) ;
+- aucune relation spécifique `Controller`, `Service`, `Repository`, Spring ou JPA ;
+- tout fait porte preuves, provenance, dérivation et couverture ;
+- un appel non établi est `NOT_INTERPRETED` avec sa raison ; aucune cible inventée ;
+- `CALLS` désigne la déclaration statiquement établie, pas le corps exécuté ; `DISPATCHES_TO` reste hors périmètre ;
+- aucune logique Java dans l'Explorer ni dans le moteur de voisinage ;
+- un futur diagramme d'appels sera une projection de la Maille, jamais une seconde source de vérité.
+
 ## Hors périmètre
 
 - résolution complète du langage Java ;
@@ -475,6 +523,8 @@ Un essai sur `spring-petclinic` mesure enfin le comportement sur un dépôt rée
 - proxies Spring ;
 - AOP ;
 - appels via méthode de référence ;
+- receveurs paramètre ou variable locale (fragment suivant) ;
+- conception ou implémentation d'un nouveau protocole de Taxo ;
 - Kotlin ;
 - dataflow ;
 - appels inter-processus ;
@@ -489,6 +539,7 @@ Pour la fixture, `student-course-demo` et `spring-petclinic` :
 - sites d'appel rencontrés ;
 - sites résolus ;
 - sites non interprétés par raison ;
+- faits déclaratifs (`CONTAINS`, `EXTENDS`, `TYPED_AS`) ajoutés ;
 - `CALLS` distincts ;
 - `IMPLEMENTS` distincts ;
 - temps de l'évaluateur ;
