@@ -40,6 +40,12 @@ lisent le port de stockage, pas ses tables. Le gain de place est un résultat à
 Les hypothèses statistiques restent hors de cette séquence. Un résultat d’évaluation d’un agent
 ne bloque pas le développement des capacités humaines et API.
 
+### Après les appels Java
+
+Vue Chaîne de l'explorateur, en notation UML Taxo ([TAXO-UI-06](TAXO-UI-06-vue-chaine-uml-taxo.md)) :
+lire une route de haut en bas, flèches nommées, frontière dessinée là où Taxo s'arrête. Direction validée
+le 2026-10-06 ; elle suit les appels Java (TAXO-01K), sans lesquels la chaîne s'arrête au contrôleur.
+
 ## Validation indépendante
 
 **Taxo ne juge pas Taxo** : les résultats attendus viennent de fixtures dont la vérité est établie
