@@ -12,7 +12,7 @@ export const CHAIN_GEOMETRY:ChainGeometry={margin:24, width:300, indent:44, gap:
   pad:14, chars:34};
 
 /** Une boîte : un nœud, une feuille (aucun objet ou une valeur), une frontière de connaissance (`note`), une coupure de
- * sélection (`cut`), ou un lien vers un nœud déjà dessiné (`revisit`). */
+ * sélection (`cut`), ou un lien vers un nœud déjà dessiné (`revisit`, dont `reference` est le nœud déjà dessiné). */
 export type Box={key:string; kind:'node'|'leaf'|'note'|'cut'|'revisit'; column:'main'|'side'; depth:number;
   x:number; y:number; width:number; height:number; lines:string[]; reference?:string; link?:Link; value?:string;
   boundary?:Boundary; anchor?:boolean};
@@ -107,7 +107,7 @@ export function chain(view:View, links:Link[], form:(relation:string)=>Form, tex
     if(known){
       const said=lines(text.revisit(link, end));
       const chip=put({key:`revisit:${link.identity}`, kind:'revisit', column:owner.column, depth:owner.depth+1, width,
-        height:said.length*line+pad, lines:said, link});
+        height:said.length*line+pad, lines:said, link, reference:end});
       ties.push({owner, box:chip});
       return null;
     }

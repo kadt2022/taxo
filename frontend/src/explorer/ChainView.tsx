@@ -9,14 +9,16 @@ import type {Link, View} from './graph';
 import type {Selected} from './state';
 import {bareName, factText, knowledgeText, nodeMarks, selectionText, statusMark, toneOf, typeText, verb} from './sentences';
 import {useNaming} from './Naming';
+import type {NodeCommands} from './NodeActions';
 
 const classes=(...names:(string|false|undefined)[])=>names.filter(Boolean).join(' ');
 const formOf=(relation:string):Form=>FORMS[relation]??'CHAIN';
 
-export function ChainView({view, links, selected, onSelect}:Readonly<{view:View; links:Link[]; selected:Selected;
-  onSelect:(selected:Selected)=>void}>){
+export function ChainView({view, links, selected, onSelect, commands, busy}:Readonly<{view:View; links:Link[]; selected:Selected;
+  onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean}>){
   const id=useId(), named=useNaming();
-  const text:ChainText=useMemo(()=>({name:value=>bareName(value, named), note:knowledgeText, cut:selectionText,
+  const text:ChainText=useMemo(()=>({name:value=>bareName(value, named), note:knowledgeText,
+    cut:boundary=>`${selectionText(boundary)} · ${boundary.continuation?'voir la suite':'développer'} ›`,
     revisit:(link, target)=>`↺ ${verb(link.relation)} ${named(target)}, déjà montré plus haut`,
     leaf:value=>value===undefined?'aucun objet : ce fait n’en a pas':value}), [named]);
   const drawn=useMemo(()=>chain(view, links, formOf, text), [view, links, text]);
@@ -49,7 +51,8 @@ export function ChainView({view, links, selected, onSelect}:Readonly<{view:View;
           {verb(link.relation)}{mark&&<span className={`chain-status status-${mark}`}>{mark}</span>}
           {count>1&&<span className="chain-count">×{count}</span>}</button>;
       })}
-      {drawn.boxes.map(box=><Shape key={box.key} box={box} view={view} nodes={nodes} selected={selected} onSelect={onSelect}/>)}
+      {drawn.boxes.map(box=><Shape key={box.key} box={box} view={view} nodes={nodes} selected={selected} onSelect={onSelect} commands={commands}
+        busy={busy}/>)}
     </div></div>
     <details className="chain-legend" open><summary>Légende</summary>
       <ul>
@@ -69,8 +72,8 @@ export function ChainView({view, links, selected, onSelect}:Readonly<{view:View;
 
 const MARK_NAMES:Record<string, string>={O:'observé dans le code', D:'déduit par Taxo', V:'validé par une personne'};
 
-function Shape({box, view, nodes, selected, onSelect}:Readonly<{box:Box; view:View; nodes:Map<string, View['nodes'][number]>;
-  selected:Selected; onSelect:(selected:Selected)=>void}>){
+function Shape({box, view, nodes, selected, onSelect, commands, busy}:Readonly<{box:Box; view:View;
+  nodes:Map<string, View['nodes'][number]>; selected:Selected; onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean}>){
   const named=useNaming();
   const style={left:box.x, top:box.y, width:box.width, height:box.height};
   const lines=box.lines.map((said, index)=><span key={index} className="chain-line">{said}</span>);
@@ -85,12 +88,18 @@ function Shape({box, view, nodes, selected, onSelect}:Readonly<{box:Box; view:Vi
   }
   if(box.kind==='note')return <div role="note" className="chain-note" style={style}>
     <span className="chain-note-title">Frontière · Taxo ne sait pas</span>{lines}</div>;
-  if(box.kind==='cut')return <button type="button" className="chain-cut" style={style}
-    aria-label={`${named(box.reference!)} : ${box.lines.join(' ')}`} onClick={()=>onSelect({kind:'node', reference:box.reference!})}>{lines}</button>;
+  if(box.kind==='cut'){
+    const reference=box.reference!, more=!!box.boundary?.continuation;
+    return <button type="button" className="chain-cut" style={style} disabled={busy}
+      aria-label={`${more?'Voir la suite de':'Développer'} ${named(reference)}, depuis la vue Chaîne`}
+      onClick={()=>(more?commands.more:commands.expand)(reference)}>{lines}</button>;
+  }
   const link=box.link!, chosen=selected?.kind==='link'&&selected.identity===link.identity;
   if(box.kind==='leaf')return <button type="button" className="chain-leaf" style={style} aria-pressed={chosen}
     aria-label={box.value===undefined?'Aucun objet : ce fait n’en a pas':`Valeur ${box.value}, pas un nœud`}
     onClick={()=>onSelect({kind:'link', identity:link.identity})}>{lines}</button>;
-  return <button type="button" className="chain-revisit" style={style} aria-pressed={chosen}
-    aria-label={`${factText(link, named)}, déjà montré`} onClick={()=>onSelect({kind:'link', identity:link.identity})}>{lines}</button>;
+  const target=box.reference!;
+  return <button type="button" className="chain-revisit" style={style} aria-pressed={selected?.kind==='node'&&selected.reference===target}
+    aria-label={`${factText(link, named)}, déjà montré : choisir ${named(target)}`}
+    onClick={()=>onSelect({kind:'node', reference:target})}>{lines}</button>;
 }

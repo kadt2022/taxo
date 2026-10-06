@@ -129,7 +129,8 @@ function Body({view, selected, dispatch, commands, busy, query, shape, onShape, 
       <button type="button" aria-pressed={shape==='couches'} onClick={()=>onShape('couches')}>Couches</button>
       <button type="button" aria-pressed={shape==='liste'} onClick={()=>onShape('liste')}>Liste</button></fieldset>
     <div className="explorer-body">
-      {shape==='chaine'&&<ChainView view={view} links={links} selected={selected} onSelect={select}/>}
+      {shape==='chaine'&&<ChainView view={view} links={links} selected={selected} onSelect={select}
+        commands={commands} busy={busy}/>}
       {shape==='couches'&&<LayerView view={view} links={links} selected={selected} onSelect={select}/>}
       {shape==='liste'&&<ListView view={view} links={links} commands={commands} busy={busy} onSelect={identity=>select({kind:'link', identity})}/>}
       <div className="explorer-side">

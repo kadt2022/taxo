@@ -48,6 +48,7 @@ describe('la vue Chaîne', ()=>{
     expect(found.arrows).toHaveLength(1);
     const revisit=found.boxes.find(item=>item.kind==='revisit')!;
     expect(revisit.lines).toEqual([`revisite ${ROUTE}`]);
+    expect(revisit.reference, 'elle désigne le nœud déjà dessiné').toBe(ROUTE);
     expect(found.ties.map(tie=>tie.box)).toContain(revisit);
   });
 

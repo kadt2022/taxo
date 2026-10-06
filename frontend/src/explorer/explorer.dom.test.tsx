@@ -173,6 +173,10 @@ describe('l’explorateur', ()=>{
     expect(host.querySelector('[aria-label="Détail du lien"]')).toBeTruthy();
     await click(named(/^symbole java:A#get\(\)/));
     expect(host.querySelector('[aria-label="Nœud choisi"]')?.textContent).toContain('symbol:java:A#get()');
+    await click(named('Développer symbole java:A#get(), depuis la vue Chaîne'));
+    expect(tiles()[1], 'la pastille de coupure reprend le parcours').toMatchObject({root:HANDLER, depth:1});
+    await click(named('Voir la suite de routes /**, depuis la vue Chaîne'));
+    expect(tiles()[2]).toMatchObject({root:PATTERN, continuation:'reprise-P'});
   });
 
   it('développe un nœud et voit la suite d’une adjacence coupée, sans recharger le reste', async()=>{
