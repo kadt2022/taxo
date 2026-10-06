@@ -92,6 +92,13 @@ Le premier fragment ne doit donc pas dépendre de Spring DI ni de Lombok.
 
 Quand une classe des sources implémente explicitement une interface des sources, Taxo peut produire un fait `IMPLEMENTS` seulement si les deux déclarations sont établies sans ambiguïté.
 
+Deux niveaux, deux statuts (décision proposée, à valider dans PR A) :
+
+- **type → type** : `symbol:java:<Impl>` `IMPLEMENTS` `symbol:java:<Interface>`, `OBSERVED`, car la clause `implements` est écrite ; preuve à la ligne de la clause ;
+- **méthode → méthode** : `symbol:java:<Impl>#m(…)` `IMPLEMENTS` `symbol:java:<Interface>#m(…)`, `INFERRED`, car aucune ligne ne l'écrit : c'est une déduction (même signature syntaxique normalisée, prémisse : l'`IMPLEMENTS` type → type). Règle `java.implements.same-signature/1`. Signature ambiguë ou supertype hors sources entre les deux : rien n'est produit.
+
+Le niveau méthode est celui qui sert l'Explorer : il relie la déclaration appelée à son implémentation connue. Il demande d'ouvrir `INFERRED` à `IMPLEMENTS` dans le validateur (`backend/app/facts/domain/fact.py`, aujourd'hui `OBSERVED` seul) et dans `ARCHITECTURE § 5.6`.
+
 Cette relation ne doit pas être utilisée pour prétendre que l'implémentation est le corps exécuté lors d'un appel sur l'interface.
 
 ### 4. `DISPATCHES_TO` reste suspendu
@@ -110,16 +117,31 @@ Le dispatch dynamique sera un récit séparé lorsqu'un site d'appel sera une r�
 
 ## Premier fragment livré
 
-Le premier fragment utile couvre les appels de méthode dont le receveur est :
+Le premier fragment utile couvre les appels de méthode écrits directement dans le corps d'une méthode ou d'un constructeur (hors lambda, classe anonyme ou locale), dont le receveur est :
 
 1. `this` ;
-2. un champ du type courant ;
+2. un champ du type courant, écrit `champ` ou `this.champ` ;
 3. un paramètre de méthode ;
 4. une variable locale ;
 
 à condition que le lecteur Java connaisse le **type déclaré** du receveur et que ce type soit résolu vers **une déclaration unique présente dans l'instantané**.
 
-Les appels sans receveur (`f()`) du type courant restent couverts selon les mêmes règles de résolution et remplacent le fragment trop étroit proposé actuellement au § 14.
+Le type déclaré est le type **écrit** : `var`, paramètre de type générique (`T`) ou paramètre de lambda donnent `RECEIVER_TYPE_UNKNOWN`. Les arguments génériques sont ignorés (`List<Course>` vise `List`).
+
+Les appels sans receveur (`f()`) du type courant restent couverts selon les mêmes règles de résolution et remplacent le fragment trop étroit proposé actuellement au § 14, avec deux conditions qu'il gardait : aucun type englobant ne déclare `f` de même arité, et aucun import statique ne peut fournir `f`. Sinon : `OVERLOAD_AMBIGUOUS`.
+
+Hors fragment, avec `UNSUPPORTED_CALL_FORM` : `super.f()`, appel statique `Type.f()`, appel sur le résultat d'un autre appel (`a.b().c()` : seul le premier appel est candidat), `new T(...)` et `this(...)` / `super(...)`.
+
+### Ce que le lecteur Java doit fournir (PR B)
+
+Le lecteur actuel (`backend/app/evaluators/java/syntax.py`) ne suffit pas tel quel :
+
+- `JavaType.methods` ne garde que les méthodes **annotées** ; `signatures` les garde toutes mais sans lignes ni modificateurs. L'évaluateur a besoin de toutes les déclarations ;
+- `JavaFile.chains(names)` filtre par nom et ignore les appels imbriqués dans un argument (`a(b.c())`) ; l'évaluateur doit voir **tous** les sites ;
+- `Chain.declared` n'existe que si le receveur est un identifiant : `this.champ` doit être ajouté ;
+- un site doit porter ses colonnes (preuve `call-site`, § 14).
+
+Ces primitives restent génériques : le lecteur ne connaît toujours aucun framework.
 
 ### Cible admissible
 
@@ -148,6 +170,9 @@ Donc :
 
 - une méthode unique par nom et arité peut être résolue dans ce fragment ;
 - plusieurs surcharges de même nom et même arité donnent `NOT_INTERPRETED` ;
+- une méthode varargs (`f(String...)`) n'a pas d'arité fixe : tout site de même nom est `OVERLOAD_AMBIGUOUS` ;
+- deux déclarations de même signature dans un type (`JavaType.ambiguous`) donnent `OVERLOAD_AMBIGUOUS` ;
+- un nom et une arité qui coïncident avec une méthode publique d'`Object` (`equals/1`, `hashCode/0`, `toString/0`…) ne sont résolus que si le type des sources la redéclare avec exactement la même signature ; sinon `OVERLOAD_AMBIGUOUS` ;
 - Taxo n'essaie pas encore d'inférer les types d'expressions pour départager les surcharges ;
 - une candidate unique après filtrage reste une cible seulement si la règle du fragment garantit son unicité.
 
@@ -157,7 +182,16 @@ Aucune préférence par proximité, ordre du fichier ou nom de classe.
 
 Le premier fragment peut suivre une super-classe ou une interface **présente dans les sources** si la chaîne de types est résolue sans ambiguïté.
 
-Si une partie nécessaire de la hiérarchie est externe ou non résolue et pourrait changer la cible, le site est `NOT_INTERPRETED`.
+Java choisit une surcharge parmi **toutes** les méthodes du type, héritées comprises. Taxo réunit donc les déclarations de même nom et même arité dans toute la hiérarchie du type déclaré :
+
+- si elles ont toutes la même signature, ce sont des redéfinitions : la cible est la déclaration du type le plus proche du receveur ; si deux types au même niveau (deux interfaces) la déclarent, `OVERLOAD_AMBIGUOUS` ;
+- si leurs signatures diffèrent, `OVERLOAD_AMBIGUOUS` ;
+- si un supertype de la hiérarchie est externe ou non résolu (autre qu'`Object`, traité plus haut) :
+  - et qu'une déclaration est trouvée dans les sources, le supertype pourrait déclarer une surcharge de même arité : `SUPER_TYPE_UNRESOLVED`. Taxo ne suppose pas qu'une bibliothèque ne déclare rien ;
+  - et qu'aucune déclaration n'est trouvée dans les sources : `TARGET_DECLARATION_OUTSIDE_SNAPSHOT` (voir « Repositories ») ;
+- si toute la hiérarchie est dans les sources et qu'aucune déclaration ne correspond : `NO_MATCHING_DECLARATION`.
+
+Conséquence assumée : dans `CourseRepository extends JpaRepository<…>`, un appel à une méthode déclarée dans `CourseRepository` est `SUPER_TYPE_UNRESOLVED`, et un appel à `findAll()` est `TARGET_DECLARATION_OUTSIDE_SNAPSHOT`. PR D mesure ce que coûte cette prudence.
 
 ## Interfaces
 
@@ -189,7 +223,7 @@ CourseController#getCourses()
 CourseService#getCourses()
 ```
 
-et, séparément, si le contrat `IMPLEMENTS` est produit au niveau des méthodes :
+et, séparément, au niveau des méthodes (`INFERRED`, décision 3) :
 
 ```text
 CourseServiceImpl#getCourses()
@@ -255,15 +289,24 @@ Règle de dérivation initiale :
 java.calls.declared-receiver-unique-target/1
 ```
 
+Prémisses (texte, comme les autres évaluateurs) : le type déclaré du receveur et la ligne où il est déclaré, la déclaration cible retenue, les types de la hiérarchie parcourus. `counter_examples_checked` : les déclarations de même nom écartées (autre arité).
+
+Preuve : une preuve fichier par site, avec `symbol` = propriétaire lexical, et les champs proposés au § 14 (`column_start`, `column_end`, `role: call-site`). Ces champs n'existent pas encore dans `contract-v1.schema.json` : PR A les ajoute.
+
 ### `IMPLEMENTS`
 
-Produit seulement quand le lien entre déclarations est écrit et résolu dans les sources.
-
-Le récit devra mettre en cohérence le statut de `IMPLEMENTS` dans `ARCHITECTURE § 5.6` avec sa preuve. Si la relation est directement déclarée dans le code, `OBSERVED` est conservé.
+Produit seulement quand le lien entre déclarations est résolu dans les sources : `OBSERVED` type → type, `INFERRED` méthode → méthode (décision 3).
 
 ### Couvertures
 
 Chaque site que l'analyseur rencontre mais ne peut pas résoudre est localisé par `NOT_INTERPRETED`.
+
+L'identité d'une couverture est (sujet, type, périmètre, producteur) et son périmètre s'arrête au fichier : deux sites non résolus d'une même méthode donneraient la même identité. Donc :
+
+- une couverture `NOT_INTERPRETED` par **méthode ou constructeur propriétaire** (sujet : son symbole ; périmètre : son fichier) ;
+- ses sites dans le champ `diagnostic` proposé au § 14 (ligne, colonnes, receveur écrit, type déclaré, raison fermée, candidats), hors identité. PR A l'ajoute au contrat ;
+- `reason` (texte) reste la phrase lisible, comme pour les autres évaluateurs ;
+- une couverture `ANALYSED` par fichier Java lu.
 
 Raisons fermées initiales :
 
@@ -281,6 +324,8 @@ PARSE_ERROR
 ```
 
 Ces raisons sont des diagnostics de résolution, jamais des arêtes « possibles ».
+
+`TARGET_TYPE_OUTSIDE_SNAPSHOT` (receveur `String`, `List`, `Optional`…) sera de loin la plus fréquente. Elle est comptée, mais PR D décide si chaque site doit être listé ou seulement compté par méthode, selon la taille ajoutée à la Maille.
 
 ## Lambdas, classes locales et anonymes
 
@@ -348,6 +393,8 @@ Elle contient explicitement :
 - surcharge ambiguë ;
 - type de receveur inconnu ;
 - méthode héritée d'une dépendance externe ;
+- méthode déclarée dans un type des sources qui étend un type externe (`SUPER_TYPE_UNRESOLVED`) ;
+- receveur `var` ou de type générique `T` ;
 - appel dans une lambda ;
 - deux sites identiques entre les mêmes méthodes.
 
@@ -361,32 +408,34 @@ Un essai sur `spring-petclinic` mesure enfin le comportement sur un dépôt rée
 
 1. Une route dont le contrôleur appelle une méthode unique d'un service concret des sources produit la chaîne `HANDLED_BY → CALLS`.
 2. Un appel sur un champ dont le type est une interface des sources produit `CALLS` vers la déclaration de l'interface, jamais directement vers une implémentation.
-3. Une implémentation explicite et résolue produit `IMPLEMENTS` selon le contrat retenu.
+3. Une implémentation explicite et résolue produit `IMPLEMENTS` type → type (`OBSERVED`) et méthode → méthode (`INFERRED`), selon la décision validée en PR A.
 4. Aucune relation `DISPATCHES_TO` n'est produite.
 5. Deux surcharges de même nom et même arité donnent `NOT_INTERPRETED`, sans choix arbitraire.
 6. Un appel vers une méthode héritée uniquement d'une dépendance externe ne fabrique aucun symbole cible ; il produit `TARGET_DECLARATION_OUTSIDE_SNAPSHOT`.
 7. Les appels d'une lambda ne sont pas attribués à la méthode englobante.
-8. Deux sites de `A` vers `B` ne créent pas deux identités `CALLS`, mais leurs deux preuves restent accessibles.
-9. Le voisinage montre les nouveaux faits sans modification spécifique au moteur ou à l'Explorer.
-10. Même instantané et même version d'évaluateur : mêmes faits, mêmes diagnostics, même ordre.
-11. Un dépôt sans Java rend l'évaluateur `UNSUPPORTED` selon TAXO-COV-01.
-12. Toute forme hors fragment est explicitement couverte comme non interprétée ; jamais une absence inventée.
+8. Un appel sur une méthode d'un type des sources qui étend un type externe donne `SUPER_TYPE_UNRESOLVED`, jamais un `CALLS`.
+9. Deux sites de `A` vers `B` ne créent pas deux identités `CALLS`, mais leurs deux preuves restent accessibles.
+10. Le voisinage montre les nouveaux faits sans modification spécifique au moteur ou à l'Explorer.
+11. Même instantané et même version d'évaluateur : mêmes faits, mêmes diagnostics, même ordre.
+12. Un dépôt sans Java rend l'évaluateur `UNSUPPORTED` selon TAXO-COV-01.
+13. Toute forme hors fragment est explicitement couverte comme non interprétée ; jamais une absence inventée.
 
 ## Découpage proposé
 
 ### PR A — Contrat et fixture
 
 - décider et mettre à jour `ARCHITECTURE § 14` ;
-- passer `CALLS` à `INFERRED` dans le vocabulaire ;
-- décider précisément `IMPLEMENTS` au niveau des symboles ;
-- compléter schéma, validateur et conformité si nécessaire ;
+- passer `CALLS` à `INFERRED` dans le vocabulaire (validateur `fact.py`, § 5.6) ;
+- valider la décision 3 sur `IMPLEMENTS` et ouvrir `INFERRED` au niveau méthode ;
+- ajouter au schéma les champs de preuve `column_start`, `column_end`, `role` et le `diagnostic` de couverture ;
+- compléter validateur et conformité (le cas `t16-02-absence-relation.json` cite déjà `CALLS`) ;
 - ajouter la fixture indépendante et ses vérités attendues ;
 - aucun producteur `CALLS` encore.
 
 ### PR B — Résolution intra-sources
 
-- primitives du lecteur Java nécessaires ;
-- nouvel évaluateur `taxo.java-calls` ;
+- primitives du lecteur Java nécessaires (voir « Ce que le lecteur Java doit fournir ») ;
+- nouvel évaluateur `taxo.java-calls`, catalogue `java-calls` v1, qui lit Java (`UNSUPPORTED` sinon, TAXO-COV-01), ajouté au tableau du § 7 ;
 - appels non qualifiés et receveurs typés présents dans les sources ;
 - surcharges et héritage source bornés ;
 - diagnostics `NOT_INTERPRETED` ;
@@ -395,7 +444,7 @@ Un essai sur `spring-petclinic` mesure enfin le comportement sur un dépôt rée
 ### PR C — Interfaces et restitution
 
 - production `IMPLEMENTS` selon la décision de PR A ;
-- Explorer / vocabulaire : libellés et explications des arrêts ;
+- Explorer / vocabulaire : libellés et explications des arrêts ; la phrase actuelle « La classe B implémente la méthode C.run() » (`frontend/src/sentences.test.ts`) doit distinguer type et méthode ;
 - essai sur `student-course-demo`.
 
 ### PR D — Mesure réelle
