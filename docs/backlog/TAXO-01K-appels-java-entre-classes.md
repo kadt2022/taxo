@@ -95,7 +95,7 @@ Quand une classe des sources implémente explicitement une interface des sources
 Deux niveaux, deux statuts (décision proposée, à valider dans PR A) :
 
 - **type → type** : `symbol:java:<Impl>` `IMPLEMENTS` `symbol:java:<Interface>`, `OBSERVED`, car la clause `implements` est écrite ; preuve à la ligne de la clause ;
-- **méthode → méthode** : `symbol:java:<Impl>#m(…)` `IMPLEMENTS` `symbol:java:<Interface>#m(…)`, `INFERRED`, car aucune ligne ne l'écrit : c'est une déduction (même signature syntaxique normalisée, prémisse : l'`IMPLEMENTS` type → type). Règle `java.implements.same-signature/1`. Signature ambiguë ou supertype hors sources entre les deux : rien n'est produit.
+- **méthode → méthode** : `symbol:java:<Impl>#m(…)` `IMPLEMENTS` `symbol:java:<Interface>#m(…)`, `INFERRED`, car aucune ligne ne l'écrit : c'est une déduction (même signature syntaxique normalisée, prémisse : l'`IMPLEMENTS` type → type). Règle `java.implements.same-signature/1`. Signature ambiguë ou supertype hors sources entre les deux : rien n'est produit. Seules les méthodes qui peuvent être implémentées comptent : une méthode `static` ou `private` de l'interface, ou une méthode `static` de la classe, n'est jamais reliée, même à signature égale (le lecteur doit donc fournir les modificateurs).
 
 Le niveau méthode est celui qui sert l'Explorer : il relie la déclaration appelée à son implémentation connue. Il demande d'ouvrir `INFERRED` à `IMPLEMENTS` dans le validateur (`backend/app/facts/domain/fact.py`, aujourd'hui `OBSERVED` seul) et dans `ARCHITECTURE § 5.6`.
 
@@ -159,6 +159,8 @@ Taxo cherche dans le type déclaré résolu du receveur une déclaration dont :
 - la sélection est unique selon les règles du fragment.
 
 Si une seule déclaration est ainsi établie, `CALLS` est produit.
+
+Nom et arité ne prouvent pas que les arguments conviennent : avec seulement `void f(String)`, le site `r.f(42)` ne vise aucune méthode. Le fragment repose donc sur une hypothèse, **le code de l'instantané compile**, écrite dans `derivation.known_gaps` de chaque `CALLS` (« applicabilité des arguments non vérifiée ; suppose un code qui compile »). Un argument littéral (nombre, chaîne, `true`/`false`, caractère) dont le type contredit le paramètre écrit donne `NO_MATCHING_DECLARATION`, jamais un `CALLS`. Les autres arguments ne sont pas typés dans ce fragment.
 
 Si plusieurs déclarations restent candidates, aucun `CALLS` n'est produit.
 
@@ -289,7 +291,12 @@ Règle de dérivation initiale :
 java.calls.declared-receiver-unique-target/1
 ```
 
-Prémisses (texte, comme les autres évaluateurs) : le type déclaré du receveur et la ligne où il est déclaré, la déclaration cible retenue, les types de la hiérarchie parcourus. `counter_examples_checked` : les déclarations de même nom écartées (autre arité).
+Prémisses : le type déclaré du receveur et la ligne où il est déclaré, la déclaration cible retenue, les types de la hiérarchie parcourus. `counter_examples_checked` : les déclarations de même nom écartées (autre arité).
+
+Ces prémisses sont des déclarations lues dans les sources, pas des faits de la Maille. Or `ARCHITECTURE § 5.5` exige qu'un `INFERRED` d'évaluateur applique sa règle à des **faits** du même instantané. PR A doit trancher, avant tout producteur :
+
+- **choix par défaut proposé** : réviser § 5.5 pour qu'une prémisse puisse aussi être une déclaration du même instantané **citée en preuve** (preuve fichier à la ligne, `role: declaration`), et ajouter à la conformité un cas qui refuse une prémisse sans preuve ;
+- alternative : modéliser les déclarations comme faits (types, méthodes, champs), ce qui ajoute une relation et beaucoup de volume à la Maille.
 
 Preuve : une preuve fichier par site, avec `symbol` = propriétaire lexical, et les champs proposés au § 14 (`column_start`, `column_end`, `role: call-site`). Ces champs n'existent pas encore dans `contract-v1.schema.json` : PR A les ajoute.
 
@@ -425,9 +432,10 @@ Un essai sur `spring-petclinic` mesure enfin le comportement sur un dépôt rée
 ### PR A — Contrat et fixture
 
 - décider et mettre à jour `ARCHITECTURE § 14` ;
+- réviser `ARCHITECTURE § 5.5` sur les prémisses d'un `INFERRED` (déclarations citées en preuve), avec son cas de conformité ;
 - passer `CALLS` à `INFERRED` dans le vocabulaire (validateur `fact.py`, § 5.6) ;
 - valider la décision 3 sur `IMPLEMENTS` et ouvrir `INFERRED` au niveau méthode ;
-- ajouter au schéma les champs de preuve `column_start`, `column_end`, `role` et le `diagnostic` de couverture ;
+- ajouter au schéma les champs de preuve `column_start`, `column_end`, `role` (`call-site`, `declaration`) et le `diagnostic` de couverture ;
 - compléter validateur et conformité (le cas `t16-02-absence-relation.json` cite déjà `CALLS`) ;
 - ajouter la fixture indépendante et ses vérités attendues ;
 - aucun producteur `CALLS` encore.
