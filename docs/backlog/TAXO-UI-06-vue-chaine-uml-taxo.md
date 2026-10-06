@@ -5,7 +5,10 @@ couleurs par type et panneau de code, demandés après la première lecture.
 Date : 2026-10-06.  
 Source de vérité : [ARCHITECTURE § 2, § 3 et § 9](../ARCHITECTURE.md), [TAXO-01J § 9](TAXO-01J-navigation-multiniveau-et-explorateur.md).  
 Dépend de : explorateur de la Maille (TAXO-01J, livré). N'a d'intérêt complet qu'avec les appels Java
-(TAXO-01K, proposition) : avant eux, la chaîne s'arrête au contrôleur.  
+(TAXO-01K, proposition #88) : avant eux, la chaîne s'arrête au contrôleur. La chaîne cible suppose 01K tel
+que proposé, qui étend `CALLS` au-delà du premier fragment de l'ARCHITECTURE § 14 (receveur champ typé,
+comme `courseService.getCourses()`) et produit `IMPLEMENTS` au niveau des méthodes (sa PR C). Si 01K est
+réduit, la vue montre moins de flèches, jamais d'autres.  
 Ne dépend pas de Minia. Ne touche pas la MIP.
 
 ## Constat
@@ -66,7 +69,7 @@ prétendre à un ordre ni à une exécution.
 | Relation de chaîne | flèche pleine verticale, sujet au-dessus, objet en dessous | son verbe (`VERBS`), un badge de statut, `×N` s'il y a plusieurs occurrences |
 | Relation de côté | flèche en pointillé à triangle creux (réalisation UML), horizontale | son verbe, son badge ; l'autre extrémité est posée dans la colonne de côté, sur la ligne du nœud qu'elle touche |
 | Revisite | pastille « ↺ déjà montré : *nom* » sous le nœud | aucun arc de retour ; un clic choisit le nœud déjà dessiné |
-| Frontière de connaissance locale | note UML (coin replié), ton d'avertissement, accrochée sous son nœud | la phrase de `knowledgeText`, la raison, l'accès à la preuve |
+| Frontière de connaissance locale | note UML (coin replié), ton d'avertissement, accrochée sous son nœud | la phrase de `knowledgeText`, la raison, et la localisation du site quand la frontière la porte (diagnostic de couverture de TAXO-01K) ; aucun lien de preuve, une frontière n'a pas de poignée d'occurrence |
 | Coupure de sélection | pastille grise sous son nœud | la phrase de `selectionText` et les actions existantes (développer, voir la suite) |
 
 Badge de statut : **O** `OBSERVED`, **D** `INFERRED`, **V** `HUMAN_VALIDATED` ; un statut inconnu
@@ -120,6 +123,10 @@ page depuis la vue, ses liens et la table des formes :
   Tuile ; l'ordre est déterministe et n'affirme aucun ordre d'exécution ;
 - un lien `CÔTÉ` pose son autre extrémité dans la colonne de côté, sur la ligne du nœud de chaîne qu'il
   touche ; si cette extrémité est déjà dessinée, c'est une revisite ;
+- un lien dont l'extrémité n'est pas un nœud (aucun objet, comme `PERMITS_ALL`, ou une valeur littérale)
+  mène à une **feuille**, comme dans la vue Couches : petite boîte en pointillé, « aucun objet » ou la
+  valeur, posée sous son sujet pour un lien `CHAÎNE`, dans la colonne de côté pour un lien `CÔTÉ` ; elle
+  n'est jamais développée ni recentrée, et l'export Mermaid l'écrit aussi : aucun fait de la vue n'est omis ;
 - les tracés sont des segments droits ; aucun lien ne croise une boîte ;
 - la hauteur d'une boîte suit la longueur de son nom, passé à la ligne après la ponctuation (`.`, `#`,
   `/`, `:`), sans découpage sémantique de la référence.
@@ -215,7 +222,7 @@ est servable. `protocol.ts` reste le seul module de l'explorateur à parler au s
 ## Tests
 
 - `chain.test.ts`, sur des vues synthétiques écrites à la main : chaîne simple, deux frères, lien de
-  côté, revisite sans arc, note de frontière locale, coupure de sélection, relation inconnue de forme
+  côté, revisite sans arc, note de frontière locale, coupure de sélection, feuille sans objet et feuille valeur (dessinées et exportées), relation inconnue de forme
   `CHAÎNE`, pas de chaîne entrant, nom très long passé à la ligne.
 - Export Mermaid : texte attendu écrit à la main, échappement des caractères spéciaux.
 - `protocol.test.ts` : une demande par pas envoie `steps`, une demande sans pas reste inchangée à l'octet.
