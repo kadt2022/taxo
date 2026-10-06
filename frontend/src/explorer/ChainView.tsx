@@ -7,7 +7,7 @@ import {FORMS, TONE_NAMES, label} from '../vocabulary';
 import {chain, type Box, type ChainText, type Form} from './chain';
 import type {Link, View} from './graph';
 import type {Selected} from './state';
-import {bareName, factText, knowledgeText, nodeMarks, selectionText, statusMark, toneOf, typeText, verb} from './sentences';
+import {compartments, factText, knowledgeText, nodeMarks, selectionText, statusMark, toneOf, typeText, verb} from './sentences';
 import {useNaming} from './Naming';
 import type {NodeCommands} from './NodeActions';
 
@@ -17,7 +17,7 @@ const formOf=(relation:string):Form=>FORMS[relation]??'CHAIN';
 export function ChainView({view, links, selected, onSelect, commands, busy}:Readonly<{view:View; links:Link[]; selected:Selected;
   onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean}>){
   const id=useId(), named=useNaming();
-  const text:ChainText=useMemo(()=>({name:value=>bareName(value, named), note:knowledgeText,
+  const text:ChainText=useMemo(()=>({name:value=>compartments(value, named), note:knowledgeText,
     cut:boundary=>`${selectionText(boundary)} · ${boundary.continuation?'voir la suite':'développer'} ›`,
     revisit:(link, target)=>`↺ ${verb(link.relation)} ${named(target)}, déjà montré plus haut`,
     leaf:value=>value===undefined?'aucun objet : ce fait n’en a pas':value}), [named]);
@@ -84,7 +84,10 @@ function Shape({box, view, nodes, selected, onSelect, commands, busy}:Readonly<{
       className={classes('chain-node', `tone-${toneOf(reference)}`, box.anchor&&'anchor')}
       aria-label={[named(reference), ...marks].join(', ')} onClick={()=>onSelect({kind:'node', reference})}>
       <span className="chain-stereo">«{typeText(reference)}»{box.anchor&&' · ancre'}</span>
-      <span className="chain-name">{lines}</span></button>;
+      <span className="chain-name">{lines}</span>
+      {box.context!.length>0&&<span className="chain-context">{box.context!.map((said, index)=><span key={index} className="chain-line">{said}</span>)}</span>}
+      {box.member!.length>0&&<span className="chain-member">{box.member!.map((said, index)=><span key={index} className="chain-line">{said}</span>)}</span>}
+      </button>;
   }
   if(box.kind==='note')return <div role="note" className="chain-note" style={style}>
     <span className="chain-note-title">Frontière · Taxo ne sait pas</span>{lines}</div>;

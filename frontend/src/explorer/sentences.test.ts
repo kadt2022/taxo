@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import type {Boundary} from './protocol';
-import {countText, factText, knowledgeText, nodeMarks, nodeName, notSentText, scopeText, selectionText, verb, viewText} from './sentences';
+import {compartments, countText, factText, knowledgeText, nodeMarks, nodeName, notSentText, scopeText, selectionText, verb, viewText} from './sentences';
 
 const SELECTIONS=['DEPTH', 'NOT_REACHED', 'NODES', 'EDGES', 'WORK', 'BYTES', 'FANOUT'];
 const KNOWLEDGE=['NO_ANALYZER', 'ANALYSIS_INCOMPLETE', 'NOT_ANALYSED', 'LANGUAGES_UNKNOWN', 'LOCAL_COVERAGE_NOT_READ',
@@ -64,5 +64,20 @@ describe('ce qui n’a pas été transmis', ()=>{
     expect(notSentText({what:'local_coverage', count:1, reason:'BUDGET'})).toContain('1 zone non lue sans place pour être située');
     expect(notSentText({what:'local_coverage', count:3, reason:'BUDGET'})).toContain('Au moins 3 zones non lues sans place pour être situées');
     expect(notSentText({what:'items', count:2, reason:'BUDGET'})).toBe('2 items non transmis (BUDGET).');
+  });
+});
+
+describe('le nom d’un symbole en compartiments UML', ()=>{
+  it('sépare la classe, son paquetage et la méthode avec ses types de paramètres', ()=>{
+    expect(compartments('symbol:java:com.acme.admin.UserAdminController#get(String,String)')).toEqual(
+      {owner:'UserAdminController', context:'com.acme.admin', member:'get(String,String)'});
+    expect(compartments('symbol:java:Foo#<init>()')).toEqual({owner:'Foo', member:'<init>()'});
+    expect(compartments('symbol:java:com.acme.Foo')).toEqual({owner:'Foo', context:'com.acme'});
+  });
+
+  it('garde le nom entier de toute autre référence', ()=>{
+    expect(compartments('endpoint:GET /orders')).toEqual({owner:'GET /orders'});
+    expect(compartments('application:app/Main.java#Main')).toEqual({owner:'app/Main.java#Main'});
+    expect(compartments('symbol:sans-langage')).toEqual({owner:'sans-langage'});
   });
 });

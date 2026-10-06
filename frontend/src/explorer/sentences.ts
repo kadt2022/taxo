@@ -123,6 +123,17 @@ export function typeText(value:string){
 /** La teinte du type d'une référence (TAXO-UI-06, E7) ; neutre pour un type que le portail ne connaît pas. */
 export const toneOf=(value:string)=>TONES[nodeType(value)]??'neutral';
 
+/** Le nom d'un symbole en compartiments UML, lu dans sa clé selon le contrat des références (ARCHITECTURE § 5.3,
+ * `<langage>:<propriétaire>#<membre>`) : le propriétaire par son dernier segment, son espace de noms à part, puis le
+ * membre tel qu'écrit, paramètres compris. Une autre référence, ou une clé hors de cette forme, garde son nom entier. */
+export function compartments(value:string, named:Naming=nodeName):{owner:string; context?:string; member?:string}{
+  const at=value.indexOf(':'), key=value.slice(at+1), language=key.indexOf(':');
+  if(value.slice(0, at)!=='symbol'||language<0)return {owner:bareName(value, named)};
+  const qualified=key.slice(language+1), hash=qualified.indexOf('#');
+  const owner=hash<0?qualified:qualified.slice(0, hash), dot=owner.lastIndexOf('.');
+  return {owner:owner.slice(dot+1), ...(dot>0?{context:owner.slice(0, dot)}:{}), ...(hash<0?{}:{member:qualified.slice(hash+1)})};
+}
+
 /** Le nom d'une référence sans son type, que l'en-tête de sa boîte dit déjà. */
 export function bareName(value:string, named:Naming=nodeName){
   const said=named(value), word=TYPES[nodeType(value)];

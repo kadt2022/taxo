@@ -164,7 +164,9 @@ describe('l’explorateur', ()=>{
     const anchor=drawn.querySelector('.chain-node.anchor') as HTMLElement;
     expect(anchor.classList.contains('tone-route')).toBe(true);
     expect(anchor.textContent).toBe('«route» · ancreGET /orders');
-    expect(drawn.querySelector('.chain-node.tone-symbol')?.textContent).toBe('«symbole»java:A#get()');
+    const method=drawn.querySelector('.chain-node.tone-symbol') as HTMLElement;
+    expect(method.querySelector('.chain-name')?.textContent, 'la classe, puis la méthode sous un trait').toBe('A');
+    expect(method.querySelector('.chain-member')?.textContent).toBe('get()');
     expect(drawn.querySelector('[role=note]')?.textContent).toContain('Frontière · Taxo ne sait pas');
     expect(drawn.querySelectorAll('.chain-cut').length).toBeGreaterThan(0);
     expect(drawn.querySelectorAll('.chain-leaf')).toHaveLength(2);

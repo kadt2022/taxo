@@ -7,14 +7,15 @@ import type {Link, View} from './graph';
 
 export type Form='CHAIN'|'SIDE';
 export type ChainGeometry={margin:number; width:number; indent:number; gap:number; sideGap:number; header:number;
-  line:number; pad:number; chars:number};
+  line:number; pad:number; chars:number; separator:number};
 export const CHAIN_GEOMETRY:ChainGeometry={margin:24, width:300, indent:44, gap:44, sideGap:150, header:24, line:18,
-  pad:14, chars:34};
+  pad:14, chars:34, separator:12};
 
 /** Une boîte : un nœud, une feuille (aucun objet ou une valeur), une frontière de connaissance (`note`), une coupure de
  * sélection (`cut`), ou un lien vers un nœud déjà dessiné (`revisit`, dont `reference` est le nœud déjà dessiné). */
 export type Box={key:string; kind:'node'|'leaf'|'note'|'cut'|'revisit'; column:'main'|'side'; depth:number;
-  x:number; y:number; width:number; height:number; lines:string[]; reference?:string; link?:Link; value?:string;
+  x:number; y:number; width:number; height:number; lines:string[]; context?:string[]; member?:string[];
+  reference?:string; link?:Link; value?:string;
   boundary?:Boundary; anchor?:boolean};
 /** Une flèche, toujours du sujet vers l'objet, même quand l'objet est au-dessus. `label` est le coin de son étiquette. */
 export type Arrow={link:Link; form:Form; from:Box; to:Box; path:string; label:{x:number; y:number}};
@@ -22,7 +23,10 @@ export type Arrow={link:Link; form:Form; from:Box; to:Box; path:string; label:{x
 export type Tie={box:Box; path:string};
 export type ChainLayout={boxes:Box[]; arrows:Arrow[]; ties:Tie[]; width:number; height:number};
 
-export type ChainText={name:(reference:string)=>string; note:(boundary:Boundary)=>string; cut:(boundary:Boundary)=>string;
+/** Le nom d'une boîte en compartiments UML : son propriétaire (la classe), son contexte (le paquetage) et son membre
+ * (la méthode), quand la référence les distingue. */
+export type Named={owner:string; context?:string; member?:string};
+export type ChainText={name:(reference:string)=>Named; note:(boundary:Boundary)=>string; cut:(boundary:Boundary)=>string;
   revisit:(link:Link, target:string)=>string; leaf:(value:string|undefined)=>string};
 
 /** Un texte en lignes d'au plus `chars` caractères, coupées après une ponctuation ou une espace quand c'est possible :
@@ -66,8 +70,10 @@ export function chain(view:View, links:Link[], form:(relation:string)=>Form, tex
   const notes=(reference:string)=>view.knowledge.filter(entry=>entry.scope==='NODE'&&entry.node===reference);
 
   function visit(reference:string, depth:number, column:'main'|'side', top?:number):Box{
-    const name=lines(text.name(reference));
-    const box=put({key:reference, kind:'node', column, depth, width, height:header+name.length*line+pad, lines:name,
+    const named=text.name(reference), name=lines(named.owner);
+    const context=named.context?lines(named.context):[], member=named.member?lines(named.member):[];
+    const height=header+(name.length+context.length+member.length)*line+pad+(member.length?geometry.separator:0);
+    const box=put({key:reference, kind:'node', column, depth, width, height, lines:name, context, member,
       reference, anchor:reference===view.anchor}, top);
     placed.set(reference, box);
     const own=(out.get(reference)??[]).filter(link=>!used.has(link.identity));

@@ -7,7 +7,7 @@ import {depthCut, element, tile} from './__fixtures__/tiles';
 const ROUTE='endpoint:GET /courses', CONTROLLER='symbol:java:CourseController#getCourses()';
 const SERVICE='symbol:java:CourseService#getCourses()', IMPL='symbol:java:CourseServiceImpl#getCourses()';
 const form=(relation:string):Form=>relation==='IMPLEMENTS'?'SIDE':'CHAIN';
-const text:ChainText={name:value=>value, note:boundary=>`note ${boundary.reason}`, cut:boundary=>`coupure ${boundary.reason}`,
+const text:ChainText={name:value=>({owner:value}), note:boundary=>`note ${boundary.reason}`, cut:boundary=>`coupure ${boundary.reason}`,
   revisit:(link, target)=>`revisite ${target}`, leaf:value=>value??'aucun objet'};
 const drawn=(items:ReturnType<typeof element>[], nodes:[string, number, boolean][], frontier:Boundary[]=[])=>{
   const view=viewOf(tile({root:ROUTE, items, nodes, frontier}));
@@ -74,6 +74,20 @@ describe('la vue Chaîne', ()=>{
       [[ROUTE, 0, true], [CONTROLLER, 1, false], [SERVICE, 1, false]]);
     expect(found.arrows.map(item=>item.to.key)).toEqual([CONTROLLER, SERVICE]);
     expect(box(found, SERVICE).y).toBeGreaterThan(box(found, CONTROLLER).y);
+  });
+});
+
+describe('les compartiments d’une boîte', ()=>{
+  it('ajoute à la hauteur le contexte, le membre et leur séparation', ()=>{
+    const view=viewOf(tile({root:ROUTE, items:[element(ROUTE, CONTROLLER, {relation:'HANDLED_BY'})],
+      nodes:[[ROUTE, 0, true], [CONTROLLER, 1, false]]}));
+    const named={owner:'CourseController', context:'com.example', member:'getCourses(String,int)'};
+    const found=chain(view, linksOf(view), form, {...text, name:value=>value===CONTROLLER?named:{owner:value}});
+    const controller=found.boxes.find(item=>item.key===CONTROLLER)!, route=found.boxes.find(item=>item.key===ROUTE)!;
+    expect([controller.lines, controller.context, controller.member]).toEqual([['CourseController'], ['com.example'], ['getCourses(String,int)']]);
+    const {header, line, pad, separator}=CHAIN_GEOMETRY;
+    expect(controller.height).toBe(header+3*line+pad+separator);
+    expect(route.height).toBe(header+line+pad);
   });
 });
 
