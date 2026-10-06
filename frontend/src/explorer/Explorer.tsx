@@ -7,6 +7,7 @@ import {href, go, type Route} from '../nav';
 import {useChoices} from '../pages';
 import {AnchorSearch} from './AnchorSearch';
 import {Boundaries} from './Boundaries';
+import {ChainView} from './ChainView';
 import {linksOf, type View} from './graph';
 import {LayerView} from './LayerView';
 import {LinkPanel} from './LinkPanel';
@@ -45,7 +46,7 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
   const choices=useMemo(()=>described?relationChoices(described):[], [described]);
   const relations=settings.relations.length?settings.relations:defaultRelations(choices);
   const [state,dispatch]=useReducer(reduce, INITIAL);
-  const [shape,setShape]=useState<Shape>('couches');
+  const [shape,setShape]=useState<Shape>('chaine');
   const counter=useRef(0), running=useRef<AbortController|null>(null);
   const address=href('explorer', undefined, addressOf(settings));
   const [trail,setTrail]=useState(NO_TRAIL);
@@ -106,7 +107,7 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
 
 const NO_TYPES:string[]=[];
 
-type Shape='couches'|'liste';
+type Shape='chaine'|'couches'|'liste';
 type BodyProps={view:View; selected:Selected; dispatch:(action:Action)=>void; commands:NodeCommands; busy:boolean; query:Query;
   shape:Shape; onShape:(shape:Shape)=>void; onReload:()=>void};
 
@@ -124,11 +125,13 @@ function Body({view, selected, dispatch, commands, busy, query, shape, onShape, 
     <p className="explorer-stop">{viewText(view)}</p>
     {view.elements.length===0&&<output className="explorer-empty">Aucun lien pour les relations suivies depuis cette ancre, dans ce que l’analyse a enregistré. Ce que Taxo ne sait pas est dit plus bas.</output>}
     <fieldset className="explorer-tabs"><legend className="explorer-hidden">Forme de la vue</legend>
+      <button type="button" aria-pressed={shape==='chaine'} onClick={()=>onShape('chaine')}>Chaîne</button>
       <button type="button" aria-pressed={shape==='couches'} onClick={()=>onShape('couches')}>Couches</button>
       <button type="button" aria-pressed={shape==='liste'} onClick={()=>onShape('liste')}>Liste</button></fieldset>
     <div className="explorer-body">
-      {shape==='couches'?<LayerView view={view} links={links} selected={selected} onSelect={select}/>
-        :<ListView view={view} links={links} commands={commands} busy={busy} onSelect={identity=>select({kind:'link', identity})}/>}
+      {shape==='chaine'&&<ChainView view={view} links={links} selected={selected} onSelect={select}/>}
+      {shape==='couches'&&<LayerView view={view} links={links} selected={selected} onSelect={select}/>}
+      {shape==='liste'&&<ListView view={view} links={links} commands={commands} busy={busy} onSelect={identity=>select({kind:'link', identity})}/>}
       <div className="explorer-side">
         {link&&<LinkPanel key={link.identity} link={link} query={query} onClose={()=>select(null)}/>}
         {node&&<section className="explorer-panel" aria-label="Nœud choisi"><h3>{named(node.reference)}</h3><code>{node.reference}</code>

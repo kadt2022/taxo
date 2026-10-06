@@ -1,7 +1,9 @@
 # TAXO-UI-06 — Vue Chaîne : lire une route en notation UML Taxo
 
 Statut : **direction validée le 2026-10-06, récit à relire avant implémentation**. Révisé le même jour :
-couleurs par type et panneau de code, demandés après la première lecture.  
+couleurs par type et panneau de code, demandés après la première lecture. Commencé avant TAXO-01K à la
+demande du 2026-10-06 : PR 1 (vue Chaîne, couleurs, légende) livrée par la PR de la branche
+`claude/project-thread-40sfm7`.  
 Date : 2026-10-06.  
 Source de vérité : [ARCHITECTURE § 2, § 3 et § 9](../ARCHITECTURE.md), [TAXO-01J § 9](TAXO-01J-navigation-multiniveau-et-explorateur.md).  
 Dépend de : explorateur de la Maille (TAXO-01J, livré). N'a d'intérêt complet qu'avec les appels Java
@@ -109,8 +111,8 @@ Maille.** Le parcours n'est proposé que si l'analyse annonce au moins une de se
 (`describe`) ; une relation sans producteur reste dite comme aujourd'hui (`NO_PRODUCER`).
 
 Le parcours reste un réglage : la personne peut toujours choisir ses relations et son sens. La vue Chaîne
-s'affiche pour tout réglage ; si un pas de chaîne est entrant, ses nœuds sont dessinés au-dessus du nœud
-qu'ils touchent, toujours dans le sens du fait.
+s'affiche pour tout réglage ; si un pas de chaîne est entrant, ses nœuds sont posés sous le nœud qui les a
+fait découvrir, et la flèche monte : elle garde toujours le sens du fait.
 
 ### E3 — Mise en page pure
 

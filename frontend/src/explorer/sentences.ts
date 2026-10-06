@@ -1,7 +1,7 @@
 // Ce que l'explorateur dit (TAXO-01J § 9) : chaque frontière, chaque marque, la portée de la vue. Pur. Des comptes,
 // jamais de pourcentage ; jamais « complet » : une vue montre ce que ses pas atteignent, pas tout le logiciel. Un type
 // ou une relation que le portail ne connaît pas s'affiche par son nom brut.
-import {COVERAGE, EVALUATORS, VERBS, label, reference} from '../vocabulary';
+import {COVERAGE, EVALUATORS, STATUS_MARKS, TONES, TYPES, VERBS, label, reference} from '../vocabulary';
 import type {Boundary, Count, Direction, NotSent} from './protocol';
 import type {View, ViewNode} from './graph';
 
@@ -113,3 +113,21 @@ export function notSentText(entry:NotSent){
   }
   return `${count} ${entry.what} non transmis (${entry.reason}).`;
 }
+
+/** Le type d'une référence dit comme un stéréotype UML (TAXO-UI-06) : « route », « symbole »… ; brut s'il est inconnu. */
+export function typeText(value:string){
+  const type=nodeType(value);
+  return TYPES[type]||type||'référence';
+}
+
+/** La teinte du type d'une référence (TAXO-UI-06, E7) ; neutre pour un type que le portail ne connaît pas. */
+export const toneOf=(value:string)=>TONES[nodeType(value)]??'neutral';
+
+/** Le nom d'une référence sans son type, que l'en-tête de sa boîte dit déjà. */
+export function bareName(value:string, named:Naming=nodeName){
+  const said=named(value), word=TYPES[nodeType(value)];
+  return word&&said.startsWith(`${word} `)?said.slice(word.length+1):said;
+}
+
+/** Le statut d'un fait en une lettre (O, D, V), brut s'il est inconnu. */
+export const statusMark=(status:string|undefined)=>status?label(STATUS_MARKS, status):'';
