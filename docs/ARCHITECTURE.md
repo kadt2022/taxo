@@ -921,7 +921,8 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
 - **`IMPLEMENTS`** : entre types, `OBSERVED` (la clause est écrite) ; entre méthodes, `INFERRED` par la règle
   `java.implements.same-signature/1` (même signature, prémisses : l'`IMPLEMENTS` des types et les deux
   `CONTAINS`). Seule une interface des sources nommée dans la clause `implements` est suivie ; une méthode
-  `static` ou `private` de l'interface, une méthode `static` de la classe ou une signature ambiguë ne sont
+  `static` ou `private` de l'interface, une méthode de la classe `static` ou non `public` (une méthode
+  d'interface est publique) ou une signature ambiguë ne sont
   jamais reliées, et une implémentation héritée d'une superclasse ne l'est pas (`known_gaps`). Il ne dit jamais
   quel corps s'exécute.
 - **`DISPATCHES_TO`** : suspendu jusqu'à ce qu'un site soit une référence adressable ; la règle
