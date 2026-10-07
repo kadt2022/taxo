@@ -73,6 +73,10 @@ describe('rendu humain typé des faits', ()=>{
     expect(say('USES_TECHNOLOGY', 'repository:other', 'technology:Spring')).toBe('Le dépôt other utilise la technologie Spring.');
     expect(say('AUTHORED_BY', 'commit:aaaa', 'person:dev@example.invalid')).toBe('Le commit aaaa a pour auteur dev@example.invalid.');
     expect(say('IMPLEMENTS', 'symbol:java:a.B', 'symbol:java:a.C#run()')).toBe('La classe B implémente la méthode C.run().');
+    expect(say('TYPED_AS', 'symbol:java:a.B#service', 'symbol:java:a.Service')).toBe('Le champ B.service est déclaré du type Service.');
+    expect(say('TYPED_AS', 'module:a', 'technology:Java')).toBe('Le module a est de type la technologie Java.');
+    expect(say('EXTENDS', 'symbol:java:a.B', 'symbol:java:a.Base')).toBe('La classe B étend la classe Base.');
+    expect(say('CONTAINS', 'file:a/B.java', 'symbol:java:a.B')).toBe('Le fichier a/B.java contient la classe B.');
     expect(say('CONTAINS', 'route-pattern:/**', 'policy-rule:x')).toBe('Le motif /** contient la règle x.');
   });
 

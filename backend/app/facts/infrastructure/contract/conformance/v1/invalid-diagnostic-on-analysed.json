@@ -1,0 +1,57 @@
+{
+  "contract_version": 1,
+  "kind": "COVERAGE",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "COMMIT"
+  },
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "taxo.java-calls",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "java-calls",
+    "catalog_version": "1"
+  },
+  "scope": {
+    "include": [
+      "file:src/main/java/com/example/demo/controller/CourseController.java"
+    ]
+  },
+  "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
+  "coverage_type": "ANALYSED",
+  "reason": "appels non résolus : surcharge ambiguë",
+  "diagnostic": {
+    "sites_seen": 2,
+    "sites": [
+      {
+        "role": "call-site",
+        "line_start": 34,
+        "line_end": 34,
+        "column_start": 8,
+        "column_end": 28,
+        "reason": "OVERLOAD_AMBIGUOUS",
+        "method": "label",
+        "receiver": "catalog",
+        "receiver_type": "com.example.demo.service.CourseCatalog",
+        "candidates": [
+          "symbol:java:com.example.demo.service.CourseCatalog#label(String)",
+          "symbol:java:com.example.demo.service.CourseCatalog#label(Course)"
+        ]
+      },
+      {
+        "role": "call-site",
+        "line_start": 35,
+        "line_end": 35,
+        "column_start": 8,
+        "column_end": 20,
+        "reason": "RECEIVER_KIND_DEFERRED",
+        "method": "trim",
+        "receiver": "title"
+      }
+    ]
+  }
+}

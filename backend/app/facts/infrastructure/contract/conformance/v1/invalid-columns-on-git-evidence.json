@@ -1,0 +1,32 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "subject": "repository:taxo",
+  "relation": "HAS_COMMIT",
+  "object": "commit:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "qualifiers": {},
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "COMMIT"
+  },
+  "evidence": [
+    {
+      "repository": "taxo",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "method": "git.log",
+      "object": "commit:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "role": "call-site"
+    }
+  ],
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "taxo.java-calls",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "java-calls",
+    "catalog_version": "1"
+  }
+}

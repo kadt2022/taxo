@@ -30,12 +30,18 @@ export function name(item:Entity, project?:Project){
 
 const code=(item:Entity, project?:Project):Segment=>({code:name(item, project)});
 
+/** Un symbole se dit par sa forme (ARCHITECTURE § 5.3) : `T#m(…)` une méthode, `T#champ` un champ, `T` une classe. */
+function symbolNoun(key:string){
+  if(key.includes('('))return 'la méthode ';
+  return key.includes('#')?'le champ ':'la classe ';
+}
+
 /** Le groupe nominal d'une entite, selon son type. */
 function noun(item:Entity, project?:Project):Sentence{
   const shown=code(item, project);
   switch(item.type){
   case 'endpoint':return ['la route ', shown];
-  case 'symbol':return [item.key.includes('(')?'la méthode ':'la classe ', shown];
+  case 'symbol':return [symbolNoun(item.key), shown];
   case 'application':return ['l’application ', shown];
   case 'module':return ['le module ', shown];
   case 'route-pattern':return ['le motif ', shown];
@@ -93,6 +99,8 @@ const RULES:Record<string, (subject:Entity, object:Entity, project?:Project)=>Se
   WRITTEN_IN:(subject, object, project)=>[...noun(subject, project), ' est écrit en ', code(object)],
   HAS_COMMIT:(subject, object, project)=>[...noun(subject, project), ' contient ', ...noun(object, project)],
   CHILD_OF:(subject, object, project)=>[...noun(subject, project), ' suit ', ...noun(object, project)],
+  TYPED_AS:(subject, object)=>subject.type==='symbol'&&object.type==='symbol'
+    ?[...noun(subject), ' est déclaré du type ', code(object)]:null,
 };
 
 /** Le debut d'une phrase prend une majuscule ; elle se termine par un point. */

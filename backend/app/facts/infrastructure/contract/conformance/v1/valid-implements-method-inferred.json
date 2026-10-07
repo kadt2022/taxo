@@ -1,0 +1,32 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "INFERRED",
+  "validity": "VALID",
+  "subject": "symbol:java:com.example.demo.service.CourseServiceImpl#getCourses()",
+  "relation": "IMPLEMENTS",
+  "object": "symbol:java:com.example.demo.service.CourseService#getCourses()",
+  "qualifiers": {},
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "COMMIT"
+  },
+  "evidence": [],
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "taxo.java-calls",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "java-calls",
+    "catalog_version": "1"
+  },
+  "derivation": {
+    "premises": [
+      "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    ],
+    "rule": "java.implements.same-signature/1",
+    "counter_examples_checked": [],
+    "known_gaps": []
+  }
+}

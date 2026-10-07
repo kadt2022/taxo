@@ -32,8 +32,8 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
 6. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 7. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
 8. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
-   Appels Java : proposition [TAXO-01K](TAXO-01K-appels-java-entre-classes.md), qui propose de passer avant
-   l'Arbre ; ordre à valider.
+   Appels Java : [TAXO-01K](TAXO-01K-appels-java-entre-classes.md), passé avant l'Arbre à la demande du
+   2026-10-07. PR A (contrat et vérité de référence) livrée ; PR B (résolution) à suivre.
 
 La mémoire versionnée passe avant la suite des Tuiles parce que la dette de stockage est constatée
 (une copie complète de chaque fait par analyse), pas parce que les Tuiles en dépendraient : elles

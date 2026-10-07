@@ -106,6 +106,10 @@ class FactEvidenceRow(Base):
     method = Column(String)
     content_hash = Column(String)
     object = Column(String)
+    # The span of a call site within its lines (TAXO-01K): UTF-8 byte columns, end exclusive.
+    column_start = Column(Integer)
+    column_end = Column(Integer)
+    role = Column(String)
     __table_args__ = (Index('ix_fact_evidence_occurrence', 'occurrence', 'position'),)
 
 

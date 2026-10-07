@@ -802,6 +802,231 @@
         "path": "/"
       },
       "reason": "Only coverage carries a reason for what was not interpreted."
+    },
+    {
+      "file": "valid-contains-file-symbol.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-contains-symbol-member.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-typed-as.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-extends.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-implements-type.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-implements-method-inferred.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-calls-call-sites.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-coverage-diagnostic.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-coverage-diagnostic-counted.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "invalid-calls-observed.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "RELATION_STATUS",
+        "path": "/status"
+      },
+      "reason": "A call names a declaration selected by a rule: it is inferred, never observed."
+    },
+    {
+      "file": "invalid-calls-without-call-site.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "CALL_SITE_REQUIRED",
+        "path": "/evidence"
+      },
+      "reason": "A call is proven by at least one call site."
+    },
+    {
+      "file": "invalid-call-site-owner.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "EVIDENCE_CALL_SITE",
+        "path": "/evidence/0"
+      },
+      "reason": "A call site names its lexical owner, which is the subject of the call."
+    },
+    {
+      "file": "invalid-call-site-without-columns.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "EVIDENCE_CALL_SITE",
+        "path": "/evidence/0"
+      },
+      "reason": "A call site is located by its lines and its columns."
+    },
+    {
+      "file": "invalid-call-site-other-relation.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "EVIDENCE_CALL_SITE",
+        "path": "/evidence/0"
+      },
+      "reason": "A call site proves only a call."
+    },
+    {
+      "file": "invalid-columns-reversed.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "EVIDENCE_COLUMNS",
+        "path": "/evidence/0"
+      },
+      "reason": "On one line, the end column (exclusive) follows the start column."
+    },
+    {
+      "file": "invalid-columns-without-lines.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_dependentRequired",
+        "path": "/evidence/0"
+      },
+      "reason": "Columns are positions within the cited lines."
+    },
+    {
+      "file": "invalid-columns-on-git-evidence.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_oneOf",
+        "path": "/evidence/0"
+      },
+      "reason": "A Git object has no lines, columns or call site."
+    },
+    {
+      "file": "invalid-contains-repository-symbol.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "RELATION_PAIR",
+        "path": "/object"
+      },
+      "reason": "A symbol is contained by a file or another symbol, not by the repository."
+    },
+    {
+      "file": "invalid-contains-symbol-file.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "RELATION_PAIR",
+        "path": "/object"
+      },
+      "reason": "A symbol contains only symbols."
+    },
+    {
+      "file": "invalid-typed-as-type.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "RELATION_OBJECT",
+        "path": "/object"
+      },
+      "reason": "A declared type is a symbol."
+    },
+    {
+      "file": "invalid-diagnostic-on-analysed.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "DIAGNOSTIC_COVERAGE",
+        "path": "/diagnostic"
+      },
+      "reason": "Only an uninterpreted zone carries a diagnostic."
+    },
+    {
+      "file": "invalid-diagnostic-on-assertion.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_None",
+        "path": "/"
+      },
+      "reason": "An assertion never carries a diagnostic."
+    },
+    {
+      "file": "invalid-diagnostic-reason.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_enum",
+        "path": "/diagnostic/sites/0/reason"
+      },
+      "reason": "The reason of a site belongs to a closed list; there is no possible call."
+    },
+    {
+      "file": "invalid-diagnostic-sites.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "DIAGNOSTIC_SITES",
+        "path": "/diagnostic/sites"
+      },
+      "reason": "A diagnostic never lists more sites than were seen."
+    },
+    {
+      "file": "invalid-diagnostic-source-text.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_pattern",
+        "path": "/diagnostic/sites/1/receiver"
+      },
+      "reason": "A receiver is a written name, never source text."
+    },
+    {
+      "file": "invalid-diagnostic-columns.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "DIAGNOSTIC_COLUMNS",
+        "path": "/diagnostic/sites/0"
+      },
+      "reason": "A site ends after it starts."
+    },
+    {
+      "file": "invalid-diagnostic-candidate.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_pattern",
+        "path": "/diagnostic/sites/0/candidates/0"
+      },
+      "reason": "A candidate is a declaration, named by its symbol."
     }
   ]
 }

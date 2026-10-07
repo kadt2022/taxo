@@ -95,7 +95,7 @@ def test_assertion_changes_are_distinct(key, value):
 
 def test_relation_changes_are_distinct():
     fact = read()
-    fact.update(subject='symbol:java:A', object='symbol:java:B', relation='CALLS')
+    fact.update(subject='symbol:java:A', object='symbol:java:B', relation='EXTENDS')
     before = fact_identity(fact)
     fact['relation'] = 'IMPLEMENTS'
     assert fact_identity(fact) != before

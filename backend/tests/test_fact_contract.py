@@ -8,6 +8,7 @@ import pytest
 from app.facts import FactValidationError, content_hash, identity_fields, validate_fact
 from app.facts.__main__ import main
 from app.facts.contract import RELATIONS, SCHEMA, SCHEMA_PATH
+from app.facts.domain.fact import RELATION_PAIRS
 
 
 ROOT = SCHEMA_PATH.parent / 'conformance' / 'v1'
@@ -107,17 +108,27 @@ def git_evidence(fact):
             'object': f'commit:{SHA}'}
 
 
+def call_site(fact):
+    snapshot = fact['snapshot']
+    return {'repository': snapshot['repository'], 'commit': snapshot['commit'], 'path': 'A.java', 'line_start': 3,
+            'line_end': 3, 'column_start': 8, 'column_end': 13, 'symbol': fact['subject'], 'method': 'java.call-site',
+            'role': 'call-site', 'content_hash': 'sha256:' + 'a' * 64}
+
+
 @pytest.mark.parametrize('relation', RELATIONS)
 def test_every_relation_has_valid_typed_example(relation):
     sources, targets, statuses = RELATIONS[relation]
     fact = read('valid-inferred-evaluator' if 'INFERRED' in statuses else 'valid-observed')
-    fact.update(relation=relation, subject=reference(sorted(sources)[0]))
-    if targets:
-        fact['object'] = reference(sorted(targets)[0])
+    source, target = min(RELATION_PAIRS.get(relation, [(min(sources), min(targets, default=None))]))
+    fact.update(relation=relation, subject=reference(source))
+    if target:
+        fact['object'] = reference(target)
     else:
         fact.pop('object')
     if relation in GIT_RELATIONS:
         fact['evidence'] = [git_evidence(fact)]
+    if relation == 'CALLS':
+        fact['evidence'] = [call_site(fact)]
     validate_fact(fact)
     fact['subject'] = 'role:R_ADMIN'
     with pytest.raises(FactValidationError, match='Subject type'):

@@ -1,0 +1,521 @@
+{
+  "fixture": "java-calls-demo",
+  "story": "docs/backlog/TAXO-01K-appels-java-entre-classes.md",
+  "written": "2026-10-07, à la main, avant tout producteur CALLS : cette vérité ne vient pas de Taxo.",
+  "conventions": {
+    "lines": "numérotées à partir de 1",
+    "columns": "octets UTF-8 dans la ligne, à partir de 0, fin exclue (ARCHITECTURE § 14)",
+    "site": "toute l’expression d’appel, du receveur écrit à la parenthèse fermante",
+    "exhaustive": "calls, implements, typed_as, extends et not_interpreted sont complets : rien d’autre n’est attendu"
+  },
+  "declarations": [
+    {
+      "file": "src/main/java/com/example/demo/model/Course.java",
+      "type": "symbol:java:com.example.demo.model.Course",
+      "members": [
+        "symbol:java:com.example.demo.model.Course#title",
+        "symbol:java:com.example.demo.model.Course#<init>(String)",
+        "symbol:java:com.example.demo.model.Course#getTitle()"
+      ]
+    },
+    {
+      "file": "src/main/java/com/example/demo/controller/CourseController.java",
+      "type": "symbol:java:com.example.demo.controller.CourseController",
+      "members": [
+        "symbol:java:com.example.demo.controller.CourseController#courseService",
+        "symbol:java:com.example.demo.controller.CourseController#catalog",
+        "symbol:java:com.example.demo.controller.CourseController#<init>(CourseService,CourseCatalog)",
+        "symbol:java:com.example.demo.controller.CourseController#getCourses()",
+        "symbol:java:com.example.demo.controller.CourseController#register(String)",
+        "symbol:java:com.example.demo.controller.CourseController#titles()",
+        "symbol:java:com.example.demo.controller.CourseController#audit()"
+      ]
+    },
+    {
+      "file": "src/main/java/com/example/demo/service/CourseCatalog.java",
+      "type": "symbol:java:com.example.demo.service.CourseCatalog",
+      "members": [
+        "symbol:java:com.example.demo.service.CourseCatalog#byTitle",
+        "symbol:java:com.example.demo.service.CourseCatalog#<init>()",
+        "symbol:java:com.example.demo.service.CourseCatalog#refresh()",
+        "symbol:java:com.example.demo.service.CourseCatalog#titles()",
+        "symbol:java:com.example.demo.service.CourseCatalog#label(String)",
+        "symbol:java:com.example.demo.service.CourseCatalog#label(Course)"
+      ]
+    },
+    {
+      "file": "src/main/java/com/example/demo/service/CourseService.java",
+      "type": "symbol:java:com.example.demo.service.CourseService",
+      "members": [
+        "symbol:java:com.example.demo.service.CourseService#getCourses()",
+        "symbol:java:com.example.demo.service.CourseService#register(String)"
+      ]
+    },
+    {
+      "file": "src/main/java/com/example/demo/service/CourseServiceImpl.java",
+      "type": "symbol:java:com.example.demo.service.CourseServiceImpl",
+      "members": [
+        "symbol:java:com.example.demo.service.CourseServiceImpl#courseRepository",
+        "symbol:java:com.example.demo.service.CourseServiceImpl#<init>(CourseRepository)",
+        "symbol:java:com.example.demo.service.CourseServiceImpl#getCourses()",
+        "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)"
+      ]
+    },
+    {
+      "file": "src/main/java/com/example/demo/repository/CourseRepository.java",
+      "type": "symbol:java:com.example.demo.repository.CourseRepository",
+      "members": [
+        "symbol:java:com.example.demo.repository.CourseRepository#findByTitle(String)"
+      ]
+    },
+    {
+      "file": "src/main/java/com/example/demo/support/Holder.java",
+      "type": "symbol:java:com.example.demo.support.Holder",
+      "members": [
+        "symbol:java:com.example.demo.support.Holder#value",
+        "symbol:java:com.example.demo.support.Holder#fingerprint()"
+      ]
+    }
+  ],
+  "typed_as": [
+    {
+      "field": "symbol:java:com.example.demo.controller.CourseController#courseService",
+      "type": "symbol:java:com.example.demo.service.CourseService",
+      "path": "src/main/java/com/example/demo/controller/CourseController.java",
+      "line": 16
+    },
+    {
+      "field": "symbol:java:com.example.demo.controller.CourseController#catalog",
+      "type": "symbol:java:com.example.demo.service.CourseCatalog",
+      "path": "src/main/java/com/example/demo/controller/CourseController.java",
+      "line": 17
+    },
+    {
+      "field": "symbol:java:com.example.demo.service.CourseServiceImpl#courseRepository",
+      "type": "symbol:java:com.example.demo.repository.CourseRepository",
+      "path": "src/main/java/com/example/demo/service/CourseServiceImpl.java",
+      "line": 10
+    }
+  ],
+  "typed_as_not_produced": {
+    "why": "le type déclaré n’est pas une déclaration des sources : aucun symbole externe n’est inventé",
+    "fields": [
+      "symbol:java:com.example.demo.model.Course#title",
+      "symbol:java:com.example.demo.service.CourseCatalog#byTitle",
+      "symbol:java:com.example.demo.support.Holder#value"
+    ]
+  },
+  "extends": [],
+  "unresolved_supertypes": [
+    {
+      "type": "symbol:java:com.example.demo.repository.CourseRepository",
+      "written": "JpaRepository",
+      "path": "src/main/java/com/example/demo/repository/CourseRepository.java",
+      "line": 7
+    }
+  ],
+  "implements": [
+    {
+      "subject": "symbol:java:com.example.demo.service.CourseServiceImpl",
+      "object": "symbol:java:com.example.demo.service.CourseService",
+      "status": "OBSERVED",
+      "path": "src/main/java/com/example/demo/service/CourseServiceImpl.java",
+      "line": 9
+    },
+    {
+      "subject": "symbol:java:com.example.demo.service.CourseServiceImpl#getCourses()",
+      "object": "symbol:java:com.example.demo.service.CourseService#getCourses()",
+      "status": "INFERRED",
+      "rule": "java.implements.same-signature/1",
+      "premises": [
+        [
+          "IMPLEMENTS",
+          "symbol:java:com.example.demo.service.CourseServiceImpl",
+          "symbol:java:com.example.demo.service.CourseService"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.CourseServiceImpl",
+          "symbol:java:com.example.demo.service.CourseServiceImpl#getCourses()"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.CourseService",
+          "symbol:java:com.example.demo.service.CourseService#getCourses()"
+        ]
+      ]
+    },
+    {
+      "subject": "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)",
+      "object": "symbol:java:com.example.demo.service.CourseService#register(String)",
+      "status": "INFERRED",
+      "rule": "java.implements.same-signature/1",
+      "premises": [
+        [
+          "IMPLEMENTS",
+          "symbol:java:com.example.demo.service.CourseServiceImpl",
+          "symbol:java:com.example.demo.service.CourseService"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.CourseServiceImpl",
+          "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.CourseService",
+          "symbol:java:com.example.demo.service.CourseService#register(String)"
+        ]
+      ]
+    }
+  ],
+  "calls": [
+    {
+      "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
+      "object": "symbol:java:com.example.demo.service.CourseCatalog#refresh()",
+      "rule": "java.calls.declared-receiver-unique-target/1",
+      "premises": [
+        [
+          "TYPED_AS",
+          "symbol:java:com.example.demo.controller.CourseController#catalog",
+          "symbol:java:com.example.demo.service.CourseCatalog"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.CourseCatalog",
+          "symbol:java:com.example.demo.service.CourseCatalog#refresh()"
+        ]
+      ],
+      "sites": [
+        {
+          "path": "src/main/java/com/example/demo/controller/CourseController.java",
+          "line": 26,
+          "column_start": 8,
+          "column_end": 25,
+          "text": "catalog.refresh()"
+        },
+        {
+          "path": "src/main/java/com/example/demo/controller/CourseController.java",
+          "line": 27,
+          "column_start": 8,
+          "column_end": 25,
+          "text": "catalog.refresh()"
+        }
+      ]
+    },
+    {
+      "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
+      "object": "symbol:java:com.example.demo.service.CourseService#getCourses()",
+      "rule": "java.calls.declared-receiver-unique-target/1",
+      "premises": [
+        [
+          "TYPED_AS",
+          "symbol:java:com.example.demo.controller.CourseController#courseService",
+          "symbol:java:com.example.demo.service.CourseService"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.CourseService",
+          "symbol:java:com.example.demo.service.CourseService#getCourses()"
+        ]
+      ],
+      "sites": [
+        {
+          "path": "src/main/java/com/example/demo/controller/CourseController.java",
+          "line": 28,
+          "column_start": 15,
+          "column_end": 41,
+          "text": "courseService.getCourses()"
+        }
+      ]
+    },
+    {
+      "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
+      "object": "symbol:java:com.example.demo.controller.CourseController#audit()",
+      "rule": "java.calls.declared-receiver-unique-target/1",
+      "premises": [
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.controller.CourseController",
+          "symbol:java:com.example.demo.controller.CourseController#audit()"
+        ]
+      ],
+      "sites": [
+        {
+          "path": "src/main/java/com/example/demo/controller/CourseController.java",
+          "line": 35,
+          "column_start": 8,
+          "column_end": 15,
+          "text": "audit()"
+        }
+      ]
+    },
+    {
+      "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
+      "object": "symbol:java:com.example.demo.service.CourseService#register(String)",
+      "rule": "java.calls.declared-receiver-unique-target/1",
+      "premises": [
+        [
+          "TYPED_AS",
+          "symbol:java:com.example.demo.controller.CourseController#courseService",
+          "symbol:java:com.example.demo.service.CourseService"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.CourseService",
+          "symbol:java:com.example.demo.service.CourseService#register(String)"
+        ]
+      ],
+      "sites": [
+        {
+          "path": "src/main/java/com/example/demo/controller/CourseController.java",
+          "line": 36,
+          "column_start": 15,
+          "column_end": 48,
+          "text": "this.courseService.register(name)"
+        }
+      ]
+    },
+    {
+      "subject": "symbol:java:com.example.demo.controller.CourseController#titles()",
+      "object": "symbol:java:com.example.demo.service.CourseCatalog#titles()",
+      "rule": "java.calls.declared-receiver-unique-target/1",
+      "premises": [
+        [
+          "TYPED_AS",
+          "symbol:java:com.example.demo.controller.CourseController#catalog",
+          "symbol:java:com.example.demo.service.CourseCatalog"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.CourseCatalog",
+          "symbol:java:com.example.demo.service.CourseCatalog#titles()"
+        ]
+      ],
+      "sites": [
+        {
+          "path": "src/main/java/com/example/demo/controller/CourseController.java",
+          "line": 43,
+          "column_start": 15,
+          "column_end": 31,
+          "text": "catalog.titles()"
+        }
+      ]
+    }
+  ],
+  "not_interpreted": [
+    {
+      "owner": "symbol:java:com.example.demo.controller.CourseController#register(String)",
+      "path": "src/main/java/com/example/demo/controller/CourseController.java",
+      "line": 33,
+      "column_start": 8,
+      "column_end": 28,
+      "text": "catalog.label(title)",
+      "reason": "OVERLOAD_AMBIGUOUS",
+      "method": "label",
+      "receiver": "catalog",
+      "receiver_type": "com.example.demo.service.CourseCatalog",
+      "candidates": [
+        "symbol:java:com.example.demo.service.CourseCatalog#label(String)",
+        "symbol:java:com.example.demo.service.CourseCatalog#label(Course)"
+      ]
+    },
+    {
+      "owner": "symbol:java:com.example.demo.controller.CourseController#register(String)",
+      "path": "src/main/java/com/example/demo/controller/CourseController.java",
+      "line": 34,
+      "column_start": 22,
+      "column_end": 34,
+      "text": "title.trim()",
+      "reason": "RECEIVER_KIND_DEFERRED",
+      "method": "trim",
+      "receiver": "title"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.controller.CourseController#titles()",
+      "path": "src/main/java/com/example/demo/controller/CourseController.java",
+      "line": 41,
+      "column_start": 32,
+      "column_end": 49,
+      "text": "catalog.refresh()",
+      "reason": "LAMBDA_OR_LOCAL_CONTEXT",
+      "method": "refresh",
+      "receiver": "catalog"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.controller.CourseController#titles()",
+      "path": "src/main/java/com/example/demo/controller/CourseController.java",
+      "line": 42,
+      "column_start": 8,
+      "column_end": 20,
+      "text": "reload.run()",
+      "reason": "RECEIVER_KIND_DEFERRED",
+      "method": "run",
+      "receiver": "reload"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.CourseCatalog#<init>()",
+      "path": "src/main/java/com/example/demo/service/CourseCatalog.java",
+      "line": 12,
+      "column_start": 23,
+      "column_end": 38,
+      "text": "new HashMap<>()",
+      "reason": "UNSUPPORTED_CALL_FORM"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.CourseCatalog#refresh()",
+      "path": "src/main/java/com/example/demo/service/CourseCatalog.java",
+      "line": 16,
+      "column_start": 8,
+      "column_end": 23,
+      "text": "byTitle.clear()",
+      "reason": "TARGET_TYPE_OUTSIDE_SNAPSHOT",
+      "method": "clear",
+      "receiver": "byTitle",
+      "receiver_type": "java.util.Map"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.CourseCatalog#titles()",
+      "path": "src/main/java/com/example/demo/service/CourseCatalog.java",
+      "line": 20,
+      "column_start": 15,
+      "column_end": 44,
+      "text": "List.copyOf(byTitle.keySet())",
+      "reason": "UNSUPPORTED_CALL_FORM",
+      "method": "copyOf",
+      "receiver": "List"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.CourseCatalog#titles()",
+      "path": "src/main/java/com/example/demo/service/CourseCatalog.java",
+      "line": 20,
+      "column_start": 27,
+      "column_end": 43,
+      "text": "byTitle.keySet()",
+      "reason": "TARGET_TYPE_OUTSIDE_SNAPSHOT",
+      "method": "keySet",
+      "receiver": "byTitle",
+      "receiver_type": "java.util.Map"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.CourseServiceImpl#getCourses()",
+      "path": "src/main/java/com/example/demo/service/CourseServiceImpl.java",
+      "line": 18,
+      "column_start": 15,
+      "column_end": 41,
+      "text": "courseRepository.findAll()",
+      "reason": "TARGET_DECLARATION_OUTSIDE_SNAPSHOT",
+      "method": "findAll",
+      "receiver": "courseRepository",
+      "receiver_type": "com.example.demo.repository.CourseRepository",
+      "external_supertypes": [
+        "org.springframework.data.jpa.repository.JpaRepository"
+      ]
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)",
+      "path": "src/main/java/com/example/demo/service/CourseServiceImpl.java",
+      "line": 23,
+      "column_start": 29,
+      "column_end": 64,
+      "text": "courseRepository.findByTitle(title)",
+      "reason": "SUPER_TYPE_UNRESOLVED",
+      "method": "findByTitle",
+      "receiver": "courseRepository",
+      "receiver_type": "com.example.demo.repository.CourseRepository",
+      "external_supertypes": [
+        "org.springframework.data.jpa.repository.JpaRepository"
+      ],
+      "candidates": [
+        "symbol:java:com.example.demo.repository.CourseRepository#findByTitle(String)"
+      ]
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)",
+      "path": "src/main/java/com/example/demo/service/CourseServiceImpl.java",
+      "line": 24,
+      "column_start": 13,
+      "column_end": 28,
+      "text": "known.isEmpty()",
+      "reason": "RECEIVER_KIND_DEFERRED",
+      "method": "isEmpty",
+      "receiver": "known"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)",
+      "path": "src/main/java/com/example/demo/service/CourseServiceImpl.java",
+      "line": 25,
+      "column_start": 19,
+      "column_end": 31,
+      "text": "known.get(0)",
+      "reason": "RECEIVER_KIND_DEFERRED",
+      "method": "get",
+      "receiver": "known"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)",
+      "path": "src/main/java/com/example/demo/service/CourseServiceImpl.java",
+      "line": 27,
+      "column_start": 15,
+      "column_end": 55,
+      "text": "courseRepository.save(new Course(title))",
+      "reason": "TARGET_DECLARATION_OUTSIDE_SNAPSHOT",
+      "method": "save",
+      "receiver": "courseRepository",
+      "receiver_type": "com.example.demo.repository.CourseRepository",
+      "external_supertypes": [
+        "org.springframework.data.jpa.repository.JpaRepository"
+      ]
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)",
+      "path": "src/main/java/com/example/demo/service/CourseServiceImpl.java",
+      "line": 27,
+      "column_start": 37,
+      "column_end": 54,
+      "text": "new Course(title)",
+      "reason": "UNSUPPORTED_CALL_FORM"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.support.Holder#fingerprint()",
+      "path": "src/main/java/com/example/demo/support/Holder.java",
+      "line": 7,
+      "column_start": 15,
+      "column_end": 31,
+      "text": "value.hashCode()",
+      "reason": "RECEIVER_TYPE_UNKNOWN",
+      "method": "hashCode",
+      "receiver": "value"
+    }
+  ],
+  "never": {
+    "relations": [
+      "DISPATCHES_TO"
+    ],
+    "calls": [
+      {
+        "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
+        "object": "symbol:java:com.example.demo.service.CourseServiceImpl#getCourses()",
+        "why": "un appel sur une interface vise sa déclaration, jamais une implémentation"
+      },
+      {
+        "subject": "symbol:java:com.example.demo.controller.CourseController#titles()",
+        "object": "symbol:java:com.example.demo.service.CourseCatalog#refresh()",
+        "why": "créer une lambda n’est pas l’appeler"
+      },
+      {
+        "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
+        "object": "symbol:java:com.example.demo.service.CourseCatalog#label(String)",
+        "why": "deux surcharges de même nom et même arité : aucun choix"
+      }
+    ]
+  },
+  "route": {
+    "endpoint": "endpoint:GET /api/courses",
+    "handled_by": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
+    "then": [
+      "symbol:java:com.example.demo.service.CourseCatalog#refresh()",
+      "symbol:java:com.example.demo.service.CourseService#getCourses()"
+    ]
+  }
+}
