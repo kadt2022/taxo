@@ -75,9 +75,15 @@ describe('le nom d’un symbole en compartiments UML', ()=>{
     expect(compartments('symbol:java:com.acme.Foo')).toEqual({owner:'Foo', context:'com.acme'});
   });
 
+  it('met à part l’emplacement d’une application ou d’un fichier, comme le paquetage d’une classe', ()=>{
+    expect(compartments('application:app/Main.java#Main')).toEqual({owner:'Main', context:'app/Main.java'});
+    expect(compartments('application:compose.yaml#api')).toEqual({owner:'api', context:'compose.yaml'});
+    expect(compartments('file:src/main/A.java')).toEqual({owner:'A.java', context:'src/main'});
+    expect(compartments('file:pom.xml')).toEqual({owner:'pom.xml'});
+  });
+
   it('garde le nom entier de toute autre référence', ()=>{
     expect(compartments('endpoint:GET /orders')).toEqual({owner:'GET /orders'});
-    expect(compartments('application:app/Main.java#Main')).toEqual({owner:'app/Main.java#Main'});
     expect(compartments('symbol:sans-langage')).toEqual({owner:'sans-langage'});
   });
 });
