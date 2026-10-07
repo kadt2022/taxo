@@ -99,7 +99,8 @@ def local_frontier(reader, scan_id, tile):
         for node in concerned[gap['subject']]:
             key = (order[node], gap['subject'], gap[_TYPE], gap['producer'] or '')
             entries[key] = {'nature': 'KNOWLEDGE', 'scope': 'NODE', 'node': node, 'subject': gap['subject'],
-                            'reason': gap[_TYPE], 'producer': gap['producer'], 'count': {'kind': 'UNKNOWN'}}
+                            'reason': gap[_TYPE], 'producer': gap['producer'], 'count': {'kind': 'UNKNOWN'},
+                            **({'causes': gap['reasons']} if gap.get('reasons') else {})}
     return [entries[key] for key in sorted(entries)]
 
 

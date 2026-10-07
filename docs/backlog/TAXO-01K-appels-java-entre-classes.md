@@ -1,7 +1,7 @@
 # TAXO-01K — Appels Java entre classes : du contrôleur au service et au repository
 
 Statut : **en cours**, implémentation demandée le 2026-10-07. PR A (contrat et vérité de référence) livrée ;
-PR B (résolution intra-sources) livrée ; PR C et D à venir.  
+PR B (résolution intra-sources) et PR C (implémentations, restitution) livrées ; PR D à venir.  
 Date : 2026-10-03, mise à jour le 2026-10-07.  
 Source de vérité : `ARCHITECTURE.md` § 2, § 5.6, § 7.3, § 8, § 12.3 et surtout § 14.  
 Dépend de : lecteur Java syntaxique existant, contrat des faits, couverture bornée, voisinage multiniveau / Explorer.  
@@ -511,7 +511,15 @@ Plan d'origine :
 - diagnostics `NOT_INTERPRETED` ;
 - tests unitaires et conformance.
 
-### PR C — Interfaces et restitution
+### PR C — Interfaces et restitution (livrée)
+
+Livré : `IMPLEMENTS` méthode → méthode (`INFERRED`, `java.implements.same-signature/1`), identique à l'oracle ;
+les phrases « La classe B implémente l'interface C » et « La méthode B.run() implémente la méthode C.run() » ;
+les raisons d'arrêt dites en clair sur la frontière d'un nœud non lu (`causes`, lues dans le `diagnostic` sans
+logique Java). L'essai sur `student-course-demo` passe à PR D, avec `spring-petclinic` : ses sources ne sont pas
+dans ce dépôt.
+
+Plan d'origine :
 
 - production `IMPLEMENTS` selon la décision de PR A ;
 - Explorer / vocabulaire : libellés et explications des arrêts ; la phrase actuelle « La classe B implémente la méthode C.run() » (`frontend/src/sentences.test.ts`) doit distinguer type et méthode ;

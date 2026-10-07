@@ -53,9 +53,9 @@ def test_the_declarations_are_exactly_those_of_the_oracle(execution):
     expected |= {('IMPLEMENTS', item['subject'], item['object']) for item in ORACLE['implements']
                  if item['status'] == 'OBSERVED'}
     found = {(fact['relation'], fact['subject'], fact['object']) for fact in execution.facts
-             if fact['relation'] != 'CALLS'}
+             if fact['status'] == 'OBSERVED'}
     assert found == expected
-    assert all(fact['status'] == 'OBSERVED' for fact in execution.facts if fact['relation'] != 'CALLS')
+    assert {fact['relation'] for fact in execution.facts if fact['status'] == 'INFERRED'} == {'CALLS', 'IMPLEMENTS'}
 
 
 def test_a_declared_field_type_is_proven_by_its_line(execution):
@@ -79,6 +79,18 @@ def test_the_calls_are_exactly_those_of_the_oracle_with_every_site(execution):
         assert sites == [(site['path'], site['line'], site['column_start'], site['column_end'], 'call-site')
                          for site in oracle['sites']]
         assert all(item['symbol'] == fact['subject'] for item in fact['evidence'])
+
+
+def test_the_method_implementations_are_exactly_those_of_the_oracle(execution):
+    expected = {(item['subject'], item['object']): item for item in ORACLE['implements'] if item['status'] == 'INFERRED'}
+    found = {(fact['subject'], fact['object']): fact for fact in of(execution, 'IMPLEMENTS')
+             if fact['status'] == 'INFERRED'}
+    assert found.keys() == expected.keys()
+    for key, fact in found.items():
+        assert fact['derivation']['rule'] == expected[key]['rule']
+        assert fact['derivation']['premises'] == [premise(*item) for item in expected[key]['premises']]
+        [evidence] = fact['evidence']
+        assert (evidence['symbol'], evidence['method']) == (fact['subject'], 'java.declaration')
 
 
 def test_each_uninterpreted_site_has_its_closed_reason_under_its_owner(execution):

@@ -1,7 +1,7 @@
 // Ce que l'explorateur dit (TAXO-01J § 9) : chaque frontière, chaque marque, la portée de la vue. Pur. Des comptes,
 // jamais de pourcentage ; jamais « complet » : une vue montre ce que ses pas atteignent, pas tout le logiciel. Un type
 // ou une relation que le portail ne connaît pas s'affiche par son nom brut.
-import {COVERAGE, EVALUATORS, STATUS_MARKS, TONES, TYPES, VERBS, label, reference} from '../vocabulary';
+import {CAUSES, COVERAGE, EVALUATORS, STATUS_MARKS, TONES, TYPES, VERBS, label, reference} from '../vocabulary';
 import type {Boundary, Count, Direction, NotSent} from './protocol';
 import type {Link, View, ViewNode} from './graph';
 
@@ -64,7 +64,8 @@ export function knowledgeText(boundary:Boundary){
   default:{
     const where=boundary.subject?nodeName(boundary.subject):'';
     const by=boundary.producer?` par ${label(EVALUATORS, boundary.producer)}`:'';
-    return `Zone non lue${by} : ${where} (${label(COVERAGE, boundary.reason)}).`;
+    const causes=(boundary.causes??[]).map(cause=>label(CAUSES, cause)).join(' ; ');
+    return `Zone non lue${by} : ${where} (${label(COVERAGE, boundary.reason)}${causes?` : ${causes}`:''}).`;
   }
   }
 }

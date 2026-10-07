@@ -7,7 +7,9 @@ Il est generique Java : il ne connait ni controleur, ni service, ni repository, 
   methodes, constructeurs et champs ; un champ `TYPED_AS` son type declare quand c'est un type des sources ; un
   type `EXTENDS` ou `IMPLEMENTS` ses supertypes des sources ;
 - les appels (`INFERRED`) : `CALLS` d'une methode ou d'un constructeur vers la declaration que la regle
-  `java.calls.declared-receiver-unique-target/1` etablit, ses premisses etant les declarations ci-dessus.
+  `java.calls.declared-receiver-unique-target/1` etablit, ses premisses etant les declarations ci-dessus ;
+- les implementations de methodes (`INFERRED`) : `IMPLEMENTS` d'une methode vers la methode de meme signature
+  d'une interface que sa classe implemente (`java.implements.same-signature/1`).
 
 Chaque site qu'il ne resout pas est decrit, avec sa raison fermee, dans le diagnostic d'une couverture
 `NOT_INTERPRETED` de la methode qui le porte : jamais une cible inventee. `DISPATCHES_TO` n'est jamais produit.
@@ -18,6 +20,7 @@ from app.evaluations.domain.evaluator import EvaluationOutput
 from app.evaluations.domain.progress import silent
 from app.evaluations.domain.status import EvaluationStatus
 from app.evaluators.java import sites, sources
+from . import implementations
 from .catalog import CATALOG
 from .declarations import Sources, supertype_relation, symbol
 from .facts import Facts, coverage, site_diagnostic
@@ -40,6 +43,8 @@ class JavaCallsEvaluator:
         run = _Run(snapshot, contents, Sources(parsed))
         for java_file in parsed:
             run.read(java_file)
+        for found in implementations.of(run.index):
+            run.facts.implementation(found)
         progress('calls', 'Appels Java établis', run.resolved)
         readable = [java_file for java_file in parsed if not java_file.has_errors]
         warnings += [f'Fichier Java lu en partie (erreur de syntaxe) : {java_file.path}'

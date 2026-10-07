@@ -99,6 +99,9 @@ const RULES:Record<string, (subject:Entity, object:Entity, project?:Project)=>Se
   WRITTEN_IN:(subject, object, project)=>[...noun(subject, project), ' est écrit en ', code(object)],
   HAS_COMMIT:(subject, object, project)=>[...noun(subject, project), ' contient ', ...noun(object, project)],
   CHILD_OF:(subject, object, project)=>[...noun(subject, project), ' suit ', ...noun(object, project)],
+  // Entre types, l'objet est une interface ; entre methodes, chaque cote se dit par sa forme (TAXO-01K).
+  IMPLEMENTS:(subject, object)=>subject.type==='symbol'&&object.type==='symbol'&&!subject.key.includes('#')
+    &&!object.key.includes('#')?[...noun(subject), ' implémente l’interface ', code(object)]:null,
   TYPED_AS:(subject, object)=>subject.type==='symbol'&&object.type==='symbol'
     ?[...noun(subject), ' est déclaré du type ', code(object)]:null,
 };

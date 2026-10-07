@@ -6,6 +6,7 @@ La vérité est écrite à la main, à partir des fichiers du dépôt scénaris�
 - `ShopSecurity` protège tout (`/**`) par `authenticated()` ; `AdminSecurity` autorise `/**` à `hasRole("ADMIN")`.
 """
 from test_coverage_bounds import PYTHON, taxo_on_fixture  # noqa: F401  (fixture partagée)
+from test_java_calls import fixture_files
 from test_spring_boot import SHOP_REF, repository
 
 ORDERS = 'endpoint:GET /orders'
@@ -77,3 +78,22 @@ def test_a_route_found_by_search_opens_its_tile(taxo_on):
     assert [item['reference'] for item in searched['items']] == [ORDERS]
     assert tile(taxo, scan, root=searched['items'][0]['reference'], follow=['HANDLED_BY'],
                 direction='OUTGOING')['anchor']['known']
+
+
+def test_the_calls_of_a_route_handler_are_followed_and_their_unread_sites_say_why(taxo_on):
+    """TAXO-01K : sans rien de propre à Java dans le moteur, la Tuile suit la route vers son traitement puis ses
+    appels, et la zone non lue d'une méthode porte les raisons fermées de ses sites."""
+    taxo, _ = taxo_on(fixture_files())
+    scan = taxo.analyse()['id']
+    controller = 'symbol:java:com.example.demo.controller.CourseController'
+    found = tile(taxo, scan, root='endpoint:POST /api/courses', follow=['HANDLED_BY', 'CALLS'],
+                 direction='OUTGOING', depth=2)
+    assert elements(found) == [
+        (1, 'endpoint:POST /api/courses', 'HANDLED_BY', f'{controller}#register(String)'),
+        (2, f'{controller}#register(String)', 'CALLS', f'{controller}#audit()'),
+        (2, f'{controller}#register(String)', 'CALLS',
+         'symbol:java:com.example.demo.service.CourseService#register(String)')]
+    unread = [entry for entry in found['frontier'] if entry.get('node') == f'{controller}#register(String)'
+              and entry['producer'] == 'taxo.java-calls']
+    assert [(entry['reason'], entry['causes']) for entry in unread] == [
+        ('NOT_INTERPRETED', ['OVERLOAD_AMBIGUOUS', 'RECEIVER_KIND_DEFERRED'])]
