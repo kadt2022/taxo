@@ -373,6 +373,7 @@ catalogue ne lit aucun d'eux est `UNSUPPORTED` (§ 6, TAXO-COV-01).
 | `taxo.spring-boot` | `spring-boot` v1 | Java | applications Spring Boot, route → application |
 | `taxo.spring-security` | `spring-security` v2 | Java | règles d'URL, correspondance, protection |
 | `taxo.structure` | `structure` v1 | indépendant du langage | modules, dépendances entre modules, applications compose |
+| `taxo.java-calls` | `java-calls` v1 | Java | déclarations des sources, appels statiquement établis (§ 14) |
 
 ### 7.1 Inventaire
 
@@ -894,10 +895,12 @@ Une **hypothèse** n'est pas un fait. Le contrat ne change pas : ni statut, ni p
 - Le modèle vit derrière un port (`backend/app/hypotheses`) ; il reçoit une représentation construite
   par Taxo, jamais le dépôt. Aucune API ni projection ne l'expose tant que TAXO-LAB-01 n'a pas conclu.
 
-## 14. Appels Java (contrat Existant, producteur À construire)
+## 14. Appels Java (Existant pour le premier fragment)
 
 Décidé par TAXO-01K (PR A, 2026-10-07). Le contrat, sa conformité, la mémoire et la vérité de référence
-(`backend/tests/fixtures/java-calls-demo`) sont livrés ; aucun évaluateur ne produit encore ces faits.
+(`backend/tests/fixtures/java-calls-demo`) sont livrés. L'évaluateur `taxo.java-calls` (PR B) produit les
+déclarations (`CONTAINS`, `TYPED_AS`, `EXTENDS`, `IMPLEMENTS` entre types) et les `CALLS` du premier fragment, et
+retrouve exactement l'oracle ; `IMPLEMENTS` entre méthodes vient avec PR C. Il ne connaît aucun framework.
 
 - **`CALLS`** : « le corps de A contient au moins un site d'appel dont une règle de résolution nommée
   sélectionne la déclaration B ». Statut **`INFERRED`** seulement (la sélection est une déduction ; l'occurrence
@@ -936,6 +939,13 @@ Décidé par TAXO-01K (PR A, 2026-10-07). Le contrat, sa conformité, la mémoir
   `PARSE_ERROR`.
 - **Lambdas** : créer une lambda n'est pas l'appeler ; ses appels ne sont jamais attribués à la méthode
   englobante.
+- **Doutes du producteur** (PR B), tous tranchés vers moins d'appels : un nom déclaré n'importe où dans le corps
+  (paramètre, variable, motif, paramètre de lambda) masque le champ de même nom ; un appel sans receveur dans un
+  type membre, ou qu'un import statique peut fournir, n'a pas de cible ; un type déclaré deux fois dans les
+  sources, ou deux déclarations de même identité syntaxique, sont ambigus ; un enum ou un record a une
+  superclasse implicite hors des sources ; un argument littéral n'écarte une déclaration que s'il contredit un
+  paramètre de type connu ; `super.f()`, `new T()`, `this(...)`, un appel statique `T.f()` et un appel dans un
+  initialiseur sont `UNSUPPORTED_CALL_FORM`.
 
 ## 15. Versionnement, projections, invalidation
 
@@ -969,7 +979,7 @@ Décidé par TAXO-01K (PR A, 2026-10-07). Le contrat, sa conformité, la mémoir
 | Profils adaptatifs, Arbre, Forêt | À construire |
 | Arbres et Forêt | Proposé |
 | Cache, déduplication, invalidation incrémentale | Proposé |
-| `CALLS` Java | Contrat et vérité de référence existants (§ 14) ; producteur à construire (TAXO-01K) |
+| `CALLS` Java | Premier fragment existant (`taxo.java-calls`, § 14) ; `IMPLEMENTS` entre méthodes et mesures réelles à construire (TAXO-01K) |
 | Dépendances externes et versions (E2) | À construire |
 | Changements de structure enrichis (E3) | en partie (comparaison générique) |
 | Lecteur Python (E4) | À construire |
@@ -1072,3 +1082,9 @@ prémisses restent des faits (§ 5.5 inchangé) : `CONTAINS` s'étend aux symbol
 vocabulaire, un champ a sa forme de symbole. Un site non résolu est décrit dans le `diagnostic` d'une couverture
 `NOT_INTERPRETED`, avec une raison fermée. La mémoire conserve les colonnes et le rôle (migration 009). Un petit
 dépôt Java et ses vérités écrites à la main deviennent l'oracle des producteurs à venir.
+
+**2026-10-07** — Premier producteur des appels Java (TAXO-01K, PR B). L'évaluateur générique `taxo.java-calls`
+écrit les déclarations des sources et les `CALLS` de la règle `java.calls.declared-receiver-unique-target/1`,
+et décrit chaque site non résolu avec sa raison fermée. Ses doutes sont tranchés vers moins d'appels (§ 14).
+Le lecteur Java partagé lit désormais les sources, les déclarations et les sites une fois pour tous les
+évaluateurs Java.

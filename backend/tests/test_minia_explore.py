@@ -406,7 +406,7 @@ def test_the_opening_answers_leave_room_for_the_advertised_operations(make_repo,
     git(repo, 'add', '-A')
     git(repo, 'commit', '-qm', 'beaucoup de fichiers')
     sha = git(repo, 'rev-parse', 'HEAD')
-    model, bodies = ollama_scripted(answer(statement('unknown', 'Trop de fichiers pour tout voir.')), num_ctx=12288)
+    model, bodies = ollama_scripted(answer(statement('unknown', 'Trop de fichiers pour tout voir.')), num_ctx=16384)
     result = completed(ask_commit(repo, tmp_path, model, sha, question='Que change ce commit ? ' * 40))
     assert result['mode'] == 'exploration', 'le premier tour tient malgre un gros commit et une longue question'
     assert result['trajectory'][1]['not_sent'], 'ce qui ne tient pas est compte, jamais tronque'

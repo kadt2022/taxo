@@ -9,6 +9,7 @@ from app.scans.application.analysis_jobs import AnalysisJobs
 from app.scans.api.router import create_router as scans_router
 from app.snapshots.infrastructure.git.reader import GitSnapshotReader
 from app.evaluators.inventory.evaluator import InventoryEvaluator
+from app.evaluators.java_calls.evaluator import JavaCallsEvaluator
 from app.evaluators.git.evaluator import GitEvaluator
 from app.evaluators.spring_api.evaluator import SpringApiEvaluator
 from app.evaluators.spring_boot.evaluator import SpringBootEvaluator
@@ -78,7 +79,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     projects = SqlAlchemyProjectRepository(engine)
     scans = SqlAlchemyScanRepository(engine)
     registry = EvaluatorRegistry([InventoryEvaluator(), GitEvaluator(), SpringApiEvaluator(), SpringBootEvaluator(),
-                                  SpringSecurityEvaluator(), StructureEvaluator()])
+                                  SpringSecurityEvaluator(), StructureEvaluator(), JavaCallsEvaluator()])
     inventory = registry.get('taxo.inventory')
     facts = SqlAlchemyFactMemory(engine)  # TAXO-01E ; analysis_facts reste en secours, plus alimentee
     # Analyse globale : chaque evaluateur observe l'instantane ; l'inventaire du code reste le principal.

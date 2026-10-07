@@ -15,19 +15,21 @@ export const DOMAINS=[
 ] as const;
 export type DomainId=typeof DOMAINS[number]['id'];
 
-/** Le domaine de chaque relation ; `CONTAINS` depend de qui la produit (un module du depot, ou un fichier). */
+/** Le domaine de chaque relation ; `CONTAINS` depend de qui la produit (un module, une declaration, un fichier). */
 const BY_RELATION:Record<string, DomainId>={HANDLED_BY:'api', SERVED_BY:'api',
   PROTECTED_BY:'securite', PERMITS_ALL:'securite', AUTHORIZED_BY:'securite', MATCHED_BY:'securite',
   DEPENDS_ON:'architecture', BUILT_FROM:'architecture',
+  CALLS:'architecture', IMPLEMENTS:'architecture', EXTENDS:'architecture', TYPED_AS:'architecture',
   USES_TECHNOLOGY:'technologies', DECLARED_BY:'technologies', WRITTEN_IN:'fichiers', CONTAINS:'fichiers',
   HAS_COMMIT:'git', AUTHORED_BY:'git', CHILD_OF:'git', CHANGES:'git'};
 /** Les domaines que chaque evaluateur peut renseigner : un domaine sans evaluateur compare est « non analyse ». */
 const BY_EVALUATOR:Record<string, DomainId[]>={'taxo.spring-api':['api'], 'taxo.spring-boot':['api', 'architecture'],
   'taxo.spring-security':['securite'], 'taxo.structure':['architecture'], 'taxo.inventory':['technologies', 'fichiers'],
-  'taxo.git':['git']};
+  'taxo.git':['git'], 'taxo.java-calls':['architecture']};
+const ARCHITECTURE_CONTAINS=new Set(['taxo.structure', 'taxo.java-calls']);
 
 export function domainOf(evaluator:string, relation:string):DomainId{
-  if(relation==='CONTAINS'&&evaluator==='taxo.structure')return 'architecture';
+  if(relation==='CONTAINS'&&ARCHITECTURE_CONTAINS.has(evaluator))return 'architecture';
   return BY_RELATION[relation]??BY_EVALUATOR[evaluator]?.[0]??'autres';
 }
 const domainsOf=(evaluator:string)=>BY_EVALUATOR[evaluator]??['autres'];
@@ -36,6 +38,7 @@ const domainsOf=(evaluator:string)=>BY_EVALUATOR[evaluator]??['autres'];
 type Noun={one:string; many:string; feminine?:boolean};
 const NOUNS:Record<string, Noun>={
   'taxo.structure|CONTAINS':{one:'module du dépôt', many:'modules du dépôt'},
+  'taxo.java-calls|CONTAINS':{one:'déclaration Java', many:'déclarations Java', feminine:true},
   CONTAINS:{one:'fichier', many:'fichiers'},
   WRITTEN_IN:{one:'identification de langage', many:'identifications de langage', feminine:true},
   USES_TECHNOLOGY:{one:'technologie', many:'technologies', feminine:true},
@@ -52,6 +55,10 @@ const NOUNS:Record<string, Noun>={
   MATCHED_BY:{one:'correspondance de route à un motif', many:'correspondances de route à un motif', feminine:true},
   DEPENDS_ON:{one:'dépendance entre modules', many:'dépendances entre modules', feminine:true},
   BUILT_FROM:{one:'composition d’application', many:'compositions d’application', feminine:true},
+  CALLS:{one:'appel entre méthodes', many:'appels entre méthodes'},
+  IMPLEMENTS:{one:'implémentation', many:'implémentations', feminine:true},
+  EXTENDS:{one:'héritage', many:'héritages'},
+  TYPED_AS:{one:'type de champ', many:'types de champ'},
 };
 const nounOf=(evaluator:string, relation:string):Noun=>NOUNS[`${evaluator}|${relation}`]??NOUNS[relation]
   ??{one:`fait « ${relation} »`, many:`faits « ${relation} »`};
