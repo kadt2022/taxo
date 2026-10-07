@@ -1,9 +1,9 @@
 // Ce que l'explorateur dit (TAXO-01J § 9) : chaque frontière, chaque marque, la portée de la vue. Pur. Des comptes,
 // jamais de pourcentage ; jamais « complet » : une vue montre ce que ses pas atteignent, pas tout le logiciel. Un type
 // ou une relation que le portail ne connaît pas s'affiche par son nom brut.
-import {COVERAGE, EVALUATORS, VERBS, label, reference} from '../vocabulary';
+import {COVERAGE, EVALUATORS, STATUS_MARKS, TONES, TYPES, VERBS, label, reference} from '../vocabulary';
 import type {Boundary, Count, Direction, NotSent} from './protocol';
-import type {View, ViewNode} from './graph';
+import type {Link, View, ViewNode} from './graph';
 
 const plural=(count:number, word:string)=>`${count} ${word}${count>1?'s':''}`;
 
@@ -113,3 +113,44 @@ export function notSentText(entry:NotSent){
   }
   return `${count} ${entry.what} non transmis (${entry.reason}).`;
 }
+
+/** Le type d'une référence dit comme un stéréotype UML (TAXO-UI-06) : « route », « symbole »… ; brut s'il est inconnu. */
+export function typeText(value:string){
+  const type=nodeType(value);
+  return TYPES[type]||type||'référence';
+}
+
+/** La teinte du type d'une référence (TAXO-UI-06, E7) ; neutre pour un type que le portail ne connaît pas. */
+export const toneOf=(value:string)=>TONES[nodeType(value)]??'neutral';
+
+/** Le nom d'une boîte en compartiments UML, lu dans sa clé selon le contrat des références (ARCHITECTURE § 5.3), pour
+ * que le nom se lise en gras et son emplacement en gris, de la même façon dans chaque boîte :
+ * - un symbole (`<langage>:<propriétaire>#<membre>`) : le propriétaire par son dernier segment, son espace de noms à
+ *   part, puis le membre tel qu'écrit, paramètres compris ;
+ * - une application (`<descripteur>#<nom>`) : son nom, son descripteur à part ;
+ * - un fichier ou un dossier : son dernier segment, son dossier parent à part.
+ * Une autre référence, ou une clé hors de ces formes, garde son nom entier. */
+export function compartments(value:string, named:Naming=nodeName):{owner:string; context?:string; member?:string}{
+  const at=value.indexOf(':'), type=value.slice(0, at), key=value.slice(at+1);
+  const apart=(owner:string, context:string)=>({owner, ...(context?{context}:{})});
+  if(type==='application'&&key.includes('#'))return apart(key.slice(key.lastIndexOf('#')+1), key.slice(0, key.lastIndexOf('#')));
+  if((type==='file'||type==='directory')&&key.includes('/'))return apart(key.slice(key.lastIndexOf('/')+1), key.slice(0, key.lastIndexOf('/')));
+  const language=key.indexOf(':');
+  if(type!=='symbol'||language<0)return {owner:bareName(value, named)};
+  const qualified=key.slice(language+1), hash=qualified.indexOf('#');
+  const owner=hash<0?qualified:qualified.slice(0, hash), dot=owner.lastIndexOf('.');
+  return {...apart(owner.slice(dot+1), dot>0?owner.slice(0, dot):''), ...(hash<0?{}:{member:qualified.slice(hash+1)})};
+}
+
+/** Le nom d'une référence sans son type, que l'en-tête de sa boîte dit déjà. */
+export function bareName(value:string, named:Naming=nodeName){
+  const said=named(value), word=TYPES[nodeType(value)];
+  return word&&said.startsWith(`${word} `)?said.slice(word.length+1):said;
+}
+
+/** Le statut d'un fait en une lettre (O, D, V), brut s'il est inconnu. */
+export const statusMark=(status:string|undefined)=>status?label(STATUS_MARKS, status):'';
+
+/** Chaque statut distinct des occurrences d'un lien, dans leur ordre : un lien ×N dont les occurrences diffèrent les
+ * montre tous, jamais le seul premier. */
+export const linkMarks=(link:Link)=>[...new Set(link.elements.map(element=>statusMark(element.fact.status)).filter(Boolean))];

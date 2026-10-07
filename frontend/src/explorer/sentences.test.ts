@@ -1,6 +1,8 @@
 import {describe, expect, it} from 'vitest';
 import type {Boundary} from './protocol';
-import {countText, factText, knowledgeText, nodeMarks, nodeName, notSentText, scopeText, selectionText, verb, viewText} from './sentences';
+import {linksOf, viewOf} from './graph';
+import {element, tile} from './__fixtures__/tiles';
+import {compartments, countText, factText, linkMarks, knowledgeText, nodeMarks, nodeName, notSentText, scopeText, selectionText, verb, viewText} from './sentences';
 
 const SELECTIONS=['DEPTH', 'NOT_REACHED', 'NODES', 'EDGES', 'WORK', 'BYTES', 'FANOUT'];
 const KNOWLEDGE=['NO_ANALYZER', 'ANALYSIS_INCOMPLETE', 'NOT_ANALYSED', 'LANGUAGES_UNKNOWN', 'LOCAL_COVERAGE_NOT_READ',
@@ -64,5 +66,38 @@ describe('ce qui n’a pas été transmis', ()=>{
     expect(notSentText({what:'local_coverage', count:1, reason:'BUDGET'})).toContain('1 zone non lue sans place pour être située');
     expect(notSentText({what:'local_coverage', count:3, reason:'BUDGET'})).toContain('Au moins 3 zones non lues sans place pour être situées');
     expect(notSentText({what:'items', count:2, reason:'BUDGET'})).toBe('2 items non transmis (BUDGET).');
+  });
+});
+
+describe('le nom d’un symbole en compartiments UML', ()=>{
+  it('sépare la classe, son paquetage et la méthode avec ses types de paramètres', ()=>{
+    expect(compartments('symbol:java:com.acme.admin.UserAdminController#get(String,String)')).toEqual(
+      {owner:'UserAdminController', context:'com.acme.admin', member:'get(String,String)'});
+    expect(compartments('symbol:java:Foo#<init>()')).toEqual({owner:'Foo', member:'<init>()'});
+    expect(compartments('symbol:java:com.acme.Foo')).toEqual({owner:'Foo', context:'com.acme'});
+  });
+
+  it('met à part l’emplacement d’une application ou d’un fichier, comme le paquetage d’une classe', ()=>{
+    expect(compartments('application:app/Main.java#Main')).toEqual({owner:'Main', context:'app/Main.java'});
+    expect(compartments('application:compose.yaml#api')).toEqual({owner:'api', context:'compose.yaml'});
+    expect(compartments('file:src/main/A.java')).toEqual({owner:'A.java', context:'src/main'});
+    expect(compartments('file:pom.xml')).toEqual({owner:'pom.xml'});
+  });
+
+  it('garde le nom entier de toute autre référence', ()=>{
+    expect(compartments('endpoint:GET /orders')).toEqual({owner:'GET /orders'});
+    expect(compartments('symbol:sans-langage')).toEqual({owner:'sans-langage'});
+  });
+});
+
+describe('les statuts d’un lien', ()=>{
+  it('montre chaque statut distinct de ses occurrences, pas seulement le premier', ()=>{
+    const view=viewOf(tile({root:'endpoint:GET /a', nodes:[['endpoint:GET /a', 0, true], ['symbol:java:A#get()', 1, false]],
+      items:[element('endpoint:GET /a', 'symbol:java:A#get()', {relation:'HANDLED_BY', occurrence:'o1'}),
+        element('endpoint:GET /a', 'symbol:java:A#get()', {relation:'HANDLED_BY', occurrence:'o2', status:'INFERRED'}),
+        element('endpoint:GET /a', 'symbol:java:A#get()', {relation:'HANDLED_BY', occurrence:'o3'})]}));
+    const [link]=linksOf(view);
+    expect(link.elements).toHaveLength(3);
+    expect(linkMarks(link)).toEqual(['O', 'D']);
   });
 });

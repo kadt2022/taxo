@@ -3,7 +3,7 @@
 // compacte, comme `neighborhood/2`. La vue de référence est la liste.
 import {act} from 'react';
 import {createRoot, type Root} from 'react-dom/client';
-import {afterEach, beforeEach, describe, expect, it} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {useRoute} from '../nav';
 import {ExplorerPage} from './Explorer';
 import type {Boundary, CompactTile, Element as Item, Tile} from './protocol';
@@ -155,6 +155,68 @@ describe('l’explorateur', ()=>{
     await click(named('Couches'));
     expect(named('Aucun objet : ce fait n’en a pas')).toBeTruthy();
     expect(named('Valeur authenticated(), pas un nœud')).toBeTruthy();
+  });
+
+  it('s’ouvre sur la vue Chaîne : boîtes teintées par type, flèches nommées, frontière et coupure dans le dessin', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    expect(named('Chaîne')?.getAttribute('aria-pressed')).toBe('true');
+    const drawn=host.querySelector('.chain') as HTMLElement;
+    const anchor=drawn.querySelector('.chain-node.anchor') as HTMLElement;
+    expect(anchor.classList.contains('tone-route')).toBe(true);
+    expect(anchor.textContent).toBe('«route» · ancreGET /orders');
+    const method=drawn.querySelector('.chain-node.tone-symbol') as HTMLElement;
+    expect(method.querySelector('.chain-name')?.textContent, 'la classe, puis la méthode sous un trait').toBe('A');
+    expect(method.querySelector('.chain-member')?.textContent).toBe('get()');
+    expect(drawn.querySelector('[role=note]')?.textContent).toContain('Frontière · Taxo ne sait pas');
+    expect(drawn.querySelectorAll('.chain-cut').length).toBeGreaterThan(0);
+    expect(drawn.querySelectorAll('.chain-leaf')).toHaveLength(2);
+    expect(Array.from(drawn.querySelectorAll('.chain-legend li')).map(item=>item.textContent)).toContain('route');
+    await click(named(/^route GET \/orders est traité par symbole java:A#get\(\), 1 occurrence$/));
+    expect(host.querySelector('[aria-label="Détail du lien"]')).toBeTruthy();
+    await click(named(/^symbole java:A#get\(\)/));
+    expect(host.querySelector('[aria-label="Nœud choisi"]')?.textContent).toContain('symbol:java:A#get()');
+    await click(named('Développer symbole java:A#get(), depuis la vue Chaîne'));
+    expect(tiles()[1], 'la pastille de coupure reprend le parcours').toMatchObject({root:HANDLER, depth:1});
+    await click(named('Voir la suite de routes /**, depuis la vue Chaîne'));
+    expect(tiles()[2]).toMatchObject({root:PATTERN, continuation:'reprise-P'});
+  });
+
+  it('a une vue Appels distincte : seulement l’axe d’exécution, ses coupures, et ce qui n’est pas analysé', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    expect(Array.from(host.querySelectorAll('.explorer-tabs button')).map(item=>item.textContent)).toEqual(['Appels', 'Chaîne', 'Couches', 'Liste']);
+    expect(named('Chaîne')?.getAttribute('aria-pressed'), 'Chaîne reste la vue de voisinage par défaut').toBe('true');
+    await click(named('Appels'));
+    const shown=host.querySelector('.calls') as HTMLElement;
+    expect(shown.querySelector('.calls-question')?.textContent).toContain('route GET /orders');
+    expect(Array.from(shown.querySelectorAll('.chain-node')).map(item=>item.getAttribute('title'))).toEqual([ROUTE, HANDLER]);
+    expect(Array.from(shown.querySelectorAll('.chain-label')).map(item=>item.textContent)).toEqual(['est traité parO']);
+    expect(shown.textContent, 'aucun type déduit par l’interface').not.toMatch(/méthode/);
+    expect(named('Exporter en image (PNG)'), 'chaque vue dessinée s’exporte en image').toBeTruthy();
+    expect(shown.querySelector('[aria-label="Où s’arrête la vue Appels"]')?.textContent).toContain('« appelle » : non analysé');
+    await click(named('Développer symbole java:A#get(), depuis la vue Appels'));
+    expect(tiles()[1]).toMatchObject({root:HANDLER});
+    const after=host.querySelector('.calls') as HTMLElement;
+    expect(Array.from(after.querySelectorAll('.chain-label')).map(item=>item.textContent)).toEqual(['est traité parO', 'appelleO']);
+    expect(after.querySelectorAll('.chain-node')).toHaveLength(3);
+  });
+
+  it('exporte le diagramme en PNG, ou dit pourquoi le navigateur n’a pas pu', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    vi.spyOn(HTMLImageElement.prototype, 'decode').mockResolvedValue(undefined);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(()=>undefined);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback=>callback(new Blob(['png'])));
+    const names:string[]=[];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function(this:HTMLAnchorElement){names.push(this.download);});
+    const context=vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({scale:()=>undefined, drawImage:()=>undefined} as never);
+    await click(named('Exporter en image (PNG)'));
+    await act(async()=>{await new Promise(resolve=>setTimeout(resolve, 0));});
+    expect(names).toEqual(['taxo-chaine-route-get-orders.png']);
+    context.mockReturnValue(null);
+    await click(named('Exporter en image (PNG)'));
+    await act(async()=>{await new Promise(resolve=>setTimeout(resolve, 0));});
+    expect(host.querySelector('.chain-tools [role=alert]')?.textContent).toBe('L’image n’a pas pu être créée par ce navigateur.');
+    vi.restoreAllMocks();
   });
 
   it('développe un nœud et voit la suite d’une adjacence coupée, sans recharger le reste', async()=>{

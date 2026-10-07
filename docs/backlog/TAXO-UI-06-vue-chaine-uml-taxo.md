@@ -1,7 +1,11 @@
 # TAXO-UI-06 — Vue Chaîne : lire une route en notation UML Taxo
 
 Statut : **direction validée le 2026-10-06, récit à relire avant implémentation**. Révisé le même jour :
-couleurs par type et panneau de code, demandés après la première lecture.  
+couleurs par type et panneau de code, demandés après la première lecture. Commencé avant TAXO-01K à la
+demande du 2026-10-06 : PR 1 (vue Chaîne, couleurs, légende) livrée par la PR de la branche
+`feat/explorateur-vue-chaine`. Le 2026-10-07, une vue **Appels** distincte s'y ajoute : elle ne suit que l'axe
+d'exécution (`HANDLED_BY`, `CALLS`, `DISPATCHES_TO` quand ils existent) depuis l'ancre et dit où il s'arrête ; la
+vue Chaîne reste le voisinage général de la Maille. L'interface n'affirme aucun type que Taxo ne donne pas.  
 Date : 2026-10-06.  
 Source de vérité : [ARCHITECTURE § 2, § 3 et § 9](../ARCHITECTURE.md), [TAXO-01J § 9](TAXO-01J-navigation-multiniveau-et-explorateur.md).  
 Dépend de : explorateur de la Maille (TAXO-01J, livré). N'a d'intérêt complet qu'avec les appels Java
@@ -109,8 +113,8 @@ Maille.** Le parcours n'est proposé que si l'analyse annonce au moins une de se
 (`describe`) ; une relation sans producteur reste dite comme aujourd'hui (`NO_PRODUCER`).
 
 Le parcours reste un réglage : la personne peut toujours choisir ses relations et son sens. La vue Chaîne
-s'affiche pour tout réglage ; si un pas de chaîne est entrant, ses nœuds sont dessinés au-dessus du nœud
-qu'ils touchent, toujours dans le sens du fait.
+s'affiche pour tout réglage ; si un pas de chaîne est entrant, ses nœuds sont posés sous le nœud qui les a
+fait découvrir, et la flèche monte : elle garde toujours le sens du fait.
 
 ### E3 — Mise en page pure
 
@@ -267,13 +271,13 @@ est servable. `protocol.ts` reste le seul module de l'explorateur à parler au s
 
 - Tout ordre d'exécution, diagramme de séquence ou `DISPATCHES_TO`.
 - Toute lecture de code hors d'une preuve, tout fichier entier, toute édition du code depuis le portail.
-- Un nom court de symbole fourni par le serveur (classe et méthode séparées) : il demanderait une
-  donnée nouvelle portée par le producteur ; l'explorateur ne découpe jamais une référence lui-même. À
-  proposer séparément si le nom complet passé à la ligne ne suffit pas.
+- Un nom court de symbole fourni par le serveur. La séparation classe, paquetage et méthode, demandée le
+  2026-10-06, se lit dans la clé selon la forme générique du contrat des références (ARCHITECTURE § 5.3,
+  `<langage>:<propriétaire>#<membre>`) : aucune analyse Java dans l'explorateur, aucune donnée nouvelle.
 - Toute relation propre à Spring ou JPA, tout rôle « contrôleur », « service » ou « repository ».
 - La MIP, Minia, l'Arbre et la Forêt.
 
 ## Maquette
 
-Maquette de la proposition, couleurs et panneau de code compris (page privée du projet) :
-<https://claude.ai/artifact/3Sh56uyqqsv18k3xmLARPF>
+La maquette de la proposition, couleurs et panneau de code compris, a été validée dans le fil du projet le
+2026-10-06. Elle n'est pas versionnée : les captures de la vue réelle la remplacent.
