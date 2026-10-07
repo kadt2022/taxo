@@ -13,7 +13,8 @@ import rfc8785
 
 from app.facts.domain.identity import _IDENTITY_DOMAIN, _IDENTITY_FIELDS, canonical_identity
 
-EVIDENCE_FIELDS = ('path', 'line_start', 'line_end', 'symbol', 'method', 'content_hash', 'object')
+EVIDENCE_FIELDS = ('path', 'line_start', 'line_end', 'symbol', 'method', 'content_hash', 'object',
+                   'column_start', 'column_end', 'role')
 _OCCURRENCE_FIELDS = {'snapshot', 'produced_by', 'evidence', 'status', 'validity'}
 
 

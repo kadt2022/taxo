@@ -11,7 +11,7 @@
     "status": {"enum": ["OBSERVED", "INFERRED", "HUMAN_VALIDATED"]},
     "validity": {"enum": ["VALID", "STALE", "REVALIDATION_REQUIRED"]},
     "subject": {"$ref": "#/$defs/reference"},
-    "relation": {"enum": ["CONTAINS", "WRITTEN_IN", "USES_TECHNOLOGY", "DECLARED_BY", "ANNOTATED_WITH", "CALLS", "IMPLEMENTS", "DISPATCHES_TO", "HANDLED_BY", "ACCEPTS", "RETURNS", "PERMITS_ALL", "AUTHORIZED_BY", "MATCHED_BY", "PROTECTED_BY", "HAS_COMMIT", "AUTHORED_BY", "CHILD_OF", "CHANGES", "DEPENDS_ON", "BUILT_FROM", "SERVED_BY"]},
+    "relation": {"enum": ["CONTAINS", "WRITTEN_IN", "USES_TECHNOLOGY", "DECLARED_BY", "ANNOTATED_WITH", "CALLS", "IMPLEMENTS", "EXTENDS", "TYPED_AS", "DISPATCHES_TO", "HANDLED_BY", "ACCEPTS", "RETURNS", "PERMITS_ALL", "AUTHORIZED_BY", "MATCHED_BY", "PROTECTED_BY", "HAS_COMMIT", "AUTHORED_BY", "CHILD_OF", "CHANGES", "DEPENDS_ON", "BUILT_FROM", "SERVED_BY"]},
     "object": {"$ref": "#/$defs/text"},
     "qualifiers": {"$ref": "#/$defs/qualifiers"},
     "pattern": {
@@ -22,6 +22,13 @@
     "method": {"$ref": "#/$defs/text"},
     "coverage_type": {"enum": ["ANALYSED", "RECOGNIZED", "NOT_INTERPRETED", "OUT_OF_SCOPE", "READ_ERROR"]},
     "reason": {"$ref": "#/$defs/text"},
+    "diagnostic": {
+      "type": "object", "additionalProperties": false, "required": ["sites_seen", "sites"],
+      "properties": {
+        "sites_seen": {"type": "integer", "minimum": 1},
+        "sites": {"type": "array", "items": {"$ref": "#/$defs/site"}}
+      }
+    },
     "snapshot": {
       "type": "object", "additionalProperties": false, "required": ["repository", "commit", "mode"],
       "properties": {
@@ -66,8 +73,8 @@
     }
   },
   "allOf": [
-    {"if": {"properties": {"kind": {"const": "ASSERTION"}}}, "then": {"required": ["subject", "relation", "qualifiers"], "properties": {"pattern": false, "scope": false, "method": false, "coverage_type": false, "reason": false}}},
-    {"if": {"properties": {"kind": {"const": "ABSENCE"}}}, "then": {"required": ["pattern", "scope", "method"], "properties": {"status": {"const": "OBSERVED"}, "subject": false, "relation": false, "object": false, "qualifiers": false, "evidence": false, "coverage_type": false, "reason": false}}},
+    {"if": {"properties": {"kind": {"const": "ASSERTION"}}}, "then": {"required": ["subject", "relation", "qualifiers"], "properties": {"pattern": false, "scope": false, "method": false, "coverage_type": false, "reason": false, "diagnostic": false}}},
+    {"if": {"properties": {"kind": {"const": "ABSENCE"}}}, "then": {"required": ["pattern", "scope", "method"], "properties": {"status": {"const": "OBSERVED"}, "subject": false, "relation": false, "object": false, "qualifiers": false, "evidence": false, "coverage_type": false, "reason": false, "diagnostic": false}}},
     {"if": {"properties": {"kind": {"const": "COVERAGE"}}}, "then": {"required": ["subject", "coverage_type", "scope"], "properties": {"status": {"const": "OBSERVED"}, "relation": false, "object": false, "qualifiers": false, "pattern": false, "method": false}}},
     {"if": {"properties": {"kind": {"const": "ASSERTION"}, "status": {"const": "OBSERVED"}}}, "then": {"required": ["evidence"], "properties": {"evidence": {"minItems": 1}}}},
     {"if": {"properties": {"status": {"const": "INFERRED"}}}, "then": {"required": ["derivation"]}, "else": {"properties": {"derivation": false}}},
@@ -95,13 +102,38 @@
         "repository": {"$ref": "#/$defs/text"}, "commit": {"$ref": "#/$defs/commit"}, "path": {"$ref": "#/$defs/path"},
         "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1},
         "symbol": {"$ref": "#/$defs/symbol"}, "method": {"$ref": "#/$defs/text"}, "content_hash": {"$ref": "#/$defs/hash"},
-        "object": {"$ref": "#/$defs/commitReference"}
+        "object": {"$ref": "#/$defs/commitReference"},
+        "column_start": {"$ref": "#/$defs/column"}, "column_end": {"$ref": "#/$defs/column"},
+        "role": {"$ref": "#/$defs/evidenceRole"}
       },
-      "dependentRequired": {"line_start": ["line_end"], "line_end": ["line_start"]},
+      "dependentRequired": {"line_start": ["line_end"], "line_end": ["line_start"],
+                            "column_start": ["column_end", "line_start"], "column_end": ["column_start"]},
       "oneOf": [
         {"required": ["path", "content_hash"], "properties": {"object": false}},
-        {"required": ["object"], "properties": {"path": false, "content_hash": false, "line_start": false, "line_end": false, "symbol": false}}
+        {"required": ["object"], "properties": {"path": false, "content_hash": false, "line_start": false, "line_end": false, "symbol": false, "column_start": false, "column_end": false, "role": false}}
       ]
+    },
+    "column": {"type": "integer", "minimum": 0},
+    "evidenceRole": {"enum": ["call-site"]},
+    "identifier": {"type": "string", "pattern": "^[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*(?![\\s\\S])"},
+    "typeName": {"type": "string", "pattern": "^[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*(?:\\.[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*)*(?:\\[\\])*(?![\\s\\S])"},
+    "site": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "line_start", "line_end", "column_start", "column_end", "reason"],
+      "properties": {
+        "role": {"$ref": "#/$defs/evidenceRole"},
+        "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1},
+        "column_start": {"$ref": "#/$defs/column"}, "column_end": {"$ref": "#/$defs/column"},
+        "reason": {"enum": ["RECEIVER_TYPE_UNKNOWN", "RECEIVER_TYPE_AMBIGUOUS", "TARGET_TYPE_OUTSIDE_SNAPSHOT",
+                            "TARGET_DECLARATION_OUTSIDE_SNAPSHOT", "NO_MATCHING_DECLARATION", "OVERLOAD_AMBIGUOUS",
+                            "SUPER_TYPE_UNRESOLVED", "UNSUPPORTED_CALL_FORM", "RECEIVER_KIND_DEFERRED",
+                            "LAMBDA_OR_LOCAL_CONTEXT", "PARSE_ERROR"]},
+        "method": {"$ref": "#/$defs/identifier"},
+        "receiver": {"type": "string", "pattern": "^(?:this\\.)?[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*(?![\\s\\S])"},
+        "receiver_type": {"$ref": "#/$defs/typeName"},
+        "external_supertypes": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/typeName"}},
+        "candidates": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/symbol"}}
+      }
     },
     "qualifiers": {
       "type": "object", "propertyNames": {"not": {"pattern": "[Cc][Oo][Nn][Ff](?:[Ii][Dd][Ee][Nn][Cc][Ee]|[Ii][Aa][Nn][Cc][Ee])"}},

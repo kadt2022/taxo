@@ -282,6 +282,7 @@ jobs:
             -Dsonar.exclusions=frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx,frontend/src/**/__fixtures__/**
             -Dsonar.tests=backend/tests,frontend/src
             -Dsonar.test.inclusions=backend/tests/**,frontend/src/**/*.test.ts,frontend/src/**/*.test.tsx,frontend/src/**/__fixtures__/**
+            -Dsonar.test.exclusions=backend/tests/fixtures/**
             -Dsonar.python.version=3.12
             -Dsonar.python.coverage.reportPaths=backend/reports/coverage.xml
             -Dsonar.javascript.lcov.reportPaths=frontend/coverage/lcov.info

@@ -240,7 +240,8 @@ annotation  role  permission  policy-rule  commit  person  application
 - `symbol:java:<type>#<nom>(<types>)` : signature syntaxique normalisée d'une méthode (schéma
   `java-symbol-syntactic/1`). Noms de paramètres, annotations et génériques retirés ; tableaux gardés ;
   varargs en `[]` ; receveur exclu ; constructeur `<init>(…)`. Deux déclarations de même signature sont
-  **ambiguës** et déclarées, jamais confondues.
+  **ambiguës** et déclarées, jamais confondues. Un type est `symbol:java:<type>`, un champ
+  `symbol:java:<type>#<nom>`, sans parenthèses (TAXO-01K).
 - `application:<descripteur>#<nom>` : `application:compose.yaml#api`,
   `application:<fichier source>#<Type>` pour Spring Boot.
 - Une clé ne contient jamais de numéro de ligne ni d'identifiant technique généré. Ajouter un type est
@@ -293,7 +294,7 @@ dans les champs textuels. Tout champ inconnu est refusé, en particulier tout ch
 
 | Relation | Sujet → objet | Statut | Producteur livré |
 | --- | --- | --- | --- |
-| `CONTAINS` | repository, module → module, file | `OBSERVED` | inventaire, structure |
+| `CONTAINS` | repository, module → module, file ; file → symbol ; symbol → symbol | `OBSERVED` | inventaire, structure ; aucun pour les symboles |
 | `WRITTEN_IN` | file → language | `OBSERVED` | inventaire |
 | `USES_TECHNOLOGY` | repository, module → technology | `OBSERVED` | inventaire |
 | `DECLARED_BY` | technology → file | `OBSERVED` | inventaire |
@@ -310,13 +311,16 @@ dans les champs textuels. Tout champ inconnu est refusé, en particulier tout ch
 | `MATCHED_BY` | endpoint → route-pattern | `INFERRED` | Spring Security |
 | `PROTECTED_BY` | endpoint → symbol, policy-rule | `INFERRED`, `HUMAN_VALIDATED` | Spring Security |
 | `ANNOTATED_WITH` | symbol → annotation | `OBSERVED` | aucun |
-| `CALLS` | symbol → symbol | `OBSERVED` (passage à `INFERRED` proposé, § 14) | aucun |
-| `IMPLEMENTS` | symbol → symbol | `OBSERVED` | aucun |
+| `CALLS` | symbol → symbol | `INFERRED`, prouvé par ses sites d'appel (§ 14) | aucun |
+| `IMPLEMENTS` | symbol → symbol | `OBSERVED` entre types, `INFERRED` entre méthodes (§ 14) | aucun |
+| `EXTENDS` | symbol → symbol | `OBSERVED` | aucun |
+| `TYPED_AS` | symbol → symbol (champ → type déclaré) | `OBSERVED` | aucun |
 | `DISPATCHES_TO` | symbol → symbol | `INFERRED` (suspendu, § 14) | aucun |
 | `ACCEPTS`, `RETURNS` | endpoint → symbol | `OBSERVED` | aucun |
 
 Ajouter une relation modifie ensemble le schéma, le validateur, la conformité, ce tableau et les libellés
-du portail.
+du portail. Les types d'une relation se combinent librement, sauf pour `CONTAINS`, dont le validateur n'admet que
+les couples du tableau.
 
 ### 5.7 Règles de cohérence
 
@@ -890,27 +894,48 @@ Une **hypothèse** n'est pas un fait. Le contrat ne change pas : ni statut, ni p
 - Le modèle vit derrière un port (`backend/app/hypotheses`) ; il reçoit une représentation construite
   par Taxo, jamais le dépôt. Aucune API ni projection ne l'expose tant que TAXO-LAB-01 n'a pas conclu.
 
-## 14. Appels Java (Proposé, à décider avant implémentation)
+## 14. Appels Java (contrat Existant, producteur À construire)
+
+Décidé par TAXO-01K (PR A, 2026-10-07). Le contrat, sa conformité, la mémoire et la vérité de référence
+(`backend/tests/fixtures/java-calls-demo`) sont livrés ; aucun évaluateur ne produit encore ces faits.
 
 - **`CALLS`** : « le corps de A contient au moins un site d'appel dont une règle de résolution nommée
-  sélectionne la déclaration B ». Statut **`INFERRED`** (la sélection est une déduction ; l'occurrence
-  est la preuve). Vise la déclaration, jamais le corps exécuté. Une arête, plusieurs sites, une preuve de
-  rôle `call-site` par site. Migration : schéma, validateur, conformité, catalogues et contrats des consommateurs.
-- **Premier fragment** : appel non qualifié sans argument `f()`, écrit directement dans le corps d'une
-  méthode ou d'un constructeur de `T` (hors lambda, classe anonyme ou locale) ; `T` déclare une seule
-  méthode `f`, privée, sans paramètre ; aucun type englobant ni supertype (tous dans les sources) ne
-  déclare `f` ; `f` n'est pas une méthode d'`Object`. Toute autre forme est `NOT_INTERPRETED` avec sa
-  raison. `this.f()` n'y entre que sur décision explicite.
+  sélectionne la déclaration B ». Statut **`INFERRED`** seulement (la sélection est une déduction ; l'occurrence
+  est la preuve). Vise la déclaration, jamais le corps exécuté. Une arête, plusieurs sites. Le validateur
+  exige au moins une preuve de rôle `call-site`.
+- **Prémisses** : § 5.5 n'est pas assoupli. Un `CALLS` cite des faits `OBSERVED` du même instantané, produits
+  par le même évaluateur, écrits `RELATION : sujet -> objet` comme les autres prémisses : `CONTAINS` du fichier
+  vers le type et du type vers ses membres, `TYPED_AS` du champ receveur, `EXTENDS` et `IMPLEMENTS` parcourus.
+  Un type déclaré hors des sources ne donne aucun `TYPED_AS` ni `EXTENDS` : aucun symbole externe n'est
+  inventé.
+- **Premier fragment** : appels écrits directement dans le corps d'une méthode ou d'un constructeur (hors
+  lambda, classe anonyme ou locale), sans receveur (`f()`), sur `this`, sur un champ (`champ`, `this.champ`)
+  dont le type déclaré se résout vers une déclaration des sources. Cible : la seule déclaration de même nom et
+  même arité dans la hiérarchie du type, toute dans les sources ; sinon le site est `NOT_INTERPRETED`. Règle
+  `java.calls.declared-receiver-unique-target/1`. Les arguments ne sont pas typés : hypothèse « le code
+  compile » écrite dans `known_gaps`. Le détail (surcharges, héritage, méthodes d'`Object`) est celui du récit
+  [TAXO-01K](backlog/TAXO-01K-appels-java-entre-classes.md).
+- **`IMPLEMENTS`** : entre types, `OBSERVED` (la clause est écrite) ; entre méthodes, `INFERRED` par la règle
+  `java.implements.same-signature/1` (même signature, prémisses : l'`IMPLEMENTS` des types et les deux
+  `CONTAINS`). Il ne dit jamais quel corps s'exécute.
 - **`DISPATCHES_TO`** : suspendu jusqu'à ce qu'un site soit une référence adressable ; la règle
   « implémentation unique dans le périmètre » est retirée.
-- **Candidats** : pas de `MAY_CALL`, pas de statut « possible ». Un site non résolu est `NOT_INTERPRETED`,
-  avec un `diagnostic` (sites, raison fermée, candidats, sens de « candidat », complétude) ajouté au
-  contrat sur la couverture, hors identité. Une seule candidate reste une candidate.
+- **Preuve d'un site** : une preuve fichier avec `column_start` et `column_end` (octets UTF-8 dans la ligne, à
+  partir de 0, fin exclue), `symbol` = propriétaire lexical, qui est le sujet du `CALLS`, et `role: call-site`.
+  `content_hash` reste calculé sur les lignes. Le rôle `call-site` ne prouve qu'un `CALLS`.
+- **Candidats** : pas de `MAY_CALL`, pas de statut « possible ». Les sites non résolus d'une méthode ou d'un
+  constructeur forment une couverture `NOT_INTERPRETED` (sujet : le propriétaire ; périmètre : son fichier) qui
+  porte un `diagnostic`, hors identité : `sites_seen` (sites rencontrés) et `sites` (ceux qui sont listés,
+  jamais plus ; la liste est complète quand les deux comptes sont égaux). Chaque site donne ses lignes et
+  colonnes, une raison fermée, et, quand ils sont connus, la méthode écrite, le receveur écrit (un nom, jamais
+  une expression), le type déclaré du receveur, les supertypes externes et les candidats. Un **candidat** est
+  une déclaration des sources de même nom et même arité examinée par la règle ; une seule candidate reste une
+  candidate. Raisons : `RECEIVER_TYPE_UNKNOWN`, `RECEIVER_TYPE_AMBIGUOUS`, `TARGET_TYPE_OUTSIDE_SNAPSHOT`,
+  `TARGET_DECLARATION_OUTSIDE_SNAPSHOT`, `NO_MATCHING_DECLARATION`, `OVERLOAD_AMBIGUOUS`,
+  `SUPER_TYPE_UNRESOLVED`, `UNSUPPORTED_CALL_FORM`, `RECEIVER_KIND_DEFERRED`, `LAMBDA_OR_LOCAL_CONTEXT`,
+  `PARSE_ERROR`.
 - **Lambdas** : créer une lambda n'est pas l'appeler ; ses appels ne sont jamais attribués à la méthode
   englobante.
-- **Preuves** : `column_start` et `column_end` (octets UTF-8, fin exclusive), `symbol` comme propriétaire
-  lexical, `role` (liste fermée). `content_hash` reste calculé sur les lignes.
-- `IMPLEMENTS` inchangé.
 
 ## 15. Versionnement, projections, invalidation
 
@@ -944,7 +969,7 @@ Une **hypothèse** n'est pas un fait. Le contrat ne change pas : ni statut, ni p
 | Profils adaptatifs, Arbre, Forêt | À construire |
 | Arbres et Forêt | Proposé |
 | Cache, déduplication, invalidation incrémentale | Proposé |
-| `CALLS` Java | Proposé (§ 14) |
+| `CALLS` Java | Contrat et vérité de référence existants (§ 14) ; producteur à construire (TAXO-01K) |
 | Dépendances externes et versions (E2) | À construire |
 | Changements de structure enrichis (E3) | en partie (comparaison générique) |
 | Lecteur Python (E4) | À construire |
@@ -1040,3 +1065,10 @@ garde-fous du découpage du portail, et un parcours de bout en bout dans Chromiu
 `33f0bd0`, spring-petclinic), plafond de 32 000 octets par opération maintenu. L'essai a trouvé qu'une lecture
 d'adjacence pouvait lire tout le voisinage d'un nœud de fort degré sur PostgreSQL ; la page est désormais choisie
 par l'index d'ancre seul, et un garde-fou vérifie le plan d'exécution sur les deux moteurs.
+
+**2026-10-07** — Contrat des appels Java (TAXO-01K, PR A). `CALLS` devient `INFERRED`, prouvé par des preuves de
+rôle `call-site` qui situent l'appel à l'octet près ; `IMPLEMENTS` s'ouvre à `INFERRED` entre méthodes. Les
+prémisses restent des faits (§ 5.5 inchangé) : `CONTAINS` s'étend aux symboles, `EXTENDS` et `TYPED_AS` entrent au
+vocabulaire, un champ a sa forme de symbole. Un site non résolu est décrit dans le `diagnostic` d'une couverture
+`NOT_INTERPRETED`, avec une raison fermée. La mémoire conserve les colonnes et le rôle (migration 009). Un petit
+dépôt Java et ses vérités écrites à la main deviennent l'oracle des producteurs à venir.

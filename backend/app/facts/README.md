@@ -51,6 +51,10 @@ Le validateur semantique ajoute :
 
 - la matrice producteur/statut ;
 - les types source/cible et statuts du vocabulaire des relations ;
+- les couples de types admis par `CONTAINS` (fichier ou symbole vers symbole, pas dépôt vers symbole) ;
+- la preuve `call-site` d'un `CALLS` : au moins une, située par lignes et colonnes, au nom de son sujet ;
+- la forme d'un `IMPLEMENTS` : `OBSERVED` entre deux types, `INFERRED` entre deux méthodes ;
+- le `diagnostic` d'une couverture `NOT_INTERPRETED` : jamais plus de sites listés que rencontrés ;
 - l'egalite du depot et du commit entre preuve et instantane ;
 - l'ordre des bornes de lignes et la syntaxe des chemins de references ;
 - l'interdiction de soumettre une validite autre que `VALID`.

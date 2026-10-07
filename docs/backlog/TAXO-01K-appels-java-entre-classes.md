@@ -1,7 +1,8 @@
 # TAXO-01K — Appels Java entre classes : du contrôleur au service et au repository
 
-Statut : **proposition à valider avant implémentation**.  
-Date : 2026-10-03.  
+Statut : **en cours**, implémentation demandée le 2026-10-07. PR A (contrat et vérité de référence) livrée ;
+PR B, C et D à venir.  
+Date : 2026-10-03, mise à jour le 2026-10-07.  
 Source de vérité : `ARCHITECTURE.md` § 2, § 5.6, § 7.3, § 8, § 12.3 et surtout § 14.  
 Dépend de : lecteur Java syntaxique existant, contrat des faits, couverture bornée, voisinage multiniveau / Explorer.  
 Ne dépend pas de Minia.
@@ -108,7 +109,7 @@ Le premier fragment ne doit donc pas dépendre de Spring DI ni de Lombok.
 
 Quand une classe des sources implémente explicitement une interface des sources, Taxo peut produire un fait `IMPLEMENTS` seulement si les deux déclarations sont établies sans ambiguïté.
 
-Deux niveaux, deux statuts (décision proposée, à valider dans PR A) :
+Deux niveaux, deux statuts (décision validée dans PR A) :
 
 - **type → type** : `symbol:java:<Impl>` `IMPLEMENTS` `symbol:java:<Interface>`, `OBSERVED`, car la clause `implements` est écrite ; preuve à la ligne de la clause ;
 - **méthode → méthode** : `symbol:java:<Impl>#m(…)` `IMPLEMENTS` `symbol:java:<Interface>#m(…)`, `INFERRED`, car aucune ligne ne l'écrit : c'est une déduction (même signature syntaxique normalisée ; prémisses : l'`IMPLEMENTS` type → type et les deux `CONTAINS` des méthodes). Règle `java.implements.same-signature/1`. Signature ambiguë ou supertype hors sources entre les deux : rien n'est produit. Seules les méthodes qui peuvent être implémentées comptent : une méthode `static` ou `private` de l'interface, ou une méthode `static` de la classe, n'est jamais reliée, même à signature égale (le lecteur doit donc fournir les modificateurs).
@@ -465,7 +466,24 @@ Un essai sur `spring-petclinic` mesure enfin le comportement sur un dépôt rée
 
 ## Découpage proposé
 
-### PR A — Contrat et fixture
+### PR A — Contrat et fixture (livrée)
+
+Livré : `CALLS` `INFERRED` et sa preuve `call-site` exigée ; `IMPLEMENTS` `OBSERVED` ou `INFERRED` ; `CONTAINS`
+vers les symboles, `EXTENDS`, `TYPED_AS` et la forme de symbole d'un champ ; colonnes et rôle des preuves,
+conservés par la mémoire (migration 009) ; `diagnostic` des couvertures ; cas de conformité ; libellés du portail ;
+`ARCHITECTURE § 14` récrit. La fixture est `backend/tests/fixtures/java-calls-demo`, et `expected.json` y donne
+les vérités attendues, vérifiées contre les sources et le contrat sans lire le Java avec Taxo
+(`backend/tests/test_java_calls_fixture.py`). Décisions prises au passage, écrites au § 14 :
+
+- les prémisses s'écrivent `RELATION : sujet -> objet`, comme celles des autres évaluateurs ;
+- un champ dont le type est hors des sources n'a pas de `TYPED_AS` ; un supertype hors des sources n'a pas
+  d'`EXTENDS` ;
+- les colonnes comptent les octets UTF-8 de la ligne à partir de 0, fin exclue, et couvrent toute l'expression
+  d'appel ;
+- le `diagnostic` compte les sites rencontrés (`sites_seen`) et peut n'en lister qu'une partie, ce qui laisse à
+  PR D le choix entre lister et compter.
+
+Plan d'origine :
 
 - décider et mettre à jour `ARCHITECTURE § 14` ;
 - **ne pas** modifier `ARCHITECTURE § 5.5` ; ajouter les faits déclaratifs (`CONTAINS` étendu, `EXTENDS`, `TYPED_AS`, symbole de champ) au schéma, au validateur, au § 5.6 et aux libellés du portail ;

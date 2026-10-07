@@ -1,0 +1,45 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "INFERRED",
+  "validity": "VALID",
+  "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
+  "relation": "CALLS",
+  "object": "symbol:java:com.example.demo.service.CourseService#getCourses()",
+  "qualifiers": {},
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "COMMIT"
+  },
+  "evidence": [
+    {
+      "repository": "taxo",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "src/main/java/com/example/demo/controller/CourseController.java",
+      "method": "java.declaration",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "line_start": 29,
+      "line_end": 29
+    }
+  ],
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "taxo.java-calls",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "java-calls",
+    "catalog_version": "1"
+  },
+  "derivation": {
+    "premises": [
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ],
+    "rule": "java.calls.declared-receiver-unique-target/1",
+    "counter_examples_checked": [],
+    "known_gaps": [
+      "applicabilité des arguments non vérifiée ; suppose un code qui compile"
+    ]
+  }
+}

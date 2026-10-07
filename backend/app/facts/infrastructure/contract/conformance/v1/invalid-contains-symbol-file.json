@@ -1,0 +1,34 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "subject": "symbol:java:com.example.demo.controller.CourseController",
+  "relation": "CONTAINS",
+  "object": "file:src/main/java/com/example/demo/controller/CourseController.java",
+  "qualifiers": {},
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "COMMIT"
+  },
+  "evidence": [
+    {
+      "repository": "taxo",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "src/main/java/com/example/demo/controller/CourseController.java",
+      "method": "java.declaration",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "line_start": 12,
+      "line_end": 12
+    }
+  ],
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "taxo.java-calls",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "java-calls",
+    "catalog_version": "1"
+  }
+}
