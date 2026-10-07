@@ -16,17 +16,28 @@ const drawn=(items:ReturnType<typeof element>[], nodes:[string, number, boolean]
 const box=(found:ReturnType<typeof drawn>, key:string)=>found.boxes.find(item=>item.key===key)!;
 
 describe('la vue Chaîne', ()=>{
-  it('pose chaque nœud de la chaîne une ligne plus bas, en retrait, la flèche du sujet vers l’objet', ()=>{
+  it('descend tout droit quand la chaîne ne se divise pas, la flèche du sujet vers l’objet', ()=>{
     const found=drawn([element(ROUTE, CONTROLLER, {relation:'HANDLED_BY'}), element(CONTROLLER, SERVICE, {relation:'CALLS', level:2})],
       [[ROUTE, 0, true], [CONTROLLER, 1, true], [SERVICE, 2, false]], [depthCut(SERVICE)]);
     const [route, controller, service]=[ROUTE, CONTROLLER, SERVICE].map(key=>box(found, key));
     expect(route.anchor).toBe(true);
-    expect([route.depth, controller.depth, service.depth]).toEqual([0, 1, 2]);
-    expect(controller.x-route.x).toBe(CHAIN_GEOMETRY.indent);
+    expect([route.x, controller.x, service.x]).toEqual([route.x, route.x, route.x]);
     expect(controller.y).toBe(route.y+route.height+CHAIN_GEOMETRY.gap);
     expect(found.arrows.map(item=>[item.from.key, item.to.key, item.form])).toEqual([[ROUTE, CONTROLLER, 'CHAIN'], [CONTROLLER, SERVICE, 'CHAIN']]);
-    expect(found.arrows[0].path.endsWith(`H${controller.x}`), 'elle entre dans la boîte par la gauche').toBe(true);
+    const center=route.x+route.width/2;
+    expect(found.arrows[0].path, 'un trait droit, du bas de la route au haut du contrôleur')
+      .toBe(`M${center} ${route.y+route.height} V${controller.y}`);
+    expect(found.arrows[0].label.x).toBeGreaterThan(center);
     expect(box(found, `cut:${SERVICE}`).lines).toEqual(['coupure DEPTH']);
+  });
+
+  it('pose en retrait les suites d’un nœud qui se divise, chacune entrant par la gauche', ()=>{
+    const found=drawn([element(ROUTE, CONTROLLER, {relation:'HANDLED_BY'}), element(ROUTE, SERVICE, {relation:'HANDLED_BY'})],
+      [[ROUTE, 0, true], [CONTROLLER, 1, false], [SERVICE, 1, false]]);
+    const [route, controller, service]=[ROUTE, CONTROLLER, SERVICE].map(key=>box(found, key));
+    expect([route.depth, controller.depth, service.depth]).toEqual([0, 1, 1]);
+    expect(controller.x-route.x).toBe(CHAIN_GEOMETRY.indent);
+    expect(found.arrows.every(item=>item.path.endsWith(`H${controller.x}`))).toBe(true);
   });
 
   it('dessine à côté une relation de côté, sur la ligne de son nœud, dans son sens réel', ()=>{

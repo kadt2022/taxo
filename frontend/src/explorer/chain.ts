@@ -1,5 +1,5 @@
 // La vue Chaîne (TAXO-UI-06, E3) : la même vue que les couches, lue de haut en bas. Une ligne par boîte ; chaque
-// lien de chaîne pose son extrémité découverte une ligne plus bas, en retrait ; un lien de côté la pose dans la colonne
+// lien de chaîne pose son extrémité découverte une ligne plus bas : tout droit si la chaîne ne se divise pas, en retrait sinon ; un lien de côté la pose dans la colonne
 // de droite, comme une réalisation UML. Les frontières sont des boîtes accrochées sous leur nœud. Pur : des nombres, des
 // lignes de texte et des chemins. La forme des relations et les phrases sont reçues : rien ici ne nomme une relation.
 import type {Boundary} from './protocol';
@@ -8,7 +8,7 @@ import type {Link, View} from './graph';
 export type Form='CHAIN'|'SIDE';
 export type ChainGeometry={margin:number; width:number; indent:number; gap:number; sideGap:number; header:number;
   line:number; pad:number; chars:number; separator:number};
-export const CHAIN_GEOMETRY:ChainGeometry={margin:24, width:300, indent:44, gap:44, sideGap:150, header:24, line:18,
+export const CHAIN_GEOMETRY:ChainGeometry={margin:24, width:300, indent:44, gap:56, sideGap:150, header:24, line:18,
   pad:14, chars:34, separator:12};
 
 /** Une boîte : un nœud, une feuille (aucun objet ou une valeur), une frontière de connaissance (`note`), une coupure de
@@ -54,7 +54,7 @@ export function chain(view:View, links:Link[], form:(relation:string)=>Form, tex
   geometry:ChainGeometry=CHAIN_GEOMETRY):ChainLayout{
   const {width, gap, header, line, pad, chars}=geometry;
   const boxes:Box[]=[], placed=new Map<string, Box>(), cursor={main:geometry.margin, side:geometry.margin};
-  const pending:{link:Link; from:Box; to:Box}[]=[], ties:{owner:Box; box:Box}[]=[];
+  const pending:{link:Link; from:Box; to:Box; straight:boolean}[]=[], ties:{owner:Box; box:Box}[]=[];
   const out=new Map<string, Link[]>();
   for(const link of links)out.set(near(link), [...out.get(near(link))??[], link]);
   const used=new Set<string>();
@@ -84,7 +84,10 @@ export function chain(view:View, links:Link[], form:(relation:string)=>Form, tex
       const end=column==='main'?place(link, 0, 'side', sideTop, box):place(link, depth, column, sideTop, box);
       if(end)sideTop=end.y+end.height+gap/2;
     }
-    for(const link of own.filter(item=>form(item.relation)==='CHAIN'))place(link, depth+1, column, undefined, box);
+    // Une chaîne qui ne se divise pas descend tout droit, dans la même colonne ; plusieurs suites se posent en retrait.
+    const chained=own.filter(item=>form(item.relation)==='CHAIN'), sides=own.length-chained.length;
+    const straight=chained.length===1&&(column==='main'||sides===0);
+    for(const link of chained)place(link, straight?depth:depth+1, column, undefined, box, straight);
     for(const boundary of notes(reference)){
       const said=lines(text.note(boundary));
       ties.push({owner:box, box:put({key:`note:${reference}:${boundary.reason}:${boundary.subject??''}`, kind:'note', column,
@@ -100,13 +103,13 @@ export function chain(view:View, links:Link[], form:(relation:string)=>Form, tex
   }
 
   /** L'extrémité découverte d'un lien : une feuille, une revisite, ou un nœud visité à son tour. */
-  function place(link:Link, depth:number, column:'main'|'side', top:number|undefined, owner:Box):Box|null{
+  function place(link:Link, depth:number, column:'main'|'side', top:number|undefined, owner:Box, straight=false):Box|null{
     const end=far(link);
     if(end===null){
       const said=lines(text.leaf(link.object));
       const leaf=put({key:`leaf:${link.identity}`, kind:'leaf', column, depth, width, height:said.length*line+pad,
         lines:said, link, value:link.object}, top);
-      pending.push({link, from:link.subject===owner.reference?owner:leaf, to:link.subject===owner.reference?leaf:owner});
+      pending.push({link, from:link.subject===owner.reference?owner:leaf, to:link.subject===owner.reference?leaf:owner, straight});
       return leaf;
     }
     const known=placed.get(end);
@@ -118,7 +121,7 @@ export function chain(view:View, links:Link[], form:(relation:string)=>Form, tex
       return null;
     }
     const box=visit(end, depth, column, top);
-    pending.push({link, from:placed.get(link.subject)!, to:placed.get(link.object!)!});
+    pending.push({link, from:placed.get(link.subject)!, to:placed.get(link.object!)!, straight});
     return box;
   }
 
@@ -131,7 +134,8 @@ export function chain(view:View, links:Link[], form:(relation:string)=>Form, tex
   for(const box of boxes)box.x=(box.column==='main'?geometry.margin:sideLeft)+box.depth*geometry.indent;
   const order=new Map(links.map((link, index)=>[link.identity, index]));
   pending.sort((a, b)=>order.get(a.link.identity)!-order.get(b.link.identity)!);
-  const arrows=pending.map(({link, from, to})=>arrow(link, form(link.relation), from, to, geometry, geometry.margin+mainRight));
+  const arrows=pending.map(({link, from, to, straight})=>arrow(link, form(link.relation), from, to, geometry, geometry.margin+mainRight,
+    straight));
   const right=Math.max(...boxes.map(box=>box.x+box.width));
   const bottom=Math.max(...boxes.map(box=>box.y+box.height));
   return {boxes, arrows, ties:ties.map(({owner, box})=>({box, path:tie(owner, box)})), width:right+geometry.margin,
@@ -141,9 +145,9 @@ export function chain(view:View, links:Link[], form:(relation:string)=>Form, tex
 const point=(x:number, y:number)=>`${Math.round(x)} ${Math.round(y)}`;
 const middle=(box:Box)=>box.y+Math.min(box.height/2, 20);
 
-/** Le tracé d'une flèche. Dans la chaîne : un tronc qui descend (ou monte) depuis le nœud du dessus, puis entre dans
+/** Le tracé d'une flèche. Dans une chaîne qui ne se divise pas : un trait droit entre les deux boîtes. Sinon : un tronc qui descend (ou monte) depuis le nœud du dessus, puis entre dans
  * la boîte du dessous par la gauche. À côté : de la boîte de droite vers le bord droit du nœud, par un couloir. */
-function arrow(link:Link, form:Form, from:Box, to:Box, geometry:ChainGeometry, mainRight:number):Arrow{
+function arrow(link:Link, form:Form, from:Box, to:Box, geometry:ChainGeometry, mainRight:number, straight:boolean):Arrow{
   if(from.column!==to.column){
     const [left, right]=from.x<to.x?[from, to]:[to, from];
     const lane=mainRight+24;
@@ -153,6 +157,12 @@ function arrow(link:Link, form:Form, from:Box, to:Box, geometry:ChainGeometry, m
     return {link, form, from, to, path, label:{x:lane+10, y:middle(right)-26}};
   }
   const [top, bottom]=from.y<to.y?[from, to]:[to, from];
+  if(straight){
+    // Tout droit, du milieu d'une boîte au milieu de la suivante, l'étiquette à droite du trait.
+    const center=Math.round(top.x+top.width/2), [start, end]=from===top?[top.y+top.height, bottom.y]:[bottom.y, top.y+top.height];
+    return {link, form, from, to, path:`M${point(center, start)} V${Math.round(end)}`,
+      label:{x:center+14, y:Math.round((top.y+top.height+bottom.y)/2)-11}};
+  }
   const trunk=top.x+geometry.indent/2;
   const down=`M${point(trunk, top.y+top.height)} V${Math.round(middle(bottom))} H${Math.round(bottom.x)}`;
   const up=`M${point(bottom.x, middle(bottom))} H${Math.round(trunk)} V${Math.round(top.y+top.height)}`;

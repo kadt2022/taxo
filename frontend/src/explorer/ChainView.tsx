@@ -83,7 +83,7 @@ function Shape({box, view, nodes, selected, onSelect, commands, busy}:Readonly<{
     return <button type="button" title={reference} style={style} aria-pressed={selected?.kind==='node'&&selected.reference===reference}
       className={classes('chain-node', `tone-${toneOf(reference)}`, box.anchor&&'anchor')}
       aria-label={[named(reference), ...marks].join(', ')} onClick={()=>onSelect({kind:'node', reference})}>
-      <span className="chain-stereo">«{typeText(reference)}»{box.anchor&&' · ancre'}</span>
+      <span className="chain-stereo">«{typeText(reference)}»{box.member!.length>0&&' · méthode'}{box.anchor&&' · ancre'}</span>
       <span className="chain-name">{lines}</span>
       {box.context!.length>0&&<span className="chain-context">{box.context!.map((said, index)=><span key={index} className="chain-line">{said}</span>)}</span>}
       {box.member!.length>0&&<span className="chain-member">{box.member!.map((said, index)=><span key={index} className="chain-line">{said}</span>)}</span>}
