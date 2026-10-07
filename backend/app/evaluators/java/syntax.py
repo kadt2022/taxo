@@ -6,6 +6,9 @@ d'annotation est resolue quand elle est ecrite dans le code : une chaine, une co
 constante du meme type, d'un type du meme fichier ou d'un type connu (`constants`). Sinon, elle est rendue telle qu'ecrite, marquee non resolue : l'analyseur ne devine
 jamais.
 
+Il donne toutes les declarations d'un type, annotees ou non (methodes, constructeurs, champs), avec leurs lignes et
+leurs modificateurs, et resout un nom de type ecrit vers un type des sources (TAXO-01K).
+
 Il donne aussi, a la demande, les chaines d'appels fluentes (`a.b(x).c(y)`) : chaque appel, ses arguments
 (valeur resolue, corps d'une lambda, type declare d'une variable), la methode et le type qui les portent.
 
@@ -60,11 +63,37 @@ class Method:
     # Types des parametres, normalises (TAXO-ID-01) : identite syntaxique, jamais des types resolus.
     parameters: tuple = ()
     constructor: bool = False
+    # Vrai si la declaration a un parametre variable (`T...`).
+    varargs: bool = False
+    # Ligne du nom : la preuve d'une declaration ne bouge pas quand son corps change.
+    name_line: int = 0
 
     @property
     def signature(self):
         """`nom(Type,Type)`, ou `<init>(...)` pour un constructeur (schema `java-symbol-syntactic/1`)."""
         return f'{"<init>" if self.constructor else self.name}({",".join(self.parameters)})'
+
+
+@dataclass(frozen=True)
+class Supertype:
+    """Un type ecrit dans une clause `extends` (`superclass`, `extends_interfaces`) ou `implements` (`interfaces`) :
+    son nom ecrit, son nom qualifie s'il est un type des sources (sinon None), et sa ligne."""
+    written: str
+    qualified: str | None
+    line: int
+    clause: str
+
+
+@dataclass(frozen=True)
+class Field:
+    """Un champ : son nom, son type ecrit (sans arguments de type) et, s'il est un type des sources, son nom
+    qualifie ; `None` sinon (type externe, variable de type, primitif)."""
+    name: str
+    written_type: str
+    qualified_type: str | None
+    line: int
+    # Vrai si le type ecrit est une variable de type (`T`) du type ou d'un type englobant.
+    type_variable: bool = False
 
 
 @dataclass(frozen=True)
@@ -81,6 +110,12 @@ class JavaType:
     supertypes: tuple = ()
     # Signatures de toutes les methodes et constructeurs du type, annotes ou non : deux egales sont ambigues.
     signatures: tuple = ()
+    # Toutes les declarations (TAXO-01K) : methodes et constructeurs annotes ou non, champs, supertypes avec leur
+    # clause et leur ligne, ligne du nom.
+    declarations: tuple = ()
+    fields: tuple = ()
+    clauses: tuple = ()
+    name_line: int = 0
 
     def ambiguous(self, signature):
         """Vrai si plusieurs declarations du type partagent cette signature syntaxique normalisee."""
@@ -139,6 +174,20 @@ class JavaFile:
     has_errors: bool
     _root: object = field(default=None, compare=False, repr=False)
     _reader: object = field(default=None, compare=False, repr=False)
+
+    @property
+    def root(self):
+        """L'arbre syntaxique du fichier, pour les lecteurs du paquetage Java ; None si le fichier n'a pas ete lu."""
+        return self._root
+
+    def resolve(self, written, owner):
+        """Nom qualifie du type ecrit `written`, vu depuis le type `owner`, s'il est un type des sources connu sans
+        ambiguite ; None sinon. Rien n'est devine : un type externe ou une variable de type n'est pas resolu."""
+        return self._reader.type_of(written, owner) if self._reader is not None else None
+
+    def imported(self, simple):
+        """Nom qualifie d'un import explicite (non statique) dont le nom simple est `simple`, ou None."""
+        return next((name for name, static in self.imports if not static and name.rsplit('.', 1)[-1] == simple), None)
 
     def constants(self):
         """Constantes chaines du fichier, par nom qualifie de leur type."""
@@ -220,7 +269,12 @@ class _Reader:
         node, name = self._pending[qualified]
         return JavaType(name, qualified, _TYPES[node.type], *_lines(node), self._annotations(node, qualified),
                         self._methods(node, qualified), self.known[qualified], self._supertypes(node, qualified),
-                        _signatures(node))
+                        _signatures(node), _declarations(node), self._fields(node, qualified),
+                        self._clauses(node, qualified),
+                        node.child_by_field_name('name').start_point[0] + 1)
+
+    def type_of(self, written, owner):
+        return self._type(written, owner)
 
     def chain(self, node):
         """La chaine d'appels dont `node` est l'appel le plus exterieur."""
@@ -316,12 +370,30 @@ class _Reader:
         return tuple(methods)
 
     def _supertypes(self, node, owner):
-        supertypes = []
+        """Supertypes tels qu'ecrits : (type ecrit, nom qualifie ou None)."""
+        return tuple((item.written, item.qualified) for item in self._clauses(node, owner))
+
+    def _clauses(self, node, owner):
+        found = []
         for kind in ('superclass', 'interfaces', 'extends_interfaces'):
             clause = node.child_by_field_name(kind) or _first(node, (kind,))
             if clause is not None:
-                supertypes += [(_text(item), self._type(_text(item), owner)) for item in _type_names(clause)]
-        return tuple(supertypes)
+                found += [Supertype(_text(item), self._type(_text(item), owner), item.start_point[0] + 1, kind)
+                          for item in _type_names(clause)]
+        return tuple(found)
+
+    def _fields(self, node, owner):
+        """Champs du type. Un champ type par une variable de type (`T`, du type ou d'un type englobant) n'a pas de
+        type qualifie, meme si un type des sources porte le meme nom : la variable le masque."""
+        fields, variables = [], _type_variables(node)
+        for member in _members(node.child_by_field_name('body')):
+            if member.type in ('field_declaration', 'constant_declaration'):
+                written = _type_name(member.child_by_field_name('type'))
+                variable = written.partition('.')[0] in variables
+                qualified = None if variable else self._type(written, owner)
+                fields += [_field(declarator, written, qualified, variable) for declarator in member.named_children
+                           if declarator.type == 'variable_declarator']
+        return tuple(fields)
 
     def _constants(self, body, qualified):
         """Constantes chaines `static final` du type, dans l'ordre : une constante peut citer les precedentes."""
@@ -460,6 +532,53 @@ def _declaration(scope, name, before):
 
 def _type_text(node):
     return _text(_base(node)) if node is not None else None
+
+
+def _field(declarator, written, qualified, variable):
+    """Un champ d'une declaration : un tableau (`int x[]`) n'a ni type des sources ni variable de type."""
+    name = declarator.child_by_field_name('name')
+    dimensions = _dimensions(declarator.child_by_field_name('dimensions'))
+    if dimensions:
+        return Field(_text(name), written + '[]' * dimensions, None, name.start_point[0] + 1)
+    return Field(_text(name), written, qualified, name.start_point[0] + 1, variable)
+
+
+def _declarations(node):
+    """Toutes les methodes et tous les constructeurs du type, annotes ou non, dans l'ordre du fichier."""
+    return tuple(Method(_text(member.child_by_field_name('name')), *_lines(member), (),
+                        _parameters(member.child_by_field_name('parameters')),
+                        member.type == 'constructor_declaration',
+                        any(item.type == 'spread_parameter'
+                            for item in _named(member.child_by_field_name('parameters'))),
+                        member.child_by_field_name('name').start_point[0] + 1)
+                 for member in _members(node.child_by_field_name('body'))
+                 if member.type in ('method_declaration', 'constructor_declaration'))
+
+
+def _type_variables(node):
+    """Variables de type visibles dans le type `node` : les siennes et celles des types qui l'englobent."""
+    names = set()
+    while node is not None:
+        if node.type in _TYPES:
+            names.update(_type_parameters(node))
+        node = node.parent
+    return names
+
+
+def _type_parameters(node):
+    parameters = node.child_by_field_name('type_parameters') or _first(node, ('type_parameters',))
+    return tuple(_text(_first(item, ('type_identifier', 'identifier'))) for item in _named(parameters)
+                 if item.type == 'type_parameter')
+
+
+def signature(declaration):
+    """Signature normalisee (`java-symbol-syntactic/1`) d'un noeud de methode ou de constructeur."""
+    return Method(_text(declaration.child_by_field_name('name')), 0, 0, (),
+                  _parameters(declaration.child_by_field_name('parameters')),
+                  declaration.type == 'constructor_declaration').signature
+
+
+TYPE_DECLARATIONS = frozenset(_TYPES)
 
 
 def _signatures(node):

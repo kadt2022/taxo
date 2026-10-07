@@ -71,7 +71,7 @@ def test_describe_offers_only_what_taxo_can_serve(taxo):
                           'diff_facts', 'get_neighborhood', 'find_references']
     assert 'get_diff' not in operations, 'sans MINIA_SOURCE_CONTEXT=diff, le diff n est pas propose'
     analyzers = {item['analyzer'] for item in described['items'] if item['kind'] == 'analyzer'}
-    assert analyzers == {'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-boot', 'taxo.spring-security', 'taxo.structure'}
+    assert analyzers == {'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-boot', 'taxo.spring-security', 'taxo.structure', 'taxo.java-calls'}
     changes = next(item for item in described['items'] if item.get('relation') == 'CHANGES')
     assert (changes['subject_types'], changes['object_types']) == (['commit'], ['file'])
     assert described['coverage'] and described['snapshot'] == result['snapshot']
@@ -95,16 +95,20 @@ def test_find_facts_gives_short_references_stable_in_the_exchange(taxo):
 
 def test_an_empty_answer_still_says_where_taxo_looked(taxo):
     client, url, _ = taxo
-    found = one(client, url, 'find_facts', relation='CALLS')
+    found = one(client, url, 'find_facts', relation='DISPATCHES_TO')
     assert (found['outcome'], found['items'], found['count']) == ('OK', [], 0)
     assert found['coverage'] == [{'subject': None, 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
-                                  'relation': 'CALLS'}]
+                                  'relation': 'DISPATCHES_TO'}], 'aucun evaluateur ne produit cette relation'
     # TAXO-COV-01 : ce depot n'a aucune source Java. L'evaluateur Spring n'a rien lu et ne pretend plus avoir
     # cherche partout : sa couverture dit que le depot est hors de son perimetre, et pourquoi.
     endpoints = one(client, url, 'find_facts', relation='HANDLED_BY')
     assert endpoints['items'] == []
     [spring] = endpoints['coverage']
     assert (spring['type'], spring['producer'], spring['languages']) == ('OUT_OF_SCOPE', 'taxo.spring-api', ['Java'])
+    calls = one(client, url, 'find_facts', relation='CALLS')
+    assert calls['items'] == []
+    [java] = calls['coverage']
+    assert (java['type'], java['producer'], java['languages']) == ('OUT_OF_SCOPE', 'taxo.java-calls', ['Java'])
 
 
 @pytest.mark.parametrize('arguments', [{}, {'relation': 'INVENTED'}, {'subject': 'pas une reference'},
@@ -133,7 +137,7 @@ def test_coverage_can_be_asked_for_a_scope(taxo):
     client, url, _ = taxo
     everything = one(client, url, 'get_coverage')
     assert {item['fact']['produced_by']['producer_id'] for item in everything['items']} == {
-        'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-boot', 'taxo.spring-security', 'taxo.structure'}
+        'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-boot', 'taxo.spring-security', 'taxo.structure', 'taxo.java-calls'}
     narrowed = one(client, url, 'get_coverage', scope='file:src/app.txt')
     assert narrowed['items'] == [] and narrowed['count'] == 0
     assert one(client, url, 'get_coverage', scope='rien')['error']['code'] == 'INVALID_ARGUMENT'

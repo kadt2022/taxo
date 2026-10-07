@@ -19,16 +19,11 @@ from itertools import product
 from app.evaluations.domain.evaluator import EvaluationOutput
 from app.evaluations.domain.progress import silent
 from app.evaluations.domain.status import EvaluationStatus
-from app.evaluators.java import syntax
-from app.facts import content_hash, is_path
-from app.snapshots.domain.errors import SnapshotError
+from app.evaluators.java import sources
+from app.facts import content_hash
 from .catalog import CATALOG
 
 METHOD = 'java.spring.request-mapping'
-IGNORED = {'.git', 'node_modules', '.venv', 'venv', 'dist', 'build', 'target', '__pycache__', '.gradle', 'out'}
-TEST_SOURCES = ('src', 'test')
-MAX_SOURCE_BYTES = 1024 * 1024
-PROGRESS_EVERY = 250
 CONTROLLERS = {'RestController', 'Controller'}
 VERBS = {'GetMapping': 'GET', 'PostMapping': 'POST', 'PutMapping': 'PUT', 'DeleteMapping': 'DELETE',
          'PatchMapping': 'PATCH'}
@@ -38,8 +33,6 @@ MAPPINGS = {*VERBS, REQUEST_MAPPING}
 WEB = 'org.springframework.web.bind.annotation'
 SPRING = {**{name: f'{WEB}.{name}' for name in (*MAPPINGS, 'RestController')},
           'Controller': 'org.springframework.stereotype.Controller'}
-# Au-dela, une chaine de constantes (A cite B qui cite C...) n'est plus suivie ; sa valeur reste non resolue.
-MAX_CONSTANT_ROUNDS = 8
 HTTP_METHODS = {'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'TRACE'}
 # `@RequestMapping` sans `method` accepte tous les verbes : l'endpoint le dit, sans en choisir un.
 ANY = 'ANY'
@@ -115,68 +108,13 @@ class Endpoint:
 
 def analyse(snapshot, progress=silent):
     """Lit les sources Java du perimetre et etablit les endpoints."""
-    sources, excluded = _select(snapshot)
+    selected, excluded = sources.select(snapshot)
     warnings, read_errors = [], []
-    contents = _read(snapshot, sources, warnings, read_errors, progress)
-    parsed = _parse_all(contents)
+    contents = sources.read(snapshot, selected, warnings, read_errors, progress)
+    parsed = sources.parse_all(contents)
     run = _Run(snapshot, contents, parsed)
     run.evaluate()
     return Analysis(contents, parsed, run, excluded, warnings, read_errors)
-
-
-def _select(snapshot):
-    """Sources Java du perimetre, et les dossiers exclus (sorties de build, sources de test)."""
-    sources, excluded = [], set()
-    for file in snapshot.iter_files():
-        if not file.path.endswith('.java') or not is_path(file.path):
-            continue
-        outside = _outside_scope(file.path.split('/'))
-        if outside:
-            excluded.add(f'directory:{outside}')
-        else:
-            sources.append(file)
-    return sources, excluded
-
-
-def _outside_scope(parts):
-    """Le dossier qui met ce chemin hors du perimetre, ou None."""
-    for index, part in enumerate(parts[:-1]):
-        if part in IGNORED:
-            return '/'.join(parts[:index + 1])
-        if tuple(parts[index:index + 2]) == TEST_SOURCES and index + 2 < len(parts):
-            return '/'.join(parts[:index + 2])
-    return None
-
-
-def _read(snapshot, sources, warnings, read_errors, progress):
-    readable = [file for file in sources if file.size <= MAX_SOURCE_BYTES]
-    for file in sources:
-        if file.size > MAX_SOURCE_BYTES:
-            warnings.append(f'Fichier Java trop volumineux, non lu : {file.path}')
-            read_errors.append(f'file:{file.path}')
-    contents, count = {}, 0
-    try:
-        for count, (path, data) in enumerate(snapshot.read_many(file.path for file in readable), 1):
-            if count % PROGRESS_EVERY == 0 or count == len(readable):
-                progress('reading', 'Fichiers Java lus', count, len(readable))
-            if _utf8(data):
-                contents[path] = data
-            else:
-                warnings.append(f'Fichier Java non UTF-8, non lu : {path}')
-                read_errors.append(f'file:{path}')
-    except SnapshotError as exc:
-        remaining = [f'file:{file.path}' for file in readable[count:]]
-        read_errors += remaining
-        warnings.append(f'Erreur de lecture : {remaining[0] if remaining else "dépôt"} : {exc}')
-    return contents
-
-
-def _utf8(data):
-    try:
-        data.decode('utf-8')
-    except UnicodeDecodeError:
-        return False
-    return True
 
 
 class _Run:
@@ -258,21 +196,6 @@ class _Run:
         for prefix, tail, verb in product(base_paths, paths, verbs):
             subject = f'endpoint:{verb} {_join(prefix, tail)}'
             self.facts.setdefault((subject, handler), _assertion(subject, handler, evidence))
-
-
-def _parse_all(contents):
-    """Chaque fichier, lu avec les constantes de tous les autres : une constante qui en cite une autre
-    (`Routes.USERS = Api.ROOT + "/users"`) se resout de proche en proche, jusqu'a ce que rien ne change."""
-    known, parsed = {}, []
-    for _ in range(MAX_CONSTANT_ROUNDS):
-        parsed = [syntax.parse(path, data, known) for path, data in contents.items()]
-        found = {}
-        for java_file in parsed:
-            found.update(java_file.constants())
-        if found == known:
-            break
-        known = found
-    return parsed
 
 
 class _Names:

@@ -2,7 +2,8 @@
 // ces libelles en sont la lecture humaine. Rien n'est renomme cote backend : un terme inconnu s'affiche tel quel.
 
 export const EVALUATORS:Record<string,string>={'taxo.inventory':'Inventaire du code', 'taxo.git':'Historique Git', 'taxo.spring-api':'Endpoints Spring',
-  'taxo.spring-boot':'Applications Spring Boot', 'taxo.spring-security':'Sécurité Spring', 'taxo.structure':'Structure du dépôt'};
+  'taxo.spring-boot':'Applications Spring Boot', 'taxo.spring-security':'Sécurité Spring', 'taxo.structure':'Structure du dépôt',
+  'taxo.java-calls':'Appels Java'};
 
 export const STATUSES:Record<string,string>={SUCCESS:'Terminée', PARTIAL:'Partielle', FAILED:'Échec',
   UNSUPPORTED:'Non pris en charge'};

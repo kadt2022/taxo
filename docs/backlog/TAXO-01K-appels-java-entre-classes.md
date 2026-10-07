@@ -1,7 +1,7 @@
 # TAXO-01K — Appels Java entre classes : du contrôleur au service et au repository
 
 Statut : **en cours**, implémentation demandée le 2026-10-07. PR A (contrat et vérité de référence) livrée ;
-PR B, C et D à venir.  
+PR B (résolution intra-sources) livrée ; PR C et D à venir.  
 Date : 2026-10-03, mise à jour le 2026-10-07.  
 Source de vérité : `ARCHITECTURE.md` § 2, § 5.6, § 7.3, § 8, § 12.3 et surtout § 14.  
 Dépend de : lecteur Java syntaxique existant, contrat des faits, couverture bornée, voisinage multiniveau / Explorer.  
@@ -494,7 +494,15 @@ Plan d'origine :
 - ajouter la fixture indépendante et ses vérités attendues ;
 - aucun producteur `CALLS` encore.
 
-### PR B — Résolution intra-sources
+### PR B — Résolution intra-sources (livrée)
+
+Livré : `taxo.java-calls` retrouve exactement `expected.json` (`backend/tests/test_java_calls.py`) ; chaque
+forme et chaque raison d'arrêt a son test (`test_java_calls_rules.py`, `test_java_sites.py`). Le lecteur Java
+partagé gagne les déclarations complètes, les champs, les clauses de supertypes (`syntax.py`), le choix et la
+lecture des sources (`sources.py`, repris de `taxo.spring-api`) et les sites d'appel (`sites.py`). Les doutes
+tranchés vers moins d'appels sont écrits au § 14. Le portail range ses faits dans le domaine Architecture.
+
+Plan d'origine :
 
 - primitives du lecteur Java nécessaires (voir « Ce que le lecteur Java doit fournir ») ;
 - nouvel évaluateur `taxo.java-calls`, catalogue `java-calls` v1, qui lit Java (`UNSUPPORTED` sinon, TAXO-COV-01), ajouté au tableau du § 7 ;
