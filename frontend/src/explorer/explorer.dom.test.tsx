@@ -3,7 +3,7 @@
 // compacte, comme `neighborhood/2`. La vue de référence est la liste.
 import {act} from 'react';
 import {createRoot, type Root} from 'react-dom/client';
-import {afterEach, beforeEach, describe, expect, it} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {useRoute} from '../nav';
 import {ExplorerPage} from './Explorer';
 import type {Boundary, CompactTile, Element as Item, Tile} from './protocol';
@@ -198,6 +198,25 @@ describe('l’explorateur', ()=>{
     const after=host.querySelector('.calls') as HTMLElement;
     expect(Array.from(after.querySelectorAll('.chain-label')).map(item=>item.textContent)).toEqual(['est traité parO', 'appelleO']);
     expect(after.querySelectorAll('.chain-node')).toHaveLength(3);
+  });
+
+  it('exporte le diagramme en PNG, ou dit pourquoi le navigateur n’a pas pu', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    vi.spyOn(HTMLImageElement.prototype, 'decode').mockResolvedValue(undefined);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(()=>undefined);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback=>callback(new Blob(['png'])));
+    const names:string[]=[];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function(this:HTMLAnchorElement){names.push(this.download);});
+    const context=vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({scale:()=>undefined, drawImage:()=>undefined} as never);
+    await click(named('Exporter en image (PNG)'));
+    await act(async()=>{await new Promise(resolve=>setTimeout(resolve, 0));});
+    expect(names).toEqual(['taxo-chaine-route-get-orders.png']);
+    context.mockReturnValue(null);
+    await click(named('Exporter en image (PNG)'));
+    await act(async()=>{await new Promise(resolve=>setTimeout(resolve, 0));});
+    expect(host.querySelector('.chain-tools [role=alert]')?.textContent).toBe('L’image n’a pas pu être créée par ce navigateur.');
+    vi.restoreAllMocks();
   });
 
   it('développe un nœud et voit la suite d’une adjacence coupée, sans recharger le reste', async()=>{
