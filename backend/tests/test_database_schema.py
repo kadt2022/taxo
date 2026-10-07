@@ -25,7 +25,8 @@ def test_an_api_started_on_a_database_behind_the_code_refuses_with_what_to_do(tm
     with pytest.raises(SchemaOutOfDate) as refused:
         create_app(url, [str(tmp_path)])
     message = str(refused.value)
-    assert 'révision 008' in message and ', '.join(sorted(expected_revisions())) in message
+    assert 'révision 008' in message
+    assert ', '.join(sorted(expected_revisions())) in message
     assert 'alembic upgrade head' in message
 
 
