@@ -181,6 +181,24 @@ describe('l’explorateur', ()=>{
     expect(tiles()[2]).toMatchObject({root:PATTERN, continuation:'reprise-P'});
   });
 
+  it('a une vue Appels distincte : seulement l’axe d’exécution, ses coupures, et ce qui n’est pas analysé', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    expect(Array.from(host.querySelectorAll('.explorer-tabs button')).map(item=>item.textContent)).toEqual(['Appels', 'Chaîne', 'Couches', 'Liste']);
+    expect(named('Chaîne')?.getAttribute('aria-pressed'), 'Chaîne reste la vue de voisinage par défaut').toBe('true');
+    await click(named('Appels'));
+    const shown=host.querySelector('.calls') as HTMLElement;
+    expect(shown.querySelector('.calls-question')?.textContent).toContain('route GET /orders');
+    expect(Array.from(shown.querySelectorAll('.chain-node')).map(item=>item.getAttribute('title'))).toEqual([ROUTE, HANDLER]);
+    expect(Array.from(shown.querySelectorAll('.chain-label')).map(item=>item.textContent)).toEqual(['est traité parO']);
+    expect(shown.textContent, 'aucun type déduit par l’interface').not.toMatch(/méthode/);
+    expect(shown.querySelector('[aria-label="Où s’arrête la vue Appels"]')?.textContent).toContain('« appelle » : non analysé');
+    await click(named('Développer symbole java:A#get(), depuis la vue Appels'));
+    expect(tiles()[1]).toMatchObject({root:HANDLER});
+    const after=host.querySelector('.calls') as HTMLElement;
+    expect(Array.from(after.querySelectorAll('.chain-label')).map(item=>item.textContent)).toEqual(['est traité parO', 'appelleO']);
+    expect(after.querySelectorAll('.chain-node')).toHaveLength(3);
+  });
+
   it('développe un nœud et voit la suite d’une adjacence coupée, sans recharger le reste', async()=>{
     await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
     await list();

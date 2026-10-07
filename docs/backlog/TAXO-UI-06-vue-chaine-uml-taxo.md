@@ -3,7 +3,9 @@
 Statut : **direction validée le 2026-10-06, récit à relire avant implémentation**. Révisé le même jour :
 couleurs par type et panneau de code, demandés après la première lecture. Commencé avant TAXO-01K à la
 demande du 2026-10-06 : PR 1 (vue Chaîne, couleurs, légende) livrée par la PR de la branche
-`feat/explorateur-vue-chaine`.  
+`feat/explorateur-vue-chaine`. Le 2026-10-07, une vue **Appels** distincte s'y ajoute : elle ne suit que l'axe
+d'exécution (`HANDLED_BY`, `CALLS`, `DISPATCHES_TO` quand ils existent) depuis l'ancre et dit où il s'arrête ; la
+vue Chaîne reste le voisinage général de la Maille. L'interface n'affirme aucun type que Taxo ne donne pas.  
 Date : 2026-10-06.  
 Source de vérité : [ARCHITECTURE § 2, § 3 et § 9](../ARCHITECTURE.md), [TAXO-01J § 9](TAXO-01J-navigation-multiniveau-et-explorateur.md).  
 Dépend de : explorateur de la Maille (TAXO-01J, livré). N'a d'intérêt complet qu'avec les appels Java

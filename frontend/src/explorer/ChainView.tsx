@@ -14,8 +14,8 @@ import type {NodeCommands} from './NodeActions';
 const classes=(...names:(string|false|undefined)[])=>names.filter(Boolean).join(' ');
 const formOf=(relation:string):Form=>FORMS[relation]??'CHAIN';
 
-export function ChainView({view, links, selected, onSelect, commands, busy}:Readonly<{view:View; links:Link[]; selected:Selected;
-  onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean}>){
+export function ChainView({view, links, selected, onSelect, commands, busy, viewName='Chaîne'}:Readonly<{view:View; links:Link[];
+  selected:Selected; onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean; viewName?:string}>){
   const id=useId(), named=useNaming();
   const text:ChainText=useMemo(()=>({name:value=>compartments(value, named), note:knowledgeText,
     cut:boundary=>`${selectionText(boundary)} · ${boundary.continuation?'voir la suite':'développer'} ›`,
@@ -52,7 +52,7 @@ export function ChainView({view, links, selected, onSelect, commands, busy}:Read
           {count>1&&<span className="chain-count">×{count}</span>}</button>;
       })}
       {drawn.boxes.map(box=><Shape key={box.key} box={box} view={view} nodes={nodes} selected={selected} onSelect={onSelect} commands={commands}
-        busy={busy}/>)}
+        busy={busy} viewName={viewName}/>)}
     </div></div>
     <details className="chain-legend" open><summary>Légende</summary>
       <ul>
@@ -72,8 +72,9 @@ export function ChainView({view, links, selected, onSelect, commands, busy}:Read
 
 const MARK_NAMES:Record<string, string>={O:'observé dans le code', D:'déduit par Taxo', V:'validé par une personne'};
 
-function Shape({box, view, nodes, selected, onSelect, commands, busy}:Readonly<{box:Box; view:View;
-  nodes:Map<string, View['nodes'][number]>; selected:Selected; onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean}>){
+function Shape({box, view, nodes, selected, onSelect, commands, busy, viewName}:Readonly<{box:Box; view:View;
+  nodes:Map<string, View['nodes'][number]>; selected:Selected; onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean;
+  viewName:string}>){
   const named=useNaming();
   const style={left:box.x, top:box.y, width:box.width, height:box.height};
   const lines=box.lines.map((said, index)=><span key={index} className="chain-line">{said}</span>);
@@ -83,7 +84,7 @@ function Shape({box, view, nodes, selected, onSelect, commands, busy}:Readonly<{
     return <button type="button" title={reference} style={style} aria-pressed={selected?.kind==='node'&&selected.reference===reference}
       className={classes('chain-node', `tone-${toneOf(reference)}`, box.anchor&&'anchor')}
       aria-label={[named(reference), ...marks].join(', ')} onClick={()=>onSelect({kind:'node', reference})}>
-      <span className="chain-stereo">«{typeText(reference)}»{box.member!.length>0&&' · méthode'}{box.anchor&&' · ancre'}</span>
+      <span className="chain-stereo">«{typeText(reference)}»{box.anchor&&' · ancre'}</span>
       <span className="chain-name">{lines}</span>
       {box.context!.length>0&&<span className="chain-context">{box.context!.map((said, index)=><span key={index} className="chain-line">{said}</span>)}</span>}
       {box.member!.length>0&&<span className="chain-member">{box.member!.map((said, index)=><span key={index} className="chain-line">{said}</span>)}</span>}
@@ -94,7 +95,7 @@ function Shape({box, view, nodes, selected, onSelect, commands, busy}:Readonly<{
   if(box.kind==='cut'){
     const reference=box.reference!, more=!!box.boundary?.continuation;
     return <button type="button" className="chain-cut" style={style} disabled={busy}
-      aria-label={`${more?'Voir la suite de':'Développer'} ${named(reference)}, depuis la vue Chaîne`}
+      aria-label={`${more?'Voir la suite de':'Développer'} ${named(reference)}, depuis la vue ${viewName}`}
       onClick={()=>(more?commands.more:commands.expand)(reference)}>{lines}</button>;
   }
   const link=box.link!, chosen=selected?.kind==='link'&&selected.identity===link.identity;

@@ -943,6 +943,11 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .tone-file{--tone:var(--tone-file)}.tone-app{--tone:var(--tone-app)}.tone-policy{--tone:var(--tone-policy)}
 .tone-history{--tone:var(--tone-history)}.tone-tech{--tone:var(--tone-tech)}.tone-neutral{--tone:var(--tone-neutral)}
 .chain{display:flex;flex-direction:column;gap:10px;min-width:0}
+.calls{display:flex;flex-direction:column;gap:10px;min-width:0}
+.calls-question{margin:0;font-size:13.5px;color:var(--text-2)}
+.calls-limits{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:10px 14px}
+.calls-limits h3{margin:0 0 6px;font-size:13px}
+.calls-limits ul{margin:0;padding-left:18px;font-size:13px;color:var(--text-2);line-height:1.6}
 .chain-scroll{background:linear-gradient(var(--surface),var(--surface-2))}
 .chain{--chain-line:#6f8f80}
 .chain-arrow{fill:none;stroke:var(--chain-line);stroke-width:2}
@@ -998,9 +1003,9 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .chain-key{width:40px;height:12px}
 @media (prefers-reduced-motion:reduce){.chain-node{transition:none}}
 /* Le diagramme suit le thème sombre de l'appareil, comme la maquette de TAXO-UI-06 : ses couleurs sont redéfinies sur
-   la vue seule, le reste du portail n'ayant pas encore de thème sombre. */
+   la vue et son encadré de limites, le reste du portail n'ayant pas encore de thème sombre. */
 @media (prefers-color-scheme:dark){
-  .chain{--surface:#17201d;--surface-2:#111916;--surface-3:#1f2b27;--border:#2a3832;--border-strong:#3d5048;--text:#e7efe9;
+  .chain,.calls-limits{--surface:#17201d;--surface-2:#111916;--surface-3:#1f2b27;--border:#2a3832;--border-strong:#3d5048;--text:#e7efe9;
     --text-2:#bccbc3;--muted:#8d9f96;--warn-soft:#33270f;--warn:#f0b357;--chain-line:#8fb3a2;
     --tone-route:#82a9f6;--tone-symbol:#62d39c;--tone-module:#b496f1;--tone-file:#d8b066;--tone-app:#52c6d1;--tone-policy:#f083a9;
     --tone-history:#a3b3c6;--tone-tech:#bcc965;--tone-neutral:#9cada4;--tone-frontier:#eaa743;--brand-3:#3f9a7f;color:var(--text)}

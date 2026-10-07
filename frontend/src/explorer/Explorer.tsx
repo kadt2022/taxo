@@ -7,6 +7,7 @@ import {href, go, type Route} from '../nav';
 import {useChoices} from '../pages';
 import {AnchorSearch} from './AnchorSearch';
 import {Boundaries} from './Boundaries';
+import {CallsView} from './CallsView';
 import {ChainView} from './ChainView';
 import {linksOf, type View} from './graph';
 import {LayerView} from './LayerView';
@@ -14,7 +15,7 @@ import {LinkPanel} from './LinkPanel';
 import {ListView} from './ListView';
 import {NodeActions, type NodeCommands} from './NodeActions';
 import {describe, openTile, queryOf, type Described, type Query, type TileDemand} from './protocol';
-import {defaultRelations, relationChoices} from './relations';
+import {defaultRelations, relationChoices, type RelationChoice} from './relations';
 import {naming, nodeMarks, scopeText, viewText} from './sentences';
 import {NamingContext, useNaming} from './Naming';
 import {Settings} from './Settings';
@@ -100,19 +101,19 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
     {!settings.root&&<p className="muted">Aucun point de départ : recherchez une référence, ou ouvrez l’explorateur depuis une route, un module, un fichier ou un commit.</p>}
     {described&&settings.root&&!relations.length&&<p className="muted">Cette analyse n’a aucun fait à parcourir : aucune relation à suivre.</p>}
     {state.view&&<Body view={state.view} selected={state.selected} dispatch={dispatch} commands={commands} busy={busy} query={query}
-      shape={shape} onShape={setShape}
+      shape={shape} onShape={setShape} choices={choices} followed={relations}
       onReload={()=>run('open', demand(settings.root!, settings.depth))}/>}
   </section></NamingContext.Provider>;
 }
 
 const NO_TYPES:string[]=[];
 
-type Shape='chaine'|'couches'|'liste';
+type Shape='appels'|'chaine'|'couches'|'liste';
 type BodyProps={view:View; selected:Selected; dispatch:(action:Action)=>void; commands:NodeCommands; busy:boolean; query:Query;
-  shape:Shape; onShape:(shape:Shape)=>void; onReload:()=>void};
+  shape:Shape; onShape:(shape:Shape)=>void; onReload:()=>void; choices:RelationChoice[]; followed:string[]};
 
-/** La vue reçue : son état vide s'il y en a un, sinon les couches ou la liste, le détail choisi et les frontières. */
-function Body({view, selected, dispatch, commands, busy, query, shape, onShape, onReload}:Readonly<BodyProps>){
+/** La vue reçue : son état vide s'il y en a un, sinon les appels, la chaîne, les couches ou la liste, le détail choisi et les frontières. */
+function Body({view, selected, dispatch, commands, busy, query, shape, onShape, onReload, choices, followed}:Readonly<BodyProps>){
   const named=useNaming();
   const links=useMemo(()=>linksOf(view), [view]);
   if(!view.known)return <output className="explorer-empty">« {named(view.anchor)} » n’apparaît dans aucun fait de cette analyse : Taxo n’en sait rien ici, ni présence ni absence de liens.</output>;
@@ -125,10 +126,13 @@ function Body({view, selected, dispatch, commands, busy, query, shape, onShape, 
     <p className="explorer-stop">{viewText(view)}</p>
     {view.elements.length===0&&<output className="explorer-empty">Aucun lien pour les relations suivies depuis cette ancre, dans ce que l’analyse a enregistré. Ce que Taxo ne sait pas est dit plus bas.</output>}
     <fieldset className="explorer-tabs"><legend className="explorer-hidden">Forme de la vue</legend>
+      <button type="button" aria-pressed={shape==='appels'} onClick={()=>onShape('appels')}>Appels</button>
       <button type="button" aria-pressed={shape==='chaine'} onClick={()=>onShape('chaine')}>Chaîne</button>
       <button type="button" aria-pressed={shape==='couches'} onClick={()=>onShape('couches')}>Couches</button>
       <button type="button" aria-pressed={shape==='liste'} onClick={()=>onShape('liste')}>Liste</button></fieldset>
     <div className="explorer-body">
+      {shape==='appels'&&<CallsView view={view} links={links} selected={selected} onSelect={select}
+        commands={commands} busy={busy} choices={choices} followed={followed}/>}
       {shape==='chaine'&&<ChainView view={view} links={links} selected={selected} onSelect={select}
         commands={commands} busy={busy}/>}
       {shape==='couches'&&<LayerView view={view} links={links} selected={selected} onSelect={select}/>}

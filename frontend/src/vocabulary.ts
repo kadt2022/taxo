@@ -35,6 +35,9 @@ export const VERBS:Record<string,string>={CONTAINS:'contient', WRITTEN_IN:'est �
 /** La forme d'une relation dans la vue Chaîne (TAXO-UI-06, E1) : dans la chaîne, sujet au-dessus, ou à côté, comme la
  * réalisation UML. Une relation absente est dans la chaîne. */
 export const FORMS:Record<string,'CHAIN'|'SIDE'>={IMPLEMENTS:'SIDE'};
+/** L'axe de la vue Appels : les relations qui disent ce qui s'exécute depuis une route, lues du sujet vers l'objet. Les
+ * relations de contexte (implémentation, module, fichier, Git, sécurité…) n'en sont pas et restent dans la vue Chaîne. */
+export const CALL_AXIS:readonly string[]=['HANDLED_BY', 'CALLS', 'DISPATCHES_TO'];
 
 /** La teinte d'un type de référence (TAXO-UI-06, E7) : un jeton CSS `--tone-<teinte>`. L'orange des frontières n'en est
  * pas une. Un type absent prend la teinte neutre. */
