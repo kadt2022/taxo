@@ -46,6 +46,8 @@ cd backend
 ..\.venv\Scripts\python -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
+Après chaque mise à jour du code, relancer `alembic upgrade head` avant l'API : sur une base en retard, l'API refuse de démarrer et indique la révision attendue.
+
 SQLite est uniquement une facilité de développement. Pour PostgreSQL, utiliser une URL `postgresql+psycopg://utilisateur:motdepasse@localhost:5432/taxo`.
 
 Dans un second terminal :

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.platform.database.engine import database_engine
+from app.platform.database.schema import require_current_schema
 from app.projects.infrastructure.sqlalchemy.project_repository import SqlAlchemyProjectRepository
 from app.projects.infrastructure.paths import LocalProjectPaths
 from app.projects.api.router import create_router as projects_router
@@ -75,6 +76,8 @@ def minia_model(options):
 def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None, minia=_FROM_SETTINGS,
                source_context=None):
     engine = database_engine(settings.database_url(database_url))
+    # Une base en retard sur le code ferait echouer chaque page qui lit une colonne recente : l'API ne demarre pas.
+    require_current_schema(engine)
     paths = LocalProjectPaths(settings.allowed_roots(allowed_roots))
     projects = SqlAlchemyProjectRepository(engine)
     scans = SqlAlchemyScanRepository(engine)
