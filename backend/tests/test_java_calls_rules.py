@@ -374,3 +374,9 @@ def test_a_literal_contradicts_only_a_known_parameter_type(literal, parameter, c
 def test_applicability_compares_arguments_rank_by_rank():
     assert arguments.applicable(('int', None), ('long', 'String'))
     assert not arguments.applicable((None, 'int'), ('long', 'String'))
+
+
+def test_a_compact_record_constructor_owns_its_call_sites():
+    execution = run(java('R', 'record R(int x) { R { f(); } void f() {} }'))
+    assert ('R', 'R#<init>(int)') in declared(execution, 'CONTAINS')
+    assert reason(execution, 'R#<init>(int)', 'f') == 'SUPER_TYPE_UNRESOLVED', 'java.lang.Record reste externe'
