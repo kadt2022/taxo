@@ -943,6 +943,7 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .tone-file{--tone:var(--tone-file)}.tone-app{--tone:var(--tone-app)}.tone-policy{--tone:var(--tone-policy)}
 .tone-history{--tone:var(--tone-history)}.tone-tech{--tone:var(--tone-tech)}.tone-neutral{--tone:var(--tone-neutral)}
 .chain{display:flex;flex-direction:column;gap:10px;min-width:0}
+.chain-tools{display:flex;align-items:center;justify-content:flex-end;gap:10px}
 .calls{display:flex;flex-direction:column;gap:10px;min-width:0}
 .calls-question{margin:0;font-size:13.5px;color:var(--text-2)}
 .calls-limits{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:10px 14px}

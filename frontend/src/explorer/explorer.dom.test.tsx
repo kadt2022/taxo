@@ -191,6 +191,7 @@ describe('l’explorateur', ()=>{
     expect(Array.from(shown.querySelectorAll('.chain-node')).map(item=>item.getAttribute('title'))).toEqual([ROUTE, HANDLER]);
     expect(Array.from(shown.querySelectorAll('.chain-label')).map(item=>item.textContent)).toEqual(['est traité parO']);
     expect(shown.textContent, 'aucun type déduit par l’interface').not.toMatch(/méthode/);
+    expect(named('Exporter en image (PNG)'), 'chaque vue dessinée s’exporte en image').toBeTruthy();
     expect(shown.querySelector('[aria-label="Où s’arrête la vue Appels"]')?.textContent).toContain('« appelle » : non analysé');
     await click(named('Développer symbole java:A#get(), depuis la vue Appels'));
     expect(tiles()[1]).toMatchObject({root:HANDLER});

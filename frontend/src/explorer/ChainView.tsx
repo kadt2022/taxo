@@ -2,9 +2,11 @@
 // son type et coiffée de son stéréotype ; une flèche nommée par lien, pleine dans la chaîne, en pointillé à triangle
 // creux à côté ; la frontière en note, la coupure en pastille. Le SVG ne fait que tracer : nœuds, étiquettes et
 // frontières sont de vrais boutons posés sur le tracé. La mise en page est calculée par `chain.ts`.
-import {useId, useMemo} from 'react';
+import {useId, useMemo, useRef, useState} from 'react';
 import {FORMS, TONE_NAMES, label} from '../vocabulary';
 import {chain, type Box, type ChainText, type Form} from './chain';
+import {picture, type Palette} from './picture';
+import {fileName, savePicture} from './savePicture';
 import type {Link, View} from './graph';
 import type {Selected} from './state';
 import {compartments, factText, knowledgeText, linkMarks, nodeMarks, selectionText, toneOf, typeText, verb} from './sentences';
@@ -28,7 +30,23 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
   const forms=new Set(drawn.arrows.map(item=>item.form));
   const kinds=new Set(drawn.boxes.map(box=>box.kind));
   const marks=[...new Set(drawn.arrows.flatMap(item=>linkMarks(item.link)))];
-  return <div className="chain">
+  const frame=useRef<HTMLDivElement>(null), [saving,setSaving]=useState(false), [failure,setFailure]=useState('');
+  const save=async()=>{
+    const style=getComputedStyle(frame.current!), read=(name:string)=>style.getPropertyValue(name).trim();
+    const palette:Palette={surface:read('--surface')||'#ffffff', text:read('--text')||'#142b25', muted:read('--muted')||'#6a7a71',
+      line:read('--chain-line')||'#6f8f80', frontier:read('--tone-frontier')||'#c47a12', frontierSoft:read('--warn-soft')||'#fdf3e1',
+      cut:read('--surface-3')||'#eef1eb', border:read('--border-strong')||'#cfd8cc'};
+    const svg=picture(drawn, palette, box=>({stereo:`«${typeText(box.reference!)}»${box.anchor?' · ancre':''}`,
+      tone:read(`--tone-${toneOf(box.reference!)}`)||palette.line}), item=>({verb:verb(item.link.relation), marks:linkMarks(item.link)}));
+    setSaving(true);setFailure('');
+    try{await savePicture(svg, drawn.width, drawn.height, fileName('taxo', viewName, named(view.anchor)));}
+    catch{setFailure('L’image n’a pas pu être créée par ce navigateur.');}
+    finally{setSaving(false);}
+  };
+  return <div className="chain" ref={frame}>
+    <div className="chain-tools">
+      <button type="button" className="ghost" onClick={()=>{void save();}} disabled={saving}>{saving?'Création de l’image…':'Exporter en image (PNG)'}</button>
+      {failure&&<span role="alert" className="error">{failure}</span>}</div>
     <div className="explorer-layers chain-scroll"><div className="explorer-canvas" style={{width:drawn.width, height:drawn.height}}>
       <svg width={drawn.width} height={drawn.height} aria-hidden="true">
         <defs>
