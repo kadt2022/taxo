@@ -115,8 +115,8 @@
     },
     "column": {"type": "integer", "minimum": 0},
     "evidenceRole": {"enum": ["call-site"]},
-    "identifier": {"type": "string", "pattern": "^[^\\s.,;:()<>\\[\\]{}\"'`]+(?![\\s\\S])"},
-    "typeName": {"type": "string", "pattern": "^[^\\s.,;:()<>\\[\\]{}\"'`]+(?:\\.[^\\s.,;:()<>\\[\\]{}\"'`]+)*(?:\\[\\])*(?![\\s\\S])"},
+    "identifier": {"type": "string", "pattern": "^[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*(?![\\s\\S])"},
+    "typeName": {"type": "string", "pattern": "^[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*(?:\\.[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*)*(?:\\[\\])*(?![\\s\\S])"},
     "site": {
       "type": "object", "additionalProperties": false,
       "required": ["role", "line_start", "line_end", "column_start", "column_end", "reason"],
@@ -129,7 +129,7 @@
                             "SUPER_TYPE_UNRESOLVED", "UNSUPPORTED_CALL_FORM", "RECEIVER_KIND_DEFERRED",
                             "LAMBDA_OR_LOCAL_CONTEXT", "PARSE_ERROR"]},
         "method": {"$ref": "#/$defs/identifier"},
-        "receiver": {"type": "string", "pattern": "^(?:this\\.)?[^\\s.,;:()<>\\[\\]{}\"'`]+(?![\\s\\S])"},
+        "receiver": {"type": "string", "pattern": "^(?:this\\.)?[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*(?![\\s\\S])"},
         "receiver_type": {"$ref": "#/$defs/typeName"},
         "external_supertypes": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/typeName"}},
         "candidates": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/symbol"}}

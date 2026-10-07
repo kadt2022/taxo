@@ -1009,6 +1009,36 @@
       "reason": "A receiver is a written name, never source text."
     },
     {
+      "file": "invalid-implements-type-inferred.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "IMPLEMENTS_FORM",
+        "path": "/status"
+      },
+      "reason": "A type implementation is written, so observed, never inferred."
+    },
+    {
+      "file": "invalid-implements-method-observed.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "IMPLEMENTS_FORM",
+        "path": "/status"
+      },
+      "reason": "A method implementation is deduced, so inferred, never observed."
+    },
+    {
+      "file": "invalid-diagnostic-receiver-expression.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_pattern",
+        "path": "/diagnostic/sites/0/receiver"
+      },
+      "reason": "A receiver is a Java name, never an expression."
+    },
+    {
       "file": "invalid-diagnostic-columns.json",
       "submission": true,
       "accepted": false,

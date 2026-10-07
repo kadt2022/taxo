@@ -126,6 +126,8 @@ def _check_assertion(fact, reference, reject):
             reject('RELATION_OBJECT', '/object', 'Object type is not permitted by this relation.')
         elif not _paired(fact['relation'], fact['subject'], target):
             reject('RELATION_PAIR', '/object', 'This relation does not link these two types.')
+    if fact['relation'] == 'IMPLEMENTS' and 'object' in fact and not _implements_form(fact):
+        reject('IMPLEMENTS_FORM', '/status', 'A type implementation is observed; a method implementation is inferred.')
     if fact['relation'] == 'CALLS' and not any(item.get('role') == CALL_SITE for item in fact.get('evidence', [])):
         reject('CALL_SITE_REQUIRED', '/evidence', 'A call is proven by at least one call-site evidence.')
 
@@ -144,6 +146,13 @@ def _check_evidence(fact, evidence, path, reference, reject):
     history = fact['kind'] == 'ASSERTION' and fact['relation'] in _GIT_RELATIONS
     if ('object' in evidence) != history:
         reject('EVIDENCE_OBJECT', path, 'Git history relations need Git object evidence, and only they accept it.')
+
+
+def _implements_form(fact):
+    """Un type implemente un type (ecrit : `OBSERVED`) ; une methode implemente une methode (deduit : `INFERRED`)."""
+    members = {'(' in reference.partition('#')[2] for reference in (fact['subject'], fact['object'])}
+    types = {'#' not in reference for reference in (fact['subject'], fact['object'])}
+    return members == {True} if fact['status'] == 'INFERRED' else types == {True}
 
 
 def _paired(relation, subject, target_type):

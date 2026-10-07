@@ -118,7 +118,7 @@ def call_site(fact):
 @pytest.mark.parametrize('relation', RELATIONS)
 def test_every_relation_has_valid_typed_example(relation):
     sources, targets, statuses = RELATIONS[relation]
-    fact = read('valid-inferred-evaluator' if 'INFERRED' in statuses else 'valid-observed')
+    fact = read('valid-observed' if 'OBSERVED' in statuses else 'valid-inferred-evaluator')
     source, target = min(RELATION_PAIRS.get(relation, [(min(sources), min(targets, default=None))]))
     fact.update(relation=relation, subject=reference(source))
     if target:
