@@ -1,8 +1,8 @@
 # TAXO-01K — Appels Java entre classes : du contrôleur au service et au repository
 
 Statut : **en cours**, implémentation demandée le 2026-10-07. PR A (contrat et vérité de référence) livrée ;
-PR B (résolution intra-sources) et PR C (implémentations, restitution) livrées ; PR D (mesure) livrée pour
-`spring-petclinic`, `student-course-demo` à mesurer.  
+PR B (résolution intra-sources) et PR C (implémentations, restitution) livrées ; PR D (mesure) livrée sur
+`spring-petclinic` et sur `bibliotheque`, un projet Spring écrit pour l'essai.  
 Date : 2026-10-03, mise à jour le 2026-10-07.  
 Source de vérité : `ARCHITECTURE.md` § 2, § 5.6, § 7.3, § 8, § 12.3 et surtout § 14.  
 Dépend de : lecteur Java syntaxique existant, contrat des faits, couverture bornée, voisinage multiniveau / Explorer.  
@@ -526,7 +526,7 @@ Plan d'origine :
 - Explorer / vocabulaire : libellés et explications des arrêts ; la phrase actuelle « La classe B implémente la méthode C.run() » (`frontend/src/sentences.test.ts`) doit distinguer type et méthode ;
 - essai sur `student-course-demo`.
 
-### PR D — Mesure réelle (petclinic livrée)
+### PR D — Mesure réelle (livrée)
 
 Essai reproductible : `backend/scripts/java_calls_trial.py <dépôt> <commit> [--database URL]` analyse le dépôt
 par l'API, puis dit les durées, les sites et leurs raisons, les faits produits et, depuis chaque route, la Tuile
@@ -569,7 +569,33 @@ n'a été vue, et chaque site non relié dit pourquoi. Le coût est négligeable
 3. Restent hors du fragment suivant : chaînes (il faut le type de retour), appels statiques et créations (une
    autre forme de `CALLS`, à décider), Spring Data (déclarations hors des sources : frontière juste).
 
-L'essai sur `student-course-demo` reste à faire : ses sources ne sont pas dans ce dépôt.
+**bibliotheque à `d2e3c46`** : un projet Spring écrit pour cet essai, à la manière d'une équipe (2 modules
+Maven, 32 fichiers Java, 10 routes, Spring Security, injection par constructeur, services derrière des interfaces,
+repositories Spring Data, records). Il remplace `student-course-demo`, resté hors d'atteinte. Ses sources ne sont
+pas dans ce dépôt : un `git bundle` les garde dans les fichiers du projet (`essais/bibliotheque.bundle`).
+
+| Mesure | Valeur |
+| --- | --- |
+| Analyse complète | 0,8 s, dont `taxo.java-calls` 0,28 s |
+| Sites d'appel | 147 vus, 28 résolus (19 %), 119 non interprétés |
+| `CALLS` | 28, tous vérifiés un à un à la main : aucun faux, aucun appel établissable manqué |
+| `IMPLEMENTS` | 4 type → type observés, 10 méthode → méthode déduits, tous justes |
+| Raisons d'arrêt | `UNSUPPORTED_CALL_FORM` 55, `RECEIVER_KIND_DEFERRED` 29, `LAMBDA_OR_LOCAL_CONTEXT` 14, `SUPER_TYPE_UNRESOLVED` 13, `TARGET_DECLARATION_OUTSIDE_SNAPSHOT` 5, `TARGET_TYPE_OUTSIDE_SNAPSHOT` 2, `OVERLOAD_AMBIGUOUS` 1 |
+| Tuiles | 13 à 35 ms, 5,5 à 7,7 Ko pour 32 Ko |
+
+**Lecture.**
+
+- Le code en couches, avec champs `final` injectés par constructeur, se lit bien : 19 % des sites, contre 3 % sur
+  petclinic. Chaque route atteint son service.
+- **La profondeur s'arrête à l'interface.** `POST /api/emprunts/{isbn}` mène à `Prets#emprunter`, méthode
+  d'interface sans corps ; le lien vers `PretsJpa#emprunter` est un `IMPLEMENTS` (vue Chaîne), pas un `CALLS`.
+  La vue Appels montre donc une seule marche, alors que `PretsJpa#emprunter` appelle six méthodes résolues.
+  Seules les routes d'administration, qui injectent la classe concrète, descendent à profondeur 3. Passer de
+  l'interface à son implémentation, c'est `DISPATCHES_TO`, hors du périmètre : une décision à prendre.
+- Spring Data : 13 sites sur des méthodes dérivées déclarées dans les sources (`findByIsbn`) restent arrêtés,
+  car `JpaRepository` est externe ; `save` et `findById` sont hors des sources. Frontière juste.
+- `java.io.Serializable` arrête 4 appels d'entités, comme sur petclinic : le point 2 ci-dessus les lèverait.
+- Le constructeur compact de `NouveauLivre` porte bien ses sites (correction de PR B).
 
 Plan d'origine :
 
