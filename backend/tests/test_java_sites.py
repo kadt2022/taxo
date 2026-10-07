@@ -86,3 +86,9 @@ def test_an_argument_is_typed_only_when_it_is_a_literal(argument, literal):
 
 def test_a_file_without_tree_has_no_site():
     assert sites.of(syntax.JavaFile('p/A.java', 'p', (), (), False)) == ()
+
+
+def test_a_compact_record_constructor_is_the_canonical_constructor():
+    """JLS 8.10.4 : le constructeur compact prend les composants du record pour parametres."""
+    [site] = read('record R(int x, String y) { R { f(); } void f() {} }')
+    assert (site.owner, site.member, site.context) == ('p.R', '<init>(int,String)', sites.BODY)

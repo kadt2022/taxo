@@ -545,14 +545,20 @@ def _field(declarator, written, qualified, variable):
 
 def _declarations(node):
     """Toutes les methodes et tous les constructeurs du type, annotes ou non, dans l'ordre du fichier."""
-    return tuple(Method(_text(member.child_by_field_name('name')), *_lines(member), (),
-                        _parameters(member.child_by_field_name('parameters')),
-                        member.type == 'constructor_declaration',
-                        any(item.type == 'spread_parameter'
-                            for item in _named(member.child_by_field_name('parameters'))),
-                        member.child_by_field_name('name').start_point[0] + 1)
-                 for member in _members(node.child_by_field_name('body'))
-                 if member.type in ('method_declaration', 'constructor_declaration'))
+    return tuple(_callable(member) for member in _members(node.child_by_field_name('body'))
+                 if member.type in CALLABLES)
+
+
+def _callable(member):
+    """Une methode ou un constructeur. Un constructeur compact de record (`R { ... }`) a les composants du record
+    pour parametres : il est le constructeur canonique (JLS 8.10.4)."""
+    listing = member.child_by_field_name('parameters')
+    if member.type == 'compact_constructor_declaration':
+        listing = member.parent.parent.child_by_field_name('parameters')
+    return Method(_text(member.child_by_field_name('name')), *_lines(member), (), _parameters(listing),
+                  member.type != 'method_declaration',
+                  any(item.type == 'spread_parameter' for item in _named(listing)),
+                  member.child_by_field_name('name').start_point[0] + 1)
 
 
 def _type_variables(node):
@@ -573,20 +579,16 @@ def _type_parameters(node):
 
 def signature(declaration):
     """Signature normalisee (`java-symbol-syntactic/1`) d'un noeud de methode ou de constructeur."""
-    return Method(_text(declaration.child_by_field_name('name')), 0, 0, (),
-                  _parameters(declaration.child_by_field_name('parameters')),
-                  declaration.type == 'constructor_declaration').signature
+    return _callable(declaration).signature
 
 
 TYPE_DECLARATIONS = frozenset(_TYPES)
+# Les declarations qui ont un corps appelable : methode, constructeur, constructeur compact de record.
+CALLABLES = ('method_declaration', 'constructor_declaration', 'compact_constructor_declaration')
 
 
 def _signatures(node):
-    return tuple(Method(_text(member.child_by_field_name('name')), 0, 0, (),
-                        _parameters(member.child_by_field_name('parameters')),
-                        member.type == 'constructor_declaration').signature
-                 for member in _members(node.child_by_field_name('body'))
-                 if member.type in ('method_declaration', 'constructor_declaration'))
+    return tuple(item.signature for item in _declarations(node))
 
 
 def _parameters(node):

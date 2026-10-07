@@ -33,7 +33,6 @@ LOCAL = 'LOCAL'
 
 _INVOCATIONS = {'method_invocation': METHOD, 'object_creation_expression': CREATION,
                 'explicit_constructor_invocation': CONSTRUCTOR}
-_MEMBERS = ('method_declaration', 'constructor_declaration')
 # Un corps de classe sans nom : classe anonyme, ou corps propre d'une constante d'enum.
 _ANONYMOUS = ('object_creation_expression', 'enum_constant')
 _BODIES = ('class_body', 'interface_body', 'enum_body', 'enum_body_declarations', 'annotation_type_body')
@@ -101,7 +100,7 @@ class _Reader:
             if parent.type == 'lambda_expression' or (parent.type == 'class_body'
                                                       and parent.parent.type in _ANONYMOUS):
                 nested = True
-            elif parent.type in _MEMBERS:
+            elif parent.type in syntax.CALLABLES:
                 member = parent
             elif parent.type in syntax.TYPE_DECLARATIONS:
                 if _member_level(parent):
