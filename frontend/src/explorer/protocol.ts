@@ -22,7 +22,7 @@ export type NodeDetail={reference:string; level:number; known:boolean; expanded:
   discovered_by:number|null};
 export type Boundary={nature:'SELECTION'|'KNOWLEDGE'|'CONTEXT'; scope?:'ANALYSIS'|'NODE'; node?:string; relation?:string;
   direction?:Direction; reason:string; count:Count; remaining_depth?:number; continuation?:string; producer?:string|null;
-  subject?:string; languages?:string[]};
+  subject?:string; languages?:string[]; causes?:string[]};
 export type NotSent={what:string; count?:number; reason:string};
 export type Tile={anchor:{reference:string; known:boolean}; parameters:{root:string; steps:Step[]; depth:number};
   facts_revision:number; nodes:string[]; node_details:NodeDetail[]; items:Element[]; frontier:Boundary[];

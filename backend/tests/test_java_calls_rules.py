@@ -301,6 +301,67 @@ def test_an_array_field_is_not_typed_as_its_element(field):
     site = sites(execution)['A#g()', 'clone']
     assert (site['reason'], site['receiver_type']) == ('TARGET_TYPE_OUTSIDE_SNAPSHOT', 'B[]')
 
+
+# Les implementations de methodes.
+
+def implemented(execution):
+    return {(short(fact['subject']), short(fact['object'])) for fact in execution.facts
+            if fact['relation'] == 'IMPLEMENTS' and fact['status'] == 'INFERRED'}
+
+
+def test_a_method_implements_the_same_signature_of_its_interface():
+    execution = run(java('I', 'interface I { void f(int x); void g(); }'),
+                    java('C', 'class C implements I { public void f(int x) {} public void g(String s) {} }'))
+    assert implemented(execution) == {('C#f(int)', 'I#f(int)')}
+    [fact] = [fact for fact in execution.facts if fact['relation'] == 'IMPLEMENTS' and fact['status'] == 'INFERRED']
+    assert fact['derivation']['rule'] == 'java.implements.same-signature/1'
+    assert fact['derivation']['premises'] == ['IMPLEMENTS : symbol:java:p.C -> symbol:java:p.I',
+                                              'CONTAINS : symbol:java:p.C -> symbol:java:p.C#f(int)',
+                                              'CONTAINS : symbol:java:p.I -> symbol:java:p.I#f(int)']
+
+
+@pytest.mark.parametrize('kind', ['enum E implements I { X; public void f() {} }',
+                                  'record E(int x) implements I { public void f() {} }'])
+def test_an_enum_or_a_record_implements_too(kind):
+    execution = run(java('I', 'interface I { void f(); }'), java('E', kind))
+    assert implemented(execution) == {('E#f()', 'I#f()')}
+
+
+@pytest.mark.parametrize('interface, implementation', [
+    ('interface I { static void f() {} }', 'class C implements I { public void f() {} }'),
+    ('interface I { private void f() {} }', 'class C implements I { public void f() {} }'),
+    ('interface I { void f(); }', 'class C implements I { public static void f() {} }'),
+    ('interface I { void f(); }', 'class C implements I { void f() {} }'),
+    ('interface I { void f(); }', 'class C implements I { protected void f() {} }'),
+    ('interface I { void f(); }', 'class C implements I { private void f() {} }'),
+    ('interface I { void f(); }', 'class C implements I { public C() {} }'),
+    ('interface I { void f(int a); void f(int b); }', 'class C implements I { public void f(int a) {} }'),
+    ('interface I { void f(); }', 'class C implements I { public void f() {} public void f() {} }'),
+    ('interface I { void f(); }', 'interface C extends I { void f(); }'),
+    ('interface I { void f(); }', 'class B implements I {} class C extends B { public void f() {} }'),
+    ('interface J { void f(); } interface I extends J {}', 'class C implements I { public void f() {} }'),
+    ('interface I { void f(); }', 'class C implements I, x.Other { public void g() {} }'),
+])
+def test_what_is_not_an_implementation_is_never_linked(interface, implementation):
+    execution = run(java('I', interface), java('C', implementation))
+    assert not implemented(execution)
+
+
+def test_a_default_method_can_be_implemented():
+    execution = run(java('I', 'interface I { default void f() {} }'),
+                    java('C', 'class C implements I { public void f() {} }'))
+    assert implemented(execution) == {('C#f()', 'I#f()')}
+
+
+@pytest.mark.parametrize('broken', ['I', 'C'])
+def test_a_type_read_in_part_or_declared_twice_has_no_implementation(broken):
+    files = dict([java('I', 'interface I { void f(); }'), java('C', 'class C implements I { public void f() {} }')])
+    files[f'p/{broken}.java'] = files[f'p/{broken}.java'].replace('}', '} oops(', 1)
+    assert not implemented(run(*files.items()))
+    twice = dict([java('I', 'interface I { void f(); }'), java('C', 'class C implements I { public void f() {} }'),
+                  (f'q/{broken}.java', f'package p;\ninterface {broken} {{}}\n')])
+    assert not implemented(run(*twice.items()))
+
 # Les litteraux.
 
 @pytest.mark.parametrize('literal, parameter, contradicted', [

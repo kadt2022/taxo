@@ -19,7 +19,7 @@ from sqlalchemy import (JSON, BigInteger, Boolean, Column, ForeignKey, Index, In
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session
 
-from app.evaluations.domain.capability import UNREAD_COVERAGE
+from app.evaluations.domain.capability import UNREAD_COVERAGE, unread_reasons
 from app.facts import is_reference
 from app.facts.domain.provenance import EXECUTABLE, ProducerExecution
 from app.neighborhood.domain.traversal import Adjacent
@@ -345,7 +345,8 @@ class SqlAlchemyFactMemory:
 
     def unread(self, scan_id, references):
         """The coverage of the analysis that says one of these references was not read (NOT_INTERPRETED,
-        READ_ERROR): its subject, type and producer. Read by subject anchor, a batch of references at a time."""
+        READ_ERROR): its subject, type, producer and the closed reasons of its diagnostic. Read by subject anchor,
+        a batch of references at a time."""
         occurrence, identity, execution = FactOccurrenceRow, FactIdentityRow, ProducerExecutionRow
         wanted = sorted(set(references))
         found = []
@@ -354,20 +355,20 @@ class SqlAlchemyFactMemory:
                 chunk = wanted[start:start + _GROUPS]
                 rows = db.execute(
                     select(identity.subject, occurrence.raw_identity, identity.identity, execution.producer_id,
-                           occurrence.human_producer_id)
+                           occurrence.human_producer_id, occurrence.details)
                     .join(identity, identity.identity_hash == occurrence.identity_hash)
                     .outerjoin(execution, execution.id == occurrence.execution)
                     .where(occurrence.scan_id == scan_id, occurrence.relation.is_(None),
                            occurrence.subject_hash.in_([_reference_hash(item) for item in chunk]),
                            identity.kind == 'COVERAGE')).all()
                 asked = set(chunk)
-                for canonical, raw, value, machine, human in rows:
+                for canonical, raw, value, machine, human, details in rows:
                     # The spelling as submitted, the one the anchor was computed from and a tile renders; it
                     # also rules out another reference sharing the anchor fingerprint.
                     subject = (raw or {}).get('subject', canonical)
                     if subject in asked and value.get('coverage_type') in UNREAD_COVERAGE:
                         found.append({'subject': subject, 'coverage_type': value['coverage_type'],
-                                      'producer': machine or human})
+                                      'producer': machine or human, 'reasons': unread_reasons(details or {})})
         return sorted(found, key=lambda item: (item['subject'], item['coverage_type'], item['producer'] or ''))
 
     def references(self, scan_id, prefix, kind, after, limit):

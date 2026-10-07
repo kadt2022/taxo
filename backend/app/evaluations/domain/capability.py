@@ -15,6 +15,11 @@ INCOMPLETE = ("L'inventaire n'a pas tout lu : des fichiers aux langages inconnus
               "analyseur de cette relation.")
 
 
+def unread_reasons(coverage):
+    """Les raisons fermees, distinctes et triees, des sites que le `diagnostic` d'une zone non lue decrit."""
+    return sorted({site['reason'] for site in (coverage.get('diagnostic') or {}).get('sites', [])})
+
+
 def present_languages(facts):
     """Les langages presents dans un instantane, d'apres ses faits `WRITTEN_IN`, tries."""
     return tuple(sorted({fact['object'][len(LANGUAGE):] for fact in facts

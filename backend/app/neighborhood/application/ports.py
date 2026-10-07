@@ -20,7 +20,8 @@ class AdjacencyReading(Protocol):
 class CoverageReading(Protocol):
     def unread(self, scan_id: str, references: list[str]) -> list[dict]:
         """Les couvertures non lues (NOT_INTERPRETED, READ_ERROR) dont le sujet est l'une de ces références :
-        `subject`, `coverage_type`, `producer`. Une lecture par l'ancre du sujet, jamais un parcours."""
+        `subject`, `coverage_type`, `producer`, et `reasons`, les raisons fermees de son `diagnostic` (vide sans
+        diagnostic). Une lecture par l'ancre du sujet, jamais un parcours."""
 
 
 class AnalysisSummary(Protocol):

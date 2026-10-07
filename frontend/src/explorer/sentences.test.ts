@@ -3,6 +3,7 @@ import type {Boundary} from './protocol';
 import {linksOf, viewOf} from './graph';
 import {element, tile} from './__fixtures__/tiles';
 import {compartments, countText, factText, linkMarks, knowledgeText, nodeMarks, nodeName, notSentText, scopeText, selectionText, verb, viewText} from './sentences';
+import {CAUSES} from '../vocabulary';
 
 const SELECTIONS=['DEPTH', 'NOT_REACHED', 'NODES', 'EDGES', 'WORK', 'BYTES', 'FANOUT'];
 const KNOWLEDGE=['NO_ANALYZER', 'ANALYSIS_INCOMPLETE', 'NOT_ANALYSED', 'LANGUAGES_UNKNOWN', 'LOCAL_COVERAGE_NOT_READ',
@@ -15,6 +16,15 @@ describe('ce que l’explorateur dit', ()=>{
   it('a une phrase pour chaque raison, jamais la raison brute', ()=>{
     for(const reason of SELECTIONS)expect(selectionText(cut(reason))).not.toContain(reason);
     for(const reason of KNOWLEDGE)expect(knowledgeText(gap(reason))).not.toContain(reason);
+  });
+
+  it('dit pourquoi des appels d’une zone non lue n’ont pas de cible, sans jamais la raison brute', ()=>{
+    const unread={...gap('NOT_INTERPRETED'), producer:'taxo.java-calls', subject:'symbol:java:a.B#run()',
+      causes:['OVERLOAD_AMBIGUOUS', 'RECEIVER_KIND_DEFERRED']};
+    expect(knowledgeText(unread)).toBe('Zone non lue par Appels Java : symbole java:a.B#run() (Non analysé par Taxo : '
+      +'plusieurs déclarations possibles ; receveur local ou paramètre, pas encore suivi).');
+    for(const cause of Object.keys(CAUSES))expect(knowledgeText({...unread, causes:[cause]})).not.toContain(cause);
+    expect(knowledgeText({...unread, causes:['NOUVELLE']})).toContain(': NOUVELLE).');
   });
 
   it('ne dit jamais de pourcentage, ni « complet »', ()=>{

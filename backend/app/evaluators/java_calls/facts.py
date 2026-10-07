@@ -5,7 +5,7 @@ declaration vue dans deux fichiers) sont deux preuves de la meme assertion.
 """
 from app.facts import content_hash
 
-from .resolution import KNOWN_GAPS, RULE
+from . import implementations, resolution
 
 DECLARATION = 'java.declaration'
 CALL_SITE = 'java.call-site'
@@ -26,11 +26,12 @@ class Facts:
         """Un appel (`INFERRED`), prouve par son site ; les sites d'un meme appel s'ajoutent a la meme assertion."""
         evidence = {**self._evidence(path, site.line_start, site.line_end, CALL_SITE, subject),
                     'column_start': site.column_start, 'column_end': site.column_end, 'role': 'call-site'}
-        fact = self._add(subject, 'CALLS', target, 'INFERRED', evidence)
-        derivation = fact.setdefault('derivation', {'premises': [], 'rule': RULE, 'counter_examples_checked': [],
-                                                    'known_gaps': list(KNOWN_GAPS)})
-        _extend(derivation['premises'], premises)
-        _extend(derivation['counter_examples_checked'], counter_examples)
+        self._inferred(subject, 'CALLS', target, evidence, resolution, premises, counter_examples)
+
+    def implementation(self, found):
+        """Une implementation de methode (`INFERRED`), prouvee par la ligne du nom de la methode qui implemente."""
+        evidence = self._evidence(found.path, found.line, found.line, DECLARATION, found.subject)
+        self._inferred(found.subject, 'IMPLEMENTS', found.target, evidence, implementations, found.premises, ())
 
     def assertions(self):
         return tuple(self._assertions[key] for key in sorted(self._assertions))
@@ -43,6 +44,15 @@ class Facts:
         if evidence not in fact['evidence']:
             fact['evidence'].append(evidence)
         return fact
+
+    def _inferred(self, subject, relation, target, evidence, rule, premises, counter_examples):
+        """Une deduction de la regle `rule` (son module : `RULE`, `KNOWN_GAPS`) ; ses preuves et ses premisses
+        s'ajoutent a celles deja ecrites pour la meme identite."""
+        fact = self._add(subject, relation, target, 'INFERRED', evidence)
+        derivation = fact.setdefault('derivation', {'premises': [], 'rule': rule.RULE, 'counter_examples_checked': [],
+                                                    'known_gaps': list(rule.KNOWN_GAPS)})
+        _extend(derivation['premises'], premises)
+        _extend(derivation['counter_examples_checked'], counter_examples)
 
     def _evidence(self, path, line_start, line_end, method, symbol):
         return {'repository': self.snapshot.repository, 'commit': self.snapshot.commit, 'path': path,

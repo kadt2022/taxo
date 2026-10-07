@@ -14,7 +14,7 @@ OBJECT_METHODS = {('equals', 1): 'equals(Object)', ('hashCode', 0): 'hashCode()'
                   ('getClass', 0): 'getClass()', ('notify', 0): 'notify()', ('notifyAll', 0): 'notifyAll()',
                   ('wait', 0): 'wait()', ('wait', 1): 'wait(long)', ('wait', 2): 'wait(long,int)',
                   ('clone', 0): 'clone()', ('finalize', 0): 'finalize()'}
-_CLASSES = ('class', 'enum', 'record')
+CLASSES = ('class', 'enum', 'record')
 
 
 def symbol(qualified, member=None):
@@ -28,7 +28,7 @@ def premise(relation, subject, target):
 
 def supertype_relation(java_type, supertype):
     """`IMPLEMENTS` pour une interface qu'une classe implemente, `EXTENDS` pour tout autre supertype."""
-    return 'IMPLEMENTS' if supertype.clause == 'interfaces' and java_type.kind in _CLASSES else 'EXTENDS'
+    return 'IMPLEMENTS' if supertype.clause == 'interfaces' and java_type.kind in CLASSES else 'EXTENDS'
 
 
 @dataclass(frozen=True)

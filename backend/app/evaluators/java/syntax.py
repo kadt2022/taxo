@@ -67,6 +67,8 @@ class Method:
     varargs: bool = False
     # Ligne du nom : la preuve d'une declaration ne bouge pas quand son corps change.
     name_line: int = 0
+    # Modificateurs ecrits (`public`, `static`, `private`...), sans les annotations.
+    modifiers: frozenset = frozenset()
 
     @property
     def signature(self):
@@ -558,7 +560,13 @@ def _callable(member):
     return Method(_text(member.child_by_field_name('name')), *_lines(member), (), _parameters(listing),
                   member.type != 'method_declaration',
                   any(item.type == 'spread_parameter' for item in _named(listing)),
-                  member.child_by_field_name('name').start_point[0] + 1)
+                  member.child_by_field_name('name').start_point[0] + 1, _modifiers(member))
+
+
+def _modifiers(node):
+    modifiers = _first(node, ('modifiers',))
+    return frozenset(child.type for child in modifiers.children
+                     if child.type not in ('annotation', 'marker_annotation')) if modifiers is not None else frozenset()
 
 
 def _type_variables(node):

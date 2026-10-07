@@ -900,7 +900,7 @@ Une **hypothèse** n'est pas un fait. Le contrat ne change pas : ni statut, ni p
 Décidé par TAXO-01K (PR A, 2026-10-07). Le contrat, sa conformité, la mémoire et la vérité de référence
 (`backend/tests/fixtures/java-calls-demo`) sont livrés. L'évaluateur `taxo.java-calls` (PR B) produit les
 déclarations (`CONTAINS`, `TYPED_AS`, `EXTENDS`, `IMPLEMENTS` entre types) et les `CALLS` du premier fragment, et
-retrouve exactement l'oracle ; `IMPLEMENTS` entre méthodes vient avec PR C. Il ne connaît aucun framework.
+retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne connaît aucun framework.
 
 - **`CALLS`** : « le corps de A contient au moins un site d'appel dont une règle de résolution nommée
   sélectionne la déclaration B ». Statut **`INFERRED`** seulement (la sélection est une déduction ; l'occurrence
@@ -920,7 +920,11 @@ retrouve exactement l'oracle ; `IMPLEMENTS` entre méthodes vient avec PR C. Il 
   [TAXO-01K](backlog/TAXO-01K-appels-java-entre-classes.md).
 - **`IMPLEMENTS`** : entre types, `OBSERVED` (la clause est écrite) ; entre méthodes, `INFERRED` par la règle
   `java.implements.same-signature/1` (même signature, prémisses : l'`IMPLEMENTS` des types et les deux
-  `CONTAINS`). Il ne dit jamais quel corps s'exécute.
+  `CONTAINS`). Seule une interface des sources nommée dans la clause `implements` est suivie ; une méthode
+  `static` ou `private` de l'interface, une méthode de la classe `static` ou non `public` (une méthode
+  d'interface est publique) ou une signature ambiguë ne sont
+  jamais reliées, et une implémentation héritée d'une superclasse ne l'est pas (`known_gaps`). Il ne dit jamais
+  quel corps s'exécute.
 - **`DISPATCHES_TO`** : suspendu jusqu'à ce qu'un site soit une référence adressable ; la règle
   « implémentation unique dans le périmètre » est retirée.
 - **Preuve d'un site** : une preuve fichier avec `column_start` et `column_end` (octets UTF-8 dans la ligne, à
@@ -937,6 +941,8 @@ retrouve exactement l'oracle ; `IMPLEMENTS` entre méthodes vient avec PR C. Il 
   `TARGET_DECLARATION_OUTSIDE_SNAPSHOT`, `NO_MATCHING_DECLARATION`, `OVERLOAD_AMBIGUOUS`,
   `SUPER_TYPE_UNRESOLVED`, `UNSUPPORTED_CALL_FORM`, `RECEIVER_KIND_DEFERRED`, `LAMBDA_OR_LOCAL_CONTEXT`,
   `PARSE_ERROR`.
+- **Restitution** : une Tuile ne connaît rien de Java ; la frontière d'un nœud non lu porte en `causes` les
+  raisons fermées de son `diagnostic`, et l'explorateur les dit en clair (« plusieurs déclarations possibles »).
 - **Lambdas** : créer une lambda n'est pas l'appeler ; ses appels ne sont jamais attribués à la méthode
   englobante.
 - **Doutes du producteur** (PR B), tous tranchés vers moins d'appels : un nom déclaré n'importe où dans le corps
@@ -979,7 +985,7 @@ retrouve exactement l'oracle ; `IMPLEMENTS` entre méthodes vient avec PR C. Il 
 | Profils adaptatifs, Arbre, Forêt | À construire |
 | Arbres et Forêt | Proposé |
 | Cache, déduplication, invalidation incrémentale | Proposé |
-| `CALLS` Java | Premier fragment existant (`taxo.java-calls`, § 14) ; `IMPLEMENTS` entre méthodes et mesures réelles à construire (TAXO-01K) |
+| `CALLS` Java | Premier fragment existant (`taxo.java-calls`, § 14), `IMPLEMENTS` entre méthodes compris ; mesures réelles à construire (TAXO-01K) |
 | Dépendances externes et versions (E2) | À construire |
 | Changements de structure enrichis (E3) | en partie (comparaison générique) |
 | Lecteur Python (E4) | À construire |
@@ -1088,3 +1094,7 @@ dépôt Java et ses vérités écrites à la main deviennent l'oracle des produc
 et décrit chaque site non résolu avec sa raison fermée. Ses doutes sont tranchés vers moins d'appels (§ 14).
 Le lecteur Java partagé lit désormais les sources, les déclarations et les sites une fois pour tous les
 évaluateurs Java.
+
+**2026-10-07** — Implémentations de méthodes et raisons d'arrêt (TAXO-01K, PR C). `taxo.java-calls` déduit
+`IMPLEMENTS` méthode → méthode par `java.implements.same-signature/1`. La frontière d'une Tuile porte les raisons
+fermées des sites non lus (`causes`), lues génériquement dans le `diagnostic` ; l'explorateur les dit en clair.

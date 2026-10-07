@@ -11,6 +11,15 @@ export const STATUSES:Record<string,string>={SUCCESS:'Terminée', PARTIAL:'Parti
 export const COVERAGE:Record<string,string>={ANALYSED:'Analysé', NOT_INTERPRETED:'Non analysé par Taxo', READ_ERROR:'Illisible',
   OUT_OF_SCOPE:'Hors de son périmètre'};
 
+/** Pourquoi un site d'appel n'est pas relie a sa cible : les raisons fermees du `diagnostic` (ARCHITECTURE § 14). */
+export const CAUSES:Record<string,string>={RECEIVER_TYPE_UNKNOWN:'type du receveur inconnu',
+  RECEIVER_TYPE_AMBIGUOUS:'type du receveur ambigu', TARGET_TYPE_OUTSIDE_SNAPSHOT:'type appelé hors des sources',
+  TARGET_DECLARATION_OUTSIDE_SNAPSHOT:'méthode appelée déclarée hors des sources',
+  NO_MATCHING_DECLARATION:'aucune déclaration ne correspond', OVERLOAD_AMBIGUOUS:'plusieurs déclarations possibles',
+  SUPER_TYPE_UNRESOLVED:'un supertype hors des sources peut porter la cible',
+  UNSUPPORTED_CALL_FORM:'forme d’appel pas encore lue', RECEIVER_KIND_DEFERRED:'receveur local ou paramètre, pas encore suivi',
+  LAMBDA_OR_LOCAL_CONTEXT:'appel dans une lambda ou une classe locale', PARSE_ERROR:'fichier lu en partie'};
+
 export const METRICS:Record<string,string>={fact_count:'Éléments identifiés', coverage_count:'Zones de couverture',
   warning_count:'Points à vérifier', duration_seconds:'Durée'};
 
