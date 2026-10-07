@@ -3,8 +3,9 @@ la methode de meme signature d'une interface que cette classe declare implemente
 
 Aucune ligne ne l'ecrit : c'est une deduction (`INFERRED`), dont les premisses sont l'`IMPLEMENTS` ecrit entre les
 deux types et les deux `CONTAINS` des methodes. Seule une interface des sources nommee dans la clause `implements`
-est suivie, sans supertype entre les deux. Une methode `static` ou `private` de l'interface, une methode `static`
-de la classe et une signature ambigue ne sont jamais reliees. Le lien ne dit jamais quel corps s'execute.
+est suivie, sans supertype entre les deux. Une methode `static` ou `private` de l'interface, une methode de la
+classe `static` ou non `public` (une methode d'interface est publique, JLS 9.4) et une signature ambigue ne sont
+jamais reliees. Le lien ne dit jamais quel corps s'execute.
 """
 from dataclasses import dataclass
 
@@ -47,7 +48,7 @@ def _pairs(declared, interface):
                and not implemented.ambiguous(method.signature)}
     for method in implementing.declarations:
         target = targets.get(method.signature)
-        if target is None or method.constructor or 'static' in method.modifiers \
+        if target is None or method.constructor or not _implementable(method) \
                 or implementing.ambiguous(method.signature):
             continue
         subject = symbol(implementing.qualified_name, method.signature)
@@ -55,6 +56,11 @@ def _pairs(declared, interface):
         yield Implementation(subject, objective, declared.java_file.path, method.name_line, (
             relation, premise('CONTAINS', symbol(implementing.qualified_name), subject),
             premise('CONTAINS', symbol(implemented.qualified_name), objective)))
+
+
+def _implementable(method):
+    """Une methode de classe qui peut implementer une methode d'interface : d'instance et publique (JLS 8.4.8.3)."""
+    return 'public' in method.modifiers and 'static' not in method.modifiers
 
 
 def _readable(sources, qualified, declared):
