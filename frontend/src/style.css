@@ -936,6 +936,75 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
   border:1px solid #8aa597;background:var(--surface);font-size:10.5px;font-weight:700;color:var(--text-2);line-height:12px;cursor:pointer}
 .explorer-edge-handle.revisit{border-style:dashed}
 .explorer-edge-handle[aria-pressed=true]{background:var(--brand-3);border-color:var(--brand-3);color:#fff}
+/* Vue Chaîne (TAXO-UI-06) : une teinte par type de référence ; l'orange reste aux frontières. */
+:root{--tone-route:#2f6fd6;--tone-symbol:#23845a;--tone-module:#7b52c9;--tone-file:#97702c;--tone-app:#17808a;
+  --tone-policy:#c03b69;--tone-history:#56677d;--tone-tech:#6f7d2a;--tone-neutral:#6a7a71;--tone-frontier:#c47a12}
+.tone-route{--tone:var(--tone-route)}.tone-symbol{--tone:var(--tone-symbol)}.tone-module{--tone:var(--tone-module)}
+.tone-file{--tone:var(--tone-file)}.tone-app{--tone:var(--tone-app)}.tone-policy{--tone:var(--tone-policy)}
+.tone-history{--tone:var(--tone-history)}.tone-tech{--tone:var(--tone-tech)}.tone-neutral{--tone:var(--tone-neutral)}
+.chain{display:flex;flex-direction:column;gap:10px;min-width:0}
+.chain-scroll{background:linear-gradient(var(--surface),var(--surface-2))}
+.chain{--chain-line:#6f8f80}
+.chain-arrow{fill:none;stroke:var(--chain-line);stroke-width:2}
+.chain-arrow.side{stroke-dasharray:6 4}
+.chain-arrow.revisit{stroke-dasharray:3 4;opacity:.7}
+.chain-arrow.chosen{stroke:var(--brand-3);stroke-width:2.8}
+.explorer-canvas marker .chain-head,.chain-head{fill:var(--chain-line)}
+.explorer-canvas marker .chain-hollow,.chain-hollow{fill:var(--surface);stroke:var(--chain-line);stroke-width:1.5}
+.chain-tie{fill:none;stroke-width:1.4;stroke-dasharray:2 4;stroke:var(--border-strong)}
+.chain-tie.note{stroke:var(--tone-frontier)}
+.chain-node,.chain-note,.chain-cut,.chain-leaf,.chain-revisit{position:absolute;display:flex;flex-direction:column;text-align:left;
+  font:inherit;padding:0;overflow:hidden;border-radius:12px}
+.chain-node{background:var(--surface);border:2px solid color-mix(in srgb,var(--tone) 85%,var(--surface));cursor:pointer;
+  box-shadow:0 1px 2px rgba(18,43,37,.06),0 8px 20px -14px color-mix(in srgb,var(--tone) 80%,transparent);transition:transform .12s,box-shadow .12s}
+.chain-node:hover{transform:translateY(-1px);border-color:var(--tone)}
+.chain-node.anchor{border-width:3px;border-color:var(--tone)}
+.chain-node[aria-pressed=true]{border-color:var(--tone);box-shadow:0 0 0 3px color-mix(in srgb,var(--tone) 30%,transparent)}
+.chain-stereo{display:block;height:24px;line-height:24px;padding:0 12px;flex:none;font-size:11.5px;font-style:italic;font-weight:650;
+  color:var(--tone);background:color-mix(in srgb,var(--tone) 16%,var(--surface));border-bottom:1px solid color-mix(in srgb,var(--tone) 22%,transparent)}
+.chain-name{display:block;padding:7px 14px 0;font-size:14px;font-weight:650;color:var(--text)}
+.chain-line{display:block;line-height:18px;white-space:pre}
+.chain-context{display:block;padding:0 14px;font-size:11.5px;color:var(--muted)}
+.chain-member{display:block;margin:4px 0 0;padding:5px 14px 0;border-top:1px solid color-mix(in srgb,var(--tone) 30%,transparent);
+  font-family:var(--mono),monospace;font-size:12.5px;color:var(--text-2)}
+.chain-note{background:var(--warn-soft);border:1.5px solid var(--tone-frontier);border-top-right-radius:2px;color:var(--text);
+  font-size:12.5px;padding:0 12px 6px;clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+.chain-note-title{display:block;height:24px;line-height:24px;font-size:11px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--warn)}
+.chain-cut{background:var(--surface-3);border:1.5px dashed var(--border-strong);border-radius:999px;padding:7px 18px 0;font-size:12.5px;
+  color:var(--text-2);cursor:pointer}
+.chain-cut:hover{border-color:var(--brand-3)}
+.chain-leaf,.chain-revisit{background:var(--surface);border:1.5px dashed var(--border-strong);padding:7px 12px 0;font-size:12.5px;color:var(--text-2);cursor:pointer}
+.chain-revisit{border-style:dotted;font-style:italic}
+.chain-leaf[aria-pressed=true],.chain-revisit[aria-pressed=true]{border-color:var(--brand-3);box-shadow:var(--ring)}
+.chain-label{position:absolute;display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 4px 0 9px;border-radius:999px;
+  border:1px solid var(--border-strong);background:var(--surface);font-size:12px;font-weight:650;color:var(--text);cursor:pointer;white-space:nowrap;
+  box-shadow:var(--shadow-sm)}
+.chain-label.side{font-style:italic}
+.chain-label:hover{border-color:var(--brand-3)}
+.chain-label[aria-pressed=true]{background:var(--brand-3);border-color:var(--brand-3);color:#fff}
+.chain-status{display:inline-grid;place-items:center;min-width:16px;height:16px;border-radius:5px;border:1.5px solid currentColor;font-size:10px;font-weight:800;font-style:normal}
+.status-O{background:color-mix(in srgb,var(--tone-symbol) 14%,var(--surface));color:var(--tone-symbol)}
+.status-D{background:color-mix(in srgb,var(--tone-route) 14%,var(--surface));color:var(--tone-route)}
+.status-V{background:color-mix(in srgb,var(--tone-module) 14%,var(--surface));color:var(--tone-module)}
+.chain-count{font-size:11px;color:var(--muted);padding-right:4px}
+.chain-legend{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:8px 14px}
+.chain-legend summary{cursor:pointer;font-weight:650;color:var(--text-2);font-size:13px}
+.chain-legend ul{list-style:none;margin:8px 0 2px;padding:0;display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12.5px;color:var(--text-2)}
+.chain-legend li{display:inline-flex;align-items:center;gap:7px}
+.chain-swatch{display:inline-block;width:16px;height:16px;border-radius:5px;background:color-mix(in srgb,var(--tone) 16%,var(--surface));border:1.5px solid var(--tone)}
+.chain-swatch.note{background:var(--warn-soft);border-color:var(--tone-frontier)}
+.chain-swatch.cut{background:var(--surface-3);border:1.5px dashed var(--border-strong);border-radius:999px}
+.chain-swatch.leaf{background:var(--surface);border:1.5px dashed var(--border-strong)}
+.chain-key{width:40px;height:12px}
+@media (prefers-reduced-motion:reduce){.chain-node{transition:none}}
+/* Le diagramme suit le thème sombre de l'appareil, comme la maquette de TAXO-UI-06 : ses couleurs sont redéfinies sur
+   la vue seule, le reste du portail n'ayant pas encore de thème sombre. */
+@media (prefers-color-scheme:dark){
+  .chain{--surface:#17201d;--surface-2:#111916;--surface-3:#1f2b27;--border:#2a3832;--border-strong:#3d5048;--text:#e7efe9;
+    --text-2:#bccbc3;--muted:#8d9f96;--warn-soft:#33270f;--warn:#f0b357;--chain-line:#8fb3a2;
+    --tone-route:#82a9f6;--tone-symbol:#62d39c;--tone-module:#b496f1;--tone-file:#d8b066;--tone-app:#52c6d1;--tone-policy:#f083a9;
+    --tone-history:#a3b3c6;--tone-tech:#bcc965;--tone-neutral:#9cada4;--tone-frontier:#eaa743;--brand-3:#3f9a7f;color:var(--text)}
+}
 .explorer-list{display:flex;flex-direction:column;gap:12px}
 .explorer-list section{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:10px 16px}
 .explorer-list h3{margin:0 0 6px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}

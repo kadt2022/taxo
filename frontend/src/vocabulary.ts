@@ -32,11 +32,28 @@ export const VERBS:Record<string,string>={CONTAINS:'contient', WRITTEN_IN:'est �
   DEPENDS_ON:'dépend de', BUILT_FROM:'est construite depuis',
   SERVED_BY:'est servie par'};
 
+/** La forme d'une relation dans la vue Chaîne (TAXO-UI-06, E1) : dans la chaîne, sujet au-dessus, ou à côté, comme la
+ * réalisation UML. Une relation absente est dans la chaîne. */
+export const FORMS:Record<string,'CHAIN'|'SIDE'>={IMPLEMENTS:'SIDE'};
+
+/** La teinte d'un type de référence (TAXO-UI-06, E7) : un jeton CSS `--tone-<teinte>`. L'orange des frontières n'en est
+ * pas une. Un type absent prend la teinte neutre. */
+export const TONES:Record<string,string>={endpoint:'route', symbol:'symbol', module:'module', repository:'module',
+  file:'file', application:'app', 'policy-rule':'policy', 'route-pattern':'policy', commit:'history', person:'history',
+  technology:'tech', language:'tech'};
+/** Ce que chaque teinte désigne, pour la légende. */
+export const TONE_NAMES:Record<string,string>={route:'route', symbol:'symbole', module:'module, dépôt', file:'fichier',
+  app:'application', policy:'règle, motif de routes', history:'commit, personne', tech:'technologie, langage',
+  neutral:'autre type'};
+
+/** Le statut d'un fait en une lettre, sur sa flèche : observé, déduit, validé. */
+export const STATUS_MARKS:Record<string,string>={OBSERVED:'O', INFERRED:'D', HUMAN_VALIDATED:'V'};
+
 export function label(labels:Record<string,string>, key:string){
   return labels[key]??key;
 }
 
-const TYPES:Record<string,string>={technology:'technologie', language:'langage', module:'module', symbol:'symbole',
+export const TYPES:Record<string,string>={technology:'technologie', language:'langage', module:'module', symbol:'symbole',
   endpoint:'route', 'route-pattern':'routes', 'policy-rule':'règle', application:'application', person:'', file:'', commit:'commit'};
 
 /** Une reference `type:cle` dite en clair : le depot par le nom du projet, un commit par son identifiant court. */

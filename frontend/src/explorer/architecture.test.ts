@@ -8,7 +8,7 @@ import {describe, expect, it} from 'vitest';
 import {VERBS} from '../vocabulary';
 
 const HERE=dirname(fileURLToPath(import.meta.url));
-const PURE=['graph.ts', 'layout.ts', 'sentences.ts', 'state.ts', 'relations.ts', 'protocol.ts'];
+const PURE=['graph.ts', 'layout.ts', 'chain.ts', 'sentences.ts', 'state.ts', 'relations.ts', 'protocol.ts'];
 const SOURCES=readdirSync(HERE).filter(name=>/\.tsx?$/.test(name)&&!name.includes('.test.'));
 
 /** Les modules qu'un fichier importe pour de vrai (un import de type seul ne charge rien). */

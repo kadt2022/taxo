@@ -157,6 +157,30 @@ describe('l’explorateur', ()=>{
     expect(named('Valeur authenticated(), pas un nœud')).toBeTruthy();
   });
 
+  it('s’ouvre sur la vue Chaîne : boîtes teintées par type, flèches nommées, frontière et coupure dans le dessin', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    expect(named('Chaîne')?.getAttribute('aria-pressed')).toBe('true');
+    const drawn=host.querySelector('.chain') as HTMLElement;
+    const anchor=drawn.querySelector('.chain-node.anchor') as HTMLElement;
+    expect(anchor.classList.contains('tone-route')).toBe(true);
+    expect(anchor.textContent).toBe('«route» · ancreGET /orders');
+    const method=drawn.querySelector('.chain-node.tone-symbol') as HTMLElement;
+    expect(method.querySelector('.chain-name')?.textContent, 'la classe, puis la méthode sous un trait').toBe('A');
+    expect(method.querySelector('.chain-member')?.textContent).toBe('get()');
+    expect(drawn.querySelector('[role=note]')?.textContent).toContain('Frontière · Taxo ne sait pas');
+    expect(drawn.querySelectorAll('.chain-cut').length).toBeGreaterThan(0);
+    expect(drawn.querySelectorAll('.chain-leaf')).toHaveLength(2);
+    expect(Array.from(drawn.querySelectorAll('.chain-legend li')).map(item=>item.textContent)).toContain('route');
+    await click(named(/^route GET \/orders est traité par symbole java:A#get\(\), 1 occurrence$/));
+    expect(host.querySelector('[aria-label="Détail du lien"]')).toBeTruthy();
+    await click(named(/^symbole java:A#get\(\)/));
+    expect(host.querySelector('[aria-label="Nœud choisi"]')?.textContent).toContain('symbol:java:A#get()');
+    await click(named('Développer symbole java:A#get(), depuis la vue Chaîne'));
+    expect(tiles()[1], 'la pastille de coupure reprend le parcours').toMatchObject({root:HANDLER, depth:1});
+    await click(named('Voir la suite de routes /**, depuis la vue Chaîne'));
+    expect(tiles()[2]).toMatchObject({root:PATTERN, continuation:'reprise-P'});
+  });
+
   it('développe un nœud et voit la suite d’une adjacence coupée, sans recharger le reste', async()=>{
     await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
     await list();
