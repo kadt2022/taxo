@@ -47,6 +47,9 @@ def test_a_database_ahead_of_the_code_is_refused_too(tmp_path):
     engine = create_engine(migrated(tmp_path, 'head'))
     with engine.begin() as db:
         db.exec_driver_sql("UPDATE alembic_version SET version_num = '999'")
-    with pytest.raises(SchemaOutOfDate, match='révision 999'):
+    with pytest.raises(SchemaOutOfDate) as refused:
         require_current_schema(engine)
+    message = str(refused.value)
+    assert 'révision 999, inconnue de ce code' in message
+    assert 'alembic upgrade head' not in message, 'une migration ne sait pas descendre depuis une révision inconnue'
     engine.dispose()

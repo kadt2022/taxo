@@ -25,9 +25,12 @@ class SchemaOutOfDate(RuntimeError):
 
 def expected_revisions(migrations=MIGRATIONS):
     """The head revisions of the migration scripts shipped with the code."""
-    config = Config()
-    config.set_main_option('script_location', str(migrations))
-    return set(ScriptDirectory.from_config(config).get_heads())
+    return set(_scripts(migrations).get_heads())
+
+
+def known_revisions(migrations=MIGRATIONS):
+    """Every revision of the migration scripts shipped with the code."""
+    return {script.revision for script in _scripts(migrations).walk_revisions()}
 
 
 def current_revisions(engine):
@@ -44,11 +47,25 @@ def require_current_schema(engine, migrations=MIGRATIONS):
     if current is None:
         return
     expected = expected_revisions(migrations)
-    if current != expected:
+    if current == expected:
+        return
+    unknown = current - known_revisions(migrations)
+    if unknown:
+        # Une base migree par un code plus recent : `alembic upgrade head` ne connait pas sa revision.
         raise SchemaOutOfDate(
-            f'La base de données est à la révision {_names(current)}, le code attend {_names(expected)}. '
-            'Appliquez les migrations avant de démarrer l’API : `alembic upgrade head` dans backend/, '
-            'ou relancez taxo-console.bat, qui le fait au démarrage.')
+            f'La base de données est à la révision {_names(unknown)}, inconnue de ce code (qui attend '
+            f'{_names(expected)}) : elle a été migrée par une version plus récente. Démarrez l’API avec cette '
+            'version, ou restaurez une sauvegarde de la base compatible avec ce code.')
+    raise SchemaOutOfDate(
+        f'La base de données est à la révision {_names(current)}, le code attend {_names(expected)}. '
+        'Appliquez les migrations avant de démarrer l’API : `alembic upgrade head` dans backend/, '
+        'ou relancez taxo-console.bat, qui le fait au démarrage.')
+
+
+def _scripts(migrations):
+    config = Config()
+    config.set_main_option('script_location', str(migrations))
+    return ScriptDirectory.from_config(config)
 
 
 def _names(revisions):
