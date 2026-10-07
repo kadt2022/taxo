@@ -1,7 +1,8 @@
 # TAXO-01K — Appels Java entre classes : du contrôleur au service et au repository
 
 Statut : **en cours**, implémentation demandée le 2026-10-07. PR A (contrat et vérité de référence) livrée ;
-PR B (résolution intra-sources) et PR C (implémentations, restitution) livrées ; PR D à venir.  
+PR B (résolution intra-sources) et PR C (implémentations, restitution) livrées ; PR D (mesure) livrée pour
+`spring-petclinic`, `student-course-demo` à mesurer.  
 Date : 2026-10-03, mise à jour le 2026-10-07.  
 Source de vérité : `ARCHITECTURE.md` § 2, § 5.6, § 7.3, § 8, § 12.3 et surtout § 14.  
 Dépend de : lecteur Java syntaxique existant, contrat des faits, couverture bornée, voisinage multiniveau / Explorer.  
@@ -525,7 +526,52 @@ Plan d'origine :
 - Explorer / vocabulaire : libellés et explications des arrêts ; la phrase actuelle « La classe B implémente la méthode C.run() » (`frontend/src/sentences.test.ts`) doit distinguer type et méthode ;
 - essai sur `student-course-demo`.
 
-### PR D — Mesure réelle
+### PR D — Mesure réelle (petclinic livrée)
+
+Essai reproductible : `backend/scripts/java_calls_trial.py <dépôt> <commit> [--database URL]` analyse le dépôt
+par l'API, puis dit les durées, les sites et leurs raisons, les faits produits et, depuis chaque route, la Tuile
+`HANDLED_BY` puis `CALLS` à profondeur 3. Mesuré le 2026-10-07, SQLite, conteneur de développement, trois
+analyses.
+
+**spring-petclinic à `500158f`** (30 fichiers Java hors tests) :
+
+| Mesure | Valeur |
+| --- | --- |
+| Analyse complète | 10,9 à 11,7 s (dont `taxo.git` 7,0 s) |
+| `taxo.java-calls` | 0,23 à 0,30 s, soit 2 à 3 % de l'analyse |
+| Faits produits | 165 (`CONTAINS` 143, `EXTENDS` 8, `TYPED_AS` 7, `CALLS` 7), à comparer aux 9 736 de `taxo.git` |
+| Sites d'appel | 253 vus, 7 résolus, 246 non interprétés |
+| `IMPLEMENTS` | aucun : petclinic n'a pas d'interface de service ; ses repositories étendent Spring Data |
+
+| Raison d'arrêt | Sites | Ce qui la cause |
+| --- | --- | --- |
+| `RECEIVER_KIND_DEFERRED` | 126 | 89 paramètres (`model.addAttribute`, `owner.getPets()`), 37 variables locales |
+| `UNSUPPORTED_CALL_FORM` | 74 | 34 chaînes (`a.b().c()`), 22 appels statiques (`SpringApplication.run`), 18 `new T()` |
+| `SUPER_TYPE_UNRESOLVED` | 27 | 17 dans les entités, à cause de `java.io.Serializable` (`BaseEntity`) ; 10 sur les repositories Spring Data |
+| `LAMBDA_OR_LOCAL_CONTEXT` | 10 | appels dans des lambdas |
+| `TARGET_DECLARATION_OUTSIDE_SNAPSHOT` | 5 | `save` hérité de Spring Data |
+| `RECEIVER_TYPE_UNKNOWN` | 4 | noms qui ne sont ni champ, ni variable, ni type connu |
+
+Coût dans les Tuiles : depuis chacune des 17 routes, `HANDLED_BY` puis `CALLS` à profondeur 3 répond en 11 à
+33 ms, en 4,1 à 9,7 Ko pour un budget de 32 Ko, avec 1 à 3 éléments, toujours `ADJACENCY_COMPLETE`. La frontière
+de chaque méthode traitante non lue porte ses causes (de 0 à 4 raisons distinctes).
+
+**Lecture.** Le premier fragment est vrai mais étroit sur un dépôt réel : 3 % des sites. Aucune flèche fausse
+n'a été vue, et chaque site non relié dit pourquoi. Le coût est négligeable, en temps comme dans les Tuiles.
+
+**Décision proposée pour le fragment suivant** (à valider) :
+
+1. Receveurs paramètre et variable locale au type déclaré dans les sources (126 sites, la moitié) : suivre la
+   portée réelle du nom au lieu du masquage prudent actuel, et citer en prémisse la déclaration du paramètre ou
+   de la variable (un nouveau fait déclaratif, sans assouplir § 5.5).
+2. Supertypes externes connus du contrat, comme `Object` aujourd'hui : une interface de la JDK qui ne déclare
+   aucune méthode (`java.io.Serializable`, `java.lang.Cloneable`) ne cache aucune cible (17 sites).
+3. Restent hors du fragment suivant : chaînes (il faut le type de retour), appels statiques et créations (une
+   autre forme de `CALLS`, à décider), Spring Data (déclarations hors des sources : frontière juste).
+
+L'essai sur `student-course-demo` reste à faire : ses sources ne sont pas dans ce dépôt.
+
+Plan d'origine :
 
 - essai sur `spring-petclinic` ;
 - temps d'analyse, nombre de sites vus/résolus/non interprétés ;
