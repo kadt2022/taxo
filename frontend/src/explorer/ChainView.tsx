@@ -7,7 +7,7 @@ import {FORMS, TONE_NAMES, label} from '../vocabulary';
 import {chain, type Box, type ChainText, type Form} from './chain';
 import type {Link, View} from './graph';
 import type {Selected} from './state';
-import {compartments, factText, knowledgeText, nodeMarks, selectionText, statusMark, toneOf, typeText, verb} from './sentences';
+import {compartments, factText, knowledgeText, linkMarks, nodeMarks, selectionText, toneOf, typeText, verb} from './sentences';
 import {useNaming} from './Naming';
 import type {NodeCommands} from './NodeActions';
 
@@ -19,7 +19,7 @@ export function ChainView({view, links, selected, onSelect, commands, busy}:Read
   const id=useId(), named=useNaming();
   const text:ChainText=useMemo(()=>({name:value=>compartments(value, named), note:knowledgeText,
     cut:boundary=>`${selectionText(boundary)} · ${boundary.continuation?'voir la suite':'développer'} ›`,
-    revisit:(link, target)=>`↺ ${verb(link.relation)} ${named(target)}, déjà montré plus haut`,
+    revisit:(link, target)=>`↺ ${verb(link.relation)} ${named(target)}, montré ailleurs dans la vue`,
     leaf:value=>value===undefined?'aucun objet : ce fait n’en a pas':value}), [named]);
   const drawn=useMemo(()=>chain(view, links, formOf, text), [view, links, text]);
   const nodes=new Map(view.nodes.map(node=>[node.reference, node]));
@@ -27,7 +27,7 @@ export function ChainView({view, links, selected, onSelect, commands, busy}:Read
   const tones=[...new Set(drawn.boxes.filter(box=>box.kind==='node').map(box=>toneOf(box.reference!)))];
   const forms=new Set(drawn.arrows.map(item=>item.form));
   const kinds=new Set(drawn.boxes.map(box=>box.kind));
-  const marks=[...new Set(drawn.arrows.map(item=>statusMark(item.link.elements[0].fact.status)).filter(Boolean))];
+  const marks=[...new Set(drawn.arrows.flatMap(item=>linkMarks(item.link)))];
   return <div className="chain">
     <div className="explorer-layers chain-scroll"><div className="explorer-canvas" style={{width:drawn.width, height:drawn.height}}>
       <svg width={drawn.width} height={drawn.height} aria-hidden="true">
@@ -43,12 +43,12 @@ export function ChainView({view, links, selected, onSelect, commands, busy}:Read
           className={classes('chain-arrow', item.form==='SIDE'&&'side', item.link.revisit&&'revisit', chosenLink(item.link)&&'chosen')}/>)}
       </svg>
       {drawn.arrows.map(item=>{
-        const {link}=item, mark=statusMark(link.elements[0].fact.status), count=link.elements.length;
+        const {link}=item, count=link.elements.length;
         return <button type="button" key={`label:${link.identity}`} className={classes('chain-label', item.form==='SIDE'&&'side')}
           style={{left:item.label.x, top:item.label.y}} aria-pressed={chosenLink(link)}
           aria-label={`${factText(link, named)}, ${count} occurrence${count>1?'s':''}`}
           onClick={()=>onSelect({kind:'link', identity:link.identity})}>
-          {verb(link.relation)}{mark&&<span className={`chain-status status-${mark}`}>{mark}</span>}
+          {verb(link.relation)}{linkMarks(link).map(mark=><span key={mark} className={`chain-status status-${mark}`}>{mark}</span>)}
           {count>1&&<span className="chain-count">×{count}</span>}</button>;
       })}
       {drawn.boxes.map(box=><Shape key={box.key} box={box} view={view} nodes={nodes} selected={selected} onSelect={onSelect} commands={commands}
@@ -103,6 +103,6 @@ function Shape({box, view, nodes, selected, onSelect, commands, busy}:Readonly<{
     onClick={()=>onSelect({kind:'link', identity:link.identity})}>{lines}</button>;
   const target=box.reference!;
   return <button type="button" className="chain-revisit" style={style} aria-pressed={selected?.kind==='node'&&selected.reference===target}
-    aria-label={`${factText(link, named)}, déjà montré : choisir ${named(target)}`}
+    aria-label={`${factText(link, named)}, montré ailleurs : choisir ${named(target)}`}
     onClick={()=>onSelect({kind:'node', reference:target})}>{lines}</button>;
 }

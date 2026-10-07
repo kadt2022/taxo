@@ -63,6 +63,15 @@ describe('la vue Chaîne', ()=>{
     expect(found.ties.map(tie=>tie.box)).toContain(revisit);
   });
 
+  it('pose un nœud sous le lien qui l’a découvert dans la Tuile, l’autre lien devenant une revisite', ()=>{
+    const found=drawn([element(ROUTE, CONTROLLER, {relation:'HANDLED_BY'}), element(ROUTE, SERVICE, {relation:'HANDLED_BY'}),
+      element(CONTROLLER, SERVICE, {relation:'CALLS', level:2})], [[ROUTE, 0, true], [CONTROLLER, 1, true], [SERVICE, 1, false]]);
+    expect(found.arrows.map(item=>[item.from.key, item.to.key])).toEqual([[ROUTE, CONTROLLER], [ROUTE, SERVICE]]);
+    const revisit=found.boxes.find(item=>item.kind==='revisit')!;
+    expect([revisit.link!.subject, revisit.reference]).toEqual([CONTROLLER, SERVICE]);
+    expect(box(found, SERVICE).depth).toBe(box(found, CONTROLLER).depth);
+  });
+
   it('montre chaque fait sans nœud au bout : aucun objet, ou une valeur', ()=>{
     const found=drawn([element(ROUTE, undefined, {relation:'PERMITS_ALL'}), element(ROUTE, 'authenticated()', {relation:'AUTHORIZED_BY'})],
       [[ROUTE, 0, true]]);
@@ -78,6 +87,16 @@ describe('la vue Chaîne', ()=>{
     expect(note.lines).toEqual(['note NOT_INTERPRETED']);
     expect(note.y).toBeGreaterThan(controller.y);
     expect(note.depth).toBe(controller.depth+1);
+  });
+
+  it('pose la frontière juste sous son nœud, avant sa suite, que la flèche contourne', ()=>{
+    const gap:Boundary={nature:'KNOWLEDGE', scope:'NODE', node:ROUTE, subject:'file:A.java', reason:'NOT_INTERPRETED',
+      count:{kind:'UNKNOWN'}};
+    const found=drawn([element(ROUTE, CONTROLLER, {relation:'HANDLED_BY'})], [[ROUTE, 0, true], [CONTROLLER, 1, false]], [gap]);
+    const route=box(found, ROUTE), controller=box(found, CONTROLLER), note=found.boxes.find(item=>item.kind==='note')!;
+    expect(note.y).toBe(route.y+route.height+CHAIN_GEOMETRY.gap);
+    expect(controller.y).toBeGreaterThan(note.y);
+    expect(controller.depth, 'en retrait : un trait droit traverserait la note').toBe(1);
   });
 
   it('montre un lien inconnu dans la chaîne et n’omet aucun lien', ()=>{

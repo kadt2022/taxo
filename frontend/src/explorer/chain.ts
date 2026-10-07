@@ -12,7 +12,7 @@ export const CHAIN_GEOMETRY:ChainGeometry={margin:24, width:300, indent:44, gap:
   pad:14, chars:34, separator:12};
 
 /** Une boîte : un nœud, une feuille (aucun objet ou une valeur), une frontière de connaissance (`note`), une coupure de
- * sélection (`cut`), ou un lien vers un nœud déjà dessiné (`revisit`, dont `reference` est le nœud déjà dessiné). */
+ * sélection (`cut`), ou un lien vers un nœud découvert par un autre lien (`revisit`, dont `reference` est ce nœud). */
 export type Box={key:string; kind:'node'|'leaf'|'note'|'cut'|'revisit'; column:'main'|'side'; depth:number;
   x:number; y:number; width:number; height:number; lines:string[]; context?:string[]; member?:string[];
   reference?:string; link?:Link; value?:string;
@@ -84,25 +84,27 @@ export function chain(view:View, links:Link[], form:(relation:string)=>Form, tex
       const end=column==='main'?place(link, 0, 'side', sideTop, box):place(link, depth, column, sideTop, box);
       if(end)sideTop=end.y+end.height+gap/2;
     }
-    // Une chaîne qui ne se divise pas descend tout droit, dans la même colonne ; plusieurs suites se posent en retrait.
-    const chained=own.filter(item=>form(item.relation)==='CHAIN'), sides=own.length-chained.length;
-    const straight=chained.length===1&&(column==='main'||sides===0);
-    for(const link of chained)place(link, straight?depth:depth+1, column, undefined, box, straight);
-    for(const boundary of notes(reference)){
+    // Les frontières se lisent juste sous leur nœud, avant ses suites.
+    const attached=notes(reference), cut=view.selection[reference];
+    for(const boundary of attached){
       const said=lines(text.note(boundary));
       ties.push({owner:box, box:put({key:`note:${reference}:${boundary.reason}:${boundary.subject??''}`, kind:'note', column,
         depth:depth+1, width, height:header+said.length*line+pad, lines:said, boundary})});
     }
-    const cut=view.selection[reference];
     if(cut){
       const said=lines(text.cut(cut));
       ties.push({owner:box, box:put({key:`cut:${reference}`, kind:'cut', column, depth:depth+1, width,
         height:said.length*line+pad+6, lines:said, boundary:cut, reference})});
     }
+    // Une chaîne qui ne se divise pas descend tout droit, dans la même colonne, si rien n'est accroché entre le nœud et
+    // sa suite ; plusieurs suites se posent en retrait.
+    const chained=own.filter(item=>form(item.relation)==='CHAIN'), sides=own.length-chained.length;
+    const straight=chained.length===1&&!attached.length&&!cut&&(column==='main'||sides===0);
+    for(const link of chained)place(link, straight?depth:depth+1, column, undefined, box, straight);
     return box;
   }
 
-  /** L'extrémité découverte d'un lien : une feuille, une revisite, ou un nœud visité à son tour. */
+  /** L'extrémité découverte d'un lien : une feuille, une revisite, ou le nœud que ce lien a découvert, visité à son tour. */
   function place(link:Link, depth:number, column:'main'|'side', top:number|undefined, owner:Box, straight=false):Box|null{
     const end=far(link);
     if(end===null){
@@ -112,8 +114,9 @@ export function chain(view:View, links:Link[], form:(relation:string)=>Form, tex
       pending.push({link, from:link.subject===owner.reference?owner:leaf, to:link.subject===owner.reference?leaf:owner, straight});
       return leaf;
     }
-    const known=placed.get(end);
-    if(known){
+    // Un nœud se pose sous le lien qui l'a découvert dans la Tuile, jamais sous un autre : tout autre lien qui l'atteint
+    // est une revisite, qu'il soit déjà dessiné ou non.
+    if(link.revisit||placed.has(end)){
       const said=lines(text.revisit(link, end));
       const chip=put({key:`revisit:${link.identity}`, kind:'revisit', column:owner.column, depth:owner.depth+1, width,
         height:said.length*line+pad, lines:said, link, reference:end});

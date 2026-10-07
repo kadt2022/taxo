@@ -3,7 +3,7 @@
 // ou une relation que le portail ne connaît pas s'affiche par son nom brut.
 import {COVERAGE, EVALUATORS, STATUS_MARKS, TONES, TYPES, VERBS, label, reference} from '../vocabulary';
 import type {Boundary, Count, Direction, NotSent} from './protocol';
-import type {View, ViewNode} from './graph';
+import type {Link, View, ViewNode} from './graph';
 
 const plural=(count:number, word:string)=>`${count} ${word}${count>1?'s':''}`;
 
@@ -150,3 +150,7 @@ export function bareName(value:string, named:Naming=nodeName){
 
 /** Le statut d'un fait en une lettre (O, D, V), brut s'il est inconnu. */
 export const statusMark=(status:string|undefined)=>status?label(STATUS_MARKS, status):'';
+
+/** Chaque statut distinct des occurrences d'un lien, dans leur ordre : un lien ×N dont les occurrences diffèrent les
+ * montre tous, jamais le seul premier. */
+export const linkMarks=(link:Link)=>[...new Set(link.elements.map(element=>statusMark(element.fact.status)).filter(Boolean))];
