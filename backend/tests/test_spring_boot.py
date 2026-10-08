@@ -114,6 +114,27 @@ def reasons(output, subject):
     return ' '.join(warning for warning in output.warnings if warning.startswith(subject))
 
 
+def test_root_gradle_application_serves_and_secures_its_routes():
+    files = {
+        'settings.gradle': "rootProject.name = 'school'\n",
+        'build.gradle': 'plugins { id "java" }\n',
+        'src/main/java/com/example/school/StudentCourseApplication.java':
+            application('com.example.school', 'StudentCourseApplication'),
+        'src/main/java/com/example/school/CourseController.java':
+            controller('com.example.school', 'CourseController', '/api/courses'),
+        'src/main/java/com/example/school/SecurityConfig.java':
+            security('com.example.school', 'SecurityConfig', 'authenticated()'),
+    }
+    app_ref = ('application:src/main/java/com/example/school/StudentCourseApplication.java'
+               '#StudentCourseApplication')
+    boot_output = boot(files)
+    assert ('endpoint:GET /api/courses', app_ref) in served(boot_output)
+    assert app_ref not in gaps(boot_output)
+
+    security_output = secure(files)
+    assert protected(security_output)['endpoint:GET /api/courses'] == 'policy-rule:authenticated()'
+
+
 def test_each_application_is_built_from_its_module_and_serves_only_what_its_classpath_and_scan_load():
     output = boot(repository())
     built = {(fact['subject'], fact['object']) for fact in output.facts if fact['relation'] == 'BUILT_FROM'}
