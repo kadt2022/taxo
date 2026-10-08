@@ -73,6 +73,7 @@ def _join(base, relative):
 _COMMENT = re.compile(r'//[^\n]*|/\*.*?\*/', re.S)
 _INCLUDE = re.compile(r'\binclude\b')
 _PROJECT_DIR = re.compile(r'\bprojectDir\b')
+_INCLUDE_FLAT = re.compile(r'\bincludeFlat\b')
 _LITERAL = re.compile(r'''(['"])([^'"\n]*)\1''')
 _PROJECT = re.compile(r'''\bproject\s*\(([^)]*)\)''')
 # Enveloppes d'une dependance de projet : la configuration est l'identifiant qui les precede.
@@ -134,9 +135,10 @@ def gradle_settings(path, text, reading):
 
 def gradle_declares_projects(text):
     """Vrai si un `settings.gradle(.kts)` peut declarer d'autres projets que sa racine : un `include`,
-    meme calcule, ou un `projectDir` redefini. Un `includeBuild` designe un autre build, pas un projet."""
+    meme calcule, un `includeFlat` ou un `projectDir` redefini. Un `includeBuild` designe un autre build,
+    pas un projet."""
     text = blank_comments(text)
-    return bool(_INCLUDE.search(text) or _PROJECT_DIR.search(text))
+    return any(pattern.search(text) for pattern in (_INCLUDE, _INCLUDE_FLAT, _PROJECT_DIR))
 
 
 def gradle_dependencies(path, text, reading, projects):
