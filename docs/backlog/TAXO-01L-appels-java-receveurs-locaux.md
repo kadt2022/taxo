@@ -175,15 +175,18 @@ Pour chaque composant `T x` d'un record des sources, sans méthode `x()` écrite
 | --- | --- | --- | --- |
 | le record déclare le champ du composant | `symbol:java:<Record>` `CONTAINS` `…<Record>#x` | `OBSERVED` | le composant |
 | le champ a un type des sources | `…<Record>#x` `TYPED_AS` `symbol:java:<T>` | `OBSERVED` | le composant |
-| le record déclare l'accesseur | `symbol:java:<Record>` `CONTAINS` `…<Record>#x()` | **à décider** | le composant |
+| le record déclare l'accesseur | `symbol:java:<Record>` `CONTAINS` `…<Record>#x()` | **à décider** (`INFERRED` recommandé) | le composant |
 
 Décision à prendre pour le statut de l'accesseur :
 
-- **`OBSERVED` (recommandé)** : l'en-tête du record **est** la déclaration écrite de l'accesseur selon le
-  langage ; la preuve est la ligne du composant. `§ 14` reste vrai (« un `CALLS` cite des faits `OBSERVED` »).
-- `INFERRED` par une règle `java.record.implicit-accessor/1` (prémisse : le `CONTAINS` du champ), sur le modèle
-  d'`IMPLEMENTS` entre méthodes. Plus prudent, mais il faut alors réécrire § 14 pour qu'un `CALLS` puisse citer
-  une prémisse `INFERRED`.
+- **`INFERRED` (recommandé)** par une règle `java.record.implicit-accessor/1` (prémisse : le `CONTAINS` du
+  champ du composant), sur le modèle d'`IMPLEMENTS` entre méthodes : ce qui est écrit, c'est le composant ;
+  `x()` est déclaré par le langage, aucune ligne ne l'écrit. Le statut dit donc comment le fait est établi.
+  Conséquence : § 14 doit admettre qu'un `CALLS` cite une prémisse `INFERRED` d'une règle nommée du même
+  producteur (§ 5.5 n'est pas assoupli : la prémisse reste un fait du même instantané). C'est un changement de
+  doctrine, à valider.
+- `OBSERVED`, preuve à la ligne du composant : § 14 inchangé, mais le statut présenterait comme lu dans les
+  sources une déclaration qui n'y est pas écrite. Écarté pour cette raison.
 
 Un accesseur écrit explicitement dans le corps est une méthode ordinaire, déjà couverte par TAXO-01K.
 
@@ -233,7 +236,7 @@ coûte peu une fois la portée réelle suivie).
 5. Une hiérarchie qui n'atteint, hors des sources, que `Serializable`, `Cloneable` ou `Record` ne donne plus
    `SUPER_TYPE_UNRESOLVED` ; tout autre supertype externe le donne toujours.
 6. `record R(T x)` sans méthode `x()` écrite : `r.x()` produit `CALLS` vers `R#x()`, dont le `CONTAINS` a pour
-   preuve la ligne du composant ; avec `x()` écrite, la cible est la méthode écrite et aucun accesseur implicite
+   preuve la ligne du composant et le statut retenu par la décision 3 ; avec `x()` écrite, la cible est la méthode écrite et aucun accesseur implicite
    n'est produit.
 7. `r.equals(o)` sur un record ne vise jamais `Record` ni l'accesseur ; même règle que pour `Object`.
 8. Un appel sans receveur dans une lambda produit, selon la décision 4, un `CALLS` depuis le symbole de lambda ;
@@ -241,8 +244,14 @@ coûte peu une fois la portée réelle suivie).
 9. Un receveur paramètre de lambda au type inféré reste `LAMBDA_OR_LOCAL_CONTEXT`.
 10. La fixture `java-calls-demo` (ou une fixture sœur) compile, et ses vérités attendues sont écrites à la main
     avant d'exécuter Taxo ; `taxo.java-calls` les retrouve exactement.
-11. Aucun `CALLS` faux sur les trois dépôts mesurés, vérifié un à un sur `student-analysis-java` et
-    `bibliotheque`.
+11. Aucun `CALLS` faux sur les trois dépôts mesurés : chaque `CALLS` **nouveau** par rapport à TAXO-01K est
+    vérifié un à un à la main sur les trois, `spring-petclinic` compris (le plus grand nombre de nouveaux
+    sites).
+12. Le portail nomme juste les nouveaux symboles : un paramètre, une variable locale ou une lambda n'est jamais
+    dit « la méthode » (aujourd'hui `symbolNoun` dans `frontend/src/sentences.ts` prend tout symbole contenant
+    `(` pour une méthode), et `TYPED_AS` n'est plus libellé « type de champ » quand son sujet n'est pas un champ
+    (`frontend/src/domains.ts`). Le classement suit la forme de symbole décidée au contrat, sans logique Java
+    dans l'Explorer.
 
 ## Découpage proposé
 
@@ -250,7 +259,8 @@ Chaque PR est testable seule, sur la fixture.
 
 - **PR A — Contrat et vérité de référence.** Formes de symbole paramètre, variable, lambda ; liste fermée des
   supertypes JDK connus ; statut de l'accesseur implicite (décision 3) ; attribution des lambdas (décision 4) ;
-  `ARCHITECTURE § 14` mis à jour ; fixture et `expected.json` étendus ; conformité. Aucun producteur encore.
+  `ARCHITECTURE § 14` mis à jour ; fixture et `expected.json` étendus ; conformité ; libellés du portail pour
+  les nouvelles formes de symbole et pour `TYPED_AS`, avec leurs tests (critère 12). Aucun producteur encore.
 - **PR B — Paramètres et variables locales.** Portée réelle dans le lecteur (`sites.py`), faits déclaratifs,
   résolution ; tests unitaires par forme et par raison.
 - **PR C — Supertypes JDK connus et accesseurs de record.** Les deux verrous mesurés ; tests de non-régression
