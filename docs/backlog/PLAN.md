@@ -37,6 +37,10 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
    restitution) livrées ; PR D mesure `spring-petclinic` (7 sites résolus sur 253, coût négligeable) et
    `bibliotheque`, projet Spring en couches (28 sur 147, aucun faux) ; elle propose le fragment suivant
    (receveurs paramètre et variable locale) et constate que la profondeur s'arrête aux méthodes d'interface.
+   Fragment suivant proposé, à valider : [TAXO-01L](TAXO-01L-appels-java-receveurs-locaux.md) (paramètres et
+   variables locales, supertypes JDK sans méthode, accesseurs de record, appels dans les lambdas). Mesuré sur
+   trois dépôts : suivre les paramètres seuls ne lèverait qu'1 site sur 167, à cause de `Serializable` et des
+   accesseurs implicites de record ; les trois ensemble, au plus 100 sites résolus de plus.
 
 La mémoire versionnée passe avant la suite des Tuiles parce que la dette de stockage est constatée
 (une copie complète de chaque fait par analyse), pas parce que les Tuiles en dépendraient : elles
