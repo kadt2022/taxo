@@ -72,6 +72,7 @@ def _join(base, relative):
 
 _COMMENT = re.compile(r'//[^\n]*|/\*.*?\*/', re.S)
 _INCLUDE = re.compile(r'\binclude\b')
+_PROJECT_DIR = re.compile(r'\bprojectDir\b')
 _LITERAL = re.compile(r'''(['"])([^'"\n]*)\1''')
 _PROJECT = re.compile(r'''\bproject\s*\(([^)]*)\)''')
 # Enveloppes d'une dependance de projet : la configuration est l'identifiant qui les precede.
@@ -111,7 +112,7 @@ def gradle_settings(path, text, reading):
     """Modules inclus par un fichier `settings.gradle(.kts)`."""
     text = blank_comments(text)
     base = directory_of(path)
-    if re.search(r'\bprojectDir\b', text):
+    if _PROJECT_DIR.search(text):
         reading.gap(path, 'dossier de projet redéfini (projectDir)')
         return
     if re.search(r'\bincludeBuild\b', text):
@@ -129,6 +130,13 @@ def gradle_settings(path, text, reading):
                 reading.gap(path, f'inclusion non lue : {literal.group(2)}')
                 continue
             reading.modules.append(Module(directory, 'gradle', path, _line(text, offset + literal.start())))
+
+
+def gradle_declares_projects(text):
+    """Vrai si un `settings.gradle(.kts)` peut declarer d'autres projets que sa racine : un `include`,
+    meme calcule, ou un `projectDir` redefini. Un `includeBuild` designe un autre build, pas un projet."""
+    text = blank_comments(text)
+    return bool(_INCLUDE.search(text) or _PROJECT_DIR.search(text))
 
 
 def gradle_dependencies(path, text, reading, projects):

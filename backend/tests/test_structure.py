@@ -70,6 +70,24 @@ def test_a_single_gradle_project_is_a_module_at_the_root():
     assert modules(output) == {'.': ['gradle']}
 
 
+def test_a_single_gradle_project_with_settings_is_still_the_root_module():
+    output = evaluate({'settings.gradle': "rootProject.name = 'demo'\n",
+                       'build.gradle': 'plugins { id "java" }\n'})
+    assert modules(output) == {'.': ['gradle']}
+
+
+def test_a_root_build_whose_settings_may_declare_projects_is_never_guessed_as_a_module():
+    build = {'build.gradle': 'plugins { id "java" }\n'}
+    computed = evaluate({'settings.gradle': 'def names = ["a"]\ninclude names\n', **build})
+    assert modules(computed) == {}, 'une inclusion calculee ne fait pas de la racine un projet seul'
+    moved = evaluate({'settings.gradle': 'project(":a").projectDir = file("elsewhere")\n', **build})
+    assert modules(moved) == {}, 'un dossier redefini ne fait pas de la racine un projet seul'
+    composite = evaluate({'settings.gradle': 'includeBuild "../tools"\n', **build})
+    assert modules(composite) == {'.': ['gradle']}, 'un build inclus est un autre build, pas un projet'
+    commented = evaluate({'settings.gradle': '// include "a"\nrootProject.name = "demo"\n', **build})
+    assert modules(commented) == {'.': ['gradle']}
+
+
 def test_what_gradle_reading_cannot_establish_is_declared_never_guessed():
     computed = evaluate({'settings.gradle': 'def names = ["a"]\ninclude names\ninclude "b"\n'})
     assert modules(computed) == {'b': ['gradle']}

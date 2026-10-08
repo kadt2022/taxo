@@ -99,8 +99,11 @@ def _interpret(texts):
 def _gradle(settings, builds, reading):
     """Un build Gradle par `settings.gradle(.kts)` ; un `build.gradle` hors de tout build est un projet seul."""
     roots = {}
+    single_project_roots = set()
     for path, text in sorted(settings.items()):
         root = readers.directory_of(path)
+        if not readers.gradle_declares_projects(text):
+            single_project_roots.add(root)
         before = len(reading.modules)
         readers.gradle_settings(path, text, reading)
         included = [module.directory for module in reading.modules[before:]]
@@ -120,6 +123,9 @@ def _gradle(settings, builds, reading):
                 # Un build.gradle qu'aucun settings n'inclut n'est pas un projet du build : non lu.
                 reading.gap(path, 'build.gradle hors des projets inclus')
                 continue
+            if directory == root and root in single_project_roots:
+                # Un settings sans aucun projet inclus : la racine est le seul projet du build, donc un module.
+                reading.modules.append(readers.Module(directory, 'gradle', path, None))
         readers.gradle_dependencies(path, text, reading, projects)
 
 
