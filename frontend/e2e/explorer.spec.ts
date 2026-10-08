@@ -1,5 +1,5 @@
-// Rechercher une ancre, développer, consulter une preuve : dans Chromium, contre une API Taxo réelle (TAXO-01J § 9).
-import {expect, test} from '@playwright/test';
+// Le parcours de l'explorateur dans Chromium, contre une API Taxo réelle (TAXO-01J § 9) : une ancre, une preuve, l'export.
+import {expect, test, type Locator} from '@playwright/test';
 import {join} from 'node:path';
 import {ROOT} from '../playwright.config';
 
@@ -30,3 +30,33 @@ test('rechercher une ancre, développer, consulter une preuve', async({page})=>{
   expect(called.length).toBeGreaterThan(0);
   expect(called.filter(path=>path.startsWith('/api/')&&!path.endsWith('/taxo-query'))).toEqual([]);
 });
+
+/** Le rapport de contraste WCAG 2.x entre le texte d'un élément et son fond, lus dans le navigateur. */
+const contrast=(element:Locator)=>element.evaluate(node=>{
+  const style=getComputedStyle(node);
+  const luminance=(color:string)=>{
+    const [r, g, b]=color.match(/\d+(\.\d+)?/g)!.slice(0, 3).map(value=>{
+      const channel=Number(value)/255;
+      return channel<=0.03928?channel/12.92:((channel+0.055)/1.055)**2.4;
+    });
+    return 0.2126*r+0.7152*g+0.0722*b;
+  };
+  const [light, dark]=[luminance(style.color), luminance(style.backgroundColor)].sort((a, b)=>b-a);
+  return (light+0.05)/(dark+0.05);
+});
+
+// Le bouton d'export est posé sur la page du portail, pas sur le diagramme : il garde les couleurs des autres boutons du
+// portail et reste lisible dans les deux thèmes de l'appareil (WCAG AA : contraste d'au moins 4,5:1, au survol aussi).
+for(const colorScheme of ['light', 'dark'] as const){
+  test(`le bouton d’export reste lisible en thème ${colorScheme==='light'?'clair':'sombre'}`, async({page})=>{
+    await page.emulateMedia({colorScheme});
+    await page.goto('/#/explorer');
+    await page.getByRole('textbox', {name:'Point de départ'}).fill('GET /ad');
+    await page.getByRole('button', {name:/route GET \/admin\/users/}).click();
+    const exporter=page.getByRole('button', {name:'Exporter en image (PNG)'});
+    await expect(exporter).toBeVisible();
+    await expect.poll(()=>contrast(exporter)).toBeGreaterThanOrEqual(4.5);
+    await exporter.hover();
+    await expect.poll(()=>contrast(exporter), {message:'au survol'}).toBeGreaterThanOrEqual(4.5);
+  });
+}

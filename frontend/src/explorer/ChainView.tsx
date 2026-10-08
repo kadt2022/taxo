@@ -43,11 +43,11 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
     catch{setFailure('L’image n’a pas pu être créée par ce navigateur.');}
     finally{setSaving(false);}
   };
-  return <div className="chain" ref={frame}>
+  return <div className="chain">
     <div className="chain-tools">
       <button type="button" className="ghost" onClick={()=>{void save();}} disabled={saving}>{saving?'Création de l’image…':'Exporter en image (PNG)'}</button>
       {failure&&<span role="alert" className="error">{failure}</span>}</div>
-    <div className="explorer-layers chain-scroll"><div className="explorer-canvas" style={{width:drawn.width, height:drawn.height}}>
+    <div className="explorer-layers chain-scroll" ref={frame}><div className="explorer-canvas" style={{width:drawn.width, height:drawn.height}}>
       <svg width={drawn.width} height={drawn.height} aria-hidden="true">
         <defs>
           <marker id={`${id}-flow`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
