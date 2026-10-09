@@ -151,10 +151,13 @@ PR D mesure combien de sites deviennent réellement `OUT_OF_SCOPE`.
 
 - Une entrée `KNOWLEDGE`, `scope: NODE`, dont la couverture a une `classification` gagne un champ **facultatif
   et additif** : `categories`, une liste triée selon l'ordre fixe `UNKNOWN`, `AMBIGUOUS`, `UNSUPPORTED`,
-  `OUT_OF_SCOPE`. Exemple : `[{"category": "UNKNOWN", "count": {"kind": "EXACT", "value": 3}}]`. Les
-  catégories à zéro ne sont pas listées.
-- Les décomptes réutilisent la qualification de TAXO-01J : `EXACT` quand `sites` est complet
-  (`len(sites) == sites_seen`), `AT_LEAST` sinon. Un décompte n'est jamais inventé.
+  `OUT_OF_SCOPE`. Exemple : `[{"category": "UNKNOWN", "count": {"kind": "EXACT", "value": 3}}]`.
+- Les décomptes réutilisent la qualification de TAXO-01J. Quand `sites` est complet
+  (`len(sites) == sites_seen`), chaque décompte est `EXACT` et une catégorie à zéro n'est pas listée : son
+  absence veut dire zéro. Quand `sites` est tronqué (`sites_seen > len(sites)`), un site omis peut appartenir à
+  n'importe quelle catégorie : les **quatre** catégories sont alors listées, chacune en `AT_LEAST` avec le
+  nombre de sites retenus, **zéro compris** (`{"kind": "AT_LEAST", "value": 0}`). Une catégorie non observée
+  n'est jamais confondue avec un zéro exact. Un décompte n'est jamais inventé.
 - Aucun champ existant ne change : `reason`, `causes`, `count`, `producer` restent tels quels. Une entrée sans
   `classification` (analyse ancienne) n'a pas de `categories` ; l'Explorer dit « non classé ».
 - `neighborhood/1` est inchangé à l'octet (il ne rend pas de lacunes locales ; l'instantané doré le prouve).
@@ -202,7 +205,8 @@ PR D mesure combien de sites deviennent réellement `OUT_OF_SCOPE`.
 8. Deux sites sur une même ligne, ou deux constats identiques, ont des clés distinctes et comptent chacun.
 9. Deux producteurs sur un même symbole donnent deux entrées de Tuile distinctes.
 10. Les frontières de sélection et de contexte n'ont jamais de catégorie.
-11. Les décomptes par catégorie sont `EXACT` ou `AT_LEAST` selon `sites_seen` ; la troncature reste dite par
+11. Les décomptes par catégorie sont `EXACT` ou `AT_LEAST` selon `sites_seen` ; un diagnostic tronqué liste
+    les quatre catégories en `AT_LEAST`, zéro compris ; la troncature reste dite par
     `not_sent`.
 12. Deux exécutions identiques rendent des diagnostics identiques à l'octet.
 13. Les tests Java tournent sur le vrai analyseur et la fixture `java-calls-demo`.
@@ -270,7 +274,8 @@ Toutes les valeurs (heure, ordre, environnement) sont fixées ; aucun test n'uti
 **Tuile (PR C, SQLite et PostgreSQL)**
 - `neighborhood/1` : instantané doré `neighborhood_v1_golden.json` identique.
 - `neighborhood/2` : une entrée `KNOWLEDGE`/`NODE` porte `categories` dans l'ordre fixe, décomptes `EXACT`.
-  Avec `sites_seen > len(sites)` : `AT_LEAST`.
+  Avec `sites_seen > len(sites)` : les quatre catégories listées en `AT_LEAST`, y compris une catégorie à
+  `value: 0` ; aucune n'est absente.
 - Analyse ancienne : aucune entrée n'a `categories`, et le reste de la réponse est identique à aujourd'hui.
 - Deux producteurs (`taxo.java-calls` et le producteur Python synthétique) sur un même symbole : deux entrées.
 - `DEPTH`, `FANOUT`, `NOT_REACHED`, `NO_ANALYZER`, une revisite : aucune catégorie.
