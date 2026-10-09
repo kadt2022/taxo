@@ -16,11 +16,9 @@ from app.minia.infrastructure.gemini import GeminiModel, gemini_schema
 from app.minia.infrastructure.ollama import OllamaModel
 
 AUTHOR = 'person:taxo@example.invalid'
-EMPTY = {name: '' for name in exploration.ARGUMENTS}
-
-
 def call(operation, **arguments):
-    return json.dumps({'action': 'call', 'operation': operation, **EMPTY, **arguments, 'statements': []})
+    return json.dumps({'action': 'call', 'operation': operation, 'arguments': json.dumps(arguments),
+                       'statements': []})
 
 
 def statement(kind, text, subject='', relation='', object_=''):
@@ -28,7 +26,7 @@ def statement(kind, text, subject='', relation='', object_=''):
 
 
 def answer(*statements):
-    return json.dumps({'action': 'answer', 'operation': '', **EMPTY, 'statements': list(statements)})
+    return json.dumps({'action': 'answer', 'operation': '', 'arguments': '', 'statements': list(statements)})
 
 
 class ScriptedModel:
@@ -178,6 +176,63 @@ def test_a_step_keeps_only_the_arguments_given():
     step = exploration.parse_step(call('find_facts', relation='CHANGES', subject=' commit:x '))
     assert step == exploration.Call('find_facts', {'subject': 'commit:x', 'relation': 'CHANGES'})
     assert 'instruction' in json.loads(exploration.message('q', [], [], 0)), 'a zero, Minia doit conclure'
+
+
+def test_the_arguments_of_a_step_keep_their_json_types():
+    step = exploration.parse_step(call('get_neighborhood', root=' file:a ', follow=['CONTAINS'], depth=2, after=''))
+    assert step == exploration.Call('get_neighborhood', {'root': 'file:a', 'follow': ['CONTAINS'], 'depth': 2})
+    already_decoded = json.dumps({'action': 'call', 'operation': 'describe', 'arguments': {'scope': 'x'},
+                                  'statements': []})
+    assert exploration.parse_step(already_decoded).arguments == {'scope': 'x'}, 'un fournisseur peut rendre un objet'
+    assert exploration.parse_step(json.dumps({'action': 'call', 'operation': 'describe', 'arguments': ' ',
+                                              'statements': []})).arguments == {}
+
+
+@pytest.mark.parametrize('arguments', ['{"root": ', '["file:a"]', '"file:a"', 3])
+def test_arguments_that_are_not_a_json_object_are_refused_never_guessed(arguments):
+    with pytest.raises(MiniaError, match='objet JSON'):
+        exploration.parse_step(json.dumps({'action': 'call', 'operation': 'find_facts', 'arguments': arguments,
+                                           'statements': []}))
+
+
+class AdaptiveModel(ScriptedModel):
+    """Un modele dont chaque tour peut dependre de ce que Taxo a deja rendu (references, analyse)."""
+
+    def complete(self, system, user, schema=None):
+        self.calls.append((system, user, schema))
+        reply = self.replies.pop(0)
+        return reply(json.loads(user)) if callable(reply) else reply
+
+
+def analysis(turn):
+    return turn['trajectory'][0]['response']['snapshot']['analysis']
+
+
+def last(turn):
+    return turn['trajectory'][-1]['response']
+
+
+def test_minia_finds_an_element_by_name_then_reads_its_neighborhood(repo, tmp_path):
+    repo, _ = repo
+
+    def neighborhood(turn):
+        reference = last(turn)['items'][0]['reference']
+        return call('get_neighborhood', analysis=analysis(turn), root=reference, follow=['CONTAINS'],
+                    direction='INCOMING', depth=1)
+
+    def conclude(turn):
+        container = next(node for node in last(turn)['nodes'] if node.startswith('repository:'))
+        return answer(statement('claim', 'Le dépôt contient src/app.txt.', container, 'CONTAINS', 'file:src/app.txt'))
+
+    model = AdaptiveModel(lambda turn: call('find_references', analysis=analysis(turn), prefix='src/app'),
+                          neighborhood, conclude)
+    result = completed(run(repo, tmp_path, model, 'Que contient le dépôt autour de src/app ?'))
+    assert (result['status'], result['mode']) == ('ANSWERED', 'exploration')
+    steps = [(step['operation'], step['outcome']) for step in result['trajectory']]
+    assert steps == [('describe', 'OK'), ('find_references', 'OK'), ('get_neighborhood', 'OK'),
+                     ('verify_claim', 'OK')], 'les deux operations recoivent enfin leurs arguments'
+    assert result['trajectory'][2]['arguments']['follow'] == ['CONTAINS'], 'une liste passe telle quelle'
+    assert result['statements'][0]['verdict'] == 'CONFIRMED', 'Taxo verifie avant affichage'
 
 
 def test_each_provider_constrains_the_step_with_the_schema():
