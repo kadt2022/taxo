@@ -6,7 +6,7 @@
 **Responsable de réalisation proposé :** agent de développement, sous gouvernance habituelle de l'équipe.  
 **Références de l'existant :** `taxo-query/1`, `describe`, `find_references`, `get_neighborhood`, `verify_claim`, Explorer de la Maille, Tuiles et `neighborhood/2` ; la disponibilité exacte des champs et des adaptateurs reste à constater dans le code avant chaque PR.
 
-> **Décision proposée.** Nous ne développons pas d'abord un « Ask Taxo général », puis un second protocole MIP. Nous réalisons **un noyau MIP 0.1 utilisable sans LLM**, puis raccordons **Ask Taxo et Minia** à ce même noyau. Un seul moteur de faits, une seule autorité de vérification, plusieurs consommateurs. L'autorisation finale d'un changement de contrat ou d'une fusion appartient au responsable du produit.
+> **Décision (acceptée le 9 octobre 2026).** Nous ne développons pas d'abord un « Ask Taxo général », puis un second protocole MIP. Nous réalisons **un noyau MIP 0.1 utilisable sans LLM**, puis raccordons **Ask Taxo et Minia** à ce même noyau. Un seul moteur de faits, une seule autorité de vérification, plusieurs consommateurs. L'autorisation finale d'un changement de contrat ou d'une fusion appartient au responsable du produit.
 
 ## 1. Problème à résoudre
 
@@ -236,7 +236,7 @@ Le mécanisme existant `verify_claim` reste l'autorité des **verdicts** dans MI
 3. Une Tuile contient ou signale explicitement ses preuves, sa couverture, ses frontières et sa troncature ; aucune lacune ne se transforme en fait.
 4. Recherche, construction de Tuile et validation des affirmations portent sur **le même instantané**.
 5. Une référence ambiguë ne donne pas lieu à un choix implicite ; une référence introuvable ne prouve pas l'inexistence de l'élément. `VetController` et `OwnerRepository.findById` sont retrouvés par leur nom (§ 4.1 bis).
-6. Tous les champs envoyés aux opérations TAXO passent leurs validations existantes ; `taxo-query/1` n'est ni modifié ni contourné silencieusement.
+6. Tous les champs envoyés aux opérations TAXO passent leurs validations existantes ; `taxo-query/1` garde son nom et le comportement de ses opérations existantes, n'est jamais contourné silencieusement, et ne reçoit que l'extension additive et compatible décrite au § 4.1 bis (`match`, défaut `KEY` inchangé).
 7. Une affirmation affichée comme **confirmée** a un verdict de TAXO ; une interprétation de Minia reste identifiée, y compris en mode paquet.
 8. Les questions historiques conservent leur comportement et leurs résultats attendus.
 9. Le consommateur ne peut ni dépasser les budgets et autorisations, ni déclencher une lecture de source/diff interdite, ni écrire au dépôt.
@@ -266,7 +266,7 @@ Le mécanisme existant `verify_claim` reste l'autorité des **verdicts** dans MI
 
 ## 10. Gouvernance, ordre et condition de démarrage
 
-- **D'abord :** faire relire et valider ce récit par le responsable du produit. Ce texte constitue une proposition de contrat, pas une approbation rétroactive de modifications de l'API.
+- **D'abord :** ce récit a été relu et accepté par le responsable du produit le 9 octobre 2026 (§ 12) ; les tranches peuvent commencer. Il ne vaut pas approbation rétroactive d'une modification de l'API non décrite ici.
 - **Avant chaque PR :** annoncer le plan (fichiers, comportements modifiés, tests, non-touchés), identifier les écarts éventuels à la doctrine, puis rester dans le périmètre autorisé.
 - **Ordre :** A → A2 → B → C → D (A2 peut avancer en parallèle de A) ; pas de dépendance artificielle sur des travaux futurs V3. Les quatre tranches sont testables et revues séparément.
 - **Traçabilité :** récit `.md`, branche nommée d'après le récit, commits propres, tests obligatoires, CI verte ; aucun fichier généré suivi sans justification.

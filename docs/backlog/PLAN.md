@@ -32,7 +32,7 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
 6. → **MIP au centre de Taxo, première tranche : MIP 0.1 et Ask Taxo général** ([TAXO-01N / MIP-01](TAXO-01N-ask-taxo-general.md)).
    Le MIP est le contrat qui permet d'interroger la Maille et de transporter des Tuiles vérifiables ; le
    protocole `taxo-query/1` en est la première version filaire. Tranches : A (contrat MIP 0.1, `EXPAND` sans
-   LLM), A2 (recherche par nom), B (Minia et repli paquet ; base livrée en #108), C (portail), D (mesures).
+   LLM), A2 (recherche par nom), B (Minia et repli paquet ; base proposée en #108, non fusionnée), C (portail), D (mesures).
    Accepté le 2026-10-09 ; passe avant l'Arbre. Autorisations par consommateur et capsule de Tuile : tranche suivante.
 7. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 8. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
