@@ -1,6 +1,8 @@
-# TAXO-01N — Ask Taxo général
+# TAXO-01N — MIP, première tranche : Ask Taxo général
 
-Statut : **accepté le 2026-10-09**, avec l'exigence de ne pas enfermer le MIP (voir « Rapport au MIP »). Ne touche pas le MIP.
+Statut : **accepté le 2026-10-09.** Le même jour, il est fusionné avec le MIP, qui passe au centre de Taxo :
+ce récit en est la première tranche (voir « Le MIP »). La règle antérieure « MIP hors périmètre » est levée
+pour ce récit.
 
 ## Problème
 
@@ -56,34 +58,53 @@ une réponse honnête : ce que Taxo sait servir pour ce projet et comment nommer
 
 - Minia ne produit aucun fait et ne lit pas le dépôt ; toute affirmation affichée comme établie a un verdict de
   Taxo (ARCHITECTURE § 12.1, § 12.4).
-- Le protocole `taxo-query/1` ne change pas de sens : aucune opération nouvelle, aucune sémantique modifiée.
-  Seul un champ facultatif de `find_references` est envisagé (décision 4), compatible selon ARCHITECTURE § 12.5. Les opérations réservées (`find_callers`…) restent réservées.
+- Le protocole existant ne change pas de sens : aucune sémantique modifiée, aucune rupture. Seuls des ajouts
+  compatibles selon ARCHITECTURE § 12.5 : un champ facultatif de `find_references` (décision 4) et une opération
+  d'exécution de plan (décision 5). Les opérations réservées (`find_callers`…) restent réservées.
 - Neutralité : aucune ligne d'Ask, de Minia ou du panneau ne nomme Java, Spring, une relation ou un type de
   référence en dur ; tout vient de `describe`.
 - Budgets et garde-fous inchangés (8 opérations choisies, 10 affirmations vérifiées, octets par tour et par
   échange).
 - Aucune réponse conservée.
 
-## Rapport au MIP
+## Le MIP
 
-TAXO-01N **n'est pas** le MIP et ne le préfigure pas. Le MIP reste hors périmètre : rien ici ne le modifie,
-rien ici ne doit le bloquer ni l'enfermer.
+> La Maille est la connaissance. La Tuile est la portion transportable de cette connaissance. Le MIP est le
+> contrat qui permet d'interagir avec elle, en préservant les preuves, les limites et l'autorité de Taxo.
 
-Ce que le MIP prévoit, et que ce récit ne réalise pas : le transport normalisé de Tuiles autonomes, un contrat
-indépendant de Minia, des intentions et des autorisations formalisées, des capsules de preuves et une
-trajectoire normalisées, l'indépendance du transport, l'exécution locale d'un plan d'exploration contrôlé.
+Le MIP (Maille Interaction Protocol) permet d'interroger une Maille et de transporter des Tuiles vérifiables,
+sans transmettre toute la Maille. Il ne dépend ni de Minia, ni d'un modèle de langage, ni d'un transport
+(appel local, HTTP, MCP). Son cycle : une intention arrive ; le MIP la valide, borne le périmètre et le budget ;
+Taxo explore **localement** et construit une Tuile (faits, preuves, provenance, statuts, frontières, reprises) ;
+le MIP la transporte ; le consommateur interprète et propose des affirmations ; le MIP les fait vérifier par
+Taxo, qui rend un verdict avec ses preuves ou les laisse non prouvées. Un consensus entre modèles ne devient
+jamais un fait.
 
-Exigences pour ne pas enfermer le MIP :
+Ce qui existe déjà, dans le protocole `taxo-query/1` (ARCHITECTURE § 12) : la Tuile bornée de
+`get_neighborhood` avec frontières et reprises, les verdicts de `verify_claim`, les budgets en octets,
+le consentement au diff, deux transports (interne et HTTP), la trajectoire visible.
 
-1. Réutiliser les primitives existantes de Taxo (`find_references`, `get_neighborhood` et sa Tuile,
-   `verify_claim`), sans en créer de propres à Minia.
-2. La forme d'un tour de Minia (décision 1) est un détail de l'adaptateur Minia ↔ modèle, jamais un contrat de
-   Taxo : rien côté Taxo ne la lit ni ne la connaît.
-3. L'unité rendue au consommateur reste la Tuile telle que le voisinage la produit (faits, preuves, limites,
-   statuts, frontières, reprises), pas un format de réponse inventé pour Minia.
-4. Le repli paquet (PR B) est déjà une exécution locale par Taxo d'une demande bornée, sans aller-retour avec le
-   modèle à chaque opération. Il reste une capacité de l'application Ask, pas une esquisse du MIP.
-5. Aucun choix de ce récit ne fixe le transport (FastAPI, HTTP), l'algorithme de parcours ou un langage.
+Ce qui manque, et ce que ce récit apporte :
+
+| Manque | Dans ce récit |
+| --- | --- |
+| Un contrat MIP écrit | Tranche 0 : ARCHITECTURE le définit sur l'existant, `taxo-query/1` en devient la première version filaire. |
+| Un consommateur qui peut se servir de tout le contrat | Tranche A (#108). |
+| Trouver un élément par son nom | Tranche A2 (décision 4). |
+| L'exécution locale d'un plan borné, sans aller-retour avec le modèle à chaque opération | Tranche B : une opération générique du MIP, servie à tout consommateur ; le repli paquet d'Ask l'utilise (décision 5). |
+
+Ce qui reste pour la tranche suivante du MIP (récit à part) : intentions et autorisations par consommateur
+(périmètre, validation adaptée à la lecture ou à l'action, sur le modèle INTENTION → PREUVES → VALIDATION →
+AUTORISATION → ACTION), capsule de Tuile autonome et vérifiable hors échange, transport MCP.
+
+Exigences :
+
+1. Réutiliser les primitives existantes (`find_references`, `get_neighborhood` et sa Tuile, `verify_claim`).
+2. La forme d'un tour de Minia est un détail de l'adaptateur Minia ↔ modèle : le MIP ne la connaît pas.
+3. L'unité transportée est la Tuile, jamais un format de réponse inventé pour un consommateur.
+4. Le contrat ne fige ni le transport (FastAPI, HTTP), ni l'algorithme de parcours, ni un langage.
+5. Le modèle propose, Taxo garde le contrôle déterministe de ce qui est exécuté : un plan est validé et borné
+   avant d'être exécuté, jamais interprété.
 
 ## Décisions à prendre
 
@@ -93,15 +114,21 @@ Exigences pour ne pas enfermer le MIP :
 | 2 | En mode paquet, comment Taxo trouve-t-il l'élément nommé sans modèle ? | Déterministe : les mots de la question (identifiants, chemins) sont cherchés par `find_references`, au plus quelques ancres, ambiguïté signalée et jamais tranchée au hasard. Aucun score, aucune similarité floue. |
 | 3 | Le bouton « Sélectionner » (sans Minia) devient-il général ? | Non dans ce récit : il garde les sélections de commits, et une question générale l'invite à « Demander à Minia » ou ouvre l'Explorer sur l'élément reconnu. Un moteur de requête structurée sans modèle serait un récit à part. |
 | 4 | Comment trouver un élément par son nom simple (`VetController`, `OwnerRepository.findById`) ? `find_references` compare un **préfixe de la clé entière** (`neighborhood/domain/references.py`, `reference_index.search`) : une clé Java commence par le paquet (`com.example.web.VetController…`), donc le nom seul ne la trouve pas. Sans réponse, les critères 2 et 3 échouent sur les exemples mêmes du récit. | Un champ facultatif `match` de `find_references` : `KEY` (défaut, comportement actuel inchangé) ou `NAME`. En `NAME`, la clé et le préfixe demandé sont d'abord **normalisés** : chaque séparateur d'un jeu fixe et neutre (`.`, `/`, `#`, `:`, `$`) devient un même séparateur canonique ; le préfixe normalisé est ensuite comparé au début de **chaque suffixe de la clé qui commence à un segment**. Une suite ordonnée de segments est ainsi trouvée quel que soit le séparateur écrit : `OwnerRepository.findById` trouve `…OwnerRepository#findById(…)`, et `VetController` trouve `…web.VetController`. Aucune règle propre à un langage, aucune recherche de segments isolés (qui serait ambiguë). Ces deux exemples exacts sont des tests de la tranche A2. Servi par un index borné (une entrée par début de segment) à côté de l'index actuel, avec migration testée ; une analyse antérieure sans cet index le dit (`NOT_AVAILABLE`) au lieu de rendre une liste vide. Alternative sans contrat : exiger un nom qualifié, ce qui ne répond pas à la cible. Décision de contrat et de format persistant : la tienne. |
+| 5 | Que contient un plan d'exploration exécuté localement ? | Une opération `run_plan` : une suite ordonnée et bornée d'opérations **en lecture** déjà servies par le MIP (au plus 8 étapes, dans le budget de l'échange). Un argument peut renvoyer à une référence rendue par une étape précédente par un chemin borné (`{"from": 1, "item": 0, "field": "reference"}`), jamais par une expression. Taxo valide tout le plan avant d'exécuter la première étape ; il rend la trajectoire et chaque réponse (Tuiles comprises). Aucune écriture, aucune boucle, aucun branchement dans cette version. |
+| 6 | Le nom filaire change-t-il ? | Non : `taxo-query/1` reste l'identifiant de la première version filaire du MIP. Renommer casserait les consommateurs sans rien apporter ; un nouveau nom viendra avec une vraie nouvelle version. |
 
 ## Tranches (chacune testable seule)
+
+- **PR 0 — Contrat MIP.** ARCHITECTURE définit le MIP (objet, cycle, Tuile, verdicts, budgets, ce qui existe et
+  ce qui manque) sur l'existant, sans rien casser ; PLAN.md le place au centre. Documentation seule.
 
 - **PR A — Minia appelle tout le protocole.** Arguments par opération (décision 1), consignes d'exploration
   rendues générales (exemples hors commits), tests avec modèle scénarisé, non-régression des commits.
 - **PR A2 — Recherche par nom** (si décision 4 acceptée). Champ facultatif `match` de `find_references`, index des
   segments et sa migration, `describe` l'annonce ; tests de contrat, de migration et de non-régression de `KEY`.
-- **PR B — Repli paquet général.** Ancres trouvées de façon déterministe (décision 2), paquet bâti sur le
-  voisinage borné (`neighborhood/2`, forme compacte), `unknown` utile sans ancre.
+- **PR B — Exécution locale d'un plan.** L'opération `run_plan` (décision 5), annoncée par `describe`, testée
+  pour tout consommateur ; puis le repli paquet d'Ask : ancres trouvées de façon déterministe (décision 2), plan
+  exécuté localement, paquet bâti sur les Tuiles rendues, `unknown` utile sans ancre.
 - **PR C — Panneau.** Texte et exemples des deux familles, ancres utilisées visibles, liens vers l'Explorer,
   soin visuel au niveau de l'Explorer.
 - **PR D — Mesure.** Banque de questions sur les fixtures (`bibliotheque`, `spring-petclinic`), vérité établie
@@ -117,7 +144,8 @@ Exigences pour ne pas enfermer le MIP :
 
 ## Hors périmètre
 
-- Le MIP ; nouvelles opérations du protocole, activation des opérations réservées, `get_source`.
+- Intentions et autorisations par consommateur, capsule de Tuile autonome, transport MCP : tranche suivante du MIP.
+- Opérations d'écriture ou d'action, activation des opérations réservées, `get_source`.
 - Nouveaux évaluateurs ou nouvelles relations (lambdas Java, lecteur Python).
 - Recherche plein texte ou sémantique, embeddings, conservation de conversations.
-- L'Arbre (étape 6 du PLAN), qui reste le récit suivant.
+- L'Arbre, qui reste le récit suivant.
