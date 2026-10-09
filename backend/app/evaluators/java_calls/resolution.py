@@ -1,9 +1,10 @@
-"""La regle `java.calls.declared-receiver-unique-target/1` (TAXO-01K, ARCHITECTURE § 14) : d'un site d'appel a la
-declaration qu'il vise, ou a la raison fermee pour laquelle elle n'est pas etablie.
+"""La regle `java.calls.declared-receiver-unique-target/2` (TAXO-01K, TAXO-01L, ARCHITECTURE § 14) : d'un site
+d'appel a la declaration qu'il vise, ou a la raison fermee pour laquelle elle n'est pas etablie.
 
 Le receveur est `this`, implicite, ou un champ du type courant (`champ`, `this.champ`) dont le type declare est un
 type des sources. La cible est la seule declaration de meme nom et meme arite dans la hierarchie de ce type, toute
-dans les sources. Toute autre forme, et tout doute (surcharge, supertype externe, argument litteral contraire), laisse
+dans les sources hors les supertypes de la JDK connus du contrat (`KNOWN_SUPERTYPES`, version 2), qui ne declarent
+aucune autre methode que celles d'`Object`. Toute autre forme, et tout doute (surcharge, supertype externe, argument litteral contraire), laisse
 le site non interprete : moins d'appels, mais vrais.
 """
 from dataclasses import dataclass, field
@@ -12,7 +13,7 @@ from app.evaluators.java import sites
 from . import arguments
 from .declarations import OBJECT_METHODS, external_name, premise, symbol
 
-RULE = 'java.calls.declared-receiver-unique-target/1'
+RULE = 'java.calls.declared-receiver-unique-target/2'
 KNOWN_GAPS = ('applicabilité des arguments non vérifiée ; suppose un code qui compile',)
 
 RECEIVER_TYPE_UNKNOWN = 'RECEIVER_TYPE_UNKNOWN'
