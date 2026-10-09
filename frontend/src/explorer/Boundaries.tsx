@@ -3,7 +3,7 @@
 // zone non lue.
 import type {Boundary} from './protocol';
 import {omitted, type View} from './graph';
-import {knowledgeText, notSentText, selectionText} from './sentences';
+import {categoryTexts, knowledgeText, notSentText, selectionText} from './sentences';
 import {useNaming} from './Naming';
 import {NodeActions, type NodeCommands} from './NodeActions';
 
@@ -24,9 +24,17 @@ export function Boundaries({view, commands, busy}:Readonly<{view:View; commands:
     {notSent.length>0&&<ul className="explorer-not-sent">{notSent.map(entry=><li key={entry.what}>{notSentText(entry)}</li>)}</ul>}
     <h4>Ce que Taxo ne sait pas <span className="count-pill">{knowledge.length}</span></h4>
     {knowledge.length?<ul>{knowledge.map(entry=><li key={JSON.stringify(entry)}>{entry.node&&entry.scope==='NODE'?<><strong>{named(entry.node)}</strong> — </>:null}
-      {knowledgeText(entry)}</li>)}</ul>:<p className="muted">Aucune lacune signalée par Taxo pour les relations suivies.</p>}
+      {knowledgeText(entry)}<Categories entry={entry}/></li>)}</ul>:<p className="muted">Aucune lacune signalée par Taxo pour les relations suivies.</p>}
     <h4>Ce que Taxo ne peut pas savoir ici <span className="count-pill">{context.length}</span></h4>
     {context.length?<ul>{context.map(entry=><li key={JSON.stringify(entry)}>{knowledgeText(entry)}</li>)}</ul>
       :<p className="muted">Chaque relation suivie a un analyseur exécuté.</p>}
   </section>;
+}
+
+/** Les sites d'une zone non lue, par catégorie générique (TAXO-01M) : une pastille par catégorie reçue. */
+function Categories({entry}:Readonly<{entry:Boundary}>){
+  const said=categoryTexts(entry);
+  if(!said.length)return null;
+  return <span className="explorer-categories" aria-label="Sites par catégorie">{said.map(({category, text})=>
+    <span key={category??'none'} className={`category-pill category-${(category??'none').toLowerCase()}`}>{text}</span>)}</span>;
 }

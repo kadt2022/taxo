@@ -15,6 +15,10 @@ const ROUTE='endpoint:GET /orders', HANDLER='symbol:java:A#get()', PATTERN='rout
 const CALLED='symbol:java:B#run()', ABSENT='endpoint:GET /nowhere', REPOSITORY='repository:p';
 const gap:Boundary={nature:'KNOWLEDGE', scope:'NODE', node:HANDLER, subject:'file:A.java', reason:'NOT_INTERPRETED',
   producer:'taxo.spring-api', count:{kind:'UNKNOWN'}};
+const classified:Boundary={nature:'KNOWLEDGE', scope:'NODE', node:HANDLER, subject:HANDLER, reason:'NOT_INTERPRETED',
+  producer:'taxo.java-calls', count:{kind:'UNKNOWN'}, causes:['OVERLOAD_AMBIGUOUS', 'TARGET_TYPE_OUTSIDE_SNAPSHOT'],
+  categories:[{category:'UNKNOWN', count:{kind:'AT_LEAST', value:1}}, {category:'AMBIGUOUS', count:{kind:'AT_LEAST', value:1}},
+    {category:'UNSUPPORTED', count:{kind:'AT_LEAST', value:0}}, {category:'OUT_OF_SCOPE', count:{kind:'AT_LEAST', value:0}}]};
 const noAnalyzer:Boundary={nature:'CONTEXT', node:ROUTE, relation:'PROTECTED_BY', reason:'NO_ANALYZER', count:{kind:'UNKNOWN'}};
 
 const TILES:Record<string, Tile>={
@@ -24,7 +28,7 @@ const TILES:Record<string, Tile>={
     element(REPOSITORY, ROUTE, {relation:'CONTAINS', direction:'INCOMING'}),
     element(ROUTE, undefined, {relation:'PERMITS_ALL'}), element(ROUTE, 'authenticated()', {relation:'AUTHORIZED_BY'})],
   nodes:[[ROUTE, 0, false], [HANDLER, 1, false], [PATTERN, 1, false], [REPOSITORY, 1, false]],
-  frontier:[depthCut(HANDLER), edgesCut(PATTERN, 'reprise-P'), depthCut(REPOSITORY), gap, noAnalyzer]}),
+  frontier:[depthCut(HANDLER), edgesCut(PATTERN, 'reprise-P'), depthCut(REPOSITORY), gap, classified, noAnalyzer]}),
   [HANDLER]:tile({root:HANDLER, items:[element(HANDLER, CALLED, {relation:'CALLS'})], nodes:[[HANDLER, 0, true], [CALLED, 1, false]],
     frontier:[depthCut(CALLED)]}),
   [PATTERN]:tile({root:PATTERN, items:[element(PATTERN, RULE, {relation:'AUTHORIZED_BY'})], nodes:[[PATTERN, 0, true], [RULE, 1, false]],
@@ -270,6 +274,16 @@ describe('l’explorateur', ()=>{
     await click(named('Développer symbole java:A#get()'));
     expect(boundaries().textContent).toContain('Zone non lue par Endpoints Spring');
     expect(boundaries().textContent).not.toMatch(/%|complet/i);
+  });
+
+  it('montre les sites d’une zone non lue par catégorie, sans les confondre avec un zéro exact', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    await list();
+    const pills=Array.from(host.querySelectorAll('.explorer-categories .category-pill'), pill=>pill.textContent);
+    expect(pills).toEqual(['cible inconnue · au moins 1', 'plusieurs cibles possibles · au moins 1',
+      'forme non prise en charge · au moins 0', 'hors du périmètre analysé · au moins 0']);
+    expect(host.querySelector('.category-out_of_scope')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Ce que la vue ne montre pas"]')!.textContent).toContain('plusieurs déclarations possibles');
   });
 
   it('ignore une réponse arrivée trop tard, même pendant la demande suivante', async()=>{

@@ -26,7 +26,8 @@
       "type": "object", "additionalProperties": false, "required": ["sites_seen", "sites"],
       "properties": {
         "sites_seen": {"type": "integer", "minimum": 1},
-        "sites": {"type": "array", "items": {"$ref": "#/$defs/site"}}
+        "sites": {"type": "array", "items": {"$ref": "#/$defs/site"}},
+        "classification": {"$ref": "#/$defs/text"}
       }
     },
     "snapshot": {
@@ -114,6 +115,7 @@
       ]
     },
     "column": {"type": "integer", "minimum": 0},
+    "diagnosticCode": {"type": "string", "maxLength": 64, "pattern": "^[A-Z][A-Z0-9_]*(?![\\s\\S])"},
     "evidenceRole": {"enum": ["call-site"]},
     "identifier": {"type": "string", "pattern": "^[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*(?![\\s\\S])"},
     "typeName": {"type": "string", "pattern": "^[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*(?:\\.[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*)*(?:\\[\\])*(?![\\s\\S])"},
@@ -124,10 +126,8 @@
         "role": {"$ref": "#/$defs/evidenceRole"},
         "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1},
         "column_start": {"$ref": "#/$defs/column"}, "column_end": {"$ref": "#/$defs/column"},
-        "reason": {"enum": ["RECEIVER_TYPE_UNKNOWN", "RECEIVER_TYPE_AMBIGUOUS", "TARGET_TYPE_OUTSIDE_SNAPSHOT",
-                            "TARGET_DECLARATION_OUTSIDE_SNAPSHOT", "NO_MATCHING_DECLARATION", "OVERLOAD_AMBIGUOUS",
-                            "SUPER_TYPE_UNRESOLVED", "UNSUPPORTED_CALL_FORM", "RECEIVER_KIND_DEFERRED",
-                            "LAMBDA_OR_LOCAL_CONTEXT", "PARSE_ERROR"]},
+        "reason": {"$ref": "#/$defs/diagnosticCode"},
+        "category": {"enum": ["UNKNOWN", "AMBIGUOUS", "UNSUPPORTED", "OUT_OF_SCOPE"]},
         "method": {"$ref": "#/$defs/identifier"},
         "receiver": {"type": "string", "pattern": "^(?:this\\.)?[A-Za-z_$\\u00c0-\\uffff][A-Za-z0-9_$\\u00c0-\\uffff]*(?![\\s\\S])"},
         "receiver_type": {"$ref": "#/$defs/typeName"},

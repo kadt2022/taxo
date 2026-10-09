@@ -39,6 +39,10 @@ class RunEvaluator:
                 raise ValueError("Les faits COVERAGE doivent être placés dans output.coverage.")
             for fact in (*facts, *coverage):
                 self.validator(fact)
+            undeclared = evaluator.catalog.undeclared_codes(coverage)
+            if undeclared:
+                raise ValueError(f'Codes de diagnostic non déclarés par le catalogue {evaluator.catalog.catalog_id} '
+                                 f'de {evaluator.evaluator_id} : {", ".join(undeclared)}.')
             declared_scope = next((fact['scope'] for fact in coverage
                                    if fact['subject'] == repository), scope)
             scope = {'include': declared_scope['include'], 'exclude': declared_scope.get('exclude', [])}

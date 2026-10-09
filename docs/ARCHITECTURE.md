@@ -637,6 +637,43 @@ ces langages), lue dans le résumé de l'analyse (TAXO-COV-01).
 
 Une Tuile finie n'atteste pas un logiciel entièrement connu.
 
+**Catégories de site (TAXO-01M, contrat).** Un analyseur possède ses diagnostics ; Taxo possède les frontières.
+Un site non résolu porte le code de son producteur (`reason`, déclaré par son catalogue) et, quand son
+`diagnostic` nomme la règle qui l'a classé (`classification`), une catégorie fermée du contrat commun :
+
+| Catégorie | Sens |
+| --- | --- |
+| `UNKNOWN` | la continuation ne peut pas être déterminée avec les connaissances disponibles |
+| `AMBIGUOUS` | plusieurs continuations possibles, sans preuve pour en choisir une ; un candidat ne devient jamais une relation |
+| `UNSUPPORTED` | la construction est reconnue, son interprétation n'est pas prise en charge |
+| `OUT_OF_SCOPE` | la continuation est établie comme extérieure au périmètre analysé |
+
+- La catégorie est écrite par le producteur, à la production, et conservée : une analyse n'est jamais
+  reclassée. Un `diagnostic` sans `classification` (analyse antérieure) n'a aucune catégorie, et rien n'en est
+  déduit.
+- Elle ne vit que sur un site. `NOT_INTERPRETED` reste un type de couverture : une zone sans site n'a aucune
+  catégorie. Les frontières de sélection et de contexte n'en ont jamais.
+- Elle ne réutilise aucun champ existant : `coverage_type` `OUT_OF_SCOPE`, statut d'évaluation `UNSUPPORTED`
+  et décompte `UNKNOWN` gardent leur sens propre.
+- Un langage de plus n'ajoute aucune catégorie ; il déclare ses codes dans son catalogue.
+
+**Catégories dans la Tuile (TAXO-01M, PR C).** Une entrée `KNOWLEDGE`, `scope: NODE`, de `neighborhood/2` dont
+la couverture a une `classification` porte un champ additif `categories` : les décomptes de ses sites par
+catégorie, dans l'ordre fixe `UNKNOWN`, `AMBIGUOUS`, `UNSUPPORTED`, `OUT_OF_SCOPE`, par exemple
+`[{"category": "UNKNOWN", "count": {"kind": "EXACT", "value": 3}}]`.
+
+- Liste complète (`sites_seen` égal au nombre de sites listés) : décomptes `EXACT`, une catégorie absente vaut
+  zéro. Liste tronquée : les quatre catégories, chacune `AT_LEAST` le nombre de sites listés, zéro compris ; une
+  catégorie non observée n'est jamais lue comme un zéro exact.
+- `reason`, `causes`, `count` et `producer` ne changent pas. Une analyse antérieure n'a pas de `categories`, et
+  l'explorateur la dit « non classée ». Les frontières de sélection et de contexte n'en ont jamais.
+- Le champ est compté dans `max_bytes` ; une lacune locale qui ne tient pas reste comptée dans `not_sent`, jamais
+  coupée. La forme compacte le transmet tel quel. Le moteur reste `neighborhood/2` : un client de
+  `neighborhood/2` ignore les propriétés qu'il ne connaît pas (vérifié dans le dépôt au 2026-10-09 : l'explorateur
+  lit des types TypeScript sans validation fermée, aucun schéma de réponse n'est fermé, Minia ne lit pas la
+  frontière).
+- L'explorateur dit chaque catégorie par un libellé générique ; il ne déduit rien d'un code ni d'un langage.
+
 ### 9.4 Parcours et reprise
 
 Parcours en largeur, ordre stable, nœuds dédupliqués, arêtes distinctes conservées (y compris celle qui
@@ -940,7 +977,19 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
   candidate. Raisons : `RECEIVER_TYPE_UNKNOWN`, `RECEIVER_TYPE_AMBIGUOUS`, `TARGET_TYPE_OUTSIDE_SNAPSHOT`,
   `TARGET_DECLARATION_OUTSIDE_SNAPSHOT`, `NO_MATCHING_DECLARATION`, `OVERLOAD_AMBIGUOUS`,
   `SUPER_TYPE_UNRESOLVED`, `UNSUPPORTED_CALL_FORM`, `RECEIVER_KIND_DEFERRED`, `LAMBDA_OR_LOCAL_CONTEXT`,
-  `PARSE_ERROR`.
+  `PARSE_ERROR`. Depuis TAXO-01M, cette liste fermée est déclarée par le catalogue `java-calls`
+  (`diagnostic_codes`), plus par le schéma commun, qui n'exige qu'un code stable (`^[A-Z][A-Z0-9_]*$`) ; le
+  moteur refuse l'exécution d'un producteur qui écrit un code que son catalogue ne déclare pas. Chaque site
+  peut porter sa catégorie générique (§ 9.3).
+- **Classification** (TAXO-01M, PR B, `producer_version` 1.1.0) : chaque site listé porte sa catégorie selon
+  `java.calls.frontier-classification/1`, nommée dans `diagnostic.classification`, et les sites sont listés par
+  position (ligne, colonne de début, ligne et colonne de fin, puis code). Table fermée : `AMBIGUOUS` pour
+  `RECEIVER_TYPE_AMBIGUOUS` et `OVERLOAD_AMBIGUOUS` ; `UNSUPPORTED` pour `UNSUPPORTED_CALL_FORM`,
+  `RECEIVER_KIND_DEFERRED` et `LAMBDA_OR_LOCAL_CONTEXT` ; `UNKNOWN` pour tous les autres. Aucun fait ne prouve
+  encore qu'un type hors du snapshot est externe et exclu : `TARGET_TYPE_OUTSIDE_SNAPSHOT` reste `UNKNOWN` et
+  la version 1 n'écrit jamais `OUT_OF_SCOPE`. Un code absent de la table fait échouer le producteur ; changer
+  une catégorie, c'est publier une nouvelle version de la règle. Les analyses écrites en 1.0.0 restent telles
+  quelles, sans catégorie.
 - **Restitution** : une Tuile ne connaît rien de Java ; la frontière d'un nœud non lu porte en `causes` les
   raisons fermées de son `diagnostic`, et l'explorateur les dit en clair (« plusieurs déclarations possibles »).
 - **Lambdas** : créer une lambda n'est pas l'appeler ; ses appels ne sont jamais attribués à la méthode
@@ -1098,3 +1147,19 @@ Le lecteur Java partagé lit désormais les sources, les déclarations et les si
 **2026-10-07** — Implémentations de méthodes et raisons d'arrêt (TAXO-01K, PR C). `taxo.java-calls` déduit
 `IMPLEMENTS` méthode → méthode par `java.implements.same-signature/1`. La frontière d'une Tuile porte les raisons
 fermées des sites non lus (`causes`), lues génériquement dans le `diagnostic` ; l'explorateur les dit en clair.
+
+**2026-10-09** — Contrat générique des frontières (TAXO-01M, PR A). Quatre catégories fermées (`UNKNOWN`,
+`AMBIGUOUS`, `UNSUPPORTED`, `OUT_OF_SCOPE`) entrent au contrat commun, sur chaque site d'un `diagnostic` qui
+nomme sa règle de classification. Les codes des sites sortent du schéma commun : chaque catalogue déclare les
+siens, et le moteur refuse un code non déclaré. Les analyses existantes restent valides, sans migration ni
+reclassification. Aucun producteur ne classe encore ; la Tuile ne change pas.
+
+**2026-10-09** — Classification des sites Java (TAXO-01M, PR B). `taxo.java-calls` 1.1.0 écrit la catégorie de
+chaque site non interprété selon `java.calls.frontier-classification/1` et liste ses sites par position. Aucun
+fait, aucune couverture, aucune identité ne change ; `OUT_OF_SCOPE` n'est pas encore écrit ; la Tuile ne change
+pas.
+
+**2026-10-09** — Catégories dans la Tuile (TAXO-01M, PR C). Une lacune locale classée de `neighborhood/2` porte
+ses décomptes par catégorie (`categories`, `EXACT` ou, liste tronquée, les quatre en `AT_LEAST`) ; champ additif,
+même moteur, aucun champ existant changé. L'explorateur les montre en pastilles, « non classé » pour une analyse
+antérieure.

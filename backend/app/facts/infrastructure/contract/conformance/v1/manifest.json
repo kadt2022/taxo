@@ -983,10 +983,10 @@
       "submission": true,
       "accepted": false,
       "expected_error": {
-        "code": "SCHEMA_enum",
+        "code": "SCHEMA_pattern",
         "path": "/diagnostic/sites/0/reason"
       },
-      "reason": "The reason of a site belongs to a closed list; there is no possible call."
+      "reason": "The code of a site is a stable producer code, never free text; its catalog closes the list (TAXO-01M)."
     },
     {
       "file": "invalid-diagnostic-sites.json",
@@ -1057,6 +1057,56 @@
         "path": "/diagnostic/sites/0/candidates/0"
       },
       "reason": "A candidate is a declaration, named by its symbol."
+    },
+    {
+      "file": "valid-coverage-diagnostic-classified.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "valid-coverage-diagnostic-producer-code.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "invalid-diagnostic-category.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_enum",
+        "path": "/diagnostic/sites/0/category"
+      },
+      "reason": "A category belongs to the four generic categories; no language adds one."
+    },
+    {
+      "file": "invalid-diagnostic-classified-without-category.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "DIAGNOSTIC_CATEGORY",
+        "path": "/diagnostic/sites/1"
+      },
+      "reason": "A classified diagnostic gives each site a category."
+    },
+    {
+      "file": "invalid-diagnostic-category-without-classification.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "DIAGNOSTIC_CLASSIFICATION",
+        "path": "/diagnostic/sites/0/category"
+      },
+      "reason": "A category is kept with the classification rule that gave it."
+    },
+    {
+      "file": "invalid-diagnostic-classification-blank.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "SCHEMA_pattern",
+        "path": "/diagnostic/classification"
+      },
+      "reason": "A classification names its rule."
     }
   ]
 }

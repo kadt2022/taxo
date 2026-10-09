@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.evaluations.domain.capability import UNREAD_COVERAGE, unread_reasons
 from app.facts import is_reference
+from app.facts.domain.diagnostic import category_counts
 from app.facts.domain.provenance import EXECUTABLE, ProducerExecution
 from app.neighborhood.domain.traversal import Adjacent
 from app.platform.database.base import Base
@@ -368,7 +369,8 @@ class SqlAlchemyFactMemory:
                     subject = (raw or {}).get('subject', canonical)
                     if subject in asked and value.get('coverage_type') in UNREAD_COVERAGE:
                         found.append({'subject': subject, 'coverage_type': value['coverage_type'],
-                                      'producer': machine or human, 'reasons': unread_reasons(details or {})})
+                                      'producer': machine or human, 'reasons': unread_reasons(details or {}),
+                                      'categories': category_counts(details or {})})
         return sorted(found, key=lambda item: (item['subject'], item['coverage_type'], item['producer'] or ''))
 
     def references(self, scan_id, prefix, kind, after, limit):

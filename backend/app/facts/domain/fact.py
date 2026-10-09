@@ -184,6 +184,14 @@ def _diagnostic_issues(fact):
     diagnostic = fact['diagnostic']
     if len(diagnostic['sites']) > diagnostic['sites_seen']:
         yield 'DIAGNOSTIC_SITES', '/diagnostic/sites', 'More sites are listed than were seen.'
+    classified = 'classification' in diagnostic
     for index, site in enumerate(diagnostic['sites']):
         for bounds, issue in _span_issues(site):
             yield f'DIAGNOSTIC_{bounds}', f'/diagnostic/sites/{index}', issue
+        # TAXO-01M : une catégorie n'existe qu'avec la règle qui l'a donnée, et une règle classe chaque site.
+        if classified and 'category' not in site:
+            yield ('DIAGNOSTIC_CATEGORY', f'/diagnostic/sites/{index}',
+                   'A classified diagnostic gives each site a category.')
+        if not classified and 'category' in site:
+            yield ('DIAGNOSTIC_CLASSIFICATION', f'/diagnostic/sites/{index}/category',
+                   'A category is kept with the classification rule that gave it.')
