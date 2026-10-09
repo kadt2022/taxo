@@ -823,7 +823,9 @@ pas. Ajouter une opération ou un champ facultatif reste compatible ; changer un
 
 - `EXPAND` : exploration bornée autour d'une **référence résolue**, selon des relations et un sens donnés
   explicitement (`relations`, `direction` : « qui appelle X » est `CALLS` entrant) ; voisinage et relations
-  viennent du seul moteur existant (§ 9). Servie en 0.1, sans modèle de langage.
+  viennent du seul moteur existant (§ 9). Servie en 0.1, sans modèle de langage. Sans reprise, c'est la première
+  Tuile (TILE, § 9.5) ; avec la reprise d'un nœud de la frontière de sélection, c'est l'EXPAND du § 9.5, qui
+  n'ajoute que la branche demandée. Un seul nom, la même opération `get_neighborhood`.
 - `PROJECT` : projection bornée selon des règles servies par le moteur. Aucune règle n'est écrite : refusée en 0.1
   par une erreur de protocole, jamais par une Tuile vide.
 
@@ -833,7 +835,9 @@ serveur. Le MIP ne devine pas une référence : la retrouver par un nom est une 
 Une requête est adressée à un projet et porte l'analyse rendue par la première étape : recherche, Tuile et
 vérification restent sur le même instantané. Le premier adaptateur de transport est
 `POST /api/projects/{project_id}/mip/query`, à côté de `taxo-query`, soumis aux mêmes droits et limites ; la sémantique se
-teste sans serveur HTTP. Le schéma JSON exact est figé sur les structures existantes avec la première réalisation.
+teste sans serveur HTTP. Ce n'est **pas un second protocole** (§ 12.3) : une requête MIP devient exactement une
+opération `taxo-query/1`, dont la validation, les budgets et les codes d'erreur s'appliquent tels quels ; l'adaptateur
+ne vérifie que la forme de sa propre requête et plafonne les bornes. Le schéma JSON exact est figé sur les structures existantes avec la première réalisation.
 
 | Élément du MIP | Réalisation | État |
 | --- | --- | --- |
@@ -903,7 +907,8 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 
 `describe` ne propose que les opérations servables pour le projet. Correspondance avec les opérations
 d'une Tuile adaptative : CAPABILITIES = `describe`, TILE et EXPAND = `get_neighborhood`, VERIFY =
-`verify_claim`. Il n'y a pas de second protocole.
+`verify_claim`. Il n'y a pas de second protocole ; l'adaptateur MIP 0.1 (§ 12.0) traduit une requête en une de ces
+opérations, sans sémantique propre.
 
 ### 12.4 Verdicts : Minia propose, Taxo vérifie
 
