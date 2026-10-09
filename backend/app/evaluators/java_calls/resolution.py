@@ -1,19 +1,22 @@
-"""La regle `java.calls.declared-receiver-unique-target/2` (TAXO-01K, TAXO-01L, ARCHITECTURE § 14) : d'un site
+"""La regle `java.calls.declared-receiver-unique-target/4` (TAXO-01K, TAXO-01L, ARCHITECTURE § 14) : d'un site
 d'appel a la declaration qu'il vise, ou a la raison fermee pour laquelle elle n'est pas etablie.
 
-Le receveur est `this`, implicite, ou un champ du type courant (`champ`, `this.champ`) dont le type declare est un
-type des sources. La cible est la seule declaration de meme nom et meme arite dans la hierarchie de ce type, toute
-dans les sources hors les supertypes de la JDK connus du contrat (`KNOWN_SUPERTYPES`, version 2), qui ne declarent
-aucune autre methode que celles d'`Object`. Toute autre forme, et tout doute (surcharge, supertype externe, argument litteral contraire), laisse
-le site non interprete : moins d'appels, mais vrais.
+Le receveur est `this`, implicite, un champ du type courant (`champ`, `this.champ`), ou, depuis la version 3, un
+parametre ou une variable locale visible au site, dont le type declare est un type des sources. La cible est la
+seule declaration de meme nom et meme arite dans la hierarchie de ce type, toute dans les sources hors les
+supertypes de la JDK connus du contrat (`KNOWN_SUPERTYPES`, version 2), qui ne declarent aucune autre methode que
+celles d'`Object`. Depuis la version 4, l'accesseur implicite d'un composant de record est une declaration
+candidate comme une autre, sa premisse etant le `CONTAINS` infere de `java.record.implicit-accessor/1`. Toute
+autre forme, et tout doute (surcharge, supertype externe, argument litteral contraire), laisse le site non
+interprete : moins d'appels, mais vrais.
 """
 from dataclasses import dataclass, field
 
 from app.evaluators.java import sites
-from . import arguments
+from . import accessors, arguments
 from .declarations import OBJECT_METHODS, external_name, premise, symbol
 
-RULE = 'java.calls.declared-receiver-unique-target/2'
+RULE = 'java.calls.declared-receiver-unique-target/4'
 KNOWN_GAPS = ('applicabilité des arguments non vérifiée ; suppose un code qui compile',)
 
 RECEIVER_TYPE_UNKNOWN = 'RECEIVER_TYPE_UNKNOWN'
@@ -39,12 +42,16 @@ class Outcome:
     premises: tuple = ()
     counter_examples: tuple = ()
     details: dict = field(default_factory=dict)
+    # Les declarations (`OBSERVED`) que les premisses citent et que l'evaluateur n'ecrit pas deja : celles d'un
+    # parametre ou d'une variable receveur, (sujet, relation, objet, ligne).
+    declarations: tuple = ()
 
 
 @dataclass(frozen=True)
 class _Receiver:
     qualified: str
     premises: tuple = ()
+    declarations: tuple = ()
 
 
 class _Stop(Exception):
@@ -65,7 +72,8 @@ class Resolver:
             target, premises, counter_examples = self._target(site, receiver, java_file)
         except _Stop as stop:
             return Outcome(reason=stop.reason, details={**details, **stop.details})
-        return Outcome(target, premises=premises, counter_examples=counter_examples, details=details)
+        return Outcome(target, premises=premises, counter_examples=counter_examples, details=details,
+                       declarations=receiver.declarations)
 
     def _receiver(self, site, java_file):
         """Le type declare du receveur, pour les seules formes du fragment."""
@@ -78,8 +86,10 @@ class Resolver:
             return _Receiver(site.owner)
         if site.receiver == sites.THIS:
             return _Receiver(site.owner)
-        if site.variable is not None:
+        if site.variable == sites.PATTERN:
             raise _Stop(RECEIVER_KIND_DEFERRED)
+        if site.variable is not None:
+            return self._variable_type(site, java_file)
         name = site.written.removeprefix('this.')
         own = next((item for item in self.sources.get(site.owner).java_type.fields if item.name == name), None)
         if own is None:
@@ -97,12 +107,30 @@ class Resolver:
             raise _Stop(RECEIVER_TYPE_AMBIGUOUS, receiver_type=own.qualified_type)
         return _Receiver(own.qualified_type, (premise('TYPED_AS', symbol(owner, own.name), symbol(own.qualified_type)),))
 
+    def _variable_type(self, site, java_file):
+        """Le type declare d'un parametre ou d'une variable locale : ses premisses sont la declaration de la variable
+        par la methode et son type, faits ecrits pour l'occasion."""
+        variable = site.declaration
+        if not variable.named:
+            raise _Stop(RECEIVER_TYPE_UNKNOWN)
+        qualified = java_file.resolve(variable.written, site.owner) if '[' not in variable.written else None
+        if qualified is None:
+            raise _Stop(TARGET_TYPE_OUTSIDE_SNAPSHOT, receiver_type=external_name(java_file, variable.written))
+        if qualified in self.sources.duplicated:
+            raise _Stop(RECEIVER_TYPE_AMBIGUOUS, receiver_type=qualified)
+        member = symbol(site.owner, site.member)
+        named = f'{member}/{variable.name}'
+        declarations = ((member, 'CONTAINS', named, variable.line),
+                        (named, 'TYPED_AS', symbol(qualified), variable.line))
+        premises = tuple(premise(relation, holder, target) for holder, relation, target, _ in declarations)
+        return _Receiver(qualified, premises, declarations)
+
     def _no_other_provider(self, site, java_file):
         """`f()` sans receveur : aucun type englobant ne declare `f` de meme arite, aucun import statique ne peut le
         fournir. Sinon le type qui le fournit n'est pas etabli."""
         outer = site.owner.rpartition('.')[0]
         while outer in self.sources.types:
-            if any(_matches(item, site) for item in self.sources.get(outer).java_type.declarations):
+            if any(_matches(item, site) for item in accessors.callables(self.sources.get(outer).java_type)):
                 raise _Stop(OVERLOAD_AMBIGUOUS)
             outer = outer.rpartition('.')[0]
         if any(static and name.rsplit('.', 1)[-1] in (site.name, '*') for name, static in java_file.imports):
@@ -136,7 +164,7 @@ class Resolver:
         for depth, level in enumerate(hierarchy.levels):
             for qualified in level:
                 java_type = self.sources.get(qualified).java_type
-                for declaration in java_type.declarations:
+                for declaration in accessors.callables(java_type):
                     if not declaration.constructor and declaration.name == name:
                         yield depth, qualified, java_type, declaration
 

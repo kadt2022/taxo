@@ -30,8 +30,10 @@ export function name(item:Entity, project?:Project){
 
 const code=(item:Entity, project?:Project):Segment=>({code:name(item, project)});
 
-/** Un symbole se dit par sa forme (ARCHITECTURE § 5.3) : `T#m(…)` une méthode, `T#champ` un champ, `T` une classe. */
+/** Un symbole se dit par sa forme (ARCHITECTURE § 5.3, § 14) : `T#m(…)/x` un paramètre ou une variable locale de la
+ * méthode, `T#m(…)` une méthode, `T#champ` un champ, `T` une classe. */
 function symbolNoun(key:string){
+  if(key.includes(')/'))return 'la variable ';
   if(key.includes('('))return 'la méthode ';
   return key.includes('#')?'le champ ':'la classe ';
 }
@@ -103,7 +105,8 @@ const RULES:Record<string, (subject:Entity, object:Entity, project?:Project)=>Se
   IMPLEMENTS:(subject, object)=>subject.type==='symbol'&&object.type==='symbol'&&!subject.key.includes('#')
     &&!object.key.includes('#')?[...noun(subject), ' implémente l’interface ', code(object)]:null,
   TYPED_AS:(subject, object)=>subject.type==='symbol'&&object.type==='symbol'
-    ?[...noun(subject), ' est déclaré du type ', code(object)]:null,
+    ?[...noun(subject), symbolNoun(subject.key)==='la variable '?' est déclarée du type ':' est déclaré du type ',
+      code(object)]:null,
 };
 
 /** Le debut d'une phrase prend une majuscule ; elle se termine par un point. */

@@ -21,6 +21,8 @@ Chaque cas du récit y figure une fois au moins :
 | type de receveur inconnu (`T`) | `Holder#fingerprint()` |
 | méthode héritée d'une dépendance externe | `courseRepository.findAll()` |
 | méthode d'un type des sources qui étend un type externe | `courseRepository.findByTitle(title)` |
-| receveur paramètre ou variable locale | `title.trim()`, `known.isEmpty()` |
+| receveur paramètre ou variable locale d'un type hors des sources | `title.trim()`, `known.isEmpty()` |
+| receveur paramètre, variable locale, deux variables de même nom, champ masqué ailleurs (TAXO-01L) | `Enrollment` |
+| variable `var` : type non écrit | `again.getTitle()` |
 | appel dans une lambda | `() -> catalog.refresh()` |
 | formes hors fragment | `new HashMap<>()`, `List.copyOf(…)` |

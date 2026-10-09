@@ -1,4 +1,4 @@
-"""TAXO-01K : la regle `java.calls.declared-receiver-unique-target/1`, cas par cas, sur des sources ecrites ici.
+"""TAXO-01K, TAXO-01L : la regle `java.calls.declared-receiver-unique-target`, cas par cas, sur des sources ecrites ici.
 
 Chaque test dit une forme d'appel et ce que la regle en fait : un `CALLS` vers la seule declaration possible, ou le
 site non interprete avec sa raison fermee. Jamais une cible devinee.
@@ -186,7 +186,7 @@ def test_the_implicit_record_superclass_is_known_and_hides_no_target():
     """TAXO-01L : `java.lang.Record` ne declare que des methodes d'`Object` ; il ne cache aucune cible."""
     execution = run(java('A', 'class A { private E e; void g() { e.f(); } }'), java('E', 'record E(int x) { void f() {} }'))
     assert calls(execution) == {('A#g()', 'E#f()')}
-    assert the_call(execution, 'A#g()', 'E#f()')['derivation']['rule'] == 'java.calls.declared-receiver-unique-target/2'
+    assert the_call(execution, 'A#g()', 'E#f()')['derivation']['rule'] == 'java.calls.declared-receiver-unique-target/4'
 
 
 @pytest.mark.parametrize('body, method', [
@@ -213,11 +213,83 @@ def test_forms_outside_the_first_fragment_are_unsupported(source, owner, method)
     assert reason(execution, owner, method) == 'UNSUPPORTED_CALL_FORM'
 
 
-@pytest.mark.parametrize('body', ['void g(B b) { b.f(); }', 'void g() { B b = new B(); b.f(); }',
-                                  'private B b; void g() { for (B b : java.util.List.<B>of()) {} b.f(); }'])
-def test_a_parameter_or_a_local_variable_is_deferred(body):
-    execution = run(java('A', f'class A {{ {body} }}'), java('B', 'class B { void f() {} }'))
-    assert reason(execution, next(owner for owner, _ in sites(execution)), 'f') == 'RECEIVER_KIND_DEFERRED'
+def test_a_call_on_a_parameter_follows_its_declared_type():
+    """TAXO-01L, critere 1 : les premisses sont la declaration du parametre par la methode et son type."""
+    execution = run(java('A', 'class A { void g(B b) { b.f(); } }'), java('B', 'class B { void f() {} }'))
+    assert calls(execution) == {('A#g(B)', 'B#f()')}
+    assert the_call(execution, 'A#g(B)', 'B#f()')['derivation']['premises'] == [
+        'CONTAINS : symbol:java:p.A#g(B) -> symbol:java:p.A#g(B)/b',
+        'TYPED_AS : symbol:java:p.A#g(B)/b -> symbol:java:p.B',
+        'CONTAINS : symbol:java:p.B -> symbol:java:p.B#f()']
+    assert ('A#g(B)', 'A#g(B)/b') in declared(execution, 'CONTAINS')
+    assert ('A#g(B)/b', 'B') in declared(execution, 'TYPED_AS')
+    [contains] = [fact for fact in execution.facts if fact['object'] == 'symbol:java:p.A#g(B)/b']
+    assert contains['status'] == 'OBSERVED' and contains['evidence'][0]['line_start'] == 3
+
+
+def test_two_locals_of_the_same_name_in_neighbour_blocks_are_two_symbols():
+    """Critere 2 : chaque site vise la variable visible, au rang de sa declaration dans le corps."""
+    execution = run(java('A', 'class A { void g() { { B x = null; x.f(); } { C x = null; x.f(); } } }'),
+                    java('B', 'class B { void f() {} }'), java('C', 'class C { void f() {} }'))
+    assert calls(execution) == {('A#g()', 'B#f()'), ('A#g()', 'C#f()')}
+    assert declared(execution, 'TYPED_AS') == {('A#g()/x#1', 'B'), ('A#g()/x#2', 'C')}
+
+
+@pytest.mark.parametrize('body, typed', [
+    ('void g(C b) { b.f(); }', ('A#g(C)/b', 'C')),
+    ('void g() { C b = null; b.f(); }', ('A#g()/b', 'C')),
+    ('void g() { { C b = null; } b.f(); }', ('A#b', 'B')),
+    ('void g() { for (C b : java.util.List.<C>of()) {} b.f(); }', ('A#b', 'B')),
+    ('void g() { java.util.function.Consumer<C> c = b -> {}; b.f(); }', ('A#b', 'B')),
+])
+def test_a_variable_hides_the_field_only_where_it_is_visible(body, typed):
+    """Critere 3."""
+    execution = run(java('A', f'class A {{ private B b; {body} }}'), java('B', 'class B { void f() {} }'),
+                    java('C', 'class C { void f() {} }'))
+    [call] = [fact for fact in execution.facts if fact['relation'] == 'CALLS']
+    assert f'TYPED_AS : symbol:java:p.{typed[0]} -> symbol:java:p.{typed[1]}' in call['derivation']['premises']
+
+
+@pytest.mark.parametrize('body, why, receiver_type', [
+    ('void g(String s) { s.trim(); }', 'TARGET_TYPE_OUTSIDE_SNAPSHOT', 'String'),
+    ('void g(java.util.List<B> s) { s.trim(); }', 'TARGET_TYPE_OUTSIDE_SNAPSHOT', 'java.util.List'),
+    ('void g(List<B> s) { s.trim(); }', 'TARGET_TYPE_OUTSIDE_SNAPSHOT', 'java.util.List'),
+    ('void g(B[] s) { s.trim(); }', 'TARGET_TYPE_OUTSIDE_SNAPSHOT', 'B[]'),
+    ('void g() { var s = (B) null; s.trim(); }', 'RECEIVER_TYPE_UNKNOWN', None),
+    ('<T extends B> void g(T s) { s.trim(); }', 'RECEIVER_TYPE_UNKNOWN', None),
+    ('void g() { try { } catch (E1 | E2 s) { s.trim(); } }', 'RECEIVER_TYPE_UNKNOWN', None),
+    ('void g(Object o) { if (o instanceof B s) { s.trim(); } }', 'RECEIVER_KIND_DEFERRED', None),
+])
+def test_a_variable_of_an_external_or_unwritten_type_has_no_call(body, why, receiver_type):
+    """Critere 4 : aucun `TYPED_AS` ni symbole externe ; `var`, un type generique, une union n'ont pas de type
+    nomme ; une variable de motif, dont la portee suit le flot, reste reportee."""
+    execution = run(java('A', f'class A {{ {body} }}', 'import java.util.List;'),
+                    java('B', 'class B { void trim() {} }'))
+    [site] = sites(execution).values()
+    assert (site['reason'], site.get('receiver_type')) == (why, receiver_type)
+    assert not calls(execution) and not declared(execution, 'TYPED_AS')
+    assert not any('/' in fact['object'] for fact in execution.facts)
+
+
+def test_a_variable_whose_call_is_not_established_writes_no_declaration():
+    """La Maille ne grossit pas : une variable n'est ecrite que comme premisse d'un appel etabli."""
+    execution = run(java('A', 'class A { void g(B b) { b.f(); b.h(1); } }'),
+                    java('B', 'class B { void f() {} void f(int x) {} void h(int x) {} void h(String x) {} }'))
+    assert {item['reason'] for item in sites(execution).values()} == {'OVERLOAD_AMBIGUOUS'}
+    assert calls(execution) == {('A#g(B)', 'B#f()')}
+    assert declared(execution, 'TYPED_AS') == {('A#g(B)/b', 'B')}
+
+
+def test_a_parameter_of_a_compact_record_constructor_is_a_record_component():
+    execution = run(java('R', 'record R(B b) { R { b.f(); } }'), java('B', 'class B { void f() {} }'))
+    assert calls(execution) == {('R#<init>(B)', 'B#f()')}
+    assert ('R#<init>(B)/b', 'B') in declared(execution, 'TYPED_AS')
+
+
+def test_a_variable_in_a_lambda_stays_in_the_lambda():
+    execution = run(java('A', 'class A { void g(B b) { Runnable r = () -> b.f(); } }'),
+                    java('B', 'class B { void f() {} }'))
+    assert reason(execution, 'A#g(B)', 'f') == 'LAMBDA_OR_LOCAL_CONTEXT'
     assert not calls(execution)
 
 
@@ -453,3 +525,59 @@ def test_an_object_method_redeclared_by_a_record_is_its_target():
     execution = run(java('A', 'class A { private R r; void g() { r.toString(); } }'),
                     java('R', 'record R(int x) { public String toString() { return "r"; } }'))
     assert calls(execution) == {('A#g()', 'R#toString()')}
+
+
+# TAXO-01L : accesseurs implicites des records (`java.record.implicit-accessor/1`).
+
+def accessor_fact(execution, record, member):
+    return next(fact for fact in execution.facts if fact['relation'] == 'CONTAINS'
+                and short(fact['subject']) == record and short(fact['object']) == member)
+
+
+def test_a_call_to_an_implicit_accessor_targets_it():
+    execution = run(java('A', 'class A { private R r; void g() { r.x(); } }'), java('R', 'record R(int x) {}'))
+    assert calls(execution) == {('A#g()', 'R#x()')}
+    call = the_call(execution, 'A#g()', 'R#x()')
+    assert call['derivation']['rule'] == 'java.calls.declared-receiver-unique-target/4'
+    assert call['derivation']['premises'] == [
+        'TYPED_AS : symbol:java:p.A#r -> symbol:java:p.R', 'CONTAINS : symbol:java:p.R -> symbol:java:p.R#x()']
+
+
+def test_an_implicit_accessor_is_contained_by_inference_and_its_component_is_a_field():
+    execution = run(java('R', 'record R(int x, B b) {}'), java('B', 'class B {}'))
+    accessor = accessor_fact(execution, 'R', 'R#x()')
+    assert accessor['status'] == 'INFERRED'
+    assert accessor['derivation']['rule'] == 'java.record.implicit-accessor/1'
+    assert accessor['derivation']['premises'] == ['CONTAINS : symbol:java:p.R -> symbol:java:p.R#x']
+    assert accessor_fact(execution, 'R', 'R#x')['status'] == 'OBSERVED'
+    assert ('R#b', 'B') in declared(execution, 'TYPED_AS')
+
+
+def test_a_written_accessor_is_an_observed_method_and_no_inferred_one_is_added():
+    execution = run(java('A', 'class A { private R r; void g() { r.x(); } }'),
+                    java('R', 'record R(int x) { public int x() { return x; } }'))
+    assert calls(execution) == {('A#g()', 'R#x()')}
+    assert accessor_fact(execution, 'R', 'R#x()')['status'] == 'OBSERVED'
+    assert not [fact for fact in execution.facts if fact['status'] == 'INFERRED' and fact['relation'] == 'CONTAINS']
+
+
+def test_inside_a_record_a_component_and_its_accessor_are_reached_like_any_member():
+    execution = run(java('R', 'record R(int x, B b) { void g() { x(); b.f(); } }'),
+                    java('B', 'class B { void f() {} }'))
+    assert calls(execution) == {('R#g()', 'R#x()'), ('R#g()', 'B#f()')}
+    assert the_call(execution, 'R#g()', 'B#f()')['derivation']['premises'] == [
+        'TYPED_AS : symbol:java:p.R#b -> symbol:java:p.B', 'CONTAINS : symbol:java:p.B -> symbol:java:p.B#f()']
+
+
+def test_an_implicit_accessor_hides_the_method_of_its_interface():
+    execution = run(java('A', 'class A { private R r; void g() { r.x(); } }'),
+                    java('I', 'interface I { int x(); }'), java('R', 'record R(int x) implements I {}'))
+    assert calls(execution) == {('A#g()', 'R#x()')}
+    assert not implemented(execution), 'un accesseur implicite n\'est pas une methode ecrite'
+
+
+def test_an_accessor_with_arguments_or_of_an_unknown_component_has_no_target():
+    execution = run(java('A', 'class A { private R r; void g() { r.x(1); r.y(); } }'),
+                    java('R', 'record R(int x) {}'))
+    assert not calls(execution)
+    assert [reason(execution, 'A#g()', name) for name in ('x', 'y')] == ['NO_MATCHING_DECLARATION'] * 2

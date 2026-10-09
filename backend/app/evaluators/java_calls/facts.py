@@ -5,7 +5,7 @@ declaration vue dans deux fichiers) sont deux preuves de la meme assertion.
 """
 from app.facts import content_hash
 
-from . import classification, implementations, resolution
+from . import accessors, classification, implementations, resolution
 
 DECLARATION = 'java.declaration'
 CALL_SITE = 'java.call-site'
@@ -27,6 +27,11 @@ class Facts:
         evidence = {**self._evidence(path, site.line_start, site.line_end, CALL_SITE, subject),
                     'column_start': site.column_start, 'column_end': site.column_end, 'role': 'call-site'}
         self._inferred(subject, 'CALLS', target, evidence, resolution, premises, counter_examples)
+
+    def accessor(self, subject, target, path, line, premises):
+        """Un accesseur implicite de record (`INFERRED`), prouve par la ligne du composant qui l'implique."""
+        evidence = self._evidence(path, line, line, DECLARATION, target)
+        self._inferred(subject, 'CONTAINS', target, evidence, accessors, premises, ())
 
     def implementation(self, found):
         """Une implementation de methode (`INFERRED`), prouvee par la ligne du nom de la methode qui implemente."""
