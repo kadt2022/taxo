@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.platform.database.base import Base
 from app.evaluations.domain.capability import UNREAD_COVERAGE, unread_reasons
 from app.facts import is_reference
+from app.facts.domain.diagnostic import category_counts
 from app.neighborhood.domain.traversal import Adjacent
 from app.scans.domain.fact_order import adjacency_keys
 from app.scans.infrastructure.sqlalchemy import reference_index
@@ -133,7 +134,8 @@ class SqlAlchemyAnalysisFacts:
                     if fact.get('coverage_type') in UNREAD_COVERAGE:
                         found.append({'subject': fact['subject'], 'coverage_type': fact['coverage_type'],
                                       'producer': fact.get('produced_by', {}).get('producer_id'),
-                                      'reasons': unread_reasons(fact)})
+                                      'reasons': unread_reasons(fact),
+                                      'categories': category_counts(fact)})
         return sorted(found, key=lambda item: (item['subject'], item['coverage_type'], item['producer'] or ''))
 
     def references(self, scan_id, prefix, kind, after, limit):

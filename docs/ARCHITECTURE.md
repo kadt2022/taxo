@@ -657,6 +657,23 @@ Un site non résolu porte le code de son producteur (`reason`, déclaré par son
   et décompte `UNKNOWN` gardent leur sens propre.
 - Un langage de plus n'ajoute aucune catégorie ; il déclare ses codes dans son catalogue.
 
+**Catégories dans la Tuile (TAXO-01M, PR C).** Une entrée `KNOWLEDGE`, `scope: NODE`, de `neighborhood/2` dont
+la couverture a une `classification` porte un champ additif `categories` : les décomptes de ses sites par
+catégorie, dans l'ordre fixe `UNKNOWN`, `AMBIGUOUS`, `UNSUPPORTED`, `OUT_OF_SCOPE`, par exemple
+`[{"category": "UNKNOWN", "count": {"kind": "EXACT", "value": 3}}]`.
+
+- Liste complète (`sites_seen` égal au nombre de sites listés) : décomptes `EXACT`, une catégorie absente vaut
+  zéro. Liste tronquée : les quatre catégories, chacune `AT_LEAST` le nombre de sites listés, zéro compris ; une
+  catégorie non observée n'est jamais lue comme un zéro exact.
+- `reason`, `causes`, `count` et `producer` ne changent pas. Une analyse antérieure n'a pas de `categories`, et
+  l'explorateur la dit « non classée ». Les frontières de sélection et de contexte n'en ont jamais.
+- Le champ est compté dans `max_bytes` ; une lacune locale qui ne tient pas reste comptée dans `not_sent`, jamais
+  coupée. La forme compacte le transmet tel quel. Le moteur reste `neighborhood/2` : un client de
+  `neighborhood/2` ignore les propriétés qu'il ne connaît pas (vérifié dans le dépôt au 2026-10-09 : l'explorateur
+  lit des types TypeScript sans validation fermée, aucun schéma de réponse n'est fermé, Minia ne lit pas la
+  frontière).
+- L'explorateur dit chaque catégorie par un libellé générique ; il ne déduit rien d'un code ni d'un langage.
+
 ### 9.4 Parcours et reprise
 
 Parcours en largeur, ordre stable, nœuds dédupliqués, arêtes distinctes conservées (y compris celle qui
@@ -1141,3 +1158,8 @@ reclassification. Aucun producteur ne classe encore ; la Tuile ne change pas.
 chaque site non interprété selon `java.calls.frontier-classification/1` et liste ses sites par position. Aucun
 fait, aucune couverture, aucune identité ne change ; `OUT_OF_SCOPE` n'est pas encore écrit ; la Tuile ne change
 pas.
+
+**2026-10-09** — Catégories dans la Tuile (TAXO-01M, PR C). Une lacune locale classée de `neighborhood/2` porte
+ses décomptes par catégorie (`categories`, `EXACT` ou, liste tronquée, les quatre en `AT_LEAST`) ; champ additif,
+même moteur, aucun champ existant changé. L'explorateur les montre en pastilles, « non classé » pour une analyse
+antérieure.

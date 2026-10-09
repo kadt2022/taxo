@@ -87,7 +87,8 @@ def _knowledge(reason, **fields):
 
 
 def local_frontier(reader, scan_id, tile):
-    """Les lacunes de connaissance rattachées aux nœuds de la Tuile, dans l'ordre des nœuds."""
+    """Les lacunes de connaissance rattachées aux nœuds de la Tuile, dans l'ordre des nœuds. Une lacune dont le
+    diagnostic est classé porte ses décomptes par catégorie (`categories`, TAXO-01M), en plus de ses `causes`."""
     if not tile.known:
         return []
     order = {node.reference: index for index, node in enumerate(tile.nodes)}
@@ -100,7 +101,8 @@ def local_frontier(reader, scan_id, tile):
             key = (order[node], gap['subject'], gap[_TYPE], gap['producer'] or '')
             entries[key] = {'nature': 'KNOWLEDGE', 'scope': 'NODE', 'node': node, 'subject': gap['subject'],
                             'reason': gap[_TYPE], 'producer': gap['producer'], 'count': {'kind': 'UNKNOWN'},
-                            **({'causes': gap['reasons']} if gap.get('reasons') else {})}
+                            **({'causes': gap['reasons']} if gap.get('reasons') else {}),
+                            **({'categories': gap['categories']} if gap.get('categories') else {})}
     return [entries[key] for key in sorted(entries)]
 
 
