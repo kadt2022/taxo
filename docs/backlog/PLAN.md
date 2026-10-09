@@ -32,6 +32,12 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
 6. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 7. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
 8. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
+   Frontières génériques, préalable au lecteur Python : [TAXO-01M](TAXO-01M-frontieres-generiques.md),
+   PR A (contrat, #101), PR B (classification Java, #102) et PR C (catégories dans la Tuile, #103) livrées ;
+   PR D réduite à la mesure (0 site `OUT_OF_SCOPE`, même avec la liste candidate). Clôture proposée le
+   2026-10-09. La reconnaissance des dépendances externes passe à TAXO-01L, **préalable au lecteur Python** :
+   elle ne doit pas être repoussée indéfiniment. Quatre catégories fermées dans le contrat commun, codes de diagnostic propres à chaque
+   producteur, classification à la production, décompte par catégorie dans la Tuile.
    Appels Java : [TAXO-01K](TAXO-01K-appels-java-entre-classes.md), passé avant l'Arbre à la demande du
    2026-10-07. PR A (contrat et vérité de référence) livrée ; PR B (résolution) et PR C (implémentations et
    restitution) livrées ; PR D mesure `spring-petclinic` (7 sites résolus sur 253, coût négligeable) et
