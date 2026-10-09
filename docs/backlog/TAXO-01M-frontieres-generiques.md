@@ -1,6 +1,7 @@
 # TAXO-01M — Contrat générique des frontières de connaissance et de périmètre
 
-Statut : **proposé, corrigé après audit**. Il attend la validation avant toute implémentation.
+Statut : **validé le 2026-10-09 ; PR A, B et C livrées (#101, #102, #103)**. PR D : mesure faite, écriture
+d'`OUT_OF_SCOPE` en attente de la liste de TAXO-01L (voir « Avancement et mesures »).
 Date : 2026-10-08.
 Source de vérité : `ARCHITECTURE.md` § 5.5, § 9.3 et § 14 ; [TAXO-01J](TAXO-01J-navigation-multiniveau-et-explorateur.md) § 5 et § 8.
 Dépend de : TAXO-01K (diagnostic des sites, livré). TAXO-01L (#99, non fusionné) n'est nécessaire qu'à la PR D.
@@ -385,3 +386,41 @@ sont vérifiés au début de la PR C, avant la décision définitive :
 4. Les anciennes analyses restent lisibles sans reclassification.
 
 Si un consommateur à schéma fermé est trouvé, la PR C s'arrête et propose `neighborhood/3`.
+
+Vérifié au début de la PR C (2026-10-09) : aucun consommateur à schéma fermé dans le dépôt. `neighborhood/2` est
+gardé ; `categories` est additif (#103).
+
+## Avancement et mesures (2026-10-09)
+
+| PR | Contenu | État |
+| --- | --- | --- |
+| A | Contrat : `category`, `classification`, codes ouverts déclarés par catalogue, `site_keys` | livrée (#101) |
+| B | Classification Java `java.calls.frontier-classification/1`, sites triés, producteur 1.1.0 | livrée (#102) |
+| C | `categories` dans `neighborhood/2` (`EXACT`, ou quatre `AT_LEAST`), pastilles de l'explorateur | livrée (#103) |
+| D | Mesure faite ; écriture d'`OUT_OF_SCOPE` et `qualification` | en attente de TAXO-01L |
+
+Mesure sur `main` à `6a90050` (producteur `taxo.java-calls` 1.1.0). Détail, script et limites :
+`essais/taxo-01m-mesures.md` et `essais/taxo-01m-mesures.py` (fichiers du projet, hors dépôt).
+
+| Dépôt | Commit | Sites vus | Résolus | Non interprétés | `UNKNOWN` | `AMBIGUOUS` | `UNSUPPORTED` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| student-course-demo | `01163f1` | 104 | 24 | 80 | 10 | 0 | 70 |
+| bibliotheque | `d2e3c46` | 147 | 28 | 119 | 20 | 1 | 98 |
+| spring-petclinic | `500158f` | 253 | 7 | 246 | 36 | 0 | 210 |
+| fixture `java-calls-demo` | — | 21 | 6 | 15 | 6 | 1 | 8 |
+
+- Aucune liste de sites n'est tronquée ; chaque couverture `NOT_INTERPRETED` nomme sa règle.
+- Sites restés `UNKNOWN` sur les trois dépôts (66) : `SUPER_TYPE_UNRESOLVED` (40), `TARGET_DECLARATION_OUTSIDE_SNAPSHOT` (10),
+  `TARGET_TYPE_OUTSIDE_SNAPSHOT` (12), `RECEIVER_TYPE_UNKNOWN` (4, `Math.max` : `Math` n'est ni importé ni
+  déclaré, ce peut être un type de `java.lang`, d'un import `*` ou un champ hérité ; `UNKNOWN` est donc juste).
+- Faux positifs sur la fixture : aucun. Aucun site `AMBIGUOUS` n'a pour candidat une cible de `CALLS` ; chaque
+  `UNSUPPORTED` est une forme que la règle ne lit pas. Limite : l'oracle a été classé à la main avec la même
+  table, la vérification prouve la cohérence, pas une vérité indépendante.
+- Coût dans la Tuile : 92 à 105 octets en moyenne par entrée classée, 138 au plus, 270 pour une liste tronquée.
+  Aucun `max_frontiers` n'est justifié.
+- **`OUT_OF_SCOPE` avec la liste candidate de TAXO-01L** (`Serializable`, `Cloneable`, `Record`) : **0 site** sur
+  les trois dépôts. Les receveurs hors des sources sont `java.util.Map`, `Set`, `AtomicLong`, `PasswordEncoder`,
+  `org.slf4j.Logger`, hors de la liste. 21 sites `SUPER_TYPE_UNRESOLVED` n'ont que des supertypes externes de la
+  liste, mais une méthode candidate dans les sources : les dire `OUT_OF_SCOPE` serait faux ; la liste
+  permettrait plutôt de les résoudre en `CALLS`, ce qui est une autre règle, hors de ce récit.
+
