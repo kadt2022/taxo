@@ -817,6 +817,21 @@ aujourd'hui que des lectures.
 **Version filaire.** `taxo-query/1` (§ 12.2 à § 12.6) est la première version filaire du MIP ; son nom ne change
 pas. Ajouter une opération ou un champ facultatif reste compatible ; changer une sémantique crée une version.
 
+**MIP 0.1 (À construire, TAXO-01N / MIP-01).** Un contrat sémantique au-dessus de `taxo-query/1`, servi par un
+**adaptateur** qui réutilise ses capacités (aucun second moteur, aucun second stockage) :
+`MIP 0.1 → adaptateur → taxo-query/1 → Maille`. Il accepte deux expressions, et n'en sert qu'une :
+
+- `EXPAND` : exploration bornée autour d'une **référence résolue** ; voisinage et relations viennent du seul
+  moteur existant (§ 9). Servie en 0.1, sans modèle de langage.
+- `PROJECT` : projection bornée selon des règles servies par le moteur. Aucune règle n'est écrite : refusée en 0.1
+  par une erreur de protocole, jamais par une Tuile vide.
+
+La réponse est une Tuile autodescriptive : analyse, centre résolu, références, faits avec statut, preuves,
+couverture, frontières, bornes appliquées et troncature. Les bornes demandées sont plafonnées par celles du
+serveur. Le MIP ne devine pas une référence : la retrouver par un nom est une étape séparée (`find_references`).
+Le premier adaptateur de transport est `POST /mip/query`, soumis aux mêmes droits et limites ; la sémantique se
+teste sans serveur HTTP. Le schéma JSON exact est figé sur les structures existantes avec la première réalisation.
+
 | Élément du MIP | Réalisation | État |
 | --- | --- | --- |
 | Interrogation structurée, neutre, bornée à un projet et une analyse | `taxo-query/1`, `describe`, `find_facts`, `find_references` | Existant |
@@ -826,7 +841,8 @@ pas. Ajouter une opération ou un champ facultatif reste compatible ; changer un
 | Consentement par nature de contenu | `get_diff`, § 12.6 | Existant |
 | Transport indépendant | appel interne, HTTP | Existant ; MCP proposé |
 | Trouver un élément par son nom simple | champ facultatif de `find_references` | À construire (TAXO-01N) |
-| Exécution locale d'un plan borné, sans aller-retour avec le consommateur à chaque opération | opération `run_plan` | À construire (TAXO-01N) |
+| Exploration bornée sans modèle de langage, en une requête | MIP 0.1 `EXPAND`, adaptateur `POST /mip/query` | À construire (TAXO-01N) |
+| Projection bornée | MIP `PROJECT` | Proposé : refusée tant qu'aucune règle servie n'existe |
 | Intentions et autorisations par consommateur | périmètre et validation par consommateur | Proposé |
 | Capsule de Tuile autonome, vérifiable hors de l'échange | — | Proposé |
 
@@ -1104,7 +1120,7 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
 | Applications Spring Boot, route → application → chaînes chargées | Existant (#50) |
 | Page Routes, raison exacte des zones non interprétées | Existant (#51) |
 | Protocole `taxo-query/1`, verdicts, Minia (exploration et paquet) | Existants |
-| MIP (§ 12.0) : contrat écrit, `taxo-query/1` première version filaire | Existant ; recherche par nom et `run_plan` à construire (TAXO-01N) ; autorisations par consommateur et capsule de Tuile proposées |
+| MIP (§ 12.0) : contrat écrit, `taxo-query/1` première version filaire | Existant ; MIP 0.1 `EXPAND` et recherche par nom à construire (TAXO-01N) ; `PROJECT` proposée ; autorisations par consommateur et capsule de Tuile proposées |
 | `get_neighborhood` explicite à un saut, budgets et reprise | Première tranche implémentée après le commit de référence |
 | Voisinage multiniveau, sens combiné, couverture locale, `find_references` | Implémentés par TAXO-01J (moteur), après le commit de référence |
 | Profils adaptatifs, Arbre, Forêt | À construire |
@@ -1262,4 +1278,5 @@ catégorie n'entre au contrat.
 permet d'interroger une Maille et d'en transporter des Tuiles vérifiables, sans dépendre de Minia, d'un modèle, d'un
 transport ni d'un langage (§ 12.0). Décisions : `taxo-query/1` en est la première version filaire et garde son nom ;
 Minia et l'Explorer en sont des consommateurs ; ce qui existe, ce qui est à construire et ce qui est proposé est
-tenu au § 12.0. Aucune opération, aucune sémantique ne change.
+tenu au § 12.0. Aucune opération, aucune sémantique ne change. Première réalisation : MIP 0.1, adaptateur sur
+`taxo-query/1` qui sert `EXPAND` et refuse `PROJECT` ; l'opération `run_plan` un temps envisagée est abandonnée.
