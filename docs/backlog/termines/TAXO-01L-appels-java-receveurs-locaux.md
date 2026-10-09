@@ -1,8 +1,8 @@
 # TAXO-01L — Appels Java : receveurs paramètres et variables locales, accesseurs de record, lambdas
 
-Statut : **implémenté, en attente de fusion.** Rédigé le 2026-10-08 ; décisions validées le 2026-10-09 ; tranches
-1 à 3 en PR #104, #105 et #106 ; mesure finale et clôture ci-dessous (« Clôture »).  
-Suite de : [TAXO-01K](TAXO-01K-appels-java-entre-classes.md) (« Décision proposée pour le fragment suivant »).  
+Statut : **terminé le 2026-10-09.** Rédigé le 2026-10-08 ; décisions validées le 2026-10-09 ; tranches 1 à 3
+livrées par #104, #105 et #106 ; lambdas reportées ; mesure finale et clôture ci-dessous (« Clôture »).  
+Suite de : [TAXO-01K](../TAXO-01K-appels-java-entre-classes.md) (« Décision proposée pour le fragment suivant »).  
 Source de vérité : `ARCHITECTURE.md` § 5.5, § 5.6 et § 14.  
 Dépend de : `taxo.java-calls` livré par TAXO-01K (PR A à D).  
 Ne dépend pas de Minia. Ne touche pas MIP.
@@ -328,7 +328,7 @@ Dépôts : `student-analysis-java` à `01163f17`, `bibliotheque` à `d2e3c46` (g
 | 3. Accesseurs implicites de record | #106 | `/4` | 1.4.0 |
 | 4. Lambdas | reportée (décision 4) | — | — |
 
-Les trois PR sont empilées (#105 sur #104, #106 sur #105) et attendent l'accord de fusion. Le catalogue
+Les trois PR sont fusionnées, dans cet ordre, avec l'accord du responsable du projet. Le catalogue
 `java-calls` garde la version 1 : aucun code ni catégorie n'y entre.
 
 ### Mesure après
@@ -383,9 +383,11 @@ s'arrête sur le budget d'octets (`BYTES`) : la Tuile le dit, comme prévu par l
 
 ### Reste ouvert
 
-- **`OUT_OF_SCOPE`** (confié par TAXO-01M) : aucun site ne remplit les quatre conditions de TAXO-01M § 5 avec la
-  liste fermée actuelle. Sur les trois dépôts, 29 sites `UNKNOWN` visent un type de la JDK (`String`, `Map`,
-  `List`, `Optional`, `LocalDate`…) et les autres une bibliothèque (Spring, slf4j). Décision en cours.
+- **`OUT_OF_SCOPE`** (confié par TAXO-01M) : la catégorie est gardée, mais n'est attribuée que si la provenance
+  externe et l'exclusion du périmètre sont prouvées ; sinon `UNKNOWN` (décision du 2026-10-09). Aucun site ne
+  remplit aujourd'hui les quatre conditions de TAXO-01M § 5 avec la liste fermée : 0 `OUT_OF_SCOPE`, résultat
+  accepté. Un préfixe de paquet (`java.*`) ne vaut toujours pas preuve. Sur les trois dépôts, 29 sites `UNKNOWN`
+  visent un type de la JDK (`String`, `Map`, `List`, `Optional`, `LocalDate`…) et les autres une bibliothèque
+  (Spring, slf4j) : leur provenance relèvera d'un récit qui la prouve (dépendances déclarées, signatures).
 - Lambdas : un récit séparé, s'il est confirmé.
-- Déplacement de ce fichier dans le dossier des récits terminés à la fusion des trois PR ; aucun dossier de ce
-  type n'existe encore dans `docs/backlog`.
+- Ce récit inaugure le dossier des récits terminés, `docs/backlog/termines/`.
