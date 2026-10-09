@@ -1,6 +1,6 @@
 """La categorie generique de chaque site Java non interprete (TAXO-01M, ARCHITECTURE § 14).
 
-Le code d'un site (`reason`) dit pourquoi `java.calls.declared-receiver-unique-target/1` ne l'a pas resolu ; sa
+Le code d'un site (`reason`) dit pourquoi `java.calls.declared-receiver-unique-target` ne l'a pas resolu ; sa
 categorie dit quelle frontiere il trace, dans les quatre valeurs du contrat commun. La table est fermee : un code
 sans categorie est une erreur du producteur, jamais une categorie devinee.
 

@@ -15,7 +15,7 @@ from app.facts.contract import content_hash, validate_fact
 FIXTURE = Path(__file__).parent / 'fixtures' / 'java-calls-demo'
 ORACLE = json.loads((FIXTURE / 'expected.json').read_text(encoding='utf-8'))
 SNAPSHOT = {'repository': 'java-calls-demo', 'commit': 'a' * 40, 'mode': 'COMMIT'}
-PRODUCER = {'producer_type': 'EVALUATOR', 'producer_id': 'taxo.java-calls', 'producer_version': '1.1.0',
+PRODUCER = {'producer_type': 'EVALUATOR', 'producer_id': 'taxo.java-calls', 'producer_version': '1.2.0',
             'execution_id': 'oracle', 'catalog_id': 'java-calls', 'catalog_version': '1'}
 # TAXO-01M : la liste fermée des raisons appartient au catalogue du producteur, plus au schéma commun.
 REASONS = set(CATALOG.diagnostic_codes)

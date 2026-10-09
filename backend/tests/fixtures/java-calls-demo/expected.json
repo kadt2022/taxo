@@ -173,7 +173,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
       "object": "symbol:java:com.example.demo.service.CourseCatalog#refresh()",
-      "rule": "java.calls.declared-receiver-unique-target/1",
+      "rule": "java.calls.declared-receiver-unique-target/2",
       "premises": [
         [
           "TYPED_AS",
@@ -206,7 +206,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
       "object": "symbol:java:com.example.demo.service.CourseService#getCourses()",
-      "rule": "java.calls.declared-receiver-unique-target/1",
+      "rule": "java.calls.declared-receiver-unique-target/2",
       "premises": [
         [
           "TYPED_AS",
@@ -232,7 +232,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
       "object": "symbol:java:com.example.demo.controller.CourseController#audit()",
-      "rule": "java.calls.declared-receiver-unique-target/1",
+      "rule": "java.calls.declared-receiver-unique-target/2",
       "premises": [
         [
           "CONTAINS",
@@ -253,7 +253,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
       "object": "symbol:java:com.example.demo.service.CourseService#register(String)",
-      "rule": "java.calls.declared-receiver-unique-target/1",
+      "rule": "java.calls.declared-receiver-unique-target/2",
       "premises": [
         [
           "TYPED_AS",
@@ -279,7 +279,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#titles()",
       "object": "symbol:java:com.example.demo.service.CourseCatalog#titles()",
-      "rule": "java.calls.declared-receiver-unique-target/1",
+      "rule": "java.calls.declared-receiver-unique-target/2",
       "premises": [
         [
           "TYPED_AS",
