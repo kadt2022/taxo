@@ -29,9 +29,12 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
    qui termine [TAXO-01I](TAXO-01I-voisinage-et-projectabilite.md) : plusieurs niveaux, sens combiné, couverture
    locale. PR 1 (moteur et protocole) livrée (#85) ; PR 2 (forme compacte et explorateur) livrée (#86) ; PR 3
    (mesures et essai réel) livrée par la PR de cette branche. Récit terminé.
-6. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
-7. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
-8. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
+6. → **Ask Taxo général** : interroger toute la Maille, pas seulement l'historique, en réutilisant les
+   primitives existantes (`find_references`, `get_neighborhood`, `verify_claim`) sans toucher ni enfermer le MIP
+   ([TAXO-01N](TAXO-01N-ask-taxo-general.md)). Accepté le 2026-10-09 ; passe avant l'Arbre à la demande du jour.
+7. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
+8. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
+9. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
    Frontières génériques, préalable au lecteur Python : [TAXO-01M](TAXO-01M-frontieres-generiques.md),
    PR A (contrat, #101), PR B (classification Java, #102) et PR C (catégories dans la Tuile, #103) livrées ;
    PR D réduite à la mesure (0 site `OUT_OF_SCOPE`, même avec la liste candidate). Clôture proposée le
