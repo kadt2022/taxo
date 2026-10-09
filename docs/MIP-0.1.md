@@ -63,7 +63,7 @@ déjà). Aucun nom du domaine de la Maille n'est changé.
 | `analysis` | non | Sans lui, la dernière analyse ; elle est rendue dans `snapshot.analysis` et doit être renvoyée aux étapes suivantes. |
 | `relations` | oui | 1 à 16 relations distinctes ; leur vocabulaire est vérifié par `get_neighborhood`. |
 | `direction` | oui | `INCOMING`, `OUTGOING` ou `BOTH`. Aucun défaut caché. « Qui appelle X ? » : `CALLS`, `INCOMING`. |
-| `bounds` | non | `depth`, `max_nodes`, `max_facts`, `max_bytes` : entiers positifs. Une valeur au-dessus du plafond du serveur est **plafonnée**, pas refusée. Sans valeur, le défaut du moteur. |
+| `bounds` | non | `depth`, `max_nodes`, `max_facts`, `max_bytes` : entiers de 1 à 10⁶. `max_bytes` vaut pour la Tuile MIP telle qu'elle est reçue : si elle ne tient pas, `BUDGET_EXHAUSTED`. Une valeur au-dessus du plafond du serveur est **plafonnée**, pas refusée. Sans valeur, le défaut du moteur. |
 | `continuation` | non | La reprise d'une frontière `SELECTION` d'une Tuile précédente, avec les mêmes `relations`, `direction` et `analysis`. |
 
 Tout autre champ, tout type faux et toute valeur hors du contrat donnent `INVALID_ARGUMENT`.
