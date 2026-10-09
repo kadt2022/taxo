@@ -73,7 +73,9 @@ Deux expressions initiales et **seulement deux** :
 - **Projet et analyse.** Une référence canonique (`symbol:java:…`) n'est pas propre à un projet ; la requête est donc toujours adressée à un projet, comme `taxo-query/1` (`/api/projects/{project_id}/taxo-query`), et porte un champ facultatif `analysis`. Sans lui, TAXO fixe la dernière analyse à l'ouverture et la rend dans la Tuile ; le consommateur la renvoie ensuite à chaque étape (recherche, Tuile, vérification) pour rester sur le même instantané (critère 4). Les droits du projet s'appliquent avant toute lecture.
 - **Relations et sens.** `get_neighborhood` refuse une demande sans relations ni sens ; `EXPAND` les porte donc explicitement : `relations` (types de relation à suivre, ceux que `describe` annonce) et `direction` (`OUTGOING`, `INCOMING` ou `BOTH`). « Qui appelle X ? » est `relations: ["CALLS"]`, `direction: "INCOMING"` ; « qu'appelle X ? » est le même avec `OUTGOING`. Aucun défaut caché : un champ manquant est une erreur de protocole. La correspondance exacte avec `steps` / `follow` du moteur est relevée en PR A.
 
-Le point d'entrée HTTP initial proposé est `POST /api/projects/{project_id}/mip/query`, à côté de `taxo-query`. Ce chemin est un **adaptateur de transport** ; la sémantique MIP doit rester testable directement au niveau applicatif sans serveur HTTP.
+Le point d'entrée HTTP initial proposé est `POST /api/projects/{project_id}/mip/query`, à côté de `taxo-query`. Ce chemin est un **adaptateur de transport**, pas un second protocole (ARCHITECTURE § 12.3) : une requête MIP devient exactement une opération `taxo-query/1` (`get_neighborhood`), dont la validation, les budgets et les codes d'erreur s'appliquent tels quels. La sémantique MIP doit rester testable directement au niveau applicatif sans serveur HTTP.
+
+`EXPAND` sans reprise est la première Tuile (TILE, ARCHITECTURE § 9.5) ; avec la reprise d'un nœud de la frontière de sélection, c'est l'EXPAND du § 9.5, qui n'ajoute que la branche demandée. Un seul nom, la même opération.
 
 **Exemple de requête illustrative (noms et identités exactes à confirmer dans les tests de contrat) :**
 
@@ -123,7 +125,7 @@ La réponse expose, avec le nommage concret validé par tests :
 | `analysis` / instantané | Identifiant de l'analyse utilisée ; aucune dérive entre recherche, Tuile et vérification. |
 | `root` / centre | Référence effectivement résolue, sans substitution silencieuse. |
 | `nodes` / références | Références retournées et leurs identités typées si disponibles. |
-| `facts` | Relations établies dans la Maille, avec statut `OBSERVED` ou `INFERRED` lorsque porté par le fait. |
+| `facts` | Relations établies dans la Maille, avec le statut porté par le fait, sans perte : `OBSERVED`, `INFERRED` ou `HUMAN_VALIDATED` (avec ses métadonnées de validation). |
 | `evidence` / provenance | Identifiants ou références de preuves accessibles selon les droits ; pas de « citation » sans preuve existante. |
 | `coverage` | Ce qui a été analysé, selon quel périmètre / évaluateur lorsque cette information existe. |
 | `frontier` | Les limites et zones inconnues, ambiguës, non supportées ou hors périmètre, sans les convertir en absences factuelles. |
