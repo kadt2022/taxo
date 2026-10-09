@@ -215,31 +215,21 @@ def _local_types(node, member):
     names, child = set(), node
     while child.id != member.id and child.parent is not None:
         parent = child.parent
-        if parent.type in ('block', 'switch_block_statement_group'):
-            names.update(_text(item.child_by_field_name('name')) for item in parent.named_children
-                         if item.type in syntax.TYPE_DECLARATIONS and item.start_byte < child.start_byte)
+        names.update(_text(item.child_by_field_name('name')) for item in _statements_before(parent, child)
+                     if item.type in syntax.TYPE_DECLARATIONS)
         child = parent
     return names
 
 
 def _before(parent, child):
     """Les declarations du noeud `parent` visibles dans son enfant `child` (JLS 6.3)."""
-    if parent.type == 'local_variable_declaration':
-        yield from (item for item in _declarators(parent) if item.start_byte < child.start_byte)
-    elif parent.type in ('block', 'switch_block_statement_group'):
-        for item in parent.named_children:
-            if item.start_byte >= child.start_byte:
-                break
+    if parent.type in ('local_variable_declaration', 'resource_specification'):
+        # La portee d'une variable commence a son propre initialiseur.
+        yield from (item for item in _declarators(parent) if item.start_byte <= child.start_byte)
+    elif parent.type in ('block', 'switch_block_statement_group', 'switch_block'):
+        for item in _statements_before(parent, child):
             if item.type == 'local_variable_declaration':
                 yield from _declarators(item)
-    elif parent.type == 'switch_block':
-        # Une variable declaree dans un groupe `case ...:` est visible dans la suite du bloc du switch.
-        for group in parent.named_children:
-            if group.start_byte >= child.start_byte:
-                break
-            if group.type == 'switch_block_statement_group':
-                yield from (declarator for item in group.named_children
-                            if item.type == 'local_variable_declaration' for declarator in _declarators(item))
     elif parent.type == 'for_statement':
         init = parent.child_by_field_name('init')
         if init is not None and init.id != child.id and init.type == 'local_variable_declaration':
@@ -247,8 +237,17 @@ def _before(parent, child):
     elif parent.type in ('enhanced_for_statement', 'catch_clause', 'try_with_resources_statement'):
         if _is(parent.child_by_field_name('body'), child):
             yield from _declarators(parent)
-    elif parent.type == 'resource_specification':
-        yield from (item for item in _declarators(parent) if item.start_byte < child.start_byte)
+
+
+def _statements_before(parent, child):
+    """Les instructions d'un bloc declarees avant son enfant `child`. Dans un `switch` a groupes `case ...:`, une
+    declaration d'un groupe precedent reste visible dans la suite du bloc du switch (JLS 6.3)."""
+    if parent.type in ('block', 'switch_block_statement_group'):
+        return [item for item in parent.named_children if item.start_byte < child.start_byte]
+    if parent.type == 'switch_block':
+        return [item for group in parent.named_children if group.start_byte < child.start_byte
+                and group.type == 'switch_block_statement_group' for item in group.named_children]
+    return []
 
 
 def _declarators(node):

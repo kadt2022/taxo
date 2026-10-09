@@ -69,6 +69,8 @@ def test_a_site_outside_a_member_body_says_where_it_is(body, context, owner):
     ('void g() { for (B b = null; ; ) { b.f(); } }', sites.LOCAL),
     ('void g() { try { } catch (B b) { b.f(); } }', sites.LOCAL),
     ('void g(int k) { switch (k) { case 1: B b = null; break; default: b.f(); } }', sites.LOCAL),
+    ('void g() { B b = ((b = null) != null ? b.f() : null); }', sites.LOCAL),
+    ('void g() { B c = null, b = c != null ? b.f() : null; }', sites.LOCAL),
     ('void g(Object o) { if (o instanceof B b) { b.f(); } }', sites.PATTERN),
     ('void g() { b.f(); }', None),
 ])
@@ -118,6 +120,7 @@ def test_a_variable_says_its_written_type_and_whether_it_names_a_type(declaratio
     ('void g() { { class L {} } L b = null; b.f(); }', True),
     ('void g() { L b = null; b.f(); class L {} }', True),
     ('void g() { class L {} L b = null; b.f(); }', False),
+    ('void g(int k) { switch (k) { case 1: class L {} break; default: L b = null; b.f(); } }', False),
 ])
 def test_a_local_type_hides_a_source_type_only_where_it_is_visible(body, named):
     site = next(item for item in read(f'class A {{ {body} }}') if item.name == 'f')
