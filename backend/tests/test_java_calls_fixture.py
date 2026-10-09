@@ -5,6 +5,7 @@ again in the source by its line and byte columns, and each expected fact must be
 evidence, premises and diagnostics a producer will have to give.
 """
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,7 @@ from app.facts.contract import content_hash, validate_fact
 FIXTURE = Path(__file__).parent / 'fixtures' / 'java-calls-demo'
 ORACLE = json.loads((FIXTURE / 'expected.json').read_text(encoding='utf-8'))
 SNAPSHOT = {'repository': 'java-calls-demo', 'commit': 'a' * 40, 'mode': 'COMMIT'}
-PRODUCER = {'producer_type': 'EVALUATOR', 'producer_id': 'taxo.java-calls', 'producer_version': '1.2.0',
+PRODUCER = {'producer_type': 'EVALUATOR', 'producer_id': 'taxo.java-calls', 'producer_version': '1.3.0',
             'execution_id': 'oracle', 'catalog_id': 'java-calls', 'catalog_version': '1'}
 # TAXO-01M : la liste fermée des raisons appartient au catalogue du producteur, plus au schéma commun.
 REASONS = set(CATALOG.diagnostic_codes)
@@ -54,6 +55,8 @@ def declared():
         facts.add(('CONTAINS', f"file:{item['file']}", item['type']))
         facts |= {('CONTAINS', item['type'], member) for member in item['members']}
     facts |= {('TYPED_AS', item['field'], item['type']) for item in ORACLE['typed_as']}
+    facts |= {fact for item in ORACLE['variables'] for fact in (
+        ('CONTAINS', item['method'], item['variable']), ('TYPED_AS', item['variable'], item['type']))}
     facts |= {('EXTENDS', item['subject'], item['object']) for item in ORACLE['extends']}
     facts |= {('IMPLEMENTS', item['subject'], item['object']) for item in ORACLE['implements']
               if item['status'] == 'OBSERVED'}
@@ -135,6 +138,21 @@ def test_each_declared_field_type_is_a_valid_fact():
                                                                           method='java.field-type')])
     declared_types = {item['type'] for item in ORACLE['declarations']}
     assert {item['type'] for item in ORACLE['typed_as']} <= declared_types, 'aucun type externe inventé'
+
+
+def test_each_receiver_variable_is_a_valid_declaration_of_its_method():
+    """TAXO-01L : `<methode>/<nom>`, contenu par une methode declaree, type par un type des sources."""
+    members = {member for item in ORACLE['declarations'] for member in item['members']}
+    declared_types = {item['type'] for item in ORACLE['declarations']}
+    for item in ORACLE['variables']:
+        assert item['method'] in members and item['variable'].startswith(item['method'] + '/')
+        assert item['type'] in declared_types, 'aucun type externe inventé'
+        line = source(item['path']).split(b'\n')[item['line'] - 1].decode('utf-8')
+        assert re.search(rf"\b{item['variable'].rsplit('/', 1)[1].partition('#')[0]}\b", line)
+        assertion(item['method'], 'CONTAINS', item['variable'],
+                  evidence=[proof(item['path'], item['line'], method='java.declaration', symbol=item['variable'])])
+        assertion(item['variable'], 'TYPED_AS', item['type'],
+                  evidence=[proof(item['path'], item['line'], method='java.declaration', symbol=item['variable'])])
 
 
 def test_uninterpreted_sites_are_one_valid_coverage_per_owner():

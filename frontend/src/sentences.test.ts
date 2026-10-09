@@ -75,6 +75,10 @@ describe('rendu humain typé des faits', ()=>{
     expect(say('IMPLEMENTS', 'symbol:java:a.B', 'symbol:java:a.C')).toBe('La classe B implémente l’interface C.');
     expect(say('IMPLEMENTS', 'symbol:java:a.B#run()', 'symbol:java:a.C#run()')).toBe('La méthode B.run() implémente la méthode C.run().');
     expect(say('TYPED_AS', 'symbol:java:a.B#service', 'symbol:java:a.Service')).toBe('Le champ B.service est déclaré du type Service.');
+    expect(say('TYPED_AS', 'symbol:java:a.B#run(Order)/order', 'symbol:java:a.Order'))
+      .toBe('La variable B.run(Order)/order est déclarée du type Order.');
+    expect(say('CONTAINS', 'symbol:java:a.B#run(Order)', 'symbol:java:a.B#run(Order)/order#2'))
+      .toBe('La méthode B.run(Order) contient la variable B.run(Order)/order#2.');
     expect(say('TYPED_AS', 'module:a', 'technology:Java')).toBe('Le module a est de type la technologie Java.');
     expect(say('EXTENDS', 'symbol:java:a.B', 'symbol:java:a.Base')).toBe('La classe B étend la classe Base.');
     expect(say('CONTAINS', 'file:a/B.java', 'symbol:java:a.B')).toBe('Le fichier a/B.java contient la classe B.');

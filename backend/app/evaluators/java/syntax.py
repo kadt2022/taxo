@@ -590,6 +590,18 @@ def signature(declaration):
     return _callable(declaration).signature
 
 
+def written_type(node, dimensions=None):
+    """Un type ecrit, normalise comme une signature : les dimensions d'un declarateur (`B x[]`) sont reportees sur
+    le type."""
+    return _type_name(node) + '[]' * _dimensions(dimensions)
+
+
+def type_variables(member):
+    """Variables de type visibles dans la methode ou le constructeur `member` : les siennes et celles des types qui
+    l'englobent."""
+    return set(_type_parameters(member)) | _type_variables(member)
+
+
 TYPE_DECLARATIONS = frozenset(_TYPES)
 # Les declarations qui ont un corps appelable : methode, constructeur, constructeur compact de record.
 CALLABLES = ('method_declaration', 'constructor_declaration', 'compact_constructor_declaration')

@@ -96,7 +96,8 @@ def test_the_calls_of_a_route_handler_are_followed_and_their_unread_sites_say_wh
     unread = [entry for entry in found['frontier'] if entry.get('node') == f'{controller}#register(String)'
               and entry['producer'] == 'taxo.java-calls']
     assert [(entry['reason'], entry['causes']) for entry in unread] == [
-        ('NOT_INTERPRETED', ['OVERLOAD_AMBIGUOUS', 'RECEIVER_KIND_DEFERRED'])]
+        ('NOT_INTERPRETED', ['OVERLOAD_AMBIGUOUS', 'TARGET_TYPE_OUTSIDE_SNAPSHOT'])]
     # TAXO-01M : les memes sites, comptes par categorie generique, sans rien de Java dans le moteur.
-    assert unread[0]['categories'] == [{'category': 'AMBIGUOUS', 'count': {'kind': 'EXACT', 'value': 1}},
-                                       {'category': 'UNSUPPORTED', 'count': {'kind': 'EXACT', 'value': 1}}]
+    # TAXO-01L : `title.trim()`, receveur parametre de type `String`, n'est plus reporte mais hors des sources.
+    assert unread[0]['categories'] == [{'category': 'UNKNOWN', 'count': {'kind': 'EXACT', 'value': 1}},
+                                       {'category': 'AMBIGUOUS', 'count': {'kind': 'EXACT', 'value': 1}}]

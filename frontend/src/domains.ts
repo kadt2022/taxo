@@ -58,7 +58,7 @@ const NOUNS:Record<string, Noun>={
   CALLS:{one:'appel entre méthodes', many:'appels entre méthodes'},
   IMPLEMENTS:{one:'implémentation', many:'implémentations', feminine:true},
   EXTENDS:{one:'héritage', many:'héritages'},
-  TYPED_AS:{one:'type de champ', many:'types de champ'},
+  TYPED_AS:{one:'type déclaré', many:'types déclarés'},
 };
 const nounOf=(evaluator:string, relation:string):Noun=>NOUNS[`${evaluator}|${relation}`]??NOUNS[relation]
   ??{one:`fait « ${relation} »`, many:`faits « ${relation} »`};

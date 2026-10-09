@@ -1,12 +1,13 @@
 {
   "fixture": "java-calls-demo",
   "story": "docs/backlog/TAXO-01K-appels-java-entre-classes.md",
-  "written": "2026-10-07, à la main, avant tout producteur CALLS : cette vérité ne vient pas de Taxo.",
+  "written": "2026-10-07, à la main, avant tout producteur CALLS : cette vérité ne vient pas de Taxo. Complété le 2026-10-09 (TAXO-01L, paramètres et variables locales), à la main, avant le producteur.",
   "conventions": {
     "lines": "numérotées à partir de 1",
     "columns": "octets UTF-8 dans la ligne, à partir de 0, fin exclue (ARCHITECTURE § 14)",
     "site": "toute l’expression d’appel, du receveur écrit à la parenthèse fermante",
-    "exhaustive": "calls, implements, typed_as, extends et not_interpreted sont complets : rien d’autre n’est attendu"
+    "exhaustive": "calls, implements, typed_as, variables, extends et not_interpreted sont complets : rien d’autre n’est attendu",
+    "variables": "un paramètre ou une variable locale receveur d’un appel établi : symbole `<méthode>/<nom>`, suivi de `#<rang>` quand le corps déclare ce nom plusieurs fois"
   },
   "declarations": [
     {
@@ -75,6 +76,15 @@
         "symbol:java:com.example.demo.support.Holder#value",
         "symbol:java:com.example.demo.support.Holder#fingerprint()"
       ]
+    },
+    {
+      "file": "src/main/java/com/example/demo/service/Enrollment.java",
+      "type": "symbol:java:com.example.demo.service.Enrollment",
+      "members": [
+        "symbol:java:com.example.demo.service.Enrollment#course",
+        "symbol:java:com.example.demo.service.Enrollment#describe(Course)",
+        "symbol:java:com.example.demo.service.Enrollment#enroll(List)"
+      ]
     }
   ],
   "typed_as": [
@@ -95,6 +105,42 @@
       "type": "symbol:java:com.example.demo.repository.CourseRepository",
       "path": "src/main/java/com/example/demo/service/CourseServiceImpl.java",
       "line": 10
+    },
+    {
+      "field": "symbol:java:com.example.demo.service.Enrollment#course",
+      "type": "symbol:java:com.example.demo.model.Course",
+      "path": "src/main/java/com/example/demo/service/Enrollment.java",
+      "line": 7
+    }
+  ],
+  "variables": [
+    {
+      "method": "symbol:java:com.example.demo.service.Enrollment#describe(Course)",
+      "variable": "symbol:java:com.example.demo.service.Enrollment#describe(Course)/course",
+      "type": "symbol:java:com.example.demo.model.Course",
+      "path": "src/main/java/com/example/demo/service/Enrollment.java",
+      "line": 9
+    },
+    {
+      "method": "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+      "variable": "symbol:java:com.example.demo.service.Enrollment#enroll(List)/course#1",
+      "type": "symbol:java:com.example.demo.model.Course",
+      "path": "src/main/java/com/example/demo/service/Enrollment.java",
+      "line": 14
+    },
+    {
+      "method": "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+      "variable": "symbol:java:com.example.demo.service.Enrollment#enroll(List)/course#2",
+      "type": "symbol:java:com.example.demo.model.Course",
+      "path": "src/main/java/com/example/demo/service/Enrollment.java",
+      "line": 17
+    },
+    {
+      "method": "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+      "variable": "symbol:java:com.example.demo.service.Enrollment#enroll(List)/first",
+      "type": "symbol:java:com.example.demo.model.Course",
+      "path": "src/main/java/com/example/demo/service/Enrollment.java",
+      "line": 20
     }
   ],
   "typed_as_not_produced": {
@@ -173,7 +219,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
       "object": "symbol:java:com.example.demo.service.CourseCatalog#refresh()",
-      "rule": "java.calls.declared-receiver-unique-target/2",
+      "rule": "java.calls.declared-receiver-unique-target/3",
       "premises": [
         [
           "TYPED_AS",
@@ -206,7 +252,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
       "object": "symbol:java:com.example.demo.service.CourseService#getCourses()",
-      "rule": "java.calls.declared-receiver-unique-target/2",
+      "rule": "java.calls.declared-receiver-unique-target/3",
       "premises": [
         [
           "TYPED_AS",
@@ -232,7 +278,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
       "object": "symbol:java:com.example.demo.controller.CourseController#audit()",
-      "rule": "java.calls.declared-receiver-unique-target/2",
+      "rule": "java.calls.declared-receiver-unique-target/3",
       "premises": [
         [
           "CONTAINS",
@@ -253,7 +299,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
       "object": "symbol:java:com.example.demo.service.CourseService#register(String)",
-      "rule": "java.calls.declared-receiver-unique-target/2",
+      "rule": "java.calls.declared-receiver-unique-target/3",
       "premises": [
         [
           "TYPED_AS",
@@ -279,7 +325,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#titles()",
       "object": "symbol:java:com.example.demo.service.CourseCatalog#titles()",
-      "rule": "java.calls.declared-receiver-unique-target/2",
+      "rule": "java.calls.declared-receiver-unique-target/3",
       "premises": [
         [
           "TYPED_AS",
@@ -299,6 +345,114 @@
           "column_start": 15,
           "column_end": 31,
           "text": "catalog.titles()"
+        }
+      ]
+    },
+    {
+      "subject": "symbol:java:com.example.demo.service.Enrollment#describe(Course)",
+      "object": "symbol:java:com.example.demo.model.Course#getTitle()",
+      "rule": "java.calls.declared-receiver-unique-target/3",
+      "premises": [
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.Enrollment#describe(Course)",
+          "symbol:java:com.example.demo.service.Enrollment#describe(Course)/course"
+        ],
+        [
+          "TYPED_AS",
+          "symbol:java:com.example.demo.service.Enrollment#describe(Course)/course",
+          "symbol:java:com.example.demo.model.Course"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.model.Course",
+          "symbol:java:com.example.demo.model.Course#getTitle()"
+        ]
+      ],
+      "sites": [
+        {
+          "path": "src/main/java/com/example/demo/service/Enrollment.java",
+          "line": 10,
+          "column_start": 15,
+          "column_end": 32,
+          "text": "course.getTitle()"
+        }
+      ]
+    },
+    {
+      "subject": "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+      "object": "symbol:java:com.example.demo.model.Course#getTitle()",
+      "rule": "java.calls.declared-receiver-unique-target/3",
+      "premises": [
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+          "symbol:java:com.example.demo.service.Enrollment#enroll(List)/course#1"
+        ],
+        [
+          "TYPED_AS",
+          "symbol:java:com.example.demo.service.Enrollment#enroll(List)/course#1",
+          "symbol:java:com.example.demo.model.Course"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.model.Course",
+          "symbol:java:com.example.demo.model.Course#getTitle()"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+          "symbol:java:com.example.demo.service.Enrollment#enroll(List)/course#2"
+        ],
+        [
+          "TYPED_AS",
+          "symbol:java:com.example.demo.service.Enrollment#enroll(List)/course#2",
+          "symbol:java:com.example.demo.model.Course"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+          "symbol:java:com.example.demo.service.Enrollment#enroll(List)/first"
+        ],
+        [
+          "TYPED_AS",
+          "symbol:java:com.example.demo.service.Enrollment#enroll(List)/first",
+          "symbol:java:com.example.demo.model.Course"
+        ],
+        [
+          "TYPED_AS",
+          "symbol:java:com.example.demo.service.Enrollment#course",
+          "symbol:java:com.example.demo.model.Course"
+        ]
+      ],
+      "sites": [
+        {
+          "path": "src/main/java/com/example/demo/service/Enrollment.java",
+          "line": 15,
+          "column_start": 12,
+          "column_end": 29,
+          "text": "course.getTitle()"
+        },
+        {
+          "path": "src/main/java/com/example/demo/service/Enrollment.java",
+          "line": 18,
+          "column_start": 12,
+          "column_end": 29,
+          "text": "course.getTitle()"
+        },
+        {
+          "path": "src/main/java/com/example/demo/service/Enrollment.java",
+          "line": 21,
+          "column_start": 8,
+          "column_end": 24,
+          "text": "first.getTitle()"
+        },
+        {
+          "path": "src/main/java/com/example/demo/service/Enrollment.java",
+          "line": 24,
+          "column_start": 8,
+          "column_end": 25,
+          "text": "course.getTitle()"
         }
       ]
     }
@@ -328,10 +482,11 @@
       "column_start": 22,
       "column_end": 34,
       "text": "title.trim()",
-      "reason": "RECEIVER_KIND_DEFERRED",
-      "category": "UNSUPPORTED",
+      "reason": "TARGET_TYPE_OUTSIDE_SNAPSHOT",
+      "category": "UNKNOWN",
       "method": "trim",
-      "receiver": "title"
+      "receiver": "title",
+      "receiver_type": "String"
     },
     {
       "owner": "symbol:java:com.example.demo.controller.CourseController#titles()",
@@ -352,10 +507,11 @@
       "column_start": 8,
       "column_end": 20,
       "text": "reload.run()",
-      "reason": "RECEIVER_KIND_DEFERRED",
-      "category": "UNSUPPORTED",
+      "reason": "TARGET_TYPE_OUTSIDE_SNAPSHOT",
+      "category": "UNKNOWN",
       "method": "run",
-      "receiver": "reload"
+      "receiver": "reload",
+      "receiver_type": "Runnable"
     },
     {
       "owner": "symbol:java:com.example.demo.service.CourseCatalog#<init>()",
@@ -447,10 +603,11 @@
       "column_start": 13,
       "column_end": 28,
       "text": "known.isEmpty()",
-      "reason": "RECEIVER_KIND_DEFERRED",
-      "category": "UNSUPPORTED",
+      "reason": "TARGET_TYPE_OUTSIDE_SNAPSHOT",
+      "category": "UNKNOWN",
       "method": "isEmpty",
-      "receiver": "known"
+      "receiver": "known",
+      "receiver_type": "java.util.List"
     },
     {
       "owner": "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)",
@@ -459,10 +616,11 @@
       "column_start": 19,
       "column_end": 31,
       "text": "known.get(0)",
-      "reason": "RECEIVER_KIND_DEFERRED",
-      "category": "UNSUPPORTED",
+      "reason": "TARGET_TYPE_OUTSIDE_SNAPSHOT",
+      "category": "UNKNOWN",
       "method": "get",
-      "receiver": "known"
+      "receiver": "known",
+      "receiver_type": "java.util.List"
     },
     {
       "owner": "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)",
@@ -501,6 +659,41 @@
       "category": "UNKNOWN",
       "method": "hashCode",
       "receiver": "value"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+      "path": "src/main/java/com/example/demo/service/Enrollment.java",
+      "line": 20,
+      "column_start": 23,
+      "column_end": 41,
+      "text": "new Course(\"Java\")",
+      "reason": "UNSUPPORTED_CALL_FORM",
+      "category": "UNSUPPORTED"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+      "path": "src/main/java/com/example/demo/service/Enrollment.java",
+      "line": 23,
+      "column_start": 8,
+      "column_end": 24,
+      "text": "again.getTitle()",
+      "reason": "RECEIVER_TYPE_UNKNOWN",
+      "category": "UNKNOWN",
+      "method": "getTitle",
+      "receiver": "again"
+    },
+    {
+      "owner": "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+      "path": "src/main/java/com/example/demo/service/Enrollment.java",
+      "line": 25,
+      "column_start": 15,
+      "column_end": 29,
+      "text": "courses.size()",
+      "reason": "TARGET_TYPE_OUTSIDE_SNAPSHOT",
+      "category": "UNKNOWN",
+      "method": "size",
+      "receiver": "courses",
+      "receiver_type": "java.util.List"
     }
   ],
   "never": {

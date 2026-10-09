@@ -2,7 +2,9 @@ from app.evaluations.domain.evaluator import EvaluatorCatalog
 
 # Version 1 (TAXO-01K, ARCHITECTURE § 14) : declarations des sources (CONTAINS, TYPED_AS, EXTENDS, IMPLEMENTS entre
 # types) et appels resolus par `java.calls.declared-receiver-unique-target/1`, premier fragment.
-# TAXO-01L : la version 2 de la regle (supertypes JDK connus) ne change ni relations, ni couvertures, ni codes.
+# TAXO-01L : les versions 2 (supertypes JDK connus) et 3 (parametres et variables locales receveurs) de la regle ne
+# changent ni relations, ni couvertures, ni codes : un parametre ou une variable est un symbole sujet de `CONTAINS`
+# et `TYPED_AS`, relations deja declarees. Le vocabulaire ne change pas, la version du catalogue non plus.
 CATALOG = EvaluatorCatalog(
     catalog_id='java-calls',
     catalog_version='1',

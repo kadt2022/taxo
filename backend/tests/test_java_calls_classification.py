@@ -78,7 +78,7 @@ def test_a_code_without_category_is_refused_never_guessed():
 
 
 def test_the_producer_version_says_the_diagnostic_changed():
-    assert JavaCallsEvaluator.producer_version == '1.2.0'
+    assert JavaCallsEvaluator.producer_version == '1.3.0'
     assert CATALOG.catalog_version == '1'
 
 
