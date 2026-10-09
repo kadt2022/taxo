@@ -5,6 +5,7 @@ vient tel quel de la réponse du moteur. Ce qui s'ajoute ne dit que ce que cette
 demandées et appliquées, et si la Tuile a été coupée par un budget. Rien n'est renommé dans le domaine de la Maille.
 """
 from app.mip.domain.query import VERSION
+from app.protocol.domain.envelope import BUDGET_EXHAUSTED, size
 
 WIRE_OPERATION = 'get_neighborhood'
 # Les arrêts dus à un budget : ce que la Tuile ne dit pas faute de place, jamais une absence dans la Maille.
@@ -32,7 +33,7 @@ def tile(query, envelope):
         error = envelope['error']
         return failure(error['code'], error['message'], envelope.get('snapshot'), query.expression)
     stop, not_sent = envelope['stop_reason'], envelope['not_sent']
-    return {
+    rendered = {
         'mip': VERSION,
         'expression': query.expression,
         'outcome': 'OK',
@@ -51,3 +52,8 @@ def tile(query, envelope):
         'wire': {'protocol': envelope['protocol'], 'operation': WIRE_OPERATION,
                  'engine': envelope['engine_version'], 'facts_revision': envelope['facts_revision']},
     }
+    # Le budget d'octets vaut pour ce que le consommateur reçoit, pas seulement pour l'enveloppe du moteur.
+    if size(rendered) > rendered['bounds']['applied']['max_bytes']:
+        return failure(BUDGET_EXHAUSTED, 'La Tuile MIP dépasse le budget d’octets : augmenter max_bytes.',
+                       envelope['snapshot'], query.expression)
+    return rendered

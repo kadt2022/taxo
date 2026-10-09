@@ -55,6 +55,9 @@ def courses_fixture(taxo_on):
     expand(REGISTER, bounds={'depth': 0}),
     expand(REGISTER, bounds={'depth': '2'}),
     expand(REGISTER, bounds={'max_edges': 10}),
+    expand(REGISTER, bounds={'max_nodes': 10 ** 3000}),
+    {**expand(REGISTER), 'expression': ['EXPAND']},
+    {**expand(REGISTER), 'direction': {'INCOMING': True}},
     expand(REGISTER, analysis=7),
 ])
 def test_an_invalid_query_is_a_protocol_error_never_a_knowledge_frontier(payload):
@@ -145,6 +148,18 @@ def test_requested_bounds_are_capped_by_the_server_never_the_reverse(courses):
     applied = tile['bounds']['applied']
     assert (applied['depth'], applied['max_nodes'], applied['max_facts']) == (
         V2_CEILINGS['depth'], V2_CEILINGS['max_nodes'], V2_CEILINGS['max_edges'])
+
+
+@pytest.mark.parametrize('max_bytes', [1_500, 2_000, 3_000, 8_000])
+def test_the_tile_received_never_exceeds_its_byte_budget(courses, max_bytes):
+    taxo, _ = courses
+    response = taxo.client.post(f'{taxo.base}/mip/query', json=expand(
+        REGISTER, bounds={'depth': 2, 'max_nodes': 10 ** 6, 'max_facts': 10 ** 6, 'max_bytes': max_bytes}))
+    tile = response.json()
+    if tile['outcome'] == 'OK':
+        assert len(response.content) <= tile['bounds']['applied']['max_bytes'] <= max_bytes
+    else:
+        assert tile['error']['code'] == 'BUDGET_EXHAUSTED'
 
 
 def test_a_tile_cut_by_a_budget_says_so_and_resumes_where_it_stopped(courses):

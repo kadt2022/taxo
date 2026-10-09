@@ -21,6 +21,8 @@ _FIELDS = frozenset({'mip', 'expression', 'target', 'analysis', 'relations', 'di
 MAX_TEXT = 1000
 MAX_CONTINUATION = 4000
 MAX_RELATIONS = 16
+# Au-delà, une borne n'est plus une demande mais une donnée hors contrat ; en deçà, le serveur plafonne.
+MAX_BOUND = 10 ** 6
 
 
 class MipError(Exception):
@@ -45,6 +47,12 @@ class MipQuery:
 
 def _invalid(message):
     raise MipError(INVALID_ARGUMENT, message)
+
+
+def _choice(value, name, allowed):
+    if not isinstance(value, str) or value not in allowed:
+        _invalid(f'{name} : {" ou ".join(sorted(allowed))}.')
+    return value
 
 
 def _text(value, name, required=True, longest=MAX_TEXT):
@@ -74,8 +82,8 @@ def _bounds(value):
     if not isinstance(value, dict) or set(value) - set(BOUNDS):
         _invalid(f'bounds : un objet dont les champs sont parmi {", ".join(BOUNDS)}.')
     for name, number in value.items():
-        if type(number) is not int or number < 1:
-            _invalid(f'bounds.{name} : un entier positif.')
+        if type(number) is not int or not 1 <= number <= MAX_BOUND:
+            _invalid(f'bounds.{name} : un entier entre 1 et {MAX_BOUND}.')
     return dict(value)
 
 
@@ -88,15 +96,11 @@ def read_query(payload) -> MipQuery:
         _invalid(f'Champ inconnu : {sorted(unknown)[0][:100]}.')
     if payload.get('mip', VERSION) != VERSION:
         _invalid(f'Version attendue : {VERSION}.')
-    expression = payload.get('expression')
-    if expression not in EXPRESSIONS:
-        _invalid('expression : EXPAND ou PROJECT.')
+    expression = _choice(payload.get('expression'), 'expression', EXPRESSIONS)
     if expression not in SERVED:
         raise MipError(NOT_AVAILABLE, f'{expression} n’est pas servie en {VERSION} : aucune règle de projection '
                                       'n’est encore écrite.')
-    direction = payload.get('direction')
-    if direction not in DIRECTIONS:
-        _invalid('direction : INCOMING, OUTGOING ou BOTH.')
+    direction = _choice(payload.get('direction'), 'direction', DIRECTIONS)
     return MipQuery(expression, _target(payload.get('target')), _relations(payload.get('relations')), direction,
                     _bounds(payload.get('bounds')), _text(payload.get('analysis'), 'analysis', required=False),
                     _text(payload.get('continuation'), 'continuation', required=False, longest=MAX_CONTINUATION))
