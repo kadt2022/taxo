@@ -1,6 +1,6 @@
 # MIP 0.1 — contrat de lecture d'une Tuile
 
-**Version :** `mip/0.1`. **Récit :** [TAXO-01N / MIP-01](backlog/TAXO-01N-ask-taxo-general.md), PR A.
+**Version :** `mip/0.1`. **Récit :** [TAXO-01N / MIP-01](backlog/TAXO-01N-ask-taxo-general.md) (proposé dans la PR #107, présent après sa fusion), PR A.
 **Architecture :** ARCHITECTURE § 12.0.
 
 MIP 0.1 permet à un consommateur, avec ou sans modèle de langage, de demander une **Tuile bornée** autour d'une

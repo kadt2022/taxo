@@ -218,6 +218,9 @@ def test_a_refusal_over_http_is_an_answer_of_the_contract_not_an_http_error(cour
     assert refused == {'mip': 'mip/0.1', 'expression': 'PROJECT', 'outcome': 'ERROR',
                        'error': {'code': 'NOT_AVAILABLE', 'message': refused['error']['message']}}
     assert ask(taxo, ['not', 'an', 'object'])['error']['code'] == 'INVALID_ARGUMENT'
+    assert ask(taxo, None)['error']['code'] == 'INVALID_ARGUMENT'
+    empty = taxo.client.post(f'{taxo.base}/mip/query')
+    assert empty.status_code == 200 and empty.json()['error']['code'] == 'INVALID_ARGUMENT'
 
 
 def test_the_relation_vocabulary_is_checked_once_by_the_wire_operation(courses):

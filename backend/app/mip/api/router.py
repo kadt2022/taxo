@@ -15,7 +15,8 @@ def create_router(mip):
     router = APIRouter()
 
     @router.post('/api/projects/{project_id}/mip/query', responses=_ERRORS)
-    def query(project_id: str, body: Annotated[Any, Body()]):
+    def query(project_id: str, body: Annotated[Any, Body()] = None):
+        # `null` ou un corps absent restent des requêtes du contrat, refusées par sa lecture, jamais par HTTP.
         return mip.query(project_id, body)
 
     return router
