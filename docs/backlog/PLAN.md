@@ -43,6 +43,11 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
    restitution) livrées ; PR D mesure `spring-petclinic` (7 sites résolus sur 253, coût négligeable) et
    `bibliotheque`, projet Spring en couches (28 sur 147, aucun faux) ; elle propose le fragment suivant
    (receveurs paramètre et variable locale) et constate que la profondeur s'arrête aux méthodes d'interface.
+   ✅ Fragment suivant : [TAXO-01L](termines/TAXO-01L-appels-java-receveurs-locaux.md), terminé le 2026-10-09.
+   Supertypes JDK connus (#104), paramètres et variables locales (#105) et accesseurs implicites de record en
+   `INFERRED` (#106) livrés ; lambdas reportées. Mesuré : student 24 → 32 sites résolus, bibliotheque 28 → 54,
+   petclinic 7 → 69, les 87 appels nouveaux vérifiés à la main, aucun faux. `OUT_OF_SCOPE` reste à 0 : il
+   n'est attribué que sur preuve de provenance externe et d'exclusion du périmètre, sinon `UNKNOWN`.
 
 La mémoire versionnée passe avant la suite des Tuiles parce que la dette de stockage est constatée
 (une copie complète de chaque fait par analyse), pas parce que les Tuiles en dépendraient : elles
