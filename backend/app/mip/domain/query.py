@@ -17,7 +17,8 @@ EXPRESSIONS = frozenset({EXPAND, PROJECT})
 SERVED = frozenset({EXPAND})
 DIRECTIONS = frozenset({'INCOMING', 'OUTGOING', 'BOTH'})
 BOUNDS = ('depth', 'max_nodes', 'max_facts', 'max_bytes')
-_FIELDS = frozenset({'mip', 'expression', 'target', 'analysis', 'relations', 'direction', 'bounds', 'continuation'})
+EXPRESSION, ANALYSIS, DIRECTION, CONTINUATION = 'expression', 'analysis', 'direction', 'continuation'
+_FIELDS = frozenset({'mip', EXPRESSION, 'target', ANALYSIS, 'relations', DIRECTION, 'bounds', CONTINUATION})
 MAX_TEXT = 1000
 MAX_CONTINUATION = 4000
 MAX_RELATIONS = 16
@@ -96,11 +97,11 @@ def read_query(payload) -> MipQuery:
         _invalid(f'Champ inconnu : {sorted(unknown)[0][:100]}.')
     if payload.get('mip', VERSION) != VERSION:
         _invalid(f'Version attendue : {VERSION}.')
-    expression = _choice(payload.get('expression'), 'expression', EXPRESSIONS)
+    expression = _choice(payload.get(EXPRESSION), EXPRESSION, EXPRESSIONS)
     if expression not in SERVED:
         raise MipError(NOT_AVAILABLE, f'{expression} n’est pas servie en {VERSION} : aucune règle de projection '
                                       'n’est encore écrite.')
-    direction = _choice(payload.get('direction'), 'direction', DIRECTIONS)
+    direction = _choice(payload.get(DIRECTION), DIRECTION, DIRECTIONS)
     return MipQuery(expression, _target(payload.get('target')), _relations(payload.get('relations')), direction,
-                    _bounds(payload.get('bounds')), _text(payload.get('analysis'), 'analysis', required=False),
-                    _text(payload.get('continuation'), 'continuation', required=False, longest=MAX_CONTINUATION))
+                    _bounds(payload.get('bounds')), _text(payload.get(ANALYSIS), ANALYSIS, required=False),
+                    _text(payload.get(CONTINUATION), CONTINUATION, required=False, longest=MAX_CONTINUATION))

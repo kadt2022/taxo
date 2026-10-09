@@ -3,7 +3,7 @@
 Une requête par appel, adressée à un projet comme `taxo-query`. Un refus du contrat est une réponse `ERROR`, pas
 une erreur HTTP ; seuls un projet inconnu (404) et l'absence d'analyse (409) le sont, comme pour `taxo-query`.
 """
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Body
 
@@ -15,7 +15,7 @@ def create_router(mip):
     router = APIRouter()
 
     @router.post('/api/projects/{project_id}/mip/query', responses=_ERRORS)
-    def query(project_id: str, body: Any = Body(...)):
+    def query(project_id: str, body: Annotated[Any, Body()]):
         return mip.query(project_id, body)
 
     return router
