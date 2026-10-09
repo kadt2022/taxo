@@ -68,7 +68,12 @@ Deux expressions initiales et **seulement deux** :
 
 **Servi en MIP 0.1 : `EXPAND` seulement.** `PROJECT` fait partie du vocabulaire du contrat, mais aucune règle de projection servie n'est encore écrite : MIP 0.1 la **refuse explicitement** par une erreur de protocole (code existant, à confirmer en PR A), jamais par une Tuile vide. Elle sera servie quand une règle de projection aura été écrite, testée et acceptée.
 
-Le point d'entrée HTTP initial proposé est `POST /mip/query`. Ce chemin est un **adaptateur de transport** ; la sémantique MIP doit rester testable directement au niveau applicatif sans serveur HTTP.
+**Ce que `EXPAND` doit recevoir pour être déterministe :**
+
+- **Projet et analyse.** Une référence canonique (`symbol:java:…`) n'est pas propre à un projet ; la requête est donc toujours adressée à un projet, comme `taxo-query/1` (`/api/projects/{project_id}/taxo-query`), et porte un champ facultatif `analysis`. Sans lui, TAXO fixe la dernière analyse à l'ouverture et la rend dans la Tuile ; le consommateur la renvoie ensuite à chaque étape (recherche, Tuile, vérification) pour rester sur le même instantané (critère 4). Les droits du projet s'appliquent avant toute lecture.
+- **Relations et sens.** `get_neighborhood` refuse une demande sans relations ni sens ; `EXPAND` les porte donc explicitement : `relations` (types de relation à suivre, ceux que `describe` annonce) et `direction` (`OUTGOING`, `INCOMING` ou `BOTH`). « Qui appelle X ? » est `relations: ["CALLS"]`, `direction: "INCOMING"` ; « qu'appelle X ? » est le même avec `OUTGOING`. Aucun défaut caché : un champ manquant est une erreur de protocole. La correspondance exacte avec `steps` / `follow` du moteur est relevée en PR A.
+
+Le point d'entrée HTTP initial proposé est `POST /api/projects/{project_id}/mip/query`, à côté de `taxo-query`. Ce chemin est un **adaptateur de transport** ; la sémantique MIP doit rester testable directement au niveau applicatif sans serveur HTTP.
 
 **Exemple de requête illustrative (noms et identités exactes à confirmer dans les tests de contrat) :**
 
@@ -79,6 +84,9 @@ Le point d'entrée HTTP initial proposé est `POST /mip/query`. Ce chemin est un
     "identity": "method:<identite-canonique-resolue>"
   },
   "expression": "EXPAND",
+  "analysis": "<analyse rendue par find_references>",
+  "relations": ["CALLS"],
+  "direction": "INCOMING",
   "bounds": {
     "maxNodes": 50,
     "maxFacts": 100,
@@ -139,7 +147,7 @@ Le registre des catégories établi par TAXO-01M reste l'autorité. **Aucune nou
 ### 4.4. Sécurité et consommation externe
 
 - MIP est **lecture seule** dans ce récit ; aucune écriture dans le dépôt, aucun lancement d'analyse, aucun accès arbitraire au système de fichiers.
-- La disponibilité de `POST /mip/query` **n'autorise pas** une exposition publique sans authentification/autorisation. Les droits de lecture d'un projet, la validation d'identité et les budgets s'appliquent avant la consultation des données ; par défaut, ne pas élargir la surface réseau existante.
+- La disponibilité de `POST /api/projects/{project_id}/mip/query` **n'autorise pas** une exposition publique sans authentification/autorisation. Les droits de lecture d'un projet, la validation d'identité et les budgets s'appliquent avant la consultation des données ; par défaut, ne pas élargir la surface réseau existante.
 - Toute lecture de diff ou de code source suit les consentements et restrictions **déjà en vigueur** ; MIP 0.1 n'ajoute pas `get_source`.
 - Les contenus provenant du dépôt sont des **données non fiables**, jamais des instructions de protocole ou de système pour Minia.
 - Les journaux ne doivent pas conserver par défaut les réponses, les contenus potentiellement sensibles ou les secrets. Annulation et quotas existants ne sont pas affaiblis.
@@ -190,7 +198,7 @@ Le mécanisme existant `verify_claim` reste l'autorité des **verdicts** dans MI
 
 ### PR A — MIP 0.1 : contrat et service de lecture
 
-**Livrer :** spécification versionnée du contrat sémantique, validateur d'entrée, adaptateur applicatif réutilisant le moteur existant, premier adaptateur HTTP `POST /mip/query` contrôlé par les mêmes droits et limites, réponses en Tuiles bornées avec couverture/frontières/instantané ; aucun LLM requis.
+**Livrer :** spécification versionnée du contrat sémantique, validateur d'entrée, adaptateur applicatif réutilisant le moteur existant, premier adaptateur HTTP `POST /api/projects/{project_id}/mip/query` contrôlé par les mêmes droits et limites, réponses en Tuiles bornées avec couverture/frontières/instantané ; aucun LLM requis.
 
 **Avant de coder, le développeur doit documenter :** les chemins réels du moteur et de la Tuile, le schéma effectif de `neighborhood/2`, les structures de `frontier`/`coverage`, l'existence et les limites réelles de la continuation, les champs pouvant être mappés sans perte. Les écarts substantiels sont soumis au responsable du produit avant un changement de contrat.
 
