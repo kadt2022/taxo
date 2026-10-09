@@ -99,11 +99,13 @@ def test_each_uninterpreted_site_has_its_closed_reason_under_its_owner(execution
         expected.setdefault(site['owner'], []).append(
             {'role': 'call-site', 'line_start': site['line'], 'line_end': site['line'],
              'column_start': site['column_start'], 'column_end': site['column_end'], 'reason': site['reason'],
-             **{key: site[key] for key in DIAGNOSTIC_FIELDS if key in site}})
+             'category': site['category'], **{key: site[key] for key in DIAGNOSTIC_FIELDS if key in site}})
     found = {fact['subject']: fact for fact in execution.coverage if fact['coverage_type'] == 'NOT_INTERPRETED'}
     assert found.keys() == expected.keys()
     for owner, fact in found.items():
-        assert fact['diagnostic'] == {'sites_seen': len(expected[owner]), 'sites': expected[owner]}
+        assert fact['diagnostic'] == {'sites_seen': len(expected[owner]),
+                                      'classification': 'java.calls.frontier-classification/1',
+                                      'sites': expected[owner]}
         assert all(site['reason'] in fact['reason'] for site in expected[owner])
 
 

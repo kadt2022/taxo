@@ -312,6 +312,7 @@
       "column_end": 28,
       "text": "catalog.label(title)",
       "reason": "OVERLOAD_AMBIGUOUS",
+      "category": "AMBIGUOUS",
       "method": "label",
       "receiver": "catalog",
       "receiver_type": "com.example.demo.service.CourseCatalog",
@@ -328,6 +329,7 @@
       "column_end": 34,
       "text": "title.trim()",
       "reason": "RECEIVER_KIND_DEFERRED",
+      "category": "UNSUPPORTED",
       "method": "trim",
       "receiver": "title"
     },
@@ -339,6 +341,7 @@
       "column_end": 49,
       "text": "catalog.refresh()",
       "reason": "LAMBDA_OR_LOCAL_CONTEXT",
+      "category": "UNSUPPORTED",
       "method": "refresh",
       "receiver": "catalog"
     },
@@ -350,6 +353,7 @@
       "column_end": 20,
       "text": "reload.run()",
       "reason": "RECEIVER_KIND_DEFERRED",
+      "category": "UNSUPPORTED",
       "method": "run",
       "receiver": "reload"
     },
@@ -360,7 +364,8 @@
       "column_start": 23,
       "column_end": 38,
       "text": "new HashMap<>()",
-      "reason": "UNSUPPORTED_CALL_FORM"
+      "reason": "UNSUPPORTED_CALL_FORM",
+      "category": "UNSUPPORTED"
     },
     {
       "owner": "symbol:java:com.example.demo.service.CourseCatalog#refresh()",
@@ -370,6 +375,7 @@
       "column_end": 23,
       "text": "byTitle.clear()",
       "reason": "TARGET_TYPE_OUTSIDE_SNAPSHOT",
+      "category": "UNKNOWN",
       "method": "clear",
       "receiver": "byTitle",
       "receiver_type": "java.util.Map"
@@ -382,6 +388,7 @@
       "column_end": 44,
       "text": "List.copyOf(byTitle.keySet())",
       "reason": "UNSUPPORTED_CALL_FORM",
+      "category": "UNSUPPORTED",
       "method": "copyOf",
       "receiver": "List"
     },
@@ -393,6 +400,7 @@
       "column_end": 43,
       "text": "byTitle.keySet()",
       "reason": "TARGET_TYPE_OUTSIDE_SNAPSHOT",
+      "category": "UNKNOWN",
       "method": "keySet",
       "receiver": "byTitle",
       "receiver_type": "java.util.Map"
@@ -405,6 +413,7 @@
       "column_end": 41,
       "text": "courseRepository.findAll()",
       "reason": "TARGET_DECLARATION_OUTSIDE_SNAPSHOT",
+      "category": "UNKNOWN",
       "method": "findAll",
       "receiver": "courseRepository",
       "receiver_type": "com.example.demo.repository.CourseRepository",
@@ -420,6 +429,7 @@
       "column_end": 64,
       "text": "courseRepository.findByTitle(title)",
       "reason": "SUPER_TYPE_UNRESOLVED",
+      "category": "UNKNOWN",
       "method": "findByTitle",
       "receiver": "courseRepository",
       "receiver_type": "com.example.demo.repository.CourseRepository",
@@ -438,6 +448,7 @@
       "column_end": 28,
       "text": "known.isEmpty()",
       "reason": "RECEIVER_KIND_DEFERRED",
+      "category": "UNSUPPORTED",
       "method": "isEmpty",
       "receiver": "known"
     },
@@ -449,6 +460,7 @@
       "column_end": 31,
       "text": "known.get(0)",
       "reason": "RECEIVER_KIND_DEFERRED",
+      "category": "UNSUPPORTED",
       "method": "get",
       "receiver": "known"
     },
@@ -460,6 +472,7 @@
       "column_end": 55,
       "text": "courseRepository.save(new Course(title))",
       "reason": "TARGET_DECLARATION_OUTSIDE_SNAPSHOT",
+      "category": "UNKNOWN",
       "method": "save",
       "receiver": "courseRepository",
       "receiver_type": "com.example.demo.repository.CourseRepository",
@@ -474,7 +487,8 @@
       "column_start": 37,
       "column_end": 54,
       "text": "new Course(title)",
-      "reason": "UNSUPPORTED_CALL_FORM"
+      "reason": "UNSUPPORTED_CALL_FORM",
+      "category": "UNSUPPORTED"
     },
     {
       "owner": "symbol:java:com.example.demo.support.Holder#fingerprint()",
@@ -484,6 +498,7 @@
       "column_end": 31,
       "text": "value.hashCode()",
       "reason": "RECEIVER_TYPE_UNKNOWN",
+      "category": "UNKNOWN",
       "method": "hashCode",
       "receiver": "value"
     }

@@ -5,7 +5,7 @@ declaration vue dans deux fichiers) sont deux preuves de la meme assertion.
 """
 from app.facts import content_hash
 
-from . import implementations, resolution
+from . import classification, implementations, resolution
 
 DECLARATION = 'java.declaration'
 CALL_SITE = 'java.call-site'
@@ -72,11 +72,18 @@ def coverage(subject, coverage_type, scope, reason=None, diagnostic=None, exclud
 
 
 def site_diagnostic(site, outcome):
-    """Un site non interprete, tel que le `diagnostic` d'une couverture le decrit (ARCHITECTURE § 14)."""
+    """Un site non interprete, tel que le `diagnostic` d'une couverture le decrit (ARCHITECTURE § 14), avec sa
+    categorie selon `classification.RULE` (TAXO-01M)."""
     return {'role': 'call-site', 'line_start': site.line_start, 'line_end': site.line_end,
             'column_start': site.column_start, 'column_end': site.column_end, 'reason': outcome.reason,
+            'category': classification.category(outcome.reason),
             **{key: outcome.details[key] for key in _DIAGNOSTIC_KEYS if outcome.details.get(key)}}
 
 
 def _extend(values, more):
     values.extend(item for item in more if item not in values)
+
+
+def site_order(item):
+    """L'ordre stable des sites d'un diagnostic : position, puis code ; deux sites d'une ligne par leurs colonnes."""
+    return item['line_start'], item['column_start'], item['line_end'], item['column_end'], item['reason']
