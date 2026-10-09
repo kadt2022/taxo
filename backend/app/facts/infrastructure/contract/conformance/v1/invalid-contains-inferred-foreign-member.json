@@ -1,0 +1,43 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "INFERRED",
+  "validity": "VALID",
+  "subject": "symbol:java:com.example.demo.model.Other",
+  "relation": "CONTAINS",
+  "object": "symbol:java:com.example.demo.model.CourseRequest#code()",
+  "qualifiers": {},
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "COMMIT"
+  },
+  "evidence": [
+    {
+      "repository": "taxo",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "src/main/java/com/example/demo/model/CourseRequest.java",
+      "method": "java.declaration",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "line_start": 3,
+      "line_end": 3,
+      "symbol": "symbol:java:com.example.demo.model.CourseRequest#code()"
+    }
+  ],
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "taxo.java-calls",
+    "producer_version": "1.4.0",
+    "execution_id": "fixture",
+    "catalog_id": "java-calls",
+    "catalog_version": "1"
+  },
+  "derivation": {
+    "premises": [
+      "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    ],
+    "rule": "java.record.implicit-accessor/1",
+    "counter_examples_checked": [],
+    "known_gaps": []
+  }
+}

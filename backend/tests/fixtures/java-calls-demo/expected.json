@@ -1,13 +1,14 @@
 {
   "fixture": "java-calls-demo",
   "story": "docs/backlog/TAXO-01K-appels-java-entre-classes.md",
-  "written": "2026-10-07, à la main, avant tout producteur CALLS : cette vérité ne vient pas de Taxo. Complété le 2026-10-09 (TAXO-01L, paramètres et variables locales), à la main, avant le producteur.",
+  "written": "2026-10-07, à la main, avant tout producteur CALLS : cette vérité ne vient pas de Taxo. Complété le 2026-10-09 (TAXO-01L, paramètres et variables locales), à la main, avant le producteur. Complété le 2026-10-09 (TAXO-01L, accesseurs de record), à la main, avant le producteur.",
   "conventions": {
     "lines": "numérotées à partir de 1",
     "columns": "octets UTF-8 dans la ligne, à partir de 0, fin exclue (ARCHITECTURE § 14)",
     "site": "toute l’expression d’appel, du receveur écrit à la parenthèse fermante",
-    "exhaustive": "calls, implements, typed_as, variables, extends et not_interpreted sont complets : rien d’autre n’est attendu",
-    "variables": "un paramètre ou une variable locale receveur d’un appel établi : symbole `<méthode>/<nom>`, suivi de `#<rang>` quand le corps déclare ce nom plusieurs fois"
+    "exhaustive": "calls, implements, typed_as, variables, accessors, extends et not_interpreted sont complets : rien d’autre n’est attendu",
+    "variables": "un paramètre ou une variable locale receveur d’un appel établi : symbole `<méthode>/<nom>`, suivi de `#<rang>` quand le corps déclare ce nom plusieurs fois",
+    "accessors": "un composant de record sans méthode `x()` écrite : le record contient l’accesseur `R#x()` par inférence (`java.record.implicit-accessor/1`), prouvé par la ligne du composant"
   },
   "declarations": [
     {
@@ -83,7 +84,16 @@
       "members": [
         "symbol:java:com.example.demo.service.Enrollment#course",
         "symbol:java:com.example.demo.service.Enrollment#describe(Course)",
-        "symbol:java:com.example.demo.service.Enrollment#enroll(List)"
+        "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
+        "symbol:java:com.example.demo.service.Enrollment#row(Seat)"
+      ]
+    },
+    {
+      "file": "src/main/java/com/example/demo/service/Seat.java",
+      "type": "symbol:java:com.example.demo.service.Seat",
+      "members": [
+        "symbol:java:com.example.demo.service.Seat#course",
+        "symbol:java:com.example.demo.service.Seat#row"
       ]
     }
   ],
@@ -111,6 +121,12 @@
       "type": "symbol:java:com.example.demo.model.Course",
       "path": "src/main/java/com/example/demo/service/Enrollment.java",
       "line": 7
+    },
+    {
+      "field": "symbol:java:com.example.demo.service.Seat#course",
+      "type": "symbol:java:com.example.demo.model.Course",
+      "path": "src/main/java/com/example/demo/service/Seat.java",
+      "line": 5
     }
   ],
   "variables": [
@@ -141,6 +157,31 @@
       "type": "symbol:java:com.example.demo.model.Course",
       "path": "src/main/java/com/example/demo/service/Enrollment.java",
       "line": 20
+    },
+    {
+      "method": "symbol:java:com.example.demo.service.Enrollment#row(Seat)",
+      "variable": "symbol:java:com.example.demo.service.Enrollment#row(Seat)/seat",
+      "type": "symbol:java:com.example.demo.service.Seat",
+      "path": "src/main/java/com/example/demo/service/Enrollment.java",
+      "line": 28
+    }
+  ],
+  "accessors": [
+    {
+      "record": "symbol:java:com.example.demo.service.Seat",
+      "accessor": "symbol:java:com.example.demo.service.Seat#course()",
+      "component": "symbol:java:com.example.demo.service.Seat#course",
+      "rule": "java.record.implicit-accessor/1",
+      "path": "src/main/java/com/example/demo/service/Seat.java",
+      "line": 5
+    },
+    {
+      "record": "symbol:java:com.example.demo.service.Seat",
+      "accessor": "symbol:java:com.example.demo.service.Seat#row()",
+      "component": "symbol:java:com.example.demo.service.Seat#row",
+      "rule": "java.record.implicit-accessor/1",
+      "path": "src/main/java/com/example/demo/service/Seat.java",
+      "line": 5
     }
   ],
   "typed_as_not_produced": {
@@ -219,7 +260,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
       "object": "symbol:java:com.example.demo.service.CourseCatalog#refresh()",
-      "rule": "java.calls.declared-receiver-unique-target/3",
+      "rule": "java.calls.declared-receiver-unique-target/4",
       "premises": [
         [
           "TYPED_AS",
@@ -252,7 +293,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
       "object": "symbol:java:com.example.demo.service.CourseService#getCourses()",
-      "rule": "java.calls.declared-receiver-unique-target/3",
+      "rule": "java.calls.declared-receiver-unique-target/4",
       "premises": [
         [
           "TYPED_AS",
@@ -278,7 +319,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
       "object": "symbol:java:com.example.demo.controller.CourseController#audit()",
-      "rule": "java.calls.declared-receiver-unique-target/3",
+      "rule": "java.calls.declared-receiver-unique-target/4",
       "premises": [
         [
           "CONTAINS",
@@ -299,7 +340,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
       "object": "symbol:java:com.example.demo.service.CourseService#register(String)",
-      "rule": "java.calls.declared-receiver-unique-target/3",
+      "rule": "java.calls.declared-receiver-unique-target/4",
       "premises": [
         [
           "TYPED_AS",
@@ -325,7 +366,7 @@
     {
       "subject": "symbol:java:com.example.demo.controller.CourseController#titles()",
       "object": "symbol:java:com.example.demo.service.CourseCatalog#titles()",
-      "rule": "java.calls.declared-receiver-unique-target/3",
+      "rule": "java.calls.declared-receiver-unique-target/4",
       "premises": [
         [
           "TYPED_AS",
@@ -351,7 +392,7 @@
     {
       "subject": "symbol:java:com.example.demo.service.Enrollment#describe(Course)",
       "object": "symbol:java:com.example.demo.model.Course#getTitle()",
-      "rule": "java.calls.declared-receiver-unique-target/3",
+      "rule": "java.calls.declared-receiver-unique-target/4",
       "premises": [
         [
           "CONTAINS",
@@ -382,7 +423,7 @@
     {
       "subject": "symbol:java:com.example.demo.service.Enrollment#enroll(List)",
       "object": "symbol:java:com.example.demo.model.Course#getTitle()",
-      "rule": "java.calls.declared-receiver-unique-target/3",
+      "rule": "java.calls.declared-receiver-unique-target/4",
       "premises": [
         [
           "CONTAINS",
@@ -453,6 +494,37 @@
           "column_start": 8,
           "column_end": 25,
           "text": "course.getTitle()"
+        }
+      ]
+    },
+    {
+      "subject": "symbol:java:com.example.demo.service.Enrollment#row(Seat)",
+      "object": "symbol:java:com.example.demo.service.Seat#row()",
+      "rule": "java.calls.declared-receiver-unique-target/4",
+      "premises": [
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.Enrollment#row(Seat)",
+          "symbol:java:com.example.demo.service.Enrollment#row(Seat)/seat"
+        ],
+        [
+          "TYPED_AS",
+          "symbol:java:com.example.demo.service.Enrollment#row(Seat)/seat",
+          "symbol:java:com.example.demo.service.Seat"
+        ],
+        [
+          "CONTAINS",
+          "symbol:java:com.example.demo.service.Seat",
+          "symbol:java:com.example.demo.service.Seat#row()"
+        ]
+      ],
+      "sites": [
+        {
+          "path": "src/main/java/com/example/demo/service/Enrollment.java",
+          "line": 29,
+          "column_start": 15,
+          "column_end": 25,
+          "text": "seat.row()"
         }
       ]
     }

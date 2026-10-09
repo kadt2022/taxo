@@ -15,7 +15,7 @@ Il donne aussi, a la demande, les chaines d'appels fluentes (`a.b(x).c(y)`) : ch
 Il ne connait aucun framework : ni endpoint, ni controleur. Ce sont les evaluateurs de framework qui donnent
 un sens a ces primitives. Aucun Gradle ni Maven n'est execute, aucun jar n'est lu : seules les sources comptent.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import tree_sitter_java
 from tree_sitter import Language, Parser
@@ -96,6 +96,8 @@ class Field:
     line: int
     # Vrai si le type ecrit est une variable de type (`T`) du type ou d'un type englobant.
     type_variable: bool = False
+    # Vrai pour le champ d'un composant de record (TAXO-01L) : declare par l'en-tete, sur la ligne du composant.
+    component: bool = False
 
 
 @dataclass(frozen=True)
@@ -118,6 +120,13 @@ class JavaType:
     fields: tuple = ()
     clauses: tuple = ()
     name_line: int = 0
+
+    @property
+    def implicit_accessors(self):
+        """Les champs des composants dont le record declare l'accesseur implicitement (JLS 8.10.3) : aucune methode
+        `x()` n'est ecrite dans son corps."""
+        written = {item.name for item in self.declarations if not item.constructor and not item.parameters}
+        return tuple(item for item in self.fields if item.component and item.name not in written)
 
     def ambiguous(self, signature):
         """Vrai si plusieurs declarations du type partagent cette signature syntaxique normalisee."""
@@ -387,7 +396,8 @@ class _Reader:
     def _fields(self, node, owner):
         """Champs du type. Un champ type par une variable de type (`T`, du type ou d'un type englobant) n'a pas de
         type qualifie, meme si un type des sources porte le meme nom : la variable le masque."""
-        fields, variables = [], _type_variables(node)
+        variables = _type_variables(node)
+        fields = list(self._components(node, owner, variables)) if node.type == 'record_declaration' else []
         for member in _members(node.child_by_field_name('body')):
             if member.type in ('field_declaration', 'constant_declaration'):
                 written = _type_name(member.child_by_field_name('type'))
@@ -396,6 +406,21 @@ class _Reader:
                 fields += [_field(declarator, written, qualified, variable) for declarator in member.named_children
                            if declarator.type == 'variable_declarator']
         return tuple(fields)
+
+    def _components(self, node, owner, variables):
+        """Les champs des composants d'un record, dans l'ordre de l'en-tete (JLS 8.10.3) ; un composant variable
+        (`T... x`) est un tableau."""
+        for item in _named(node.child_by_field_name('parameters')):
+            if item.type == 'formal_parameter':
+                written = _type_name(item.child_by_field_name('type'))
+                variable = written.partition('.')[0] in variables
+                yield replace(_field(item, written, None if variable else self._type(written, owner), variable),
+                              component=True)
+            elif item.type == 'spread_parameter':
+                declarator = next(child for child in item.named_children if child.type == 'variable_declarator')
+                written = _type_name(next(child for child in item.named_children if child.type not in (
+                    'modifiers', 'variable_declarator', 'marker_annotation', 'annotation')))
+                yield replace(_field(declarator, written + '[]', None, False), component=True)
 
     def _constants(self, body, qualified):
         """Constantes chaines `static final` du type, dans l'ordre : une constante peut citer les precedentes."""

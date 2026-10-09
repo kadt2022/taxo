@@ -294,7 +294,7 @@ dans les champs textuels. Tout champ inconnu est refusé, en particulier tout ch
 
 | Relation | Sujet → objet | Statut | Producteur livré |
 | --- | --- | --- | --- |
-| `CONTAINS` | repository, module → module, file ; file → symbol ; symbol → symbol | `OBSERVED` | inventaire, structure ; aucun pour les symboles |
+| `CONTAINS` | repository, module → module, file ; file → symbol ; symbol → symbol | `OBSERVED` ; `INFERRED` d'un symbole vers son propre membre implicite | inventaire, structure ; aucun pour les symboles |
 | `WRITTEN_IN` | file → language | `OBSERVED` | inventaire |
 | `USES_TECHNOLOGY` | repository, module → technology | `OBSERVED` | inventaire |
 | `DECLARED_BY` | technology → file | `OBSERVED` | inventaire |
@@ -946,14 +946,16 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
 - **Prémisses** : § 5.5 n'est pas assoupli. Un `CALLS` cite des faits `OBSERVED` du même instantané, produits
   par le même évaluateur, écrits `RELATION : sujet -> objet` comme les autres prémisses : `CONTAINS` du fichier
   vers le type et du type vers ses membres, `TYPED_AS` du champ receveur, `EXTENDS` et `IMPLEMENTS` parcourus ;
-  depuis TAXO-01L, `CONTAINS` de la méthode vers le paramètre ou la variable receveur et son `TYPED_AS`.
+  depuis TAXO-01L, `CONTAINS` de la méthode vers le paramètre ou la variable receveur et son `TYPED_AS`, et le
+  `CONTAINS` `INFERRED` d'un accesseur implicite de record, conclusion d'une règle nommée du même évaluateur
+  sur des faits `OBSERVED` : la chaîne de déduction reste remontable jusqu'au code écrit.
   Un type déclaré hors des sources ne donne aucun `TYPED_AS` ni `EXTENDS` : aucun symbole externe n'est
   inventé.
 - **Premier fragment** : appels écrits directement dans le corps d'une méthode ou d'un constructeur (hors lambda,
   classe anonyme ou locale), sans receveur (`f()`), sur `this`, sur un champ (`champ`, `this.champ`) dont le type
   déclaré se résout vers une déclaration des sources. Cible : la seule déclaration de même nom et même arité dans la
   hiérarchie du type, toute dans les sources ; sinon le site est `NOT_INTERPRETED`. Règle
-  `java.calls.declared-receiver-unique-target/3` (`/1` avant TAXO-01L). Les arguments ne sont pas typés : hypothèse
+  `java.calls.declared-receiver-unique-target/4` (`/1` avant TAXO-01L). Les arguments ne sont pas typés : hypothèse
   « le code compile » écrite dans `known_gaps`. Le détail (surcharges, héritage, méthodes d'`Object`) est celui du
   récit [TAXO-01K](backlog/TAXO-01K-appels-java-entre-classes.md).
 - **`IMPLEMENTS`** : entre types, `OBSERVED` (la clause est écrite) ; entre méthodes, `INFERRED` par la règle
@@ -1005,6 +1007,16 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
   d'un `catch` donnent `RECEIVER_TYPE_UNKNOWN` (aucune inférence d'expression). Une variable de motif
   (`o instanceof B b`), dont la portée suit le flot du code, garde `RECEIVER_KIND_DEFERRED`. Le portail dit
   « la variable » d'un tel symbole, et `TYPED_AS` « type déclaré ».
+- **Accesseurs implicites des records** (TAXO-01L, tranche 3, `producer_version` 1.4.0, règle `/4`) : chaque
+  composant d'un record est un champ (JLS 8.10.3), écrit comme les autres (`CONTAINS`, `TYPED_AS` vers un type
+  des sources), preuve : la ligne du composant. Quand le corps n'écrit aucune méthode `x()` sans paramètre, la
+  règle `java.record.implicit-accessor/1` déduit que le record `CONTAINS` l'accesseur `R#x()` (`INFERRED`,
+  prémisse : `CONTAINS R -> R#x`, preuve : la ligne du composant). Le validateur n'admet un `CONTAINS`
+  `INFERRED` que d'un symbole vers son propre membre (`R` vers `R#…`) : aucun fichier, aucun membre d'un autre
+  type. L'accesseur est alors une déclaration candidate comme une autre : `r.x()` devient un `CALLS` vers
+  `R#x()`, dont le `CONTAINS` inféré est la prémisse. Un accesseur écrit reste une méthode `OBSERVED` et aucun
+  accesseur n'est inféré à sa place. Un accesseur implicite n'implémente jamais (`IMPLEMENTS`) la méthode d'une
+  interface : seule une méthode écrite le fait.
 - **Supertypes JDK connus** (TAXO-01L, tranche 1, `producer_version` 1.2.0, règle `/2`) : `java.io.Serializable`,
   `java.lang.Cloneable` et `java.lang.Record` sont connus du contrat par leur seule déclaration publique : les deux
   premiers ne déclarent aucune méthode, `Record` ne déclare que `equals`, `hashCode` et `toString`, déjà connues
@@ -1017,7 +1029,7 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
 - **Restitution** : une Tuile ne connaît rien de Java ; la frontière d'un nœud non lu porte en `causes` les
   raisons fermées de son `diagnostic`, et l'explorateur les dit en clair (« plusieurs déclarations possibles »).
 - **Lambdas** : créer une lambda n'est pas l'appeler ; ses appels ne sont jamais attribués à la méthode
-  englobante.
+  englobante. TAXO-01L les laisse en `LAMBDA_OR_LOCAL_CONTEXT` (`UNSUPPORTED`) : leur attribution est reportée.
 - **Doutes du producteur** (PR B), tous tranchés vers moins d'appels : un nom de variable de motif déclaré dans le
   corps masque le champ de même nom (avant TAXO-01L, tout nom déclaré n'importe où dans le corps le masquait) ; un
   appel sans receveur dans un type membre, ou qu'un import statique peut fournir, n'a pas de cible ; un type déclaré
@@ -1198,3 +1210,10 @@ qualifié, ne cachent plus de cible. Un appel dont la hiérarchie n'atteint qu'e
 paramètre ou une variable locale d'un type des sources est suivi comme un champ. Un tel receveur a un symbole
 (`T#m(…)/nom`), contenu par sa méthode et typé, écrit seulement comme prémisse d'un appel établi. Aucune relation,
 aucun code, aucune catégorie n'entre au contrat ; le portail dit « la variable » et « type déclaré ».
+
+**2026-10-09** — Accesseurs implicites des records (TAXO-01L, tranche 3). `taxo.java-calls` 1.4.0 écrit les
+composants d'un record comme ses champs et, par `java.record.implicit-accessor/1`, un `CONTAINS` `INFERRED` du
+record vers chaque accesseur que son corps n'écrit pas. Le contrat admet ce statut pour `CONTAINS` d'un symbole
+vers son propre membre seulement (ajout, conformité étendue) ; § 5.5 n'est pas assoupli. Avec
+`java.calls.declared-receiver-unique-target/4`, `r.x()` devient un `CALLS` vers `R#x()`. Aucun code, aucune
+catégorie n'entre au contrat.

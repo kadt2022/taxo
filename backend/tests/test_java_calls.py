@@ -57,7 +57,23 @@ def test_the_declarations_are_exactly_those_of_the_oracle(execution):
     found = {(fact['relation'], fact['subject'], fact['object']) for fact in execution.facts
              if fact['status'] == 'OBSERVED'}
     assert found == expected
-    assert {fact['relation'] for fact in execution.facts if fact['status'] == 'INFERRED'} == {'CALLS', 'IMPLEMENTS'}
+    assert {fact['relation'] for fact in execution.facts if fact['status'] == 'INFERRED'} == {
+        'CALLS', 'IMPLEMENTS', 'CONTAINS'}
+
+
+def test_the_implicit_record_accessors_are_exactly_those_of_the_oracle(execution):
+    """TAXO-01L : un record contient par inference l'accesseur de chaque composant que son corps n'ecrit pas."""
+    expected = {(item['record'], item['accessor']): item for item in ORACLE['accessors']}
+    found = {(fact['subject'], fact['object']): fact for fact in of(execution, 'CONTAINS')
+             if fact['status'] == 'INFERRED'}
+    assert found.keys() == expected.keys()
+    for key, fact in found.items():
+        oracle = expected[key]
+        assert fact['derivation']['rule'] == oracle['rule']
+        assert fact['derivation']['premises'] == [premise('CONTAINS', oracle['record'], oracle['component'])]
+        [evidence] = fact['evidence']
+        assert (evidence['path'], evidence['line_start'], evidence['symbol']) == (oracle['path'], oracle['line'],
+                                                                                  fact['object'])
 
 
 def test_a_declared_field_or_variable_type_is_proven_by_its_line(execution):

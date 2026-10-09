@@ -1,20 +1,22 @@
-"""La regle `java.calls.declared-receiver-unique-target/3` (TAXO-01K, TAXO-01L, ARCHITECTURE § 14) : d'un site
+"""La regle `java.calls.declared-receiver-unique-target/4` (TAXO-01K, TAXO-01L, ARCHITECTURE § 14) : d'un site
 d'appel a la declaration qu'il vise, ou a la raison fermee pour laquelle elle n'est pas etablie.
 
 Le receveur est `this`, implicite, un champ du type courant (`champ`, `this.champ`), ou, depuis la version 3, un
 parametre ou une variable locale visible au site, dont le type declare est un type des sources. La cible est la
 seule declaration de meme nom et meme arite dans la hierarchie de ce type, toute dans les sources hors les
 supertypes de la JDK connus du contrat (`KNOWN_SUPERTYPES`, version 2), qui ne declarent aucune autre methode que
-celles d'`Object`. Toute autre forme, et tout doute (surcharge, supertype externe, argument litteral contraire),
-laisse le site non interprete : moins d'appels, mais vrais.
+celles d'`Object`. Depuis la version 4, l'accesseur implicite d'un composant de record est une declaration
+candidate comme une autre, sa premisse etant le `CONTAINS` infere de `java.record.implicit-accessor/1`. Toute
+autre forme, et tout doute (surcharge, supertype externe, argument litteral contraire), laisse le site non
+interprete : moins d'appels, mais vrais.
 """
 from dataclasses import dataclass, field
 
 from app.evaluators.java import sites
-from . import arguments
+from . import accessors, arguments
 from .declarations import OBJECT_METHODS, external_name, premise, symbol
 
-RULE = 'java.calls.declared-receiver-unique-target/3'
+RULE = 'java.calls.declared-receiver-unique-target/4'
 KNOWN_GAPS = ('applicabilité des arguments non vérifiée ; suppose un code qui compile',)
 
 RECEIVER_TYPE_UNKNOWN = 'RECEIVER_TYPE_UNKNOWN'
@@ -128,7 +130,7 @@ class Resolver:
         fournir. Sinon le type qui le fournit n'est pas etabli."""
         outer = site.owner.rpartition('.')[0]
         while outer in self.sources.types:
-            if any(_matches(item, site) for item in self.sources.get(outer).java_type.declarations):
+            if any(_matches(item, site) for item in accessors.callables(self.sources.get(outer).java_type)):
                 raise _Stop(OVERLOAD_AMBIGUOUS)
             outer = outer.rpartition('.')[0]
         if any(static and name.rsplit('.', 1)[-1] in (site.name, '*') for name, static in java_file.imports):
@@ -162,7 +164,7 @@ class Resolver:
         for depth, level in enumerate(hierarchy.levels):
             for qualified in level:
                 java_type = self.sources.get(qualified).java_type
-                for declaration in java_type.declarations:
+                for declaration in accessors.callables(java_type):
                     if not declaration.constructor and declaration.name == name:
                         yield depth, qualified, java_type, declaration
 
