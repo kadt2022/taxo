@@ -823,9 +823,10 @@ pas. Ajouter une opération ou un champ facultatif reste compatible ; changer un
 
 - `EXPAND` : exploration bornée autour d'une **référence résolue**, selon des relations et un sens donnés
   explicitement (`relations`, `direction` : « qui appelle X » est `CALLS` entrant) ; voisinage et relations
-  viennent du seul moteur existant (§ 9). Servie en 0.1, sans modèle de langage. Sans reprise, c'est la première
-  Tuile (TILE, § 9.5) ; avec la reprise d'un nœud de la frontière de sélection, c'est l'EXPAND du § 9.5, qui
-  n'ajoute que la branche demandée. Un seul nom, la même opération `get_neighborhood`.
+  viennent du seul moteur existant (§ 9). Servie en 0.1, sans modèle de langage. Trois formes, un seul nom et la même
+  opération `get_neighborhood` : la première Tuile autour d'une référence (TILE, § 9.5) ; l'extension depuis un
+  nœud de frontière arrêté par la profondeur ou non atteint, sans jeton, comme une nouvelle Tuile centrée sur ce
+  nœud ; la reprise d'une adjacence coupée par un budget, avec le jeton de sa frontière (l'EXPAND du § 9.5).
 - `PROJECT` : projection bornée selon des règles servies par le moteur. Aucune règle n'est écrite : refusée en 0.1
   par une erreur de protocole, jamais par une Tuile vide.
 
