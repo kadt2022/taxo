@@ -113,6 +113,17 @@ def test_a_variable_says_its_written_type_and_whether_it_names_a_type(declaratio
     assert (site.declaration.written, site.declaration.named) == (written, named)
 
 
+@pytest.mark.parametrize('body, named', [
+    ('void g(L b) { b.f(); { class L {} } }', True),
+    ('void g() { { class L {} } L b = null; b.f(); }', True),
+    ('void g() { L b = null; b.f(); class L {} }', True),
+    ('void g() { class L {} L b = null; b.f(); }', False),
+])
+def test_a_local_type_hides_a_source_type_only_where_it_is_visible(body, named):
+    site = next(item for item in read(f'class A {{ {body} }}') if item.name == 'f')
+    assert site.declaration.named == named
+
+
 def test_a_catch_union_names_no_single_type_and_a_parameter_its_array():
     found = [item.declaration for item in read(
         'class A { void g(B... v) { v.f(); try { } catch (E1 | E2 e) { e.f(); } } }')]

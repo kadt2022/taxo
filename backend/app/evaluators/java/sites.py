@@ -153,8 +153,8 @@ class _Body:
     def __init__(self, member):
         self.member = member
         self.parameters = _parameters(member)
-        locals_, self.patterns, local_types = _scan(member.child_by_field_name('body'))
-        self.variables = _variables(self.parameters, locals_, syntax.type_variables(member) | local_types)
+        locals_, self.patterns = _scan(member.child_by_field_name('body'))
+        self.variables = _variables(member, self.parameters, locals_)
 
     def designated(self, node, name):
         """(PARAMETER, LOCAL ou PATTERN, la declaration) que le nom `name` designe au noeud `node`, ou (None, None)
@@ -177,8 +177,8 @@ class _Body:
 
 
 def _scan(body):
-    """(variables locales, noms de variables de motif, noms de types locaux) du corps, dans l'ordre du fichier."""
-    locals_, patterns, local_types = [], set(), set()
+    """(variables locales, noms de variables de motif) du corps, dans l'ordre du fichier."""
+    locals_, patterns = [], set()
     for node in _own(body):
         if node.type in _DECLARING:
             locals_ += _declarators(node)
@@ -186,15 +186,14 @@ def _scan(body):
             patterns.update(_text(item) for item in node.named_children if item.type == 'identifier')
         elif node.type == 'instanceof_expression' and node.child_by_field_name('name') is not None:
             patterns.add(_text(node.child_by_field_name('name')))
-        elif node.type in syntax.TYPE_DECLARATIONS:
-            local_types.add(_text(node.child_by_field_name('name')))
-    return locals_, patterns, local_types
+    return locals_, patterns
 
 
-def _variables(parameters, locals_, hidden):
+def _variables(member, parameters, locals_):
     """Chaque declaration, par l'identifiant de son noeud : son nom de symbole, rang compris si le nom est declare
-    plusieurs fois, et son type ecrit ; un type dont le nom est cache (`hidden` : variable de type, type local) ne
-    nomme aucun type des sources."""
+    plusieurs fois, et son type ecrit ; un type dont le nom est cache la ou la variable est declaree (variable de
+    type, type local visible) ne nomme aucun type des sources."""
+    variables = syntax.type_variables(member)
     declaring = parameters + locals_
     counts, seen, found = Counter(_text(item.child_by_field_name('name')) for item in declaring), Counter(), {}
     for kind, items in ((PARAMETER, parameters), (LOCAL, locals_)):
@@ -203,10 +202,24 @@ def _variables(parameters, locals_, hidden):
             seen[name] += 1
             written = _declared_type(item)
             head = written.partition('.')[0].partition('[')[0]
+            hidden = variables | _local_types(item, member)
             found[item.id] = Variable(kind, f'{name}#{seen[name]}' if counts[name] > 1 else name, written,
                                       written != 'var' and '|' not in written and head not in hidden,
                                       item.child_by_field_name('name').start_point[0] + 1)
     return found
+
+
+def _local_types(node, member):
+    """Les noms des types locaux visibles au noeud `node` : declares avant lui dans un bloc qui l'englobe (JLS 6.3).
+    Le composant d'un record, parametre de son constructeur compact, est hors du corps : aucun ne l'est."""
+    names, child = set(), node
+    while child.id != member.id and child.parent is not None:
+        parent = child.parent
+        if parent.type in ('block', 'switch_block_statement_group'):
+            names.update(_text(item.child_by_field_name('name')) for item in parent.named_children
+                         if item.type in syntax.TYPE_DECLARATIONS and item.start_byte < child.start_byte)
+        child = parent
+    return names
 
 
 def _before(parent, child):
