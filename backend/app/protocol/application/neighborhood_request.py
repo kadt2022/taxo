@@ -22,6 +22,8 @@ NONE, SUMMARY = 'NONE', 'SUMMARY'
 _LIMITS = {V1: {'max_nodes': (30, 200), 'max_edges': (60, 200), 'max_work': (100, 1000)},
            V2: {'max_nodes': (30, 200), 'max_edges': (60, 400), 'max_work': (100, 2000)}}
 _DEPTH = {V1: 1, V2: 4}
+# Les plafonds de `neighborhood/2`, publiés pour les adaptateurs qui plafonnent une demande avant de la transmettre.
+V2_CEILINGS = {'depth': _DEPTH[V2], **{name: maximum for name, (_, maximum) in _LIMITS[V2].items()}}
 MAX_FANOUT = 200
 MAX_STEPS = 16
 
