@@ -821,15 +821,18 @@ pas. Ajouter une opération ou un champ facultatif reste compatible ; changer un
 **adaptateur** qui réutilise ses capacités (aucun second moteur, aucun second stockage) :
 `MIP 0.1 → adaptateur → taxo-query/1 → Maille`. Il accepte deux expressions, et n'en sert qu'une :
 
-- `EXPAND` : exploration bornée autour d'une **référence résolue** ; voisinage et relations viennent du seul
-  moteur existant (§ 9). Servie en 0.1, sans modèle de langage.
+- `EXPAND` : exploration bornée autour d'une **référence résolue**, selon des relations et un sens donnés
+  explicitement (`relations`, `direction` : « qui appelle X » est `CALLS` entrant) ; voisinage et relations
+  viennent du seul moteur existant (§ 9). Servie en 0.1, sans modèle de langage.
 - `PROJECT` : projection bornée selon des règles servies par le moteur. Aucune règle n'est écrite : refusée en 0.1
   par une erreur de protocole, jamais par une Tuile vide.
 
 La réponse est une Tuile autodescriptive : analyse, centre résolu, références, faits avec statut, preuves,
 couverture, frontières, bornes appliquées et troncature. Les bornes demandées sont plafonnées par celles du
 serveur. Le MIP ne devine pas une référence : la retrouver par un nom est une étape séparée (`find_references`).
-Le premier adaptateur de transport est `POST /mip/query`, soumis aux mêmes droits et limites ; la sémantique se
+Une requête est adressée à un projet et porte l'analyse rendue par la première étape : recherche, Tuile et
+vérification restent sur le même instantané. Le premier adaptateur de transport est
+`POST /api/projects/{project_id}/mip/query`, à côté de `taxo-query`, soumis aux mêmes droits et limites ; la sémantique se
 teste sans serveur HTTP. Le schéma JSON exact est figé sur les structures existantes avec la première réalisation.
 
 | Élément du MIP | Réalisation | État |
@@ -841,7 +844,7 @@ teste sans serveur HTTP. Le schéma JSON exact est figé sur les structures exis
 | Consentement par nature de contenu | `get_diff`, § 12.6 | Existant |
 | Transport indépendant | appel interne, HTTP | Existant ; MCP proposé |
 | Trouver un élément par son nom simple | champ facultatif de `find_references` | À construire (TAXO-01N) |
-| Exploration bornée sans modèle de langage, en une requête | MIP 0.1 `EXPAND`, adaptateur `POST /mip/query` | À construire (TAXO-01N) |
+| Exploration bornée sans modèle de langage, en une requête | MIP 0.1 `EXPAND`, adaptateur `POST /api/projects/{project_id}/mip/query` | À construire (TAXO-01N) |
 | Projection bornée | MIP `PROJECT` | Proposé : refusée tant qu'aucune règle servie n'existe |
 | Intentions et autorisations par consommateur | périmètre et validation par consommateur | Proposé |
 | Capsule de Tuile autonome, vérifiable hors de l'échange | — | Proposé |
