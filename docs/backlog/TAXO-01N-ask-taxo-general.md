@@ -56,8 +56,8 @@ une réponse honnête : ce que Taxo sait servir pour ce projet et comment nommer
 
 - Minia ne produit aucun fait et ne lit pas le dépôt ; toute affirmation affichée comme établie a un verdict de
   Taxo (ARCHITECTURE § 12.1, § 12.4).
-- Le protocole `taxo-query/1` ne change pas : aucune opération nouvelle, aucun argument nouveau, aucun sens
-  modifié. Les opérations réservées (`find_callers`…) restent réservées.
+- Le protocole `taxo-query/1` ne change pas de sens : aucune opération nouvelle, aucune sémantique modifiée.
+  Seul un champ facultatif de `find_references` est envisagé (décision 4), compatible selon ARCHITECTURE § 12.5. Les opérations réservées (`find_callers`…) restent réservées.
 - Neutralité : aucune ligne d'Ask, de Minia ou du panneau ne nomme Java, Spring, une relation ou un type de
   référence en dur ; tout vient de `describe`.
 - Budgets et garde-fous inchangés (8 opérations choisies, 10 affirmations vérifiées, octets par tour et par
@@ -92,11 +92,14 @@ Exigences pour ne pas enfermer le MIP :
 | 1 | Comment Minia transmet-elle des arguments propres à chaque opération (listes `steps`, `follow`, entiers `depth`…) ? | Un champ unique `arguments`, objet JSON écrit en chaîne, lu et validé par Taxo. Le schéma d'un tour reste plat et stable pour tous les fournisseurs, et une opération future n'oblige pas à le modifier. Alternative : allonger la liste à plat (rapide, mais à refaire à chaque opération). |
 | 2 | En mode paquet, comment Taxo trouve-t-il l'élément nommé sans modèle ? | Déterministe : les mots de la question (identifiants, chemins) sont cherchés par `find_references`, au plus quelques ancres, ambiguïté signalée et jamais tranchée au hasard. Aucun score, aucune similarité floue. |
 | 3 | Le bouton « Sélectionner » (sans Minia) devient-il général ? | Non dans ce récit : il garde les sélections de commits, et une question générale l'invite à « Demander à Minia » ou ouvre l'Explorer sur l'élément reconnu. Un moteur de requête structurée sans modèle serait un récit à part. |
+| 4 | Comment trouver un élément par son nom simple (`VetController`, `OwnerRepository.findById`) ? `find_references` compare un **préfixe de la clé entière** (`neighborhood/domain/references.py`, `reference_index.search`) : une clé Java commence par le paquet (`com.example.web.VetController…`), donc le nom seul ne la trouve pas. Sans réponse, les critères 2 et 3 échouent sur les exemples mêmes du récit. | Un champ facultatif `match` de `find_references` : `KEY` (défaut, comportement actuel inchangé) ou `NAME`, préfixe comparé au début de **chaque segment** de la clé, les segments étant coupés sur un jeu fixe de séparateurs neutres (`.`, `/`, `#`, `:`, `$`), sans aucune règle propre à un langage. Servi par un index borné à côté de l'index actuel, avec migration testée ; une analyse antérieure sans cet index le dit (`NOT_AVAILABLE`) au lieu de rendre une liste vide. Alternative sans contrat : exiger un nom qualifié, ce qui ne répond pas à la cible. Décision de contrat et de format persistant : la tienne. |
 
 ## Tranches (chacune testable seule)
 
 - **PR A — Minia appelle tout le protocole.** Arguments par opération (décision 1), consignes d'exploration
   rendues générales (exemples hors commits), tests avec modèle scénarisé, non-régression des commits.
+- **PR A2 — Recherche par nom** (si décision 4 acceptée). Champ facultatif `match` de `find_references`, index des
+  segments et sa migration, `describe` l'annonce ; tests de contrat, de migration et de non-régression de `KEY`.
 - **PR B — Repli paquet général.** Ancres trouvées de façon déterministe (décision 2), paquet bâti sur le
   voisinage borné (`neighborhood/2`, forme compacte), `unknown` utile sans ancre.
 - **PR C — Panneau.** Texte et exemples des deux familles, ancres utilisées visibles, liens vers l'Explorer,
@@ -108,7 +111,8 @@ Exigences pour ne pas enfermer le MIP :
 
 - Taxo ne répond que ce que la Maille sait : un appel non interprété reste une frontière, pas une réponse.
 - Un petit modèle local explore moins bien : le repli paquet garantit une réponse bornée, pas une réponse riche.
-- La reconnaissance d'un élément nommé est littérale (préfixe de référence) ; une description vague (« la
+- La reconnaissance d'un élément nommé est littérale (préfixe de la clé, ou d'un de ses segments si la décision 4
+  est acceptée) ; une description vague (« la
   classe qui gère les vétérinaires ») ne trouve rien sans nom.
 
 ## Hors périmètre
