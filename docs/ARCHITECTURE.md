@@ -964,6 +964,15 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
   (`diagnostic_codes`), plus par le schéma commun, qui n'exige qu'un code stable (`^[A-Z][A-Z0-9_]*$`) ; le
   moteur refuse l'exécution d'un producteur qui écrit un code que son catalogue ne déclare pas. Chaque site
   peut porter sa catégorie générique (§ 9.3).
+- **Classification** (TAXO-01M, PR B, `producer_version` 1.1.0) : chaque site listé porte sa catégorie selon
+  `java.calls.frontier-classification/1`, nommée dans `diagnostic.classification`, et les sites sont listés par
+  position (ligne, colonne de début, ligne et colonne de fin, puis code). Table fermée : `AMBIGUOUS` pour
+  `RECEIVER_TYPE_AMBIGUOUS` et `OVERLOAD_AMBIGUOUS` ; `UNSUPPORTED` pour `UNSUPPORTED_CALL_FORM`,
+  `RECEIVER_KIND_DEFERRED` et `LAMBDA_OR_LOCAL_CONTEXT` ; `UNKNOWN` pour tous les autres. Aucun fait ne prouve
+  encore qu'un type hors du snapshot est externe et exclu : `TARGET_TYPE_OUTSIDE_SNAPSHOT` reste `UNKNOWN` et
+  la version 1 n'écrit jamais `OUT_OF_SCOPE`. Un code absent de la table fait échouer le producteur ; changer
+  une catégorie, c'est publier une nouvelle version de la règle. Les analyses écrites en 1.0.0 restent telles
+  quelles, sans catégorie.
 - **Restitution** : une Tuile ne connaît rien de Java ; la frontière d'un nœud non lu porte en `causes` les
   raisons fermées de son `diagnostic`, et l'explorateur les dit en clair (« plusieurs déclarations possibles »).
 - **Lambdas** : créer une lambda n'est pas l'appeler ; ses appels ne sont jamais attribués à la méthode
@@ -1127,3 +1136,8 @@ fermées des sites non lus (`causes`), lues génériquement dans le `diagnostic`
 nomme sa règle de classification. Les codes des sites sortent du schéma commun : chaque catalogue déclare les
 siens, et le moteur refuse un code non déclaré. Les analyses existantes restent valides, sans migration ni
 reclassification. Aucun producteur ne classe encore ; la Tuile ne change pas.
+
+**2026-10-09** — Classification des sites Java (TAXO-01M, PR B). `taxo.java-calls` 1.1.0 écrit la catégorie de
+chaque site non interprété selon `java.calls.frontier-classification/1` et liste ses sites par position. Aucun
+fait, aucune couverture, aucune identité ne change ; `OUT_OF_SCOPE` n'est pas encore écrit ; la Tuile ne change
+pas.
