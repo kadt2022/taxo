@@ -137,7 +137,7 @@ La Tuile est **autodescriptive** : ses champs permettent à un consommateur de d
 ### 4.3. Résultats et erreurs
 
 - **Référence absente :** indiquer l'absence de correspondance **dans l'analyse interrogée**, sans déclarer que le symbole n'existe pas dans le dépôt.
-- **Plusieurs références :** `AMBIGUOUS` et candidates accessibles ; aucun choix automatique opaque.
+- **Plusieurs références :** c'est un état de la **recherche**, pas une réponse du MIP : `find_references` rend toutes les candidates comme des résultats ordinaires, et le consommateur ou l'utilisateur en choisit une avant `EXPAND` ; aucun choix automatique opaque. Une cible MIP est une référence résolue, donc jamais ambiguë.
 - **Relation non interprétée :** frontière explicite, jamais relation fabriquée.
 - **Analyseur non disponible / périmètre exclu :** distinguer `UNSUPPORTED` de `OUT_OF_SCOPE`, conformément aux conventions existantes.
 - **Requête invalide :** erreur de protocole explicite (par exemple `INVALID_ARGUMENT` si c'est le code existant approprié), **pas** une frontière de connaissance ; une correction puis une nouvelle requête sont possibles.
@@ -181,7 +181,7 @@ Remplacer le verrou des huit arguments à plat (`subject`, `relation`, `object`,
 - Préserver les garde-fous d'exploration actuels : **8 opérations choisies, 10 affirmations vérifiées et budgets d'octets**.
 - Garder les non-régressions sur les questions de commits.
 
-**État :** le champ `arguments` est livré par la PR #108 (en revue, non fusionnée) : objet JSON écrit en chaîne, types JSON conservés, refus explicite de ce qui n'est pas un objet, garde-fous 8/10 inchangés, questions de commits non régressées, et un essai scénarisé « trouver un élément par son nom puis lire son voisinage » (`describe` → `find_references` → `get_neighborhood` → affirmation `CONTAINS` confirmée). Le moteur valide déjà chaque argument (`INVALID_ARGUMENT`). Restent pour la PR B : la limite de taille de l'objet et des tests qui prouvent le refus d'un champ non déclaré pour chaque opération.
+**État :** le champ `arguments` est **proposé** par la PR #108, en revue et non fusionnée ; tant qu'elle ne l'est pas, le code de `main` garde les huit champs à plat. Elle propose : objet JSON écrit en chaîne, types JSON conservés, refus explicite de ce qui n'est pas un objet, garde-fous 8/10 inchangés, questions de commits non régressées, et un essai scénarisé « trouver un élément par son nom puis lire son voisinage » (`describe` → `find_references` → `get_neighborhood` → affirmation `CONTAINS` confirmée). Le moteur valide déjà chaque argument (`INVALID_ARGUMENT`). Restent pour la PR B : la limite de taille de l'objet et des tests qui prouvent le refus d'un champ non déclaré pour chaque opération.
 
 ### 5.3. Repli paquet sans invention
 
@@ -203,7 +203,7 @@ Le mécanisme existant `verify_claim` reste l'autorité des **verdicts** dans MI
 
 **Avant de coder, le développeur doit documenter :** les chemins réels du moteur et de la Tuile, le schéma effectif de `neighborhood/2`, les structures de `frontier`/`coverage`, l'existence et les limites réelles de la continuation, les champs pouvant être mappés sans perte. Les écarts substantiels sont soumis au responsable du produit avant un changement de contrat.
 
-**Tests :** requête valide, identité inconnue, ambiguïté, type/périmètre refusé, profondeur et budgets, troncature, provenance, même analyse du début à la fin, absence de LLM, droits d'accès et non-exposition involontaire. `taxo-query/1` reste inchangé et vert.
+**Tests :** requête valide, identité inconnue, type/périmètre refusé, profondeur et budgets, troncature, provenance, même analyse du début à la fin, absence de LLM, droits d'accès et non-exposition involontaire. `taxo-query/1` reste inchangé et vert.
 
 ### PR A2 — Recherche par nom
 
@@ -211,7 +211,7 @@ Le mécanisme existant `verify_claim` reste l'autorité des **verdicts** dans MI
 
 ### PR B — Minia : exploration générale et repli paquet
 
-**Livrer :** fin du transport d'arguments génériques et contrôlés (la base est la PR #108, § 5.2), recherche de références, appel au service MIP pour obtenir la Tuile, repli déterministe non limité à Git, vérification explicite des affirmations dans tous les modes.
+**Livrer :** fin du transport d'arguments génériques et contrôlés (la base proposée est la PR #108, § 5.2 ; si elle n'est pas fusionnée, la PR B la reprend), recherche de références, appel au service MIP pour obtenir la Tuile, repli déterministe non limité à Git, vérification explicite des affirmations dans tous les modes.
 
 **Tests :** fournisseur scénarisé « qui appelle X ? » : recherche → Tuile → `CALLS` → `verify_claim` ; cas `AMBIGUOUS`, aucun symbole, frontière non interprétée, modèle local incapable d'explorer, argument invalide, consigne hostile dans des données, budget dépassé, arrêt de demande, non-régression Git. Aucun résultat inventé.
 
