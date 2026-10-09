@@ -75,23 +75,22 @@ Deux expressions initiales et **seulement deux** :
 
 Le point d'entrée HTTP initial proposé est `POST /api/projects/{project_id}/mip/query`, à côté de `taxo-query`. Ce chemin est un **adaptateur de transport**, pas un second protocole (ARCHITECTURE § 12.3) : une requête MIP devient exactement une opération `taxo-query/1` (`get_neighborhood`), dont la validation, les budgets et les codes d'erreur s'appliquent tels quels. La sémantique MIP doit rester testable directement au niveau applicatif sans serveur HTTP.
 
-`EXPAND` sans reprise est la première Tuile (TILE, ARCHITECTURE § 9.5) ; avec la reprise d'un nœud de la frontière de sélection, c'est l'EXPAND du § 9.5, qui n'ajoute que la branche demandée. Un seul nom, la même opération.
+`EXPAND` couvre les trois formes de la même opération (ARCHITECTURE § 9.5) : la première Tuile autour d'une référence (TILE) ; l'extension depuis un nœud de frontière arrêté par la profondeur ou non atteint (`DEPTH`, `NOT_REACHED`), qui n'a pas de jeton et se demande comme une nouvelle Tuile centrée sur ce nœud, avec sa profondeur restante (TAXO-01J) ; la reprise d'une adjacence coupée par un budget, avec le jeton `continuation` de sa frontière. Un seul nom, la même opération.
 
-**Exemple de requête illustrative (noms et identités exactes à confirmer dans les tests de contrat) :**
+**Exemple de requête (noms relevés sur le protocole existant en PR A, voir `docs/MIP-0.1.md`) :**
 
 ```json
 {
   "target": {
-    "kind": "method",
-    "identity": "method:<identite-canonique-resolue>"
+    "reference": "symbol:java:com.example.demo.service.CourseService#register(String)"
   },
   "expression": "EXPAND",
   "analysis": "<analyse rendue par find_references>",
   "relations": ["CALLS"],
   "direction": "INCOMING",
   "bounds": {
-    "maxNodes": 50,
-    "maxFacts": 100,
+    "max_nodes": 50,
+    "max_facts": 100,
     "depth": 2
   }
 }
@@ -177,12 +176,12 @@ Le registre des catégories établi par TAXO-01M reste l'autorité. **Aucune nou
 Remplacer le verrou des huit arguments à plat (`subject`, `relation`, `object`, `nature`, `fact`, `scope`, `commit`, `path`) par un **champ de transport stable `arguments`**, encodant un objet JSON pour conserver la compatibilité avec les fournisseurs qui attendent un schéma de tour plat.
 
 - Décoder l'objet, limiter sa taille, refuser les erreurs JSON et les types incohérents.
-- Ne transmettre que les champs **déclarés dans `describe` pour l'opération choisie** ; signaler distinctement les champs ignorés.
+- Transmettre tous les champs de l'objet : un champ que l'opération ne déclare pas est **refusé** par sa validation existante (`INVALID_ARGUMENT`), jamais ignoré, car une faute de frappe sur un filtre facultatif rendrait sinon une requête plus large qui semblerait réussir. Minia corrige l'appel au tour suivant.
 - Laisser le moteur TAXO valider les arguments et les droits de l'opération ; aucun assouplissement du protocole `taxo-query/1`.
 - Préserver les garde-fous d'exploration actuels : **8 opérations choisies, 10 affirmations vérifiées et budgets d'octets**.
 - Garder les non-régressions sur les questions de commits.
 
-**État :** le champ `arguments` est livré par la PR #108 (en revue, non fusionnée) : objet JSON écrit en chaîne, types JSON conservés, refus explicite de ce qui n'est pas un objet, garde-fous 8/10 inchangés, questions de commits non régressées, et un essai scénarisé « trouver un élément par son nom puis lire son voisinage » (`describe` → `find_references` → `get_neighborhood` → affirmation `CONTAINS` confirmée). Le moteur valide déjà chaque argument (`INVALID_ARGUMENT`). Restent pour la PR B : la limite de taille de l'objet, le filtrage par les arguments déclarés dans `describe` et le signalement distinct des champs ignorés.
+**État :** le champ `arguments` est livré par la PR #108 (en revue, non fusionnée) : objet JSON écrit en chaîne, types JSON conservés, refus explicite de ce qui n'est pas un objet, garde-fous 8/10 inchangés, questions de commits non régressées, et un essai scénarisé « trouver un élément par son nom puis lire son voisinage » (`describe` → `find_references` → `get_neighborhood` → affirmation `CONTAINS` confirmée). Le moteur valide déjà chaque argument (`INVALID_ARGUMENT`). Restent pour la PR B : la limite de taille de l'objet et des tests qui prouvent le refus d'un champ non déclaré pour chaque opération.
 
 ### 5.3. Repli paquet sans invention
 
