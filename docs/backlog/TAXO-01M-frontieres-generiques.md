@@ -51,6 +51,30 @@ toutes les bibliothèques ; aucun `max_frontiers` sans mesure ; aucune modificat
 
 ## Comportement attendu
 
+### 0. Responsabilités (normatives)
+
+| Niveau | Responsabilité | Interdit |
+| --- | --- | --- |
+| Analyseur | Observer les sites, résoudre les cibles, produire diagnostics, preuves et catégories | Inventer une cible ; conclure sans preuve |
+| Maille | Conserver faits, couvertures, sites individuels, provenance et règle de classification | Perdre un site dans une agrégation ; reclasser |
+| Tuile | Présenter une portion bornée de la Maille | Faire passer une limite d'affichage pour une limite de connaissance |
+
+Trois familles restent séparées et ne se convertissent jamais l'une en l'autre :
+
+- **Couverture** (ce que l'analyse a lu) : `ANALYSED`, `NOT_INTERPRETED`, `READ_ERROR`… par zone.
+  `NOT_INTERPRETED` reste un type de couverture : la zone est identifiée, son contenu n'a pas été interprété.
+- **Catégorie de site** (pourquoi une continuation précise n'est pas établie) : les quatre valeurs du § 1.
+  Elle n'existe que sur un site, à l'intérieur d'une couverture `NOT_INTERPRETED` qui porte un `diagnostic`.
+- **Frontière de sélection et de contexte** (ce que la Tuile n'a pas montré) : `DEPTH`, `FANOUT`, budgets,
+  `NOT_REACHED`, `NO_ANALYZER`. Jamais de catégorie.
+
+Distinction testable entre `NOT_INTERPRETED` et `UNSUPPORTED` : `UNSUPPORTED` qualifie **un site localisé**
+dont l'analyseur a reconnu la forme et a tenté la résolution, en connaissant la raison de son échec.
+`NOT_INTERPRETED` qualifie **une zone** ; elle peut n'avoir aucun site (par exemple un fichier en erreur de
+syntaxe, ou une annotation détectée que l'analyseur ne lit pas, comme `@PreAuthorize` pour un analyseur
+d'appels). Une couverture `NOT_INTERPRETED` sans `diagnostic` n'a **aucune** catégorie et ne vaut jamais
+évaluation : rien n'en est déduit, ni « autorisé », ni « sans appel ».
+
 ### 1. Quatre catégories fermées (contrat commun)
 
 | Catégorie | Sens |
@@ -65,6 +89,9 @@ toutes les bibliothèques ; aucun `max_frontiers` sans mesure ; aucune modificat
 - Aucune catégorie propre à un langage, un framework ou une bibliothèque. Un langage de plus n'ajoute aucune
   catégorie.
 - Une catégorie ne produit jamais de fait : aucune assertion, aucun `CALLS`, aucun symbole externe.
+- **`AMBIGUOUS` n'est jamais converti en relation.** Les `candidates` d'un site restent des candidats : aucun
+  `CALLS`, même `INFERRED`, n'est créé vers un candidat, ni par le producteur, ni par la Tuile, ni par
+  l'Explorer, ni par une projection. Un seul candidat reste un candidat (§ 14).
 
 ### 2. Codes ouverts par producteur
 
@@ -107,7 +134,7 @@ Table `java.calls.frontier-classification/1` :
 | `PARSE_ERROR` | `UNKNOWN` |
 | `TARGET_TYPE_OUTSIDE_SNAPSHOT` | `UNKNOWN`, sauf les conditions du § 5 réunies : `OUT_OF_SCOPE` |
 
-### 4. Identité déterministe des sites
+### 4. Identité locale des sites
 
 - Le producteur émet les sites d'une couverture triés par `(line_start, column_start, line_end, column_end,
   reason)`. Aujourd'hui l'ordre vient du parcours de l'arbre ; il devient explicite et testé.
@@ -117,6 +144,10 @@ Table `java.calls.frontier-classification/1` :
   diffèrent par leurs colonnes. Deux constats identiques gardent chacun leur rang : ils ne sont jamais fusionnés.
 - La clé est calculée par une fonction pure du domaine commun (`site_key`). Elle n'est pas persistée et
   n'entre pas dans l'identité du fait : le `diagnostic` reste hors identité, comme le dit § 14.
+- C'est une **identité locale de diagnostic**, pas une identité de site dans le graphe. Elle sert à compter et
+  à désigner un site dans un `diagnostic` donné. Deux constats identiques ne se distinguent que par leur rang ;
+  ce rang ne porte aucun sens : aucun consommateur ne peut rattacher une information à « le site de rang 1 »
+  au-delà de cette analyse.
 - Entre deux révisions, la clé n'est **pas** stable (les lignes bougent). Ce récit ne compare pas les sites
   d'une révision à l'autre (limite écrite). TAXO-01E et TAXO-01F ne changent pas.
 - Deux producteurs sur un même symbole donnent deux couvertures, deux entrées de Tuile (la clé de
@@ -134,14 +165,26 @@ Un site `TARGET_TYPE_OUTSIDE_SNAPSHOT` est `OUT_OF_SCOPE` **si et seulement si**
    Aucune autre bibliothèque. Aucun préfixe (`java.*`) ne vaut liste.
 3. **Périmètre connu.** L'exécution a lu toutes les sources Java sélectionnées : aucune `READ_ERROR`, aucun
    fichier en erreur de syntaxe, statut `SUCCESS`. Si l'exécution est `PARTIAL`, le type pourrait être déclaré
-   dans un fichier non lu : `UNKNOWN`.
+   dans un fichier non lu : `UNKNOWN`. C'est une **règle conservatrice de première version**, pas une définition
+   universelle d'`OUT_OF_SCOPE` : un seul fichier illisible sans rapport avec la cible fait basculer ces sites
+   en `UNKNOWN`. Une preuve de complétude locale (pertinente pour la résolution de ce type seulement)
+   demanderait des métadonnées que Taxo ne produit pas aujourd'hui ; elle relève d'un futur récit.
 4. **Exclusion explicite.** Le périmètre d'analyse, c'est la couverture `ANALYSED` du dépôt par le producteur
    (`scope.include` et `scope.exclude`) : il ne contient que les sources de l'instantané. Aucune source de
    l'instantané ne déclare le paquet du type. Une source qui le déclarerait l'inclurait, et le site serait
    résolu ou resterait `UNKNOWN`.
 
-Le site `OUT_OF_SCOPE` porte déjà sa preuve : `receiver_type` (nom qualifié), son code, sa position, et la règle
-dans `classification`. Aucun `CALLS`, aucun `TYPED_AS`, aucun symbole externe n'est créé.
+`receiver_type` et la règle nommée sont une **trace** de classification, pas à eux seuls une preuve du
+périmètre. Chaque condition doit pouvoir être retrouvée dans l'analyse elle-même :
+
+| Condition | Où elle se retrouve |
+| --- | --- |
+| 1. Type certain | Nouveau champ de site `qualification`, seulement sur un site `OUT_OF_SCOPE` : `{"kind": "IMPORT", "line_start": n}` (ligne de l'import simple) ou `{"kind": "IMPLICIT"}` (paquet implicite du langage). À valider : c'est un champ ajouté, de forme générique. |
+| 2. Type dans la liste | La règle `classification` (`…/1`) désigne une version figée de la liste. |
+| 3. Périmètre connu | Statut d'évaluation et couvertures `READ_ERROR` de la même analyse, déjà conservés. |
+| 4. Exclusion explicite | Couverture `ANALYSED` du dépôt (`scope`) et faits `CONTAINS` des sources de la même analyse. |
+
+Aucun `CALLS`, aucun `TYPED_AS`, aucun symbole externe n'est créé.
 
 Conséquence assumée : la liste de TAXO-01L ne vise que des supertypes (`Serializable`, `Cloneable`, `Record`).
 Un receveur `java.lang.String` reste donc `UNKNOWN` tant qu'aucun récit n'élargit la liste avec décision. La
@@ -198,6 +241,9 @@ PR D mesure combien de sites deviennent réellement `OUT_OF_SCOPE`.
    historique n'est renommé ; une analyse existante reste valide sans migration.
 3. Un code non déclaré par le catalogue de son producteur est refusé par la conformité.
 4. Chaque site d'une nouvelle analyse porte `category`, et son `diagnostic` porte `classification`.
+4 bis. Un site `AMBIGUOUS` ne donne jamais de `CALLS` vers un de ses candidats, à aucun niveau.
+4 ter. Une couverture `NOT_INTERPRETED` sans `diagnostic` n'a aucune catégorie ; `NOT_INTERPRETED` reste un type
+   de couverture et n'est jamais remplacé par une catégorie.
 5. `TARGET_TYPE_OUTSIDE_SNAPSHOT` donne `UNKNOWN` dès qu'une des quatre conditions du § 5 manque, et
    `OUT_OF_SCOPE` seulement quand les quatre sont réunies.
 6. Les appels entre modules internes restent résolus, sans frontière.
@@ -229,9 +275,10 @@ Chaque PR est testable seule.
   n'existe pas ; tout `TARGET_TYPE_OUTSIDE_SNAPSHOT` est `UNKNOWN`. Oracle `expected.json` étendu à la main.
 - **PR C — Tuile et Explorer.** `categories` dans les entrées `KNOWLEDGE`/`NODE` de `neighborhood/2`, libellés,
   état « non classé », non-régression `neighborhood/1`.
-- **PR D — `OUT_OF_SCOPE` et mesure** (après la liste de TAXO-01L). Conditions du § 5, puis mesure sur
-  `student-analysis-java`, `bibliotheque` et `spring-petclinic` : sites par catégorie, octets ajoutés aux
-  Tuiles. Le récit est clos ensuite.
+- **PR D — `OUT_OF_SCOPE` et mesure** (après la liste de TAXO-01L). Conditions du § 5 et champ
+  `qualification`, puis mesure sur `student-analysis-java`, `bibliotheque` et `spring-petclinic` : sites par
+  catégorie, sites restés `UNKNOWN`, sites `OUT_OF_SCOPE` vérifiés un par un, faux positifs constatés sur les
+  fixtures, octets ajoutés aux Tuiles. Le récit est clos ensuite.
 
 ## Plan de tests
 
@@ -249,6 +296,8 @@ Toutes les valeurs (heure, ordre, environnement) sont fixées ; aucun test n'uti
   `DYNAMIC_ATTRIBUTE` dans son catalogue. Ses couvertures sont valides **sans toucher au schéma commun**.
 - `site_key` : deux sites sur une ligne (colonnes différentes) donnent deux clés ; deux sites identiques donnent
   les rangs 0 et 1 ; la clé ne dépend pas de l'ordre d'arrivée une fois les sites triés.
+- Une couverture `NOT_INTERPRETED` sans `diagnostic` (fichier en erreur de syntaxe) est valide sans catégorie ;
+  une catégorie hors d'un site est refusée.
 
 **Classification Java, unitaires purs (PR B)**
 - Une ligne de table par code : les 11 codes donnent la catégorie attendue.
@@ -257,6 +306,8 @@ Toutes les valeurs (heure, ordre, environnement) sont fixées ; aucun test n'uti
   `PARTIAL`, quand le type n'est pas dans la liste. Un test par condition manquante.
 - Déterminisme : 100 classifications du même site rendent la même catégorie ; la fonction ne lit ni l'heure
   ni l'environnement.
+- `AMBIGUOUS` : un site `OVERLOAD_AMBIGUOUS` à deux candidats, et un site à un seul candidat, ne produisent
+  aucun `CALLS` ; les candidats restent dans le `diagnostic`.
 
 **Classification Java sur le vrai analyseur (PR B)**
 - `java-calls-demo` : chaque site de l'oracle a sa catégorie écrite à la main avant l'exécution ; l'évaluateur
@@ -275,21 +326,27 @@ Toutes les valeurs (heure, ordre, environnement) sont fixées ; aucun test n'uti
 - `neighborhood/1` : instantané doré `neighborhood_v1_golden.json` identique.
 - `neighborhood/2` : une entrée `KNOWLEDGE`/`NODE` porte `categories` dans l'ordre fixe, décomptes `EXACT`.
   Avec `sites_seen > len(sites)` : les quatre catégories listées en `AT_LEAST`, y compris une catégorie à
-  `value: 0` ; aucune n'est absente.
+  `value: 0` ; aucune n'est absente. Exemple vérifié : 10 sites vus, 6 retenus (3 `UNKNOWN`, 2 `AMBIGUOUS`,
+  1 `UNSUPPORTED`) donnent 3, 2, 1 et 0 en `AT_LEAST`, jamais un `OUT_OF_SCOPE` absent lu comme zéro.
 - Analyse ancienne : aucune entrée n'a `categories`, et le reste de la réponse est identique à aujourd'hui.
 - Deux producteurs (`taxo.java-calls` et le producteur Python synthétique) sur un même symbole : deux entrées.
 - `DEPTH`, `FANOUT`, `NOT_REACHED`, `NO_ANALYZER`, une revisite : aucune catégorie.
 - `max_bytes` serré : les lacunes locales omises sont comptées dans `not_sent`, sans erreur.
 - Propriétés de TAXO-01J (préfixe, monotonie) rejouées à graine fixe : inchangées.
 - `find_facts` (`nature: COVERAGE`) rend le `diagnostic` avec ses catégories.
+- Forme compacte (`neighborhood_form.py`) : `categories` est transmis tel quel.
+- `max_bytes` serré avec des entrées classées : la réponse tient dans le budget, et l'omission est dite.
+- Client strict : une réponse `neighborhood/2` d'avant le champ et une d'après sont toutes deux lues par
+  l'Explorer actuel (types `Boundary`), sans erreur.
 
 **Explorateur (PR C, Vitest)**
 - Les quatre libellés sont affichés ; « non classé » pour une entrée sans catégories ; le code reste visible
   en détail ; aucune branche du code ne teste un nom de langage.
 
 **Mesure (PR D)**
-- Les trois dépôts : sites par catégorie, avant et après ; nombre de sites `OUT_OF_SCOPE` justifiés un par un ;
-  octets ajoutés par Tuile. Résultats écrits dans ce récit.
+- Les trois dépôts : sites par catégorie, avant et après ; sites restés `UNKNOWN` ; sites `OUT_OF_SCOPE`
+  justifiés un par un ; faux positifs constatés sur les fixtures ; octets ajoutés par Tuile. Résultats écrits
+  dans ce récit.
 
 **CI de chaque PR** : backend `pytest -q`, frontend `npm ci && npm test && npm run build`, avec les nombres
 exacts dans la description de la PR.
@@ -299,7 +356,10 @@ exacts dans la description de la PR.
 - La clé de site n'est stable qu'à l'intérieur d'une analyse ; aucun suivi d'un site d'une révision à l'autre.
 - `OUT_OF_SCOPE` ne couvre que les types de la liste de TAXO-01L. La plupart des receveurs JDK
   (`String`, `List`…) restent `UNKNOWN`.
-- Les tests Python sont synthétiques : ils prouvent le contrat de représentation, pas une analyse de code Python.
+- Les tests Python sont synthétiques : ils prouvent que le vocabulaire des catégories et l'ouverture des codes
+  sont génériques, pas que tout le diagnostic de site est indépendant du langage, ni une analyse de code Python.
+- La condition de périmètre d'`OUT_OF_SCOPE` est globale (exécution `SUCCESS`) : règle conservatrice de
+  première version.
 - Les champs de site autres que `reason` et `category` (`receiver`, `receiver_type`…) gardent leur forme
   actuelle, pensée pour Java. Un producteur Python pourra les laisser vides. Les ouvrir relève d'un futur récit.
 
@@ -312,6 +372,16 @@ liste JDK ; `max_frontiers` ; comparaison des sites entre révisions ; refonte d
 ## Point à valider avant la PR C
 
 `neighborhood/2` reçoit un champ **additif** (`categories`), annoncé dans ARCHITECTURE et TAXO-01J, sans
-changer de nom de moteur. Recommandation : garder `neighborhood/2`, puisque TAXO-01J § 8 admet les ajouts qui
-ne changent aucun sens existant et que l'Explorer tolère l'absence du champ. L'autre option est un
-`neighborhood/3`, qui serait plus lourd sans bénéfice mesurable.
+changer de nom de moteur. Recommandation : garder `neighborhood/2`, mais **seulement si** ces quatre invariants
+sont vérifiés au début de la PR C, avant la décision définitive :
+
+1. Les champs existants gardent exactement leur sens.
+2. Les consommateurs existants acceptent la propriété ajoutée. Inventaire au 2026-10-08 dans le dépôt :
+   l'Explorer (types TypeScript `Boundary`, sans validation fermée à l'exécution) et la forme compacte
+   (`neighborhood_form.py`) ; aucun schéma JSON fermé des réponses ; aucun code de Minia du dépôt ne lit `frontier`. À
+   revérifier dans la PR C. ARCHITECTURE précisera qu'un client de `neighborhood/2` ignore les propriétés
+   inconnues.
+3. Le budget `max_bytes` reste respecté avec les catégories.
+4. Les anciennes analyses restent lisibles sans reclassification.
+
+Si un consommateur à schéma fermé est trouvé, la PR C s'arrête et propose `neighborhood/3`.
