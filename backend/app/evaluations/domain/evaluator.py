@@ -14,6 +14,9 @@ class EvaluatorCatalog:
     # Les langages lus pour produire ces relations, nommes comme l'inventaire les nomme (TAXO-COV-01).
     # `None` : independant du langage (le depot, son historique). Les changer change le catalogue.
     languages: tuple[str, ...] | None = None
+    # Les codes des sites que ses diagnostics peuvent ecrire (TAXO-01M) : ils appartiennent au producteur, pas au
+    # contrat commun. Un code non declare ici est refuse a l'execution.
+    diagnostic_codes: tuple[str, ...] = ()
 
     def __post_init__(self):
         if not self.catalog_id.strip() or not self.catalog_version.strip():
@@ -24,6 +27,13 @@ class EvaluatorCatalog:
             raise ValueError('Les couvertures du catalogue doivent être triées.')
         if self.languages is not None and (not self.languages or tuple(sorted(self.languages)) != self.languages):
             raise ValueError('Les langages du catalogue sont triés ; None s’il n’en lit aucun en propre.')
+        if tuple(sorted(set(self.diagnostic_codes))) != self.diagnostic_codes:
+            raise ValueError('Les codes de diagnostic du catalogue sont triés et distincts.')
+
+    def undeclared_codes(self, coverage):
+        """Les codes de site, distincts et triés, que ces couvertures écrivent sans que ce catalogue les déclare."""
+        written = {site['reason'] for fact in coverage for site in (fact.get('diagnostic') or {}).get('sites', [])}
+        return tuple(sorted(written - set(self.diagnostic_codes)))
 
 
 @dataclass(frozen=True)

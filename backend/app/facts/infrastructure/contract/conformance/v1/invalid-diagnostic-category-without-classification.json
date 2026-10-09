@@ -33,14 +33,15 @@
         "line_end": 34,
         "column_start": 8,
         "column_end": 28,
-        "reason": "may call",
+        "reason": "OVERLOAD_AMBIGUOUS",
         "method": "label",
         "receiver": "catalog",
         "receiver_type": "com.example.demo.service.CourseCatalog",
         "candidates": [
           "symbol:java:com.example.demo.service.CourseCatalog#label(String)",
           "symbol:java:com.example.demo.service.CourseCatalog#label(Course)"
-        ]
+        ],
+        "category": "AMBIGUOUS"
       },
       {
         "role": "call-site",
