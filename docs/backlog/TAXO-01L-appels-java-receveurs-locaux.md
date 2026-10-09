@@ -1,6 +1,7 @@
 # TAXO-01L — Appels Java : receveurs paramètres et variables locales, accesseurs de record, lambdas
 
-Statut : **proposé**, à valider avant toute implémentation. Rédigé le 2026-10-08.  
+Statut : **implémenté, en attente de fusion.** Rédigé le 2026-10-08 ; décisions validées le 2026-10-09 ; tranches
+1 à 3 en PR #104, #105 et #106 ; mesure finale et clôture ci-dessous (« Clôture »).  
 Suite de : [TAXO-01K](TAXO-01K-appels-java-entre-classes.md) (« Décision proposée pour le fragment suivant »).  
 Source de vérité : `ARCHITECTURE.md` § 5.5, § 5.6 et § 14.  
 Dépend de : `taxo.java-calls` livré par TAXO-01K (PR A à D).  
@@ -127,7 +128,7 @@ CourseAccessControlService#canAccessCourse(Course,Integer,String)
 **Priorité inchangée : moins de `CALLS`, mais vrais.** Un accesseur de record appelé est un `CALLS` vers la
 déclaration de l'accesseur ; aucune nouvelle relation (« utilise », « lit ») n'est créée.
 
-## Décisions proposées (à valider)
+## Décisions (validées le 2026-10-09)
 
 ### 1. Paramètres et variables locales deviennent des prémisses, sans assouplir § 5.5
 
@@ -156,6 +157,10 @@ n'a pas de type écrit : `RECEIVER_TYPE_UNKNOWN` (aucune inférence d'expression
 (`instanceof Pet pet`) ou dans une ressource suit la même règle que la variable locale ; si sa portée n'est pas
 établie sans ambiguïté, le site garde `RECEIVER_KIND_DEFERRED`.
 
+**Retenu** (tranche 2, #105, règle `/3`) : la portée suit JLS 6.3 (bloc, boucle `for`, ressource, `catch`,
+groupe `case` précédent du même `switch`, composant d'un record pour son constructeur compact). Une variable de
+motif, dont la portée suit le flot du code, garde `RECEIVER_KIND_DEFERRED`.
+
 ### 2. Supertypes de la JDK connus du contrat, comme `Object`
 
 Trois supertypes externes sont connus par leur seule déclaration publique, inscrite au contrat :
@@ -166,6 +171,9 @@ Trois supertypes externes sont connus par leur seule déclaration publique, insc
 
 Aucun symbole n'est créé pour eux : pas d'`EXTENDS` ni d'`IMPLEMENTS` vers la JDK (règle de TAXO-01K
 inchangée). La liste est fermée ; `java.lang.Enum`, qui déclare de nombreuses méthodes, n'y entre pas.
+
+**Retenu** (tranche 1, #104, règle `/2`) : reconnus par leur nom qualifié seulement (écrit en entier, import
+simple, ou superclasse implicite d'un record) ; un nom simple sans import reste externe.
 
 ### 3. Accesseurs implicites de record
 
@@ -190,6 +198,9 @@ Décision à prendre pour le statut de l'accesseur :
 
 Un accesseur écrit explicitement dans le corps est une méthode ordinaire, déjà couverte par TAXO-01K.
 
+**Retenu : `INFERRED`**, règle `java.record.implicit-accessor/1`. Le contrat admet un `CONTAINS` `INFERRED`
+seulement d'un symbole vers son propre membre ; § 5.5 n'est pas assoupli (tranche 3, #106).
+
 ### 4. Appels sans receveur dans une lambda : à qui les attribuer
 
 § 14 dit : « créer une lambda n'est pas l'appeler ; ses appels ne sont jamais attribués à la méthode
@@ -209,6 +220,9 @@ Les receveurs **capturés** dans une lambda (paramètre, variable ou champ de la
 règles 1 à 3 depuis le symbole de lambda. Un **paramètre de lambda** au type inféré reste
 `LAMBDA_OR_LOCAL_CONTEXT` ; un paramètre de lambda au type écrit suit la règle 1 (aucun mesuré, mais la règle
 coûte peu une fois la portée réelle suivie).
+
+**Retenu : report.** Les appels dans une lambda restent `LAMBDA_OR_LOCAL_CONTEXT` (`UNSUPPORTED`) ; § 14 est
+inchangé. Les critères 8 et 9 passent au récit qui reprendra les lambdas.
 
 ## Invariants (repris de TAXO-01K, non négociables)
 
@@ -302,3 +316,76 @@ surcharges, ni arguments, ni portée fine.
 
 Dépôts : `student-analysis-java` à `01163f17`, `bibliotheque` à `d2e3c46` (git bundle des essais du projet),
 `spring-petclinic` à `500158f7`.
+
+## Clôture (2026-10-09)
+
+### Livré
+
+| Tranche | PR | Règle `CALLS` | `taxo.java-calls` |
+| --- | --- | --- | --- |
+| 1. Supertypes JDK connus | #104 | `/2` | 1.2.0 |
+| 2. Paramètres et variables locales | #105 | `/3` | 1.3.0 |
+| 3. Accesseurs implicites de record | #106 | `/4` | 1.4.0 |
+| 4. Lambdas | reportée (décision 4) | — | — |
+
+Les trois PR sont empilées (#105 sur #104, #106 sur #105) et attendent l'accord de fusion. Le catalogue
+`java-calls` garde la version 1 : aucun code ni catégorie n'y entre.
+
+### Mesure après
+
+Même méthode et mêmes commits que la mesure avant ; `backend/scripts/java_calls_trial.py`, SQLite,
+`taxo.java-calls` 1.4.0.
+
+| Dépôt | Sites vus | Résolus avant | Plafond estimé | Résolus après | Faits `CALLS` | Non interprétés |
+| --- | --- | --- | --- | --- | --- | --- |
+| `student-analysis-java` | 104 | 24 | 32 | **32** | 29 | 72 |
+| `bibliotheque` | 147 | 28 | 54 | **54** | 54 | 93 |
+| `spring-petclinic` | 253 | 7 | 73 | **69** | 60 | 184 |
+
+Par catégorie (`java.calls.frontier-classification/1`), avant (TAXO-01M) puis après :
+
+| Dépôt | `UNKNOWN` | `AMBIGUOUS` | `UNSUPPORTED` | `OUT_OF_SCOPE` |
+| --- | --- | --- | --- | --- |
+| `student-analysis-java` | 10 → 14 | 0 → 0 | 70 → 58 | 0 → 0 |
+| `bibliotheque` | 20 → 23 | 1 → 1 | 98 → 69 | 0 → 0 |
+| `spring-petclinic` | 36 → 96 | 0 → 4 | 210 → 84 | 0 → 0 |
+
+`UNKNOWN` augmente : des sites autrefois reportés (`RECEIVER_KIND_DEFERRED`) sont maintenant lus jusqu'à leur
+vraie frontière, presque toujours un type hors des sources (`TARGET_TYPE_OUTSIDE_SNAPSHOT`). C'est une
+connaissance de plus, pas une perte. `OUT_OF_SCOPE` reste à 0 : la liste fermée de la tranche 1 ne contient
+que des supertypes, jamais receveurs d'un appel (voir « Reste ouvert »).
+
+Petclinic reste sous le plafond (69 sur 73) : le script d'estimation comparait les noms simples ; Taxo laisse
+`OVERLOAD_AMBIGUOUS` les 4 appels `getPet(x)` (`getPet(Integer)` et `getPet(String)`, même arité), comme
+l'exige TAXO-01K.
+
+### Vérification à la main (critère 11)
+
+Les 87 couples (site, cible) nouveaux par rapport à TAXO-01K ont été relus un à un dans les sources des trois
+dépôts : 6 sur student, 26 sur bibliotheque, 55 sur petclinic. Aucun faux. Aucun appel de TAXO-01K n'est
+perdu. Exemples : `request.code()` vers l'accesseur `CreateCourseRequest#code()`, `livre.sortir()` sur une
+variable locale `Livre`, `pet.getName()` hérité de `NamedEntity` à travers `Serializable`,
+`owner.getPet(name, true)` vers la seule surcharge d'arité 2.
+
+### Coût dans les Tuiles et la Maille
+
+`taxo.java-calls` reste sous 0,4 s par dépôt. Faits du producteur, avant (1.1.0) puis après : student 104 → 148,
+bibliotheque 219 → 287, petclinic 165 → 266. Tuiles depuis les routes (`HANDLED_BY` puis
+`CALLS`, budget 32 Ko) : student 7,8 à 14,9 Ko (avant 7,7 à 14,5) ; bibliotheque 5,5 à 11,6 Ko ; petclinic
+4,1 à 31,8 Ko. Une route de petclinic (`POST /owners/{ownerId}/pets/{petId}/edit`, 13 éléments, 12 `CALLS`)
+s'arrête sur le budget d'octets (`BYTES`) : la Tuile le dit, comme prévu par le protocole.
+
+### Critères d'acceptation
+
+1 à 7, 10 à 12 : satisfaits, chacun couvert par des tests de règle et par l'oracle de `java-calls-demo`, écrit
+à la main avant le producteur (record `Seat` ajouté en tranche 3). 8 et 9 : reportés avec les lambdas
+(décision 4) ; aujourd'hui, un appel dans une lambda n'est jamais attribué à la méthode englobante.
+
+### Reste ouvert
+
+- **`OUT_OF_SCOPE`** (confié par TAXO-01M) : aucun site ne remplit les quatre conditions de TAXO-01M § 5 avec la
+  liste fermée actuelle. Sur les trois dépôts, 29 sites `UNKNOWN` visent un type de la JDK (`String`, `Map`,
+  `List`, `Optional`, `LocalDate`…) et les autres une bibliothèque (Spring, slf4j). Décision en cours.
+- Lambdas : un récit séparé, s'il est confirmé.
+- Déplacement de ce fichier dans le dossier des récits terminés à la fusion des trois PR ; aucun dossier de ce
+  type n'existe encore dans `docs/backlog`.
