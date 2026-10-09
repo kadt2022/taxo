@@ -176,14 +176,17 @@ def test_a_qualified_external_supertype_keeps_its_written_name():
     assert sites(execution)['A#g()', 'save']['external_supertypes'] == ['x.Base']
 
 
-@pytest.mark.parametrize('kind, declaration, implicit', [
-    ('enum', 'enum E { X; void f() {} }', 'java.lang.Enum'),
-    ('record', 'record E(int x) { void f() {} }', 'java.lang.Record'),
-])
-def test_an_enum_or_a_record_has_an_external_superclass(kind, declaration, implicit):
-    execution = run(java('A', 'class A { private E e; void g() { e.f(); } }'), java('E', declaration))
+def test_an_enum_has_an_external_superclass():
+    execution = run(java('A', 'class A { private E e; void g() { e.f(); } }'), java('E', 'enum E { X; void f() {} }'))
     site = sites(execution)['A#g()', 'f']
-    assert (site['reason'], site['external_supertypes']) == ('SUPER_TYPE_UNRESOLVED', [implicit]), kind
+    assert (site['reason'], site['external_supertypes']) == ('SUPER_TYPE_UNRESOLVED', ['java.lang.Enum'])
+
+
+def test_the_implicit_record_superclass_is_known_and_hides_no_target():
+    """TAXO-01L : `java.lang.Record` ne declare que des methodes d'`Object` ; il ne cache aucune cible."""
+    execution = run(java('A', 'class A { private E e; void g() { e.f(); } }'), java('E', 'record E(int x) { void f() {} }'))
+    assert calls(execution) == {('A#g()', 'E#f()')}
+    assert the_call(execution, 'A#g()', 'E#f()')['derivation']['rule'] == 'java.calls.declared-receiver-unique-target/2'
 
 
 @pytest.mark.parametrize('body, method', [
@@ -382,4 +385,71 @@ def test_applicability_compares_arguments_rank_by_rank():
 def test_a_compact_record_constructor_owns_its_call_sites():
     execution = run(java('R', 'record R(int x) { R { f(); } void f() {} }'))
     assert ('R', 'R#<init>(int)') in declared(execution, 'CONTAINS')
-    assert reason(execution, 'R#<init>(int)', 'f') == 'SUPER_TYPE_UNRESOLVED', 'java.lang.Record reste externe'
+    assert ('R#<init>(int)', 'R#f()') in calls(execution), 'java.lang.Record est connu du contrat (TAXO-01L)'
+
+
+# TAXO-01L : supertypes de la JDK connus du contrat (`Serializable`, `Cloneable`, `Record`).
+
+def entity(clause, imports=''):
+    """`A` appelle `e.f()` sur un champ de type `E`, dont la hierarchie atteint `clause` hors des sources."""
+    return (java('A', 'class A { private E e; void g() { e.f(); } }'),
+            java('E', f'class E {clause} {{ void f() {{}} }}', imports))
+
+
+@pytest.mark.parametrize('clause, imports', [
+    ('implements Serializable', 'import java.io.Serializable;'),
+    ('implements java.io.Serializable', ''),
+    ('implements java.lang.Cloneable', ''),
+    ('implements Serializable, Cloneable', 'import java.io.Serializable;\nimport java.lang.Cloneable;'),
+])
+def test_a_known_jdk_supertype_no_longer_hides_the_target(clause, imports):
+    execution = run(*entity(clause, imports))
+    assert calls(execution) == {('A#g()', 'E#f()')}
+    assert the_call(execution, 'A#g()', 'E#f()')['derivation']['premises'] == [
+        'TYPED_AS : symbol:java:p.A#e -> symbol:java:p.E', 'CONTAINS : symbol:java:p.E -> symbol:java:p.E#f()']
+    assert not declared(execution, 'IMPLEMENTS') and not declared(execution, 'EXTENDS'), 'aucun symbole de la JDK'
+
+
+def test_a_known_supertype_reached_through_a_source_superclass_is_known_too():
+    execution = run(java('A', 'class A { private C c; void g() { c.f(); } }'),
+                    java('B', 'class B implements Serializable { void f() {} }', 'import java.io.Serializable;'),
+                    java('C', 'class C extends B {}'))
+    assert calls(execution) == {('A#g()', 'B#f()')}
+
+
+@pytest.mark.parametrize('clause, imports, written', [
+    ('implements Serializable', 'import java.io.*;', 'Serializable'),
+    ('implements Serializable', '', 'Serializable'),
+    ('implements Cloneable', '', 'Cloneable'),
+    ('implements x.Serializable', '', 'x.Serializable'),
+])
+def test_a_simple_name_without_its_import_is_never_taken_for_the_jdk(clause, imports, written):
+    """Sans nom qualifie, la provenance n'est pas etablie : le supertype reste externe et inconnu."""
+    site = sites(run(*entity(clause, imports)))['A#g()', 'f']
+    assert (site['reason'], site['external_supertypes']) == ('SUPER_TYPE_UNRESOLVED', [written])
+
+
+def test_another_external_supertype_still_doubts_the_target_and_only_it_is_named():
+    site = sites(run(*entity('extends Base implements Serializable',
+                             'import java.io.Serializable;\nimport x.Base;')))['A#g()', 'f']
+    assert (site['reason'], site['external_supertypes']) == ('SUPER_TYPE_UNRESOLVED', ['x.Base'])
+
+
+def test_a_method_absent_from_a_known_hierarchy_has_no_matching_declaration():
+    execution = run(java('A', 'class A { private E e; void g() { e.save(); } }'),
+                    java('E', 'class E implements Serializable { void f() {} }', 'import java.io.Serializable;'))
+    assert reason(execution, 'A#g()', 'save') == 'NO_MATCHING_DECLARATION'
+
+
+def test_an_object_method_on_a_record_never_targets_record_nor_an_accessor():
+    execution = run(java('A', 'class A { private R r; void g(Object o) { r.equals(o); r.hashCode(); } }'),
+                    java('R', 'record R(int x) {}'))
+    assert not calls(execution)
+    found = sites(execution)
+    assert [found['A#g(Object)', name]['reason'] for name in ('equals', 'hashCode')] == ['OVERLOAD_AMBIGUOUS'] * 2
+
+
+def test_an_object_method_redeclared_by_a_record_is_its_target():
+    execution = run(java('A', 'class A { private R r; void g() { r.toString(); } }'),
+                    java('R', 'record R(int x) { public String toString() { return "r"; } }'))
+    assert calls(execution) == {('A#g()', 'R#toString()')}

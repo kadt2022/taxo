@@ -7,7 +7,7 @@ Il est generique Java : il ne connait ni controleur, ni service, ni repository, 
   methodes, constructeurs et champs ; un champ `TYPED_AS` son type declare quand c'est un type des sources ; un
   type `EXTENDS` ou `IMPLEMENTS` ses supertypes des sources ;
 - les appels (`INFERRED`) : `CALLS` d'une methode ou d'un constructeur vers la declaration que la regle
-  `java.calls.declared-receiver-unique-target/1` etablit, ses premisses etant les declarations ci-dessus ;
+  `java.calls.declared-receiver-unique-target/2` etablit, ses premisses etant les declarations ci-dessus ;
 - les implementations de methodes (`INFERRED`) : `IMPLEMENTS` d'une methode vers la methode de meme signature
   d'une interface que sa classe implemente (`java.implements.same-signature/1`).
 
@@ -31,7 +31,7 @@ PARSE_ERROR_REASON = 'Fichier Java lu en partie (erreur de syntaxe) : ses décla
 
 class JavaCallsEvaluator:
     evaluator_id = 'taxo.java-calls'
-    producer_version = '1.1.0'
+    producer_version = '1.2.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):

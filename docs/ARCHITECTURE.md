@@ -952,7 +952,7 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
   lambda, classe anonyme ou locale), sans receveur (`f()`), sur `this`, sur un champ (`champ`, `this.champ`)
   dont le type déclaré se résout vers une déclaration des sources. Cible : la seule déclaration de même nom et
   même arité dans la hiérarchie du type, toute dans les sources ; sinon le site est `NOT_INTERPRETED`. Règle
-  `java.calls.declared-receiver-unique-target/1`. Les arguments ne sont pas typés : hypothèse « le code
+  `java.calls.declared-receiver-unique-target/2` (`/1` avant TAXO-01L). Les arguments ne sont pas typés : hypothèse « le code
   compile » écrite dans `known_gaps`. Le détail (surcharges, héritage, méthodes d'`Object`) est celui du récit
   [TAXO-01K](backlog/TAXO-01K-appels-java-entre-classes.md).
 - **`IMPLEMENTS`** : entre types, `OBSERVED` (la clause est écrite) ; entre méthodes, `INFERRED` par la règle
@@ -990,6 +990,15 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
   la version 1 n'écrit jamais `OUT_OF_SCOPE`. Un code absent de la table fait échouer le producteur ; changer
   une catégorie, c'est publier une nouvelle version de la règle. Les analyses écrites en 1.0.0 restent telles
   quelles, sans catégorie.
+- **Supertypes JDK connus** (TAXO-01L, tranche 1, `producer_version` 1.2.0, règle `/2`) : `java.io.Serializable`,
+  `java.lang.Cloneable` et `java.lang.Record` sont connus du contrat par leur seule déclaration publique : les deux
+  premiers ne déclarent aucune méthode, `Record` ne déclare que `equals`, `hashCode` et `toString`, déjà connues
+  par `Object`. Une hiérarchie qui n'atteint qu'eux hors des sources ne cache donc aucune cible. Ils sont reconnus
+  par leur nom qualifié seulement : écrit en entier, importé par un import simple, ou superclasse implicite d'un
+  record. Un nom simple sans import, ou couvert par un import à la demande, reste un supertype externe ; un enum
+  garde sa superclasse implicite externe (`java.lang.Enum` déclare des méthodes). Aucun symbole, aucun `EXTENDS`
+  ni `IMPLEMENTS` n'est écrit vers la JDK ; liste fermée, l'étendre, c'est publier une nouvelle version de la
+  règle. Les relations, couvertures, codes et catégories ne changent pas.
 - **Restitution** : une Tuile ne connaît rien de Java ; la frontière d'un nœud non lu porte en `causes` les
   raisons fermées de son `diagnostic`, et l'explorateur les dit en clair (« plusieurs déclarations possibles »).
 - **Lambdas** : créer une lambda n'est pas l'appeler ; ses appels ne sont jamais attribués à la méthode
@@ -997,7 +1006,7 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
 - **Doutes du producteur** (PR B), tous tranchés vers moins d'appels : un nom déclaré n'importe où dans le corps
   (paramètre, variable, motif, paramètre de lambda) masque le champ de même nom ; un appel sans receveur dans un
   type membre, ou qu'un import statique peut fournir, n'a pas de cible ; un type déclaré deux fois dans les
-  sources, ou deux déclarations de même identité syntaxique, sont ambigus ; un enum ou un record a une
+  sources, ou deux déclarations de même identité syntaxique, sont ambigus ; un enum a une
   superclasse implicite hors des sources ; un argument littéral n'écarte une déclaration que s'il contredit un
   paramètre de type connu ; `super.f()`, `new T()`, `this(...)`, un appel statique `T.f()` et un appel dans un
   initialiseur sont `UNSUPPORTED_CALL_FORM`.
@@ -1163,3 +1172,8 @@ pas.
 ses décomptes par catégorie (`categories`, `EXACT` ou, liste tronquée, les quatre en `AT_LEAST`) ; champ additif,
 même moteur, aucun champ existant changé. L'explorateur les montre en pastilles, « non classé » pour une analyse
 antérieure.
+
+**2026-10-09** — Supertypes JDK connus (TAXO-01L, tranche 1). `taxo.java-calls` 1.2.0 applique
+`java.calls.declared-receiver-unique-target/2` : `Serializable`, `Cloneable` et `Record`, reconnus par leur nom
+qualifié, ne cachent plus de cible. Un appel dont la hiérarchie n'atteint qu'eux hors des sources devient un
+`CALLS` quand sa cible est unique ; aucune relation, aucun code, aucune catégorie n'entre au contrat.

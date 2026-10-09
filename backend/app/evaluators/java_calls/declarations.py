@@ -3,6 +3,10 @@
 Une hierarchie ne suit que les supertypes des sources ; un supertype ecrit qui n'y est pas est externe, nomme par
 son import quand il en a un, sans jamais inventer sa declaration. `Object` n'est pas un supertype externe : ses
 methodes sont connues du contrat (`OBJECT_METHODS`). Un enum ou un record a une superclasse implicite, externe.
+
+TAXO-01L : trois supertypes de la JDK sont connus du contrat par leur seule declaration publique
+(`KNOWN_SUPERTYPES`). Ils ne cachent aucune cible : une hierarchie qui n'atteint qu'eux hors des sources n'a pas de
+supertype externe inconnu. Ils sont reconnus par leur nom qualifie seulement, jamais par un nom simple sans import.
 """
 from dataclasses import dataclass, field
 
@@ -14,6 +18,10 @@ OBJECT_METHODS = {('equals', 1): 'equals(Object)', ('hashCode', 0): 'hashCode()'
                   ('getClass', 0): 'getClass()', ('notify', 0): 'notify()', ('notifyAll', 0): 'notifyAll()',
                   ('wait', 0): 'wait()', ('wait', 1): 'wait(long)', ('wait', 2): 'wait(long,int)',
                   ('clone', 0): 'clone()', ('finalize', 0): 'finalize()'}
+# `Serializable` et `Cloneable` ne declarent aucune methode ; `Record` ne declare que `equals`, `hashCode` et
+# `toString`, les methodes d'`Object` de meme signature. Liste fermee : `java.lang.Enum`, qui declare de nombreuses
+# methodes, n'y entre pas. Aucun symbole n'est cree pour eux : ni `EXTENDS`, ni `IMPLEMENTS` vers la JDK.
+KNOWN_SUPERTYPES = frozenset({'java.io.Serializable', 'java.lang.Cloneable', 'java.lang.Record'})
 CLASSES = ('class', 'enum', 'record')
 
 
@@ -40,11 +48,13 @@ class Declared:
 @dataclass
 class Hierarchy:
     """Les types de la hierarchie, niveau par niveau a partir du type lui-meme ; pour chacun, les premisses qui le
-    relient au type de depart. `external` nomme les supertypes hors des sources ; `unreadable` est vrai si un type
-    vient d'un fichier lu en partie, `ambiguous` si un type est declare plusieurs fois dans les sources."""
+    relient au type de depart. `external` nomme les supertypes hors des sources qui peuvent cacher une cible ;
+    `known` ceux de la JDK connus du contrat, qui n'en cachent aucune ; `unreadable` est vrai si un type vient d'un
+    fichier lu en partie, `ambiguous` si un type est declare plusieurs fois dans les sources."""
     levels: list = field(default_factory=list)
     paths: dict = field(default_factory=dict)
     external: list = field(default_factory=list)
+    known: list = field(default_factory=list)
     unreadable: bool = False
     ambiguous: bool = False
 
@@ -83,7 +93,7 @@ class Sources:
             if supertype.written in OBJECT:
                 continue
             if supertype.qualified is None or supertype.qualified not in self.types:
-                _note(found.external, external_name(declared.java_file, supertype.written))
+                _outside(found, external_name(declared.java_file, supertype.written))
             elif supertype.qualified not in found.paths:
                 relation = supertype_relation(declared.java_type, supertype)
                 found.paths[supertype.qualified] = found.paths[name] + (
@@ -91,7 +101,7 @@ class Sources:
                 following.append(supertype.qualified)
         implicit = IMPLICIT_SUPERCLASS.get(declared.java_type.kind)
         if implicit is not None:
-            _note(found.external, implicit)
+            _outside(found, implicit)
         return following
 
 
@@ -100,6 +110,11 @@ def external_name(java_file, written):
     if '.' in written:
         return written
     return java_file.imported(written) or written
+
+
+def _outside(found, name):
+    """Un supertype hors des sources : connu du contrat, ou externe."""
+    _note(found.known if name in KNOWN_SUPERTYPES else found.external, name)
 
 
 def _note(names, name):
