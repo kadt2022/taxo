@@ -138,8 +138,8 @@ def _arguments(raw):
     if isinstance(raw, str):
         try:
             raw = json.loads(raw)
-        except ValueError as exc:
-            raise MiniaError(INVALID_ANSWER, 'Minia a donné des arguments qui ne sont pas un objet JSON.') from exc
+        except ValueError:
+            raw = None
     if not isinstance(raw, dict):
         raise MiniaError(INVALID_ANSWER, 'Minia a donné des arguments qui ne sont pas un objet JSON.')
     arguments = {}
