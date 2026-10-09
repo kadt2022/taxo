@@ -49,6 +49,8 @@ def test_the_declarations_are_exactly_those_of_the_oracle(execution):
     expected = {('CONTAINS', f"file:{item['file']}", item['type']) for item in ORACLE['declarations']}
     expected |= {('CONTAINS', item['type'], member) for item in ORACLE['declarations'] for member in item['members']}
     expected |= {('TYPED_AS', item['field'], item['type']) for item in ORACLE['typed_as']}
+    expected |= {fact for item in ORACLE['variables'] for fact in (
+        ('CONTAINS', item['method'], item['variable']), ('TYPED_AS', item['variable'], item['type']))}
     expected |= {('EXTENDS', item['subject'], item['object']) for item in ORACLE['extends']}
     expected |= {('IMPLEMENTS', item['subject'], item['object']) for item in ORACLE['implements']
                  if item['status'] == 'OBSERVED'}
@@ -58,8 +60,9 @@ def test_the_declarations_are_exactly_those_of_the_oracle(execution):
     assert {fact['relation'] for fact in execution.facts if fact['status'] == 'INFERRED'} == {'CALLS', 'IMPLEMENTS'}
 
 
-def test_a_declared_field_type_is_proven_by_its_line(execution):
+def test_a_declared_field_or_variable_type_is_proven_by_its_line(execution):
     lines = {(item['field'], item['type']): (item['path'], item['line']) for item in ORACLE['typed_as']}
+    lines |= {(item['variable'], item['type']): (item['path'], item['line']) for item in ORACLE['variables']}
     for fact in of(execution, 'TYPED_AS'):
         [evidence] = fact['evidence']
         assert (evidence['path'], evidence['line_start']) == lines[fact['subject'], fact['object']]
@@ -107,6 +110,16 @@ def test_each_uninterpreted_site_has_its_closed_reason_under_its_owner(execution
                                       'classification': 'java.calls.frontier-classification/1',
                                       'sites': expected[owner]}
         assert all(site['reason'] in fact['reason'] for site in expected[owner])
+
+
+def test_a_variable_is_declared_by_its_method_at_the_line_of_its_name(execution):
+    """TAXO-01L : un parametre ou une variable receveur d'un appel etabli est contenu par sa methode."""
+    lines = {(item['method'], item['variable']): (item['path'], item['line']) for item in ORACLE['variables']}
+    found = {(fact['subject'], fact['object']): fact for fact in of(execution, 'CONTAINS') if '/' in fact['object']}
+    assert found.keys() == lines.keys()
+    for key, fact in found.items():
+        [evidence] = fact['evidence']
+        assert (evidence['path'], evidence['line_start']) == lines[key] and evidence['symbol'] == fact['object']
 
 
 def test_what_must_never_be_produced_is_absent(execution):

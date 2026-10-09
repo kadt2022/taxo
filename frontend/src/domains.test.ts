@@ -14,6 +14,7 @@ describe('résultat par domaine', ()=>{
     expect(phrase('taxo.java-calls', 'CALLS', 'ADDED', 3)).toBe('3 appels entre méthodes ajoutés');
     expect(phrase('taxo.java-calls', 'CONTAINS', 'REMOVED', 1)).toBe('1 déclaration Java disparue');
     expect(phrase('taxo.java-calls', 'IMPLEMENTS', 'MODIFIED', 2)).toBe('2 implémentations modifiées');
+    expect(phrase('taxo.java-calls', 'TYPED_AS', 'ADDED', 2)).toBe('2 types déclarés ajoutés');
     expect(phrase('taxo.git', 'HAS_COMMIT', 'OCCURRENCE_COUNT_CHANGED', 1)).toBe('1 commit relevé un nombre de fois différent');
     expect(phrase('x', 'NEW', 'STATUS_CHANGED', 3)).toBe('3 faits « NEW » dont le statut a changé');
     expect(phrase('x', 'NEW', 'OCCURRENCES_CHANGED', 1)).toBe('1 fait « NEW » dont les apparitions disent autre chose');

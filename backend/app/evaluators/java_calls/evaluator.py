@@ -5,9 +5,10 @@ Il est generique Java : il ne connait ni controleur, ni service, ni repository, 
 
 - les declarations ecrites (`OBSERVED`) : un fichier `CONTAINS` ses types, un type `CONTAINS` ses types membres,
   methodes, constructeurs et champs ; un champ `TYPED_AS` son type declare quand c'est un type des sources ; un
-  type `EXTENDS` ou `IMPLEMENTS` ses supertypes des sources ;
+  type `EXTENDS` ou `IMPLEMENTS` ses supertypes des sources ; une methode `CONTAINS` le parametre ou la variable
+  locale receveur d'un appel etabli, qui `TYPED_AS` son type declare (TAXO-01L) ;
 - les appels (`INFERRED`) : `CALLS` d'une methode ou d'un constructeur vers la declaration que la regle
-  `java.calls.declared-receiver-unique-target/2` etablit, ses premisses etant les declarations ci-dessus ;
+  `java.calls.declared-receiver-unique-target/3` etablit, ses premisses etant les declarations ci-dessus ;
 - les implementations de methodes (`INFERRED`) : `IMPLEMENTS` d'une methode vers la methode de meme signature
   d'une interface que sa classe implemente (`java.implements.same-signature/1`).
 
@@ -31,7 +32,7 @@ PARSE_ERROR_REASON = 'Fichier Java lu en partie (erreur de syntaxe) : ses décla
 
 class JavaCallsEvaluator:
     evaluator_id = 'taxo.java-calls'
-    producer_version = '1.2.0'
+    producer_version = '1.3.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
@@ -129,6 +130,8 @@ class _Run:
             self._unread.setdefault((subject, java_file.path), []).append(site_diagnostic(site, outcome))
             return
         self.resolved += 1
+        for holder, relation, target, line in outcome.declarations:
+            self.facts.declaration(holder, relation, target, java_file.path, line)
         self.facts.call(subject, outcome.target, java_file.path, site, outcome.premises, outcome.counter_examples)
 
     def _note(self, subject, path, note):

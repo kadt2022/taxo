@@ -945,16 +945,17 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
   exige au moins une preuve de rôle `call-site`.
 - **Prémisses** : § 5.5 n'est pas assoupli. Un `CALLS` cite des faits `OBSERVED` du même instantané, produits
   par le même évaluateur, écrits `RELATION : sujet -> objet` comme les autres prémisses : `CONTAINS` du fichier
-  vers le type et du type vers ses membres, `TYPED_AS` du champ receveur, `EXTENDS` et `IMPLEMENTS` parcourus.
+  vers le type et du type vers ses membres, `TYPED_AS` du champ receveur, `EXTENDS` et `IMPLEMENTS` parcourus ;
+  depuis TAXO-01L, `CONTAINS` de la méthode vers le paramètre ou la variable receveur et son `TYPED_AS`.
   Un type déclaré hors des sources ne donne aucun `TYPED_AS` ni `EXTENDS` : aucun symbole externe n'est
   inventé.
-- **Premier fragment** : appels écrits directement dans le corps d'une méthode ou d'un constructeur (hors
-  lambda, classe anonyme ou locale), sans receveur (`f()`), sur `this`, sur un champ (`champ`, `this.champ`)
-  dont le type déclaré se résout vers une déclaration des sources. Cible : la seule déclaration de même nom et
-  même arité dans la hiérarchie du type, toute dans les sources ; sinon le site est `NOT_INTERPRETED`. Règle
-  `java.calls.declared-receiver-unique-target/2` (`/1` avant TAXO-01L). Les arguments ne sont pas typés : hypothèse « le code
-  compile » écrite dans `known_gaps`. Le détail (surcharges, héritage, méthodes d'`Object`) est celui du récit
-  [TAXO-01K](backlog/TAXO-01K-appels-java-entre-classes.md).
+- **Premier fragment** : appels écrits directement dans le corps d'une méthode ou d'un constructeur (hors lambda,
+  classe anonyme ou locale), sans receveur (`f()`), sur `this`, sur un champ (`champ`, `this.champ`) dont le type
+  déclaré se résout vers une déclaration des sources. Cible : la seule déclaration de même nom et même arité dans la
+  hiérarchie du type, toute dans les sources ; sinon le site est `NOT_INTERPRETED`. Règle
+  `java.calls.declared-receiver-unique-target/3` (`/1` avant TAXO-01L). Les arguments ne sont pas typés : hypothèse
+  « le code compile » écrite dans `known_gaps`. Le détail (surcharges, héritage, méthodes d'`Object`) est celui du
+  récit [TAXO-01K](backlog/TAXO-01K-appels-java-entre-classes.md).
 - **`IMPLEMENTS`** : entre types, `OBSERVED` (la clause est écrite) ; entre méthodes, `INFERRED` par la règle
   `java.implements.same-signature/1` (même signature, prémisses : l'`IMPLEMENTS` des types et les deux
   `CONTAINS`). Seule une interface des sources nommée dans la clause `implements` est suivie ; une méthode
@@ -990,6 +991,20 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
   la version 1 n'écrit jamais `OUT_OF_SCOPE`. Un code absent de la table fait échouer le producteur ; changer
   une catégorie, c'est publier une nouvelle version de la règle. Les analyses écrites en 1.0.0 restent telles
   quelles, sans catégorie.
+- **Paramètres et variables locales** (TAXO-01L, tranche 2, `producer_version` 1.3.0, règle `/3`) : un receveur
+  nommé désigne la déclaration visible au site (JLS 6.3) : paramètre de la méthode, composant d'un record pour son
+  constructeur compact, variable déclarée avant le site dans un bloc qui l'englobe, variable d'une boucle `for`,
+  d'une ressource ou d'un `catch` dont le corps contient le site, variable d'un groupe `case` précédent du même
+  `switch`. Sinon, le nom désigne un champ ou un type, même s'il est déclaré ailleurs dans le corps (autre bloc,
+  après le site, lambda, classe anonyme ou locale). Ces déclarations ont un symbole :
+  `symbol:java:<Type>#m(<signature>)/<nom>`, suivi de `#<rang>` (ordre du fichier, à partir de 1) quand le corps,
+  hors lambdas et classes imbriquées, déclare ce nom plusieurs fois ; l'identité ne dépend pas des lignes. Seule
+  une variable receveur d'un appel établi est écrite : la méthode la `CONTAINS` et elle `TYPED_AS` son type
+  (`OBSERVED`, preuve : la ligne de son nom), deux prémisses du `CALLS`. Un type hors des sources donne
+  `TARGET_TYPE_OUTSIDE_SNAPSHOT` sans `TYPED_AS` ; `var`, une variable de type, un type local au corps ou l'union
+  d'un `catch` donnent `RECEIVER_TYPE_UNKNOWN` (aucune inférence d'expression). Une variable de motif
+  (`o instanceof B b`), dont la portée suit le flot du code, garde `RECEIVER_KIND_DEFERRED`. Le portail dit
+  « la variable » d'un tel symbole, et `TYPED_AS` « type déclaré ».
 - **Supertypes JDK connus** (TAXO-01L, tranche 1, `producer_version` 1.2.0, règle `/2`) : `java.io.Serializable`,
   `java.lang.Cloneable` et `java.lang.Record` sont connus du contrat par leur seule déclaration publique : les deux
   premiers ne déclarent aucune méthode, `Record` ne déclare que `equals`, `hashCode` et `toString`, déjà connues
@@ -998,15 +1013,15 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
   record. Un nom simple sans import, ou couvert par un import à la demande, reste un supertype externe ; un enum
   garde sa superclasse implicite externe (`java.lang.Enum` déclare des méthodes). Aucun symbole, aucun `EXTENDS`
   ni `IMPLEMENTS` n'est écrit vers la JDK ; liste fermée, l'étendre, c'est publier une nouvelle version de la
-  règle. Les relations, couvertures, codes et catégories ne changent pas.
+  règle. Les relations, couvertures, codes et catégories ne changent pas, ni la version 1 du catalogue `java-calls`.
 - **Restitution** : une Tuile ne connaît rien de Java ; la frontière d'un nœud non lu porte en `causes` les
   raisons fermées de son `diagnostic`, et l'explorateur les dit en clair (« plusieurs déclarations possibles »).
 - **Lambdas** : créer une lambda n'est pas l'appeler ; ses appels ne sont jamais attribués à la méthode
   englobante.
-- **Doutes du producteur** (PR B), tous tranchés vers moins d'appels : un nom déclaré n'importe où dans le corps
-  (paramètre, variable, motif, paramètre de lambda) masque le champ de même nom ; un appel sans receveur dans un
-  type membre, ou qu'un import statique peut fournir, n'a pas de cible ; un type déclaré deux fois dans les
-  sources, ou deux déclarations de même identité syntaxique, sont ambigus ; un enum a une
+- **Doutes du producteur** (PR B), tous tranchés vers moins d'appels : un nom de variable de motif déclaré dans le
+  corps masque le champ de même nom (avant TAXO-01L, tout nom déclaré n'importe où dans le corps le masquait) ; un
+  appel sans receveur dans un type membre, ou qu'un import statique peut fournir, n'a pas de cible ; un type déclaré
+  deux fois dans les sources, ou deux déclarations de même identité syntaxique, sont ambigus ; un enum a une
   superclasse implicite hors des sources ; un argument littéral n'écarte une déclaration que s'il contredit un
   paramètre de type connu ; `super.f()`, `new T()`, `this(...)`, un appel statique `T.f()` et un appel dans un
   initialiseur sont `UNSUPPORTED_CALL_FORM`.
@@ -1177,3 +1192,9 @@ antérieure.
 `java.calls.declared-receiver-unique-target/2` : `Serializable`, `Cloneable` et `Record`, reconnus par leur nom
 qualifié, ne cachent plus de cible. Un appel dont la hiérarchie n'atteint qu'eux hors des sources devient un
 `CALLS` quand sa cible est unique ; aucune relation, aucun code, aucune catégorie n'entre au contrat.
+
+**2026-10-09** — Paramètres et variables locales receveurs (TAXO-01L, tranche 2). `taxo.java-calls` 1.3.0 applique
+`java.calls.declared-receiver-unique-target/3` : un receveur nommé désigne la déclaration visible au site, et un
+paramètre ou une variable locale d'un type des sources est suivi comme un champ. Un tel receveur a un symbole
+(`T#m(…)/nom`), contenu par sa méthode et typé, écrit seulement comme prémisse d'un appel établi. Aucune relation,
+aucun code, aucune catégorie n'entre au contrat ; le portail dit « la variable » et « type déclaré ».
