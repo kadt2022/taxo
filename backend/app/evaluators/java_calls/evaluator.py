@@ -4,11 +4,14 @@ statiquement etablis entre elles, en faits.
 Il est generique Java : il ne connait ni controleur, ni service, ni repository, ni Spring. Il produit :
 
 - les declarations ecrites (`OBSERVED`) : un fichier `CONTAINS` ses types, un type `CONTAINS` ses types membres,
-  methodes, constructeurs et champs ; un champ `TYPED_AS` son type declare quand c'est un type des sources ; un
-  type `EXTENDS` ou `IMPLEMENTS` ses supertypes des sources ; une methode `CONTAINS` le parametre ou la variable
-  locale receveur d'un appel etabli, qui `TYPED_AS` son type declare (TAXO-01L) ;
+  methodes, constructeurs et champs (les composants d'un record sont ses champs) ; un champ `TYPED_AS` son type
+  declare quand c'est un type des sources ; un type `EXTENDS` ou `IMPLEMENTS` ses supertypes des sources ; une
+  methode `CONTAINS` le parametre ou la variable locale receveur d'un appel etabli, qui `TYPED_AS` son type declare
+  (TAXO-01L) ;
 - les appels (`INFERRED`) : `CALLS` d'une methode ou d'un constructeur vers la declaration que la regle
-  `java.calls.declared-receiver-unique-target/3` etablit, ses premisses etant les declarations ci-dessus ;
+  `java.calls.declared-receiver-unique-target/4` etablit, ses premisses etant les declarations ci-dessus ;
+- les accesseurs implicites des records (`INFERRED`) : un record `CONTAINS` l'accesseur `x()` de chaque composant
+  que son corps n'ecrit pas (`java.record.implicit-accessor/1`, TAXO-01L) ;
 - les implementations de methodes (`INFERRED`) : `IMPLEMENTS` d'une methode vers la methode de meme signature
   d'une interface que sa classe implemente (`java.implements.same-signature/1`).
 
@@ -21,7 +24,7 @@ from app.evaluations.domain.evaluator import EvaluationOutput
 from app.evaluations.domain.progress import silent
 from app.evaluations.domain.status import EvaluationStatus
 from app.evaluators.java import sites, sources
-from . import classification, implementations
+from . import accessors, classification, implementations
 from .catalog import CATALOG
 from .declarations import Sources, supertype_relation, symbol
 from .facts import Facts, coverage, site_diagnostic, site_order
@@ -32,7 +35,7 @@ PARSE_ERROR_REASON = 'Fichier Java lu en partie (erreur de syntaxe) : ses décla
 
 class JavaCallsEvaluator:
     evaluator_id = 'taxo.java-calls'
-    producer_version = '1.3.0'
+    producer_version = '1.4.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
@@ -113,6 +116,9 @@ class _Run:
             if item.qualified_type is not None:
                 self.facts.declaration(symbol(qualified, item.name), 'TYPED_AS', symbol(item.qualified_type), path,
                                        item.line)
+        for accessor in accessors.declarations(java_type):
+            self.facts.accessor(symbol(qualified), symbol(qualified, accessor.signature), path, accessor.name_line,
+                                accessors.premises(qualified, accessor))
         for supertype in java_type.clauses:
             if self.index.get(supertype.qualified or '') is not None:
                 self.facts.declaration(symbol(qualified), supertype_relation(java_type, supertype),

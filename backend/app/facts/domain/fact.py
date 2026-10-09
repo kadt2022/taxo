@@ -7,7 +7,9 @@ _REFERENCE_SYNTAX = re.compile(r'[a-z][a-z0-9-]*:')
 
 # Source/target types and permitted statuses are the v1 relation vocabulary.
 RELATIONS = {
-    'CONTAINS': ({'repository', 'module', 'file', 'symbol'}, {'module', 'file', 'symbol'}, {'OBSERVED'}),
+    # Une declaration ecrite est observee ; une declaration que le langage implique sans l'ecrire (accesseur
+    # implicite d'un record, TAXO-01L) est deduite, d'un symbole vers un membre.
+    'CONTAINS': ({'repository', 'module', 'file', 'symbol'}, {'module', 'file', 'symbol'}, {'OBSERVED', 'INFERRED'}),
     'WRITTEN_IN': ({'file'}, {'language'}, {'OBSERVED'}),
     'USES_TECHNOLOGY': ({'repository', 'module'}, {'technology'}, {'OBSERVED'}),
     'DECLARED_BY': ({'technology'}, {'file'}, {'OBSERVED'}),
@@ -128,6 +130,8 @@ def _check_assertion(fact, reference, reject):
             reject('RELATION_PAIR', '/object', 'This relation does not link these two types.')
     if fact['relation'] == 'IMPLEMENTS' and 'object' in fact and not _implements_form(fact):
         reject('IMPLEMENTS_FORM', '/status', 'A type implementation is observed; a method implementation is inferred.')
+    if fact['relation'] == 'CONTAINS' and fact['status'] == 'INFERRED' and not _implied_member(fact):
+        reject('CONTAINS_FORM', '/status', 'Only a member implied by the language is contained by inference.')
     if fact['relation'] == 'CALLS' and not any(item.get('role') == CALL_SITE for item in fact.get('evidence', [])):
         reject('CALL_SITE_REQUIRED', '/evidence', 'A call is proven by at least one call-site evidence.')
 
@@ -153,6 +157,12 @@ def _implements_form(fact):
     members = {'(' in reference.partition('#')[2] for reference in (fact['subject'], fact['object'])}
     types = {'#' not in reference for reference in (fact['subject'], fact['object'])}
     return members == {True} if fact['status'] == 'INFERRED' else types == {True}
+
+
+def _implied_member(fact):
+    """Un symbole contient par deduction un de ses membres, jamais un fichier, un module ou un autre type."""
+    owner, member = fact['subject'], fact.get('object', '')
+    return owner.startswith('symbol:') and '#' not in owner and member.startswith(owner + '#')
 
 
 def _paired(relation, subject, target_type):

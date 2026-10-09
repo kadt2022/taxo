@@ -24,4 +24,8 @@ public class Enrollment {
         course.getTitle();
         return courses.size();
     }
+
+    public int row(Seat seat) {
+        return seat.row();
+    }
 }

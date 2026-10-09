@@ -162,3 +162,13 @@ def test_a_compact_record_constructor_is_the_canonical_constructor():
     """JLS 8.10.4 : le constructeur compact prend les composants du record pour parametres."""
     [site] = read('record R(int x, String y) { R { f(); } void f() {} }')
     assert (site.owner, site.member, site.context) == ('p.R', '<init>(int,String)', sites.BODY)
+
+
+def test_record_components_are_fields_and_only_unwritten_accessors_are_implicit():
+    """TAXO-01L, JLS 8.10.3 : chaque composant est un champ ; son accesseur est implicite sans `x()` ecrit."""
+    source = (b'package p;\nrecord R(boolean b, int n,\n T t, String... xs) {\n'
+              b' int n() { return n; } int b(int i) { return i; } }\n')
+    [record] = syntax.parse('p/R.java', source).types
+    assert [(item.name, item.written_type, item.line, item.component) for item in record.fields] == [
+        ('b', 'boolean', 2, True), ('n', 'int', 2, True), ('t', 'T', 3, True), ('xs', 'String[]', 3, True)]
+    assert [item.name for item in record.implicit_accessors] == ['b', 't', 'xs']

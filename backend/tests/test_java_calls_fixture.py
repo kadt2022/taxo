@@ -16,7 +16,7 @@ from app.facts.contract import content_hash, validate_fact
 FIXTURE = Path(__file__).parent / 'fixtures' / 'java-calls-demo'
 ORACLE = json.loads((FIXTURE / 'expected.json').read_text(encoding='utf-8'))
 SNAPSHOT = {'repository': 'java-calls-demo', 'commit': 'a' * 40, 'mode': 'COMMIT'}
-PRODUCER = {'producer_type': 'EVALUATOR', 'producer_id': 'taxo.java-calls', 'producer_version': '1.3.0',
+PRODUCER = {'producer_type': 'EVALUATOR', 'producer_id': 'taxo.java-calls', 'producer_version': '1.4.0',
             'execution_id': 'oracle', 'catalog_id': 'java-calls', 'catalog_version': '1'}
 # TAXO-01M : la liste fermée des raisons appartient au catalogue du producteur, plus au schéma commun.
 REASONS = set(CATALOG.diagnostic_codes)
@@ -60,11 +60,14 @@ def declared():
     facts |= {('EXTENDS', item['subject'], item['object']) for item in ORACLE['extends']}
     facts |= {('IMPLEMENTS', item['subject'], item['object']) for item in ORACLE['implements']
               if item['status'] == 'OBSERVED'}
+    # TAXO-01L : l'accesseur implicite d'un record est contenu par inference, lui-meme premisse d'un appel.
+    facts |= {('CONTAINS', item['record'], item['accessor']) for item in ORACLE['accessors']}
     return facts
 
 
 def premises(items):
-    """Premises are declarative facts of the same analysis, spelled `RELATION : sujet -> objet` like the others."""
+    """Premises are declarative facts of the same analysis (an implicit record accessor included), spelled
+    `RELATION : sujet -> objet` like the others."""
     found = declared()
     for relation, subject, target in items:
         assert (relation, subject, target) in found, f'prémisse absente des faits déclaratifs : {relation} {subject}'
@@ -88,6 +91,7 @@ def test_every_java_file_is_declared_once_and_every_symbol_is_a_declaration():
     files = {path.relative_to(FIXTURE).as_posix() for path in FIXTURE.rglob('*.java')}
     assert sorted(item['file'] for item in ORACLE['declarations']) == sorted(files)
     members = {member for item in ORACLE['declarations'] for member in [item['type'], *item['members']]}
+    members |= {item['accessor'] for item in ORACLE['accessors']}
     named = {call[side] for call in ORACLE['calls'] for side in ('subject', 'object')}
     named |= {item[side] for item in ORACLE['implements'] for side in ('subject', 'object')}
     named |= {item['owner'] for item in ORACLE['not_interpreted']}
@@ -154,6 +158,20 @@ def test_each_receiver_variable_is_a_valid_declaration_of_its_method():
         assertion(item['variable'], 'TYPED_AS', item['type'],
                   evidence=[proof(item['path'], item['line'], method='java.declaration', symbol=item['variable'])])
 
+
+
+def test_each_implicit_accessor_is_a_valid_inferred_member_of_its_record():
+    """TAXO-01L : `R#x()` contenu par `R` par inference, de la premisse `CONTAINS R -> R#x` d'un composant."""
+    members = {member for item in ORACLE['declarations'] for member in item['members']}
+    for item in ORACLE['accessors']:
+        assert item['component'] in members and item['accessor'] == item['component'] + '()'
+        assert item['accessor'] not in members, 'un accesseur ecrit est une methode observee, jamais inferee'
+        line = source(item['path']).split(b'\n')[item['line'] - 1].decode('utf-8')
+        assert re.search(rf"\b{item['component'].rsplit('#', 1)[1]}\b", line)
+        assertion(item['record'], 'CONTAINS', item['accessor'], 'INFERRED',
+                  [proof(item['path'], item['line'], method='java.declaration', symbol=item['accessor'])], {
+                      'premises': premises([['CONTAINS', item['record'], item['component']]]), 'rule': item['rule'],
+                      'counter_examples_checked': [], 'known_gaps': []})
 
 def test_uninterpreted_sites_are_one_valid_coverage_per_owner():
     owners = {}

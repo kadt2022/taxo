@@ -186,7 +186,7 @@ def test_the_implicit_record_superclass_is_known_and_hides_no_target():
     """TAXO-01L : `java.lang.Record` ne declare que des methodes d'`Object` ; il ne cache aucune cible."""
     execution = run(java('A', 'class A { private E e; void g() { e.f(); } }'), java('E', 'record E(int x) { void f() {} }'))
     assert calls(execution) == {('A#g()', 'E#f()')}
-    assert the_call(execution, 'A#g()', 'E#f()')['derivation']['rule'] == 'java.calls.declared-receiver-unique-target/3'
+    assert the_call(execution, 'A#g()', 'E#f()')['derivation']['rule'] == 'java.calls.declared-receiver-unique-target/4'
 
 
 @pytest.mark.parametrize('body, method', [
@@ -525,3 +525,59 @@ def test_an_object_method_redeclared_by_a_record_is_its_target():
     execution = run(java('A', 'class A { private R r; void g() { r.toString(); } }'),
                     java('R', 'record R(int x) { public String toString() { return "r"; } }'))
     assert calls(execution) == {('A#g()', 'R#toString()')}
+
+
+# TAXO-01L : accesseurs implicites des records (`java.record.implicit-accessor/1`).
+
+def accessor_fact(execution, record, member):
+    return next(fact for fact in execution.facts if fact['relation'] == 'CONTAINS'
+                and short(fact['subject']) == record and short(fact['object']) == member)
+
+
+def test_a_call_to_an_implicit_accessor_targets_it():
+    execution = run(java('A', 'class A { private R r; void g() { r.x(); } }'), java('R', 'record R(int x) {}'))
+    assert calls(execution) == {('A#g()', 'R#x()')}
+    call = the_call(execution, 'A#g()', 'R#x()')
+    assert call['derivation']['rule'] == 'java.calls.declared-receiver-unique-target/4'
+    assert call['derivation']['premises'] == [
+        'TYPED_AS : symbol:java:p.A#r -> symbol:java:p.R', 'CONTAINS : symbol:java:p.R -> symbol:java:p.R#x()']
+
+
+def test_an_implicit_accessor_is_contained_by_inference_and_its_component_is_a_field():
+    execution = run(java('R', 'record R(int x, B b) {}'), java('B', 'class B {}'))
+    accessor = accessor_fact(execution, 'R', 'R#x()')
+    assert accessor['status'] == 'INFERRED'
+    assert accessor['derivation']['rule'] == 'java.record.implicit-accessor/1'
+    assert accessor['derivation']['premises'] == ['CONTAINS : symbol:java:p.R -> symbol:java:p.R#x']
+    assert accessor_fact(execution, 'R', 'R#x')['status'] == 'OBSERVED'
+    assert ('R#b', 'B') in declared(execution, 'TYPED_AS')
+
+
+def test_a_written_accessor_is_an_observed_method_and_no_inferred_one_is_added():
+    execution = run(java('A', 'class A { private R r; void g() { r.x(); } }'),
+                    java('R', 'record R(int x) { public int x() { return x; } }'))
+    assert calls(execution) == {('A#g()', 'R#x()')}
+    assert accessor_fact(execution, 'R', 'R#x()')['status'] == 'OBSERVED'
+    assert not [fact for fact in execution.facts if fact['status'] == 'INFERRED' and fact['relation'] == 'CONTAINS']
+
+
+def test_inside_a_record_a_component_and_its_accessor_are_reached_like_any_member():
+    execution = run(java('R', 'record R(int x, B b) { void g() { x(); b.f(); } }'),
+                    java('B', 'class B { void f() {} }'))
+    assert calls(execution) == {('R#g()', 'R#x()'), ('R#g()', 'B#f()')}
+    assert the_call(execution, 'R#g()', 'B#f()')['derivation']['premises'] == [
+        'TYPED_AS : symbol:java:p.R#b -> symbol:java:p.B', 'CONTAINS : symbol:java:p.B -> symbol:java:p.B#f()']
+
+
+def test_an_implicit_accessor_hides_the_method_of_its_interface():
+    execution = run(java('A', 'class A { private R r; void g() { r.x(); } }'),
+                    java('I', 'interface I { int x(); }'), java('R', 'record R(int x) implements I {}'))
+    assert calls(execution) == {('A#g()', 'R#x()')}
+    assert not implemented(execution), 'un accesseur implicite n\'est pas une methode ecrite'
+
+
+def test_an_accessor_with_arguments_or_of_an_unknown_component_has_no_target():
+    execution = run(java('A', 'class A { private R r; void g() { r.x(1); r.y(); } }'),
+                    java('R', 'record R(int x) {}'))
+    assert not calls(execution)
+    assert [reason(execution, 'A#g()', name) for name in ('x', 'y')] == ['NO_MATCHING_DECLARATION'] * 2

@@ -1107,6 +1107,29 @@
         "path": "/diagnostic/classification"
       },
       "reason": "A classification names its rule."
+    },
+    {
+      "file": "valid-contains-inferred-accessor.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
+      "file": "invalid-contains-inferred-file.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "CONTAINS_FORM",
+        "path": "/status"
+      }
+    },
+    {
+      "file": "invalid-contains-inferred-foreign-member.json",
+      "submission": true,
+      "accepted": false,
+      "expected_error": {
+        "code": "CONTAINS_FORM",
+        "path": "/status"
+      }
     }
   ]
 }
