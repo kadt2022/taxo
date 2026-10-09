@@ -97,3 +97,6 @@ def test_the_calls_of_a_route_handler_are_followed_and_their_unread_sites_say_wh
               and entry['producer'] == 'taxo.java-calls']
     assert [(entry['reason'], entry['causes']) for entry in unread] == [
         ('NOT_INTERPRETED', ['OVERLOAD_AMBIGUOUS', 'RECEIVER_KIND_DEFERRED'])]
+    # TAXO-01M : les memes sites, comptes par categorie generique, sans rien de Java dans le moteur.
+    assert unread[0]['categories'] == [{'category': 'AMBIGUOUS', 'count': {'kind': 'EXACT', 'value': 1}},
+                                       {'category': 'UNSUPPORTED', 'count': {'kind': 'EXACT', 'value': 1}}]

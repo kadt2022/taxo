@@ -20,6 +20,10 @@ export const CAUSES:Record<string,string>={RECEIVER_TYPE_UNKNOWN:'type du receve
   UNSUPPORTED_CALL_FORM:'forme d’appel pas encore lue', RECEIVER_KIND_DEFERRED:'receveur local ou paramètre, pas encore suivi',
   LAMBDA_OR_LOCAL_CONTEXT:'appel dans une lambda ou une classe locale', PARSE_ERROR:'fichier lu en partie'};
 
+/** Les catégories génériques d'une frontière (TAXO-01M) : communes à tous les analyseurs, jamais propres à un langage. */
+export const CATEGORIES:Record<string,string>={UNKNOWN:'cible inconnue', AMBIGUOUS:'plusieurs cibles possibles',
+  UNSUPPORTED:'forme non prise en charge', OUT_OF_SCOPE:'hors du périmètre analysé'};
+
 export const METRICS:Record<string,string>={fact_count:'Éléments identifiés', coverage_count:'Zones de couverture',
   warning_count:'Points à vérifier', duration_seconds:'Durée'};
 

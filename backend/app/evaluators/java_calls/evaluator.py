@@ -20,10 +20,10 @@ from app.evaluations.domain.evaluator import EvaluationOutput
 from app.evaluations.domain.progress import silent
 from app.evaluations.domain.status import EvaluationStatus
 from app.evaluators.java import sites, sources
-from . import implementations
+from . import classification, implementations
 from .catalog import CATALOG
 from .declarations import Sources, supertype_relation, symbol
-from .facts import Facts, coverage, site_diagnostic
+from .facts import Facts, coverage, site_diagnostic, site_order
 from .resolution import Resolver
 
 PARSE_ERROR_REASON = 'Fichier Java lu en partie (erreur de syntaxe) : ses déclarations et ses appels ne sont pas lus.'
@@ -31,7 +31,7 @@ PARSE_ERROR_REASON = 'Fichier Java lu en partie (erreur de syntaxe) : ses décla
 
 class JavaCallsEvaluator:
     evaluator_id = 'taxo.java-calls'
-    producer_version = '1.0.0'
+    producer_version = '1.1.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
@@ -80,14 +80,16 @@ class _Run:
             self._site(java_file, site)
 
     def gaps(self):
-        """Une couverture `NOT_INTERPRETED` par proprietaire : ses sites non interpretes, et ce qu'il faut en dire."""
+        """Une couverture `NOT_INTERPRETED` par proprietaire : ses sites non interpretes, tries par position et
+        classes (TAXO-01M), et ce qu'il faut en dire."""
         found = []
         for key in sorted(set(self._unread) | set(self._notes)):
             subject, path = key
-            listed, notes = self._unread.get(key, []), self._notes.get(key, [])
+            listed, notes = sorted(self._unread.get(key, []), key=site_order), self._notes.get(key, [])
             reasons = sorted({item['reason'] for item in listed})
             said = notes + ([f'{len(listed)} appel(s) non interprété(s) : {", ".join(reasons)}'] if listed else [])
-            diagnostic = {'sites_seen': len(listed), 'sites': listed} if listed else None
+            diagnostic = ({'sites_seen': len(listed), 'classification': classification.RULE, 'sites': listed}
+                          if listed else None)
             found.append(coverage(subject, 'NOT_INTERPRETED', f'file:{path}', ' ; '.join(said), diagnostic))
         return found
 

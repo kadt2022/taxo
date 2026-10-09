@@ -9,14 +9,16 @@ from pathlib import Path
 
 import pytest
 
-from app.facts.contract import SCHEMA, content_hash, validate_fact
+from app.evaluators.java_calls.catalog import CATALOG
+from app.facts.contract import content_hash, validate_fact
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'java-calls-demo'
 ORACLE = json.loads((FIXTURE / 'expected.json').read_text(encoding='utf-8'))
 SNAPSHOT = {'repository': 'java-calls-demo', 'commit': 'a' * 40, 'mode': 'COMMIT'}
-PRODUCER = {'producer_type': 'EVALUATOR', 'producer_id': 'taxo.java-calls', 'producer_version': '1.0.0',
+PRODUCER = {'producer_type': 'EVALUATOR', 'producer_id': 'taxo.java-calls', 'producer_version': '1.1.0',
             'execution_id': 'oracle', 'catalog_id': 'java-calls', 'catalog_version': '1'}
-REASONS = set(SCHEMA['$defs']['site']['properties']['reason']['enum'])
+# TAXO-01M : la liste fermée des raisons appartient au catalogue du producteur, plus au schéma commun.
+REASONS = set(CATALOG.diagnostic_codes)
 SITE_FIELDS = ('line_start', 'line_end', 'column_start', 'column_end')
 DIAGNOSTIC_FIELDS = ('method', 'receiver', 'receiver_type', 'external_supertypes', 'candidates')
 
@@ -102,6 +104,7 @@ def test_what_must_never_be_produced_is_absent_from_the_truth():
     assert not edges & {(item['subject'], item['object']) for item in ORACLE['never']['calls']}
     assert ORACLE['never']['relations'] == ['DISPATCHES_TO']
     assert {item['reason'] for item in ORACLE['not_interpreted']} <= REASONS
+    assert all(item['category'] != 'OUT_OF_SCOPE' for item in ORACLE['not_interpreted'])
 
 
 @pytest.mark.parametrize('call', ORACLE['calls'], ids=lambda call: call['subject'].split('#')[1] + ' → '
@@ -139,8 +142,8 @@ def test_uninterpreted_sites_are_one_valid_coverage_per_owner():
     for item in ORACLE['not_interpreted']:
         owners.setdefault((item['owner'], item['path']), []).append(item)
     for (owner, path), sites in owners.items():
-        diagnostic = {'sites_seen': len(sites), 'sites': [
-            {'role': 'call-site', **located(site), 'reason': site['reason'],
+        diagnostic = {'sites_seen': len(sites), 'classification': 'java.calls.frontier-classification/1', 'sites': [
+            {'role': 'call-site', **located(site), 'reason': site['reason'], 'category': site['category'],
              **{key: site[key] for key in DIAGNOSTIC_FIELDS if key in site}} for site in sites]}
         validate_fact({'contract_version': 1, 'kind': 'COVERAGE', 'status': 'OBSERVED', 'validity': 'VALID',
                        'subject': owner, 'coverage_type': 'NOT_INTERPRETED', 'scope': {'include': [f'file:{path}']},

@@ -323,6 +323,10 @@ sens) :
 ```
 
 - `stop_reason` garde ses valeurs et ajoute `DEPTH`, `FANOUT`.
+- Amendement TAXO-01M (PR C), additif : une entrée `KNOWLEDGE`/`NODE` dont la couverture a une
+  `classification` peut porter `categories`, ses décomptes de sites par catégorie générique (ARCHITECTURE
+  § 9.3). Aucun champ existant ne change ; le moteur reste `neighborhood/2`. Un client de `neighborhood/2`
+  ignore les propriétés qu'il ne connaît pas.
 - ARCHITECTURE § 9 (première tranche → multiniveau), § 9.1 (sens combiné), § 12.3 (`find_references`,
   poignée d'occurrence) sont amendés dans la PR du moteur.
 
