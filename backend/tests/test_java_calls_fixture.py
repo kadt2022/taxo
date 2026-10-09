@@ -9,14 +9,16 @@ from pathlib import Path
 
 import pytest
 
-from app.facts.contract import SCHEMA, content_hash, validate_fact
+from app.evaluators.java_calls.catalog import CATALOG
+from app.facts.contract import content_hash, validate_fact
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'java-calls-demo'
 ORACLE = json.loads((FIXTURE / 'expected.json').read_text(encoding='utf-8'))
 SNAPSHOT = {'repository': 'java-calls-demo', 'commit': 'a' * 40, 'mode': 'COMMIT'}
 PRODUCER = {'producer_type': 'EVALUATOR', 'producer_id': 'taxo.java-calls', 'producer_version': '1.0.0',
             'execution_id': 'oracle', 'catalog_id': 'java-calls', 'catalog_version': '1'}
-REASONS = set(SCHEMA['$defs']['site']['properties']['reason']['enum'])
+# TAXO-01M : la liste fermée des raisons appartient au catalogue du producteur, plus au schéma commun.
+REASONS = set(CATALOG.diagnostic_codes)
 SITE_FIELDS = ('line_start', 'line_end', 'column_start', 'column_end')
 DIAGNOSTIC_FIELDS = ('method', 'receiver', 'receiver_type', 'external_supertypes', 'candidates')
 

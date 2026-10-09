@@ -1,0 +1,52 @@
+{
+  "contract_version": 1,
+  "kind": "COVERAGE",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "COMMIT"
+  },
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "test.synthetic-python",
+    "producer_version": "1.0.0",
+    "execution_id": "fixture",
+    "catalog_id": "synthetic-python",
+    "catalog_version": "1"
+  },
+  "scope": {
+    "include": [
+      "file:app/service.py"
+    ]
+  },
+  "subject": "symbol:python:app.service.OrderService.place",
+  "coverage_type": "NOT_INTERPRETED",
+  "reason": "appels non résolus",
+  "diagnostic": {
+    "sites_seen": 2,
+    "classification": "python.synthetic.frontier-classification/1",
+    "sites": [
+      {
+        "role": "call-site",
+        "line_start": 12,
+        "line_end": 12,
+        "column_start": 4,
+        "column_end": 22,
+        "reason": "NAME_UNBOUND",
+        "method": "notify",
+        "category": "UNKNOWN"
+      },
+      {
+        "role": "call-site",
+        "line_start": 12,
+        "line_end": 12,
+        "column_start": 26,
+        "column_end": 40,
+        "reason": "DYNAMIC_ATTRIBUTE",
+        "category": "UNSUPPORTED"
+      }
+    ]
+  }
+}
