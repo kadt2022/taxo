@@ -36,5 +36,5 @@ class FactReading(Protocol):
 
     def unread(self, scan_id: str, references: list[str]) -> list[dict]:
         """Les couvertures de l'analyse qui disent qu'une de ces references n'a pas ete lue (`subject`,
-        `coverage_type`, `producer`, `reasons` de son `diagnostic`) : une lecture par l'ancre du sujet, jamais un
+        `coverage_type`, `producer`, `reasons` et `categories` de son `diagnostic`) : une lecture par l'ancre du sujet, jamais un
         parcours (TAXO-01J)."""

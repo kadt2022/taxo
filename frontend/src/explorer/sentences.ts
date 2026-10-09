@@ -1,7 +1,7 @@
 // Ce que l'explorateur dit (TAXO-01J § 9) : chaque frontière, chaque marque, la portée de la vue. Pur. Des comptes,
 // jamais de pourcentage ; jamais « complet » : une vue montre ce que ses pas atteignent, pas tout le logiciel. Un type
 // ou une relation que le portail ne connaît pas s'affiche par son nom brut.
-import {CAUSES, COVERAGE, EVALUATORS, STATUS_MARKS, TONES, TYPES, VERBS, label, reference} from '../vocabulary';
+import {CATEGORIES, CAUSES, COVERAGE, EVALUATORS, STATUS_MARKS, TONES, TYPES, VERBS, label, reference} from '../vocabulary';
 import type {Boundary, Count, Direction, NotSent} from './protocol';
 import type {Link, View, ViewNode} from './graph';
 
@@ -68,6 +68,15 @@ export function knowledgeText(boundary:Boundary){
     return `Zone non lue${by} : ${where} (${label(COVERAGE, boundary.reason)}${causes?` : ${causes}`:''}).`;
   }
   }
+}
+
+/** Les sites d'une zone non lue, par catégorie générique (TAXO-01M) : un libellé et son décompte, dans l'ordre reçu.
+ * Une zone dont les sites sont décrits sans catégorie (analyse antérieure) est « non classée » ; rien n'est déduit des
+ * codes, ni d'un langage. */
+export function categoryTexts(boundary:Boundary):{category:string|null; text:string}[]{
+  if(boundary.categories)return boundary.categories.map(({category, count})=>
+    ({category, text:`${label(CATEGORIES, category)} · ${countText(count)}`}));
+  return boundary.causes?.length?[{category:null, text:'non classé'}]:[];
 }
 
 /** Où en est la vue, toutes Tuiles réunies : ce qu'elle montre, et combien de nœuds restent coupés. */

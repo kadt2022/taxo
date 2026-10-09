@@ -136,6 +136,39 @@ def test_filters_compare_the_submitted_spelling(stores, spelling):
     assert stores.store.query(scan, subject='module:root', object=spelling) == [fact]
 
 
+
+def unread_of(stores, name, change=None):
+    """The unread zone a contract case states, as the store reads it back by its subject."""
+    fact = json.loads((CONFORMANCE / 'v1' / f'{name}.json').read_text(encoding='utf-8'))
+    if change:
+        change(fact)
+    scan = stores.analysis('analysis', fact['snapshot'], producer_of(fact))
+    stores.store.add(scan, fact['produced_by']['producer_id'], [fact])
+    [found] = stores.store.unread(scan, [fact['subject']])
+    return found
+
+
+def test_unread_gives_the_exact_counts_of_a_classified_diagnostic(stores):
+    found = unread_of(stores, 'valid-coverage-diagnostic-classified')
+    assert found['reasons'] == ['OVERLOAD_AMBIGUOUS', 'RECEIVER_KIND_DEFERRED']
+    assert found['categories'] == [{'category': 'AMBIGUOUS', 'count': {'kind': 'EXACT', 'value': 1}},
+                                   {'category': 'UNSUPPORTED', 'count': {'kind': 'EXACT', 'value': 1}}]
+
+
+def test_unread_lists_the_four_categories_at_least_when_the_sites_are_truncated(stores):
+    def truncated(fact):
+        fact['diagnostic']['sites_seen'] = 10
+    found = unread_of(stores, 'valid-coverage-diagnostic-classified', truncated)
+    assert found['categories'] == [{'category': name, 'count': {'kind': 'AT_LEAST', 'value': value}}
+                                   for name, value in (('UNKNOWN', 0), ('AMBIGUOUS', 1), ('UNSUPPORTED', 1),
+                                                       ('OUT_OF_SCOPE', 0))]
+
+
+def test_unread_of_an_analysis_written_before_the_categories_has_none(stores):
+    found = unread_of(stores, 'valid-coverage-diagnostic')
+    assert found['reasons'] == ['OVERLOAD_AMBIGUOUS', 'RECEIVER_KIND_DEFERRED']
+    assert found['categories'] is None
+
 def test_any_iterable_of_facts_is_written_once(stores):
     scan = stores.analysis('analysis', executions=[execution()])
     facts = [assertion('module:a'), assertion('module:b')]

@@ -2,8 +2,8 @@ import {describe, expect, it} from 'vitest';
 import type {Boundary} from './protocol';
 import {linksOf, viewOf} from './graph';
 import {element, tile} from './__fixtures__/tiles';
-import {compartments, countText, factText, linkMarks, knowledgeText, nodeMarks, nodeName, notSentText, scopeText, selectionText, verb, viewText} from './sentences';
-import {CAUSES} from '../vocabulary';
+import {categoryTexts, compartments, countText, factText, linkMarks, knowledgeText, nodeMarks, nodeName, notSentText, scopeText, selectionText, verb, viewText} from './sentences';
+import {CATEGORIES, CAUSES} from '../vocabulary';
 
 const SELECTIONS=['DEPTH', 'NOT_REACHED', 'NODES', 'EDGES', 'WORK', 'BYTES', 'FANOUT'];
 const KNOWLEDGE=['NO_ANALYZER', 'ANALYSIS_INCOMPLETE', 'NOT_ANALYSED', 'LANGUAGES_UNKNOWN', 'LOCAL_COVERAGE_NOT_READ',
@@ -25,6 +25,29 @@ describe('ce que l’explorateur dit', ()=>{
       +'plusieurs déclarations possibles ; receveur local ou paramètre, pas encore suivi).');
     for(const cause of Object.keys(CAUSES))expect(knowledgeText({...unread, causes:[cause]})).not.toContain(cause);
     expect(knowledgeText({...unread, causes:['NOUVELLE']})).toContain(': NOUVELLE).');
+  });
+
+  it('dit chaque catégorie par son libellé et son décompte, jamais par son nom brut', ()=>{
+    const unread={...gap('NOT_INTERPRETED'), causes:['X_CODE']};
+    expect(categoryTexts({...unread, categories:[{category:'UNKNOWN', count:{kind:'EXACT', value:3}},
+      {category:'AMBIGUOUS', count:{kind:'AT_LEAST', value:0}}]}))
+      .toEqual([{category:'UNKNOWN', text:'cible inconnue · 3'}, {category:'AMBIGUOUS', text:'plusieurs cibles possibles · au moins 0'}]);
+    for(const category of Object.keys(CATEGORIES))
+      expect(categoryTexts({...unread, categories:[{category, count:{kind:'EXACT', value:1}}]})[0].text).not.toContain(category);
+    expect(categoryTexts({...unread, categories:[{category:'NOUVELLE', count:{kind:'EXACT', value:1}}]})[0].text).toBe('NOUVELLE · 1');
+  });
+
+  it('dit « non classé » d’une zone décrite sans catégorie, et rien d’une zone sans site', ()=>{
+    expect(categoryTexts({...gap('NOT_INTERPRETED'), causes:['X_CODE']})).toEqual([{category:null, text:'non classé'}]);
+    expect(categoryTexts(gap('READ_ERROR'))).toEqual([]);
+    expect(categoryTexts(cut('DEPTH'))).toEqual([]);
+  });
+
+  it('lit une frontière d’avant les catégories comme une d’après, sans erreur', ()=>{
+    const before:Boundary=JSON.parse('{"nature":"KNOWLEDGE","scope":"NODE","node":"m","reason":"NOT_INTERPRETED","count":{"kind":"UNKNOWN"},"causes":["A"]}');
+    const after:Boundary=JSON.parse('{"nature":"KNOWLEDGE","scope":"NODE","node":"m","reason":"NOT_INTERPRETED","count":{"kind":"UNKNOWN"},"causes":["A"],'
+      +'"categories":[{"category":"UNKNOWN","count":{"kind":"EXACT","value":1}}]}');
+    expect(knowledgeText(after)).toBe(knowledgeText(before));
   });
 
   it('ne dit jamais de pourcentage, ni « complet »', ()=>{
