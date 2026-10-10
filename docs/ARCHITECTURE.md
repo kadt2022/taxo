@@ -308,10 +308,11 @@ dans les champs textuels. Tout champ inconnu est refusé, en particulier tout ch
 | `HANDLED_BY` | endpoint → symbol | `OBSERVED` | Spring API |
 | `SERVED_BY` | endpoint → application | `INFERRED` | Spring Boot |
 | `PERMITS_ALL` | route-pattern → (aucun) | `OBSERVED` | Spring Security |
-| `AUTHORIZED_BY` | route-pattern → symbol ou expression littérale | `OBSERVED` | Spring Security |
+| `AUTHORIZED_BY` | route-pattern, symbol → symbol ou expression littérale | `OBSERVED` | Spring Security |
 | `MATCHED_BY` | endpoint → route-pattern | `INFERRED` | Spring Security |
 | `PROTECTED_BY` | endpoint → symbol, policy-rule | `INFERRED`, `HUMAN_VALIDATED` | Spring Security |
-| `ANNOTATED_WITH` | symbol → annotation | `OBSERVED` | aucun |
+| `CONFIGURES` | symbol → policy-rule | `OBSERVED` | Spring Security (`csrf.disable()`) |
+| `ANNOTATED_WITH` | symbol → annotation | `OBSERVED` | Spring Security (activation de la sécurité de méthode) |
 | `CALLS` | symbol → symbol | `INFERRED`, prouvé par ses sites d'appel (§ 14) | aucun |
 | `IMPLEMENTS` | symbol → symbol | `OBSERVED` entre types, `INFERRED` entre méthodes (§ 14) | aucun |
 | `EXTENDS` | symbol → symbol | `OBSERVED` | aucun |
@@ -428,7 +429,8 @@ usage. Un manifeste illisible est `NOT_INTERPRETED`.
   `spring-security.first-matching-pattern`) vient d'une règle `ALL` précédée de règles `NONE`, qui
   deviennent les contre-exemples.
 - **`PROTECTED_BY`** (`INFERRED`, règle `spring-security.route-authorization-applies`) s'appuie sur
-  `MATCHED_BY` puis `AUTHORIZED_BY`, **jamais sur `HANDLED_BY`**. Limites dites : les rôles sont des
+  `MATCHED_BY` puis `AUTHORIZED_BY`, **jamais sur `HANDLED_BY`** : une règle d'URL ne dépend pas de la
+  méthode qui traite la route. Limites dites : les rôles sont des
   données ; la décision d'un gestionnaire n'est pas lue.
 - **Une route n'a pour candidates que les chaînes chargées par l'application qui la sert** (§ 7.6).
   Les chaînes d'une autre application sont écartées en contre-exemples, avec leur raison ; de même pour
@@ -442,8 +444,23 @@ usage. Un manifeste illisible est `NOT_INTERPRETED`.
   - une application la sert peut-être, une chaîne applicable a un chargement inconnu, ou deux
     applications qui la servent chargent des chaînes différentes ;
   - l'analyse des endpoints n'a pas établi certaines routes.
-- Sécurité de méthode (`@PreAuthorize`…) et mécanismes maison (filtres, `AuthorizationManager`) :
-  `NOT_INTERPRETED`, la protection réelle peut s'y trouver.
+- **Sécurité de méthode** (TAXO-MINIA-SEC-01, E2) : le type qui porte `@EnableMethodSecurity`, ou
+  `@EnableGlobalMethodSecurity(prePostEnabled = true)`, est `ANNOTATED_WITH` cette annotation (`OBSERVED`,
+  qualificatif `prePostEnabled` s'il est écrit). La méthode gardée par `@PreAuthorize`, ou son type à
+  défaut, est `AUTHORIZED_BY` l'expression écrite (`OBSERVED`, qualificatif `annotation`). L'endpoint
+  qu'elle traite est **`PROTECTED_BY` `policy-rule:<expression>`** (`INFERRED`, règle
+  `spring-security.method-authorization-applies`), sur `HANDLED_BY`, `AUTHORIZED_BY` et `ANNOTATED_WITH`.
+  C'est la seule protection déduite via `HANDLED_BY` : la garde est sur la méthode qui traite la route.
+  Conditions : chaque application qui sert la route charge un type qui active `@PreAuthorize` (§ 7.6),
+  et l'expression ne peut que restreindre. Cette protection s'ajoute à celle de la règle d'URL, sans la
+  remplacer. Une annotation qui ne se résout pas vers Spring, une expression non résolue ou qui peut tout
+  permettre, une activation non établie : `NOT_INTERPRETED`, l'`AUTHORIZED_BY` lu restant un fait.
+- **CSRF** : la méthode de la chaîne qui écrit `csrf().disable()`, `csrf(c -> c.disable())` ou
+  `csrf(AbstractHttpConfigurer::disable)` `CONFIGURES` `policy-rule:csrf.disable()` (`OBSERVED`). Toute
+  autre configuration CSRF est `NOT_INTERPRETED` ; sans appel `csrf`, rien n'est affirmé.
+- Autres annotations de sécurité de méthode (`@Secured`, `@RolesAllowed`, `@PostAuthorize`…) et
+  mécanismes maison (filtres, `AuthorizationManager`) : `NOT_INTERPRETED`, la protection réelle peut s'y
+  trouver.
 - Sans règle `authorizeHttpRequests`, rien n'est affirmé et un avertissement le dit.
 - Sans aucune `@SpringBootApplication` (bibliothèque), toutes les chaînes lues sont candidates.
 - Hors version : `@Order`, SpEL, `context-path`, variantes d'URL d'`antMatchers` (lacune connue).

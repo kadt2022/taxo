@@ -25,9 +25,12 @@ RELATIONS = {
     'ACCEPTS': ({'endpoint'}, {'symbol'}, {'OBSERVED'}),
     'RETURNS': ({'endpoint'}, {'symbol'}, {'OBSERVED'}),
     'PERMITS_ALL': ({'route-pattern'}, set(), {'OBSERVED'}),
-    'AUTHORIZED_BY': ({'route-pattern'}, {'symbol'}, {'OBSERVED'}),
+    # Une regle d'URL ou une methode (`@PreAuthorize`, TAXO-MINIA-SEC-01) exige l'expression ecrite ou le type qui decide.
+    'AUTHORIZED_BY': ({'route-pattern', 'symbol'}, {'symbol'}, {'OBSERVED'}),
     'MATCHED_BY': ({'endpoint'}, {'route-pattern'}, {'INFERRED'}),
     'PROTECTED_BY': ({'endpoint'}, {'symbol', 'policy-rule'}, {'INFERRED', 'HUMAN_VALIDATED'}),
+    # Un reglage de securite ecrit dans une configuration (`csrf.disable()`), hors autorisation d'une route.
+    'CONFIGURES': ({'symbol'}, {'policy-rule'}, {'OBSERVED'}),
     # Historique Git (ARCHITECTURE § 7.2) : un commit, son auteur, ses parents et les fichiers qu'il change.
     'HAS_COMMIT': ({'repository'}, {'commit'}, {'OBSERVED'}),
     'AUTHORED_BY': ({'commit'}, {'person'}, {'OBSERVED'}),

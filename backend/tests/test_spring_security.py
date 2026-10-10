@@ -130,7 +130,7 @@ def test_each_readable_rule_is_an_observed_fact_with_its_line():
     assert authorized == {'route-pattern:/api/orgs/**': 'hasRole("ADMIN")',
                           'route-pattern:/api/v1/**': 'symbol:java:com.example.security.PolicyManager',
                           'route-pattern:/**': 'authenticated()'}
-    chains = {fact['qualifiers']['filter_chain'] for fact in output.facts}
+    chains = {fact['qualifiers']['filter_chain'] for fact in output.facts if fact['relation'] != 'CONFIGURES'}
     assert chains == {'symbol:java:com.example.security.SecurityConfig#chain(HttpSecurity)'}, 'chaque regle dit sa chaine de filtres'
     evidence = facts(output, 'AUTHORIZED_BY')['route-pattern:/api/orgs/**']['evidence'][0]
     lines = config(RULES).splitlines()
@@ -294,8 +294,8 @@ def test_every_fact_satisfies_the_contract():
     assert execution.status == EvaluationStatus.PARTIAL, execution.error
     assert {fact['status'] for fact in execution.facts} == {'OBSERVED', 'INFERRED'}
     assert all(fact['produced_by']['catalog_id'] == 'spring-security' for fact in execution.facts)
-    assert {fact['produced_by']['catalog_version'] for fact in execution.facts} == {'2'}, \
-        'filter_chain porte une signature : schema d identite en version 2'
+    assert {fact['produced_by']['catalog_version'] for fact in execution.facts} == {'3'}, \
+        'version 3 : securite de methode et CSRF'
 
 
 def test_pattern_matching_has_three_outcomes():
