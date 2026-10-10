@@ -87,7 +87,8 @@ ancre d'un type qu'il n'accepte pas, donne `INVALID_ARGUMENT`. `PROJECT` reste r
 
 Ce qu'un profil ne peut pas promettre est dit, jamais tu : une relation sans producteur exécuté (`DISPATCHES_TO`
 aujourd'hui) rend la frontière `CONTEXT` `NO_ANALYZER` du moteur ; une relation produite en partie
-(`ANNOTATED_WITH`, relevée pour la seule activation de la sécurité de méthode) est déclarée dans `limits`.
+(`ANNOTATED_WITH`, relevée sur les types et les méthodes Java mais pas sur leurs paramètres ni leurs champs) est
+déclarée dans `limits`.
 `security/1` est un parcours documentaire : il ne démontre pas qu'une route est protégée.
 
 ## 3. Réponse : la Tuile

@@ -13,7 +13,9 @@ Il est generique Java : il ne connait ni controleur, ni service, ni repository, 
 - les accesseurs implicites des records (`INFERRED`) : un record `CONTAINS` l'accesseur `x()` de chaque composant
   que son corps n'ecrit pas (`java.record.implicit-accessor/1`, TAXO-01L) ;
 - les implementations de methodes (`INFERRED`) : `IMPLEMENTS` d'une methode vers la methode de meme signature
-  d'une interface que sa classe implemente (`java.implements.same-signature/1`).
+  d'une interface que sa classe implemente (`java.implements.same-signature/1`) ;
+- les annotations ecrites (`OBSERVED`, TAXO-MIP-ADT-01) : un type ou une methode `ANNOTATED_WITH` chaque annotation
+  qu'il porte, nom et arguments tels qu'ecrits, sans rien savoir de son role (`annotations.py`).
 
 Chaque site qu'il ne resout pas est decrit, avec sa raison fermee, dans le diagnostic d'une couverture
 `NOT_INTERPRETED` de la methode qui le porte : jamais une cible inventee. `DISPATCHES_TO` n'est jamais produit.
@@ -24,7 +26,7 @@ from app.evaluations.domain.evaluator import EvaluationOutput
 from app.evaluations.domain.progress import silent
 from app.evaluations.domain.status import EvaluationStatus
 from app.evaluators.java import sites, sources
-from . import accessors, classification, implementations
+from . import accessors, annotations, classification, implementations
 from .catalog import CATALOG
 from .declarations import Sources, supertype_relation, symbol
 from .facts import Facts, coverage, site_diagnostic, site_order
@@ -35,7 +37,7 @@ PARSE_ERROR_REASON = 'Fichier Java lu en partie (erreur de syntaxe) : ses décla
 
 class JavaCallsEvaluator:
     evaluator_id = 'taxo.java-calls'
-    producer_version = '1.4.0'
+    producer_version = '1.5.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
@@ -97,6 +99,18 @@ class _Run:
             found.append(coverage(subject, 'NOT_INTERPRETED', f'file:{path}', ' ; '.join(said), diagnostic))
         return found
 
+    def _annotations(self, java_file, java_type):
+        """Les annotations du type et de ses methodes ; une methode d'identite ambigue n'a pas de symbole a annoter."""
+        qualified, path = java_type.qualified_name, java_file.path
+        for item in java_type.annotations:
+            self.facts.annotation(symbol(qualified), annotations.read(java_file, item, qualified), path)
+        for method in java_type.methods:
+            if java_type.ambiguous(method.signature):
+                continue
+            for item in method.annotations:
+                self.facts.annotation(symbol(qualified, method.signature), annotations.read(java_file, item, qualified),
+                                      path)
+
     def _declare(self, java_file, java_type):
         qualified, path = java_type.qualified_name, java_file.path
         outer = qualified.rpartition('.')[0]
@@ -105,6 +119,7 @@ class _Run:
         if qualified in self.index.duplicated:
             self._note(symbol(qualified), path, f'Type déclaré plusieurs fois dans les sources : {qualified}')
             return
+        self._annotations(java_file, java_type)
         for member in java_type.declarations:
             if java_type.ambiguous(member.signature):
                 self._note(symbol(qualified), path, f'Identité syntaxique ambiguë : {qualified}#{member.signature}')

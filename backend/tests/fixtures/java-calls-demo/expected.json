@@ -797,5 +797,49 @@
       "symbol:java:com.example.demo.service.CourseCatalog#refresh()",
       "symbol:java:com.example.demo.service.CourseService#getCourses()"
     ]
-  }
+  },
+  "annotations": [
+    {
+      "subject": "symbol:java:com.example.demo.controller.CourseController",
+      "object": "annotation:org.springframework.web.bind.annotation.RestController",
+      "line": 13
+    },
+    {
+      "subject": "symbol:java:com.example.demo.controller.CourseController",
+      "object": "annotation:org.springframework.web.bind.annotation.RequestMapping",
+      "line": 14,
+      "value": "/api/courses"
+    },
+    {
+      "subject": "symbol:java:com.example.demo.controller.CourseController#getCourses()",
+      "object": "annotation:org.springframework.web.bind.annotation.GetMapping",
+      "line": 24
+    },
+    {
+      "subject": "symbol:java:com.example.demo.controller.CourseController#register(String)",
+      "object": "annotation:org.springframework.web.bind.annotation.PostMapping",
+      "line": 31
+    },
+    {
+      "subject": "symbol:java:com.example.demo.controller.CourseController#titles()",
+      "object": "annotation:org.springframework.web.bind.annotation.GetMapping",
+      "line": 39,
+      "value": "/titles"
+    },
+    {
+      "subject": "symbol:java:com.example.demo.service.CourseServiceImpl",
+      "object": "annotation:org.springframework.stereotype.Service",
+      "line": 8
+    },
+    {
+      "subject": "symbol:java:com.example.demo.service.CourseServiceImpl#getCourses()",
+      "object": "annotation:Override",
+      "line": 16
+    },
+    {
+      "subject": "symbol:java:com.example.demo.service.CourseServiceImpl#register(String)",
+      "object": "annotation:Override",
+      "line": 21
+    }
+  ]
 }
