@@ -64,9 +64,31 @@ déjà). Aucun nom du domaine de la Maille n'est changé.
 | `relations` | oui | 1 à 16 relations distinctes ; leur vocabulaire est vérifié par `get_neighborhood`. |
 | `direction` | oui | `INCOMING`, `OUTGOING` ou `BOTH`. Aucun défaut caché. « Qui appelle X ? » : `CALLS`, `INCOMING`. |
 | `bounds` | non | `depth`, `max_nodes`, `max_facts`, `max_bytes` : entiers de 1 à 10⁶. `max_bytes` vaut pour la Tuile MIP telle qu'elle est reçue : si elle ne tient pas, `BUDGET_EXHAUSTED`. Une valeur au-dessus du plafond du serveur est **plafonnée**, pas refusée. Sans valeur, le défaut du moteur. |
-| `continuation` | non | La reprise d'une frontière `SELECTION` d'une Tuile précédente, avec les mêmes `relations`, `direction` et `analysis`. |
+| `continuation` | non | La reprise d'une frontière `SELECTION` d'une Tuile précédente, avec les mêmes `relations`, `direction` (ou le même `profile`) et `analysis`. |
+| `profile` | non | Un profil déclaré (§ 2.1). Il remplace `relations` et `direction`, qui sont alors interdits. |
 
 Tout autre champ, tout type faux et toute valeur hors du contrat donnent `INVALID_ARGUMENT`.
+
+### 2.1 Profils de Tuile adaptative (TAXO-MIP-ADT-01, PR A)
+
+Champ facultatif et additif : une requête sans `profile` est servie exactement comme avant. Un profil est un
+manifeste fermé et versionné (`app/mip/domain/profiles.py`, ARCHITECTURE § 9.5) : types d'ancre acceptés, pas suivis
+(relation et sens, dans leur ordre de priorité), chacun nommé par sa règle, profondeur par défaut, preuves résumées, et
+limites connues. Il se résout en `steps` et `depth` de `neighborhood/2` : la même demande écrite en mode explicite
+rend la même sélection, dans le même ordre. `bounds.depth` remplace la profondeur du profil. Un profil inconnu, ou une
+ancre d'un type qu'il n'accepte pas, donne `INVALID_ARGUMENT`. `PROJECT` reste refusée.
+
+| Profil | Ancre | Pas (règle) | Profondeur |
+| --- | --- | --- | --- |
+| `method-context/1` | `symbol` | `CONTAINS` entrant (`owner`), `ANNOTATED_WITH` sortant (`annotations`), `CALLS` sortant (`callees`) et entrant (`callers`), `IMPLEMENTS` sortant (`implemented-method`) et entrant (`implementations`) | 1 |
+| `calls/1` | `endpoint`, `symbol` | `HANDLED_BY` (`handler`), `CALLS` (`callees`), `DISPATCHES_TO` (`dispatch`), sortants | 2 |
+| `structure/1` | `module`, `application` | `CONTAINS` (`members`), `DEPENDS_ON` (`dependencies`), `BUILT_FROM` (`built-from`), sortants | 1 |
+| `security/1` | `endpoint` | `HANDLED_BY` (`handler`), `SERVED_BY` (`application`), `MATCHED_BY` (`route-rule`), `AUTHORIZED_BY` (`authorization`), `PROTECTED_BY` (`protection`), sortants | 2 |
+
+Ce qu'un profil ne peut pas promettre est dit, jamais tu : une relation sans producteur exécuté (`DISPATCHES_TO`
+aujourd'hui) rend la frontière `CONTEXT` `NO_ANALYZER` du moteur ; une relation produite en partie
+(`ANNOTATED_WITH`, relevée pour la seule activation de la sécurité de méthode) est déclarée dans `limits`.
+`security/1` est un parcours documentaire : il ne démontre pas qu'une route est protégée.
 
 ## 3. Réponse : la Tuile
 
@@ -85,6 +107,14 @@ Tout autre champ, tout type faux et toute valeur hors du contrat donnent `INVALI
 | `not_sent` | ce qui n'a pas tenu dans les octets | `not_sent` |
 | `continuation` | la reprise de l'arrêt, quand le moteur en rend une ; sinon `null`, et les reprises sont dans `frontier` | `continuation` |
 | `wire` | `taxo-query/1`, `get_neighborhood`, `neighborhood/2`, révision des faits | — |
+| `profile` | avec un profil seulement : son manifeste (`id`, `anchors`, `depth`, `steps` avec leur `rule`, `evidence`, `limits`) et `resolved`, les paramètres explicites appliqués par le moteur | profil, `parameters` |
+| `facts[].selection` | avec un profil seulement : `rule`, la règle du pas qui a retenu le fait, et `path`, les références des faits parcourus depuis l'ancre jusqu'à lui (`null` si un fait du chemin n'a pas été rendu) | `via`, `node_details.discovered_by` |
+
+`bounds.applied.max_bytes` est le budget de la Tuile reçue. Le moteur mesure ses propres octets mais ignore ce qu'un
+profil ajoute (manifeste, règles, chemins) : si la Tuile dépasse, l'adaptateur la redemande **une fois**, dans un
+nouvel échange sur la même analyse, avec un budget moteur réduit de ce surplus. Les deux appels sont déterministes ;
+la Tuile rendue est coupée par les octets et le dit (`truncated`). Si elle dépasse encore, ou si le budget ne contient
+pas l'enveloppe du moteur, le refus est `BUDGET_EXHAUSTED`.
 
 Lecture honnête d'une Tuile :
 
@@ -116,4 +146,4 @@ comme pour `taxo-query`.
 
 ## 6. Hors de MIP 0.1
 
-`PROJECT` servie, autorisations par consommateur, capsule de Tuile autonome, transport MCP.
+`PROJECT` servie, profils au-delà des quatre du § 2.1, autorisations par consommateur, capsule de Tuile autonome, transport MCP.
