@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.bootstrap.database import Base
 from app.main import create_app
 from app.protocol.application.exchange import Exchange
+from app.protocol.domain.envelope import Response
 from tests.method_security_sources import FILES
 
 ENDPOINT = 'endpoint:GET /api/items'
@@ -116,8 +117,10 @@ def test_limits_that_do_not_fit_are_counted_never_cost_the_verdict(taxo):
     claim = {'subject': ENDPOINT, 'relation': 'PROTECTED_BY', 'object': 'policy-rule:authenticated()'}
     full = verify(taxo, **claim)
     # Le plus petit budget qui sert encore la reponse : les faits n'y tiennent plus, la limite non plus.
-    served = [response for response in (verify(taxo, max_bytes=budget, **claim)
-                                        for budget in range(full['bytes'], 0, -32)) if response['outcome'] == 'OK']
+    answers = [(budget, verify(taxo, max_bytes=budget, **claim)) for budget in range(full['bytes'], 0, -8)]
+    served = [response for _, response in answers if response['outcome'] == 'OK']
+    assert all(response['bytes'] <= budget for budget, response in answers if response['outcome'] == 'OK'), \
+        'la taille demandée borne toute réponse servie'
     tight = served[-1]
     assert tight['verdict'] == 'CONFIRMED', 'le verdict reste servi'
     assert tight['limits'] == []
@@ -132,3 +135,17 @@ def test_a_decisive_verdict_on_a_single_valued_relation_ignores_what_was_not_rea
     exchange = SimpleNamespace(analyzers=lambda: [git])
     limits = Exchange.limits(exchange, 'AUTHORED_BY', {'commit:abc', 'person:x@example.org'}, verdict, 'commit:abc')
     assert [limit['subject'] for limit in limits] == expected, 'l’auteur établi exclut tout autre'
+
+
+def test_an_extra_section_reserves_its_own_mention_in_not_sent():
+    snapshot = {'analysis': 'a', 'commit': 'c'}
+    base = Response('verify_claim', snapshot, [], 10 ** 6).used
+    for budget in range(base, base + 200):
+        response = Response('verify_claim', snapshot, [], budget, limits=[])
+        if not response.fits:
+            continue
+        for section in ('limits', 'items', 'evidence'):
+            assert not response.add(section, {'text': 'x' * 300})
+        closed = response.close()
+        assert len(closed['not_sent']) == 3
+        assert closed['bytes'] <= budget, 'trois sections omises tiennent dans la taille demandée'
