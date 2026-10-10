@@ -38,3 +38,9 @@ class FactReading(Protocol):
         """Les couvertures de l'analyse qui disent qu'une de ces references n'a pas ete lue (`subject`,
         `coverage_type`, `producer`, `reasons` et `categories` de son `diagnostic`) : une lecture par l'ancre du sujet, jamais un
         parcours (TAXO-01J)."""
+
+
+class DeclarationReading(Protocol):
+    def __call__(self, path: str, source: bytes, reference: str):
+        """Les lignes de la declaration de `reference` dans le fichier `path` (`line_start`, `line_end`, `name_line`),
+        ou None si ce fichier ne la declare pas une seule fois (TAXO-MIP-ADT-01, PR B). Lecture seule."""

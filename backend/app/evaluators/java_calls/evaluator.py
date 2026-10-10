@@ -26,7 +26,7 @@ from app.evaluations.domain.evaluator import EvaluationOutput
 from app.evaluations.domain.progress import silent
 from app.evaluations.domain.status import EvaluationStatus
 from app.evaluators.java import sites, sources
-from . import accessors, annotations, classification, implementations
+from . import accessors, annotations, classification, implementations, source_range
 from .catalog import CATALOG
 from .declarations import Sources, supertype_relation, symbol
 from .facts import Facts, coverage, site_diagnostic, site_order
@@ -39,6 +39,8 @@ class JavaCallsEvaluator:
     evaluator_id = 'taxo.java-calls'
     producer_version = '1.5.0'
     catalog = CATALOG
+    # Les lignes de la déclaration d'un symbole qu'il a déclaré : ce que lit `get_source` (TAXO-MIP-ADT-01, PR B).
+    declaration_lines = staticmethod(source_range.declaration_lines)
 
     def evaluate(self, snapshot, progress=silent):
         repository = f'repository:{snapshot.repository}'

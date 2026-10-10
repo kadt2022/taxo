@@ -31,7 +31,7 @@ def graph(tmp_path):
     evaluation = {'evaluator_id': 'fixture', 'status': 'SUCCESS',
                   'snapshot': {'repository': 'project', 'commit': 'a' * 40},
                   'coverage': [{'coverage_type': 'ANALYSED', 'count': 1, 'subjects': ['repository:project']}]}
-    service = SimpleNamespace(facts=store, source_context='off',
+    service = SimpleNamespace(facts=store, source_context='off', source_reading='off', readers={},
                               catalogs={'fixture': frozenset({'CONTAINS', 'DEPENDS_ON'})})
     scan = SimpleNamespace(id='analysis-1', result={'evaluations': [evaluation]})
     def opened():

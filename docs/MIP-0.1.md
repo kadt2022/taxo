@@ -139,7 +139,7 @@ contenu de cette catégorie est transmis. Champs additifs : un consommateur qui 
 | `nature` | Le type de la référence centrale, lu dans sa syntaxe : `METHOD` (symbole appelable `…#nom(…)`), `TYPE` (symbole sans membre : la Maille ne distingue pas classe, interface, record ou énumération), `MEMBER` (autre symbole), sinon le type de référence en majuscules (`ENDPOINT`, `COMMIT`, `MODULE`, `FILE`, `ROUTE_PATTERN`…). Vaut aussi pour une ancre inconnue de l'analyse. |
 | `language` | Celui que la référence écrit (`symbol:java:…`), sinon celui d'un fait `WRITTEN_IN` transmis, sinon `null`. |
 | `profile` | L'identifiant du profil appliqué, ou `null`. |
-| `content` | Dans cet ordre, parmi : `FACTS` (au moins un fait), `RELATIONS` (un fait qui relie deux nœuds de la Tuile, jamais une valeur littérale), `EVIDENCE` (une preuve résumée transmise), `CODE_SOURCE`, `COMMIT_METADATA` (un fait `HAS_COMMIT`, `CHILD_OF`, `AUTHORED_BY` ou `CHANGES`), `COVERAGE`, `FRONTIER`. `CODE_SOURCE` n'est jamais annoncé par une Tuile : le code n'y est jamais (ARCHITECTURE § 9.5, règle 6) ; une pièce source sera consultée à part, sous consentement (`get_source`, réservée). |
+| `content` | Dans cet ordre, parmi : `FACTS` (au moins un fait), `RELATIONS` (un fait qui relie deux nœuds de la Tuile, jamais une valeur littérale), `EVIDENCE` (une preuve résumée transmise), `CODE_SOURCE`, `COMMIT_METADATA` (un fait `HAS_COMMIT`, `CHILD_OF`, `AUTHORED_BY` ou `CHANGES`), `COVERAGE`, `FRONTIER`. `CODE_SOURCE` n'est jamais annoncé par une Tuile : le code n'y est jamais (ARCHITECTURE § 9.5, règle 6) ; une pièce source se consulte à part, sous son propre consentement (`get_source` de `taxo-query/1`, avec sa propre classification). |
 | `commit_metadata` | Présent avec `COMMIT_METADATA` : nombre de commits et champs Git transmis (`sha`, puis ceux des qualificatifs présents : `authored_at`, `committed_at`, `message`, et `author` seulement si un fait `AUTHORED_BY` est transmis). |
 | `provenance` | `snapshot` de la Tuile, `facts_revision`, et les producteurs (identifiant, version) des faits transmis. |
 
@@ -164,7 +164,7 @@ comme pour `taxo-query`.
 ## 5. Garanties
 
 - Lecture seule : aucune écriture, aucune analyse lancée, aucun accès au système de fichiers, aucun diff, aucune
-  source (`get_source` n'existe pas).
+  source (`get_source` est une opération de `taxo-query/1`, hors des Tuiles).
 - Un seul moteur : les faits, nœuds, frontières et couvertures de la Tuile sont ceux de `get_neighborhood`, à
   l'identique (test de parité).
 - Aucun modèle de langage n'est requis ni appelé.

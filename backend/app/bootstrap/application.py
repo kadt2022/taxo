@@ -76,7 +76,7 @@ def minia_model(options):
 
 
 def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None, minia=_FROM_SETTINGS,
-               source_context=None):
+               source_context=None, source_reading=None):
     engine = database_engine(settings.database_url(database_url))
     # Une base en retard sur le code ferait echouer chaque page qui lit une colonne recente : l'API ne demarre pas.
     require_current_schema(engine)
@@ -118,9 +118,12 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     query = ProjectQuery(projects, scans, facts)
     api.include_router(query_router(query))
     # Protocole Taxo (ARCHITECTURE § 12) : operations en lecture seule sur la derniere analyse ; le diff reste soumis
-    # au meme double consentement que pour Minia (ARCHITECTURE § 12.6).
+    # au meme double consentement que pour Minia (ARCHITECTURE § 12.6) ; le code d'un symbole, au sien (TAXO_SOURCE_READING).
     source = settings.minia_source_context(source_context)
-    api.state.taxo_query = TaxoQuery(projects, scans, facts, history, registry.all(), source, contracts)
+    java_calls = registry.get(JavaCallsEvaluator.evaluator_id)
+    api.state.taxo_query = TaxoQuery(projects, scans, facts, history, registry.all(), source, contracts,
+                                     settings.taxo_source_reading(source_reading),
+                                     {java_calls.evaluator_id: java_calls.declaration_lines})
     api.include_router(protocol_router(api.state.taxo_query))
     # MIP 0.1 (ARCHITECTURE § 12.0) : un adaptateur sur ce même protocole, qui sert une Tuile sans modèle de langage.
     mip = MipService(api.state.taxo_query)

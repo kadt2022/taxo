@@ -22,7 +22,9 @@ from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INTERNAL, INVALID_AR
                                           Response, error)
 from app.knowledge.application.loader import analysis_languages, from_coverage, from_summary
 from app.protocol.application.commits import HISTORY as _HISTORY, CommitOperations
-from app.protocol.application.ports import FactReading
+from app.protocol.application.source import SourceOperation
+from app.protocol.domain import source as _source
+from app.protocol.application.ports import DeclarationReading, FactReading
 from app.protocol.application.arguments import claim_object as _claim_object, no_other as _no_other
 from app.protocol.application.arguments import reference as _reference, relation as _relation, text as _text
 from app.knowledge.domain.knowledge import AnalysisKnowledge, contains
@@ -54,11 +56,12 @@ _DECISIVE = frozenset({'CONFIRMED', 'REFUTED'})
 _SINGLE_VALUED = frozenset({'AUTHORED_BY', 'HANDLED_BY', 'MATCHED_BY', 'TYPED_AS', 'WRITTEN_IN'})
 V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'get_diff', 'verify_claim')
 # Operations reservees d'ARCHITECTURE § 12 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
-# commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01).
-ACTIVATED = ('diff_facts', 'get_neighborhood', 'find_references')
+# commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01). `get_source`
+# lit le code d'un symbole declare, sous son propre double consentement (TAXO-MIP-ADT-01, PR B).
+ACTIVATED = ('diff_facts', 'get_neighborhood', 'find_references', 'get_source')
 OPERATIONS = V1 + ACTIVATED
 RESERVED = ('find_endpoint', 'trace_access_control', 'find_callers', 'find_callees', 'find_dependencies',
-            'find_configuration', 'get_source')
+            'find_configuration')
 # Ce que `describe` dit des arguments de chaque operation.
 _COMMIT_ARGUMENT = {'commit': 'identifiant, 7 caracteres ou plus'}
 _CLAIM_ARGUMENTS = {'subject': 'reference', 'relation': 'relation', 'object': 'reference ou valeur'}
@@ -91,6 +94,7 @@ _ARGUMENTS = {
                         'type': 'type de référence (facultatif)', 'limit': '1..50', 'after': 'reprise (facultatif)',
                         'match': 'KEY (défaut) | NAME : nom simple ou qualifié (VetController, '
                                  'OwnerRepository.findById, Items.list(String)), égal à la fin de la clé'},
+    'get_source': {'reference': 'symbole déclaré : type, méthode ou constructeur (jamais un fichier)'},
 }
 
 
@@ -156,7 +160,8 @@ class References:
 class TaxoQuery:
     """Ouvre des echanges du protocole sur les projets analyses."""
 
-    def __init__(self, projects, scans, facts: FactReading, history, analyzers, source_context, contracts=None):
+    def __init__(self, projects, scans, facts: FactReading, history, analyzers, source_context, contracts=None,
+                 source_reading=_source.OFF, declarations: dict[str, DeclarationReading] | None = None):
         # `facts` : le port de lecture des faits (`FactReading`). `analyzers` : les evaluateurs enregistres ;
         # seuls leur identifiant et leur catalogue servent.
         self.projects, self.scans, self.facts, self.history = projects, scans, facts, history
@@ -166,28 +171,38 @@ class TaxoQuery:
         # meme valeur a toutes les operations ; a defaut, elle se deduit des evaluateurs.
         self.contracts = contracts if contracts is not None else CatalogContracts(item.catalog for item in analyzers)
         self.source_context = source_context
+        # La lecture du code d'un symbole (`get_source`) : un reglage serveur a part, `off` par defaut, que le
+        # reglage du diff n'active jamais. `declarations` : par analyseur, le port qui dit la plage d'une declaration
+        # qu'il a produite ; seuls ces analyseurs servent le code de leurs symboles.
+        if source_reading not in _source.MODES:
+            raise ValueError(f'Lecture du code inconnue : {source_reading}')
+        self.source_reading = source_reading
+        self.readers = dict(declarations or {})
 
     def reads_of(self, evaluation):
         """Ce que lit le contrat de catalogue qu'une execution resumee nomme ; inconnu s'il n'en nomme aucun."""
         return self.contracts.reads(evaluation.get('catalog_id'), evaluation.get('catalog_version'))
 
-    def open(self, project_id, diff_consent=False, max_bytes=None, analysis_id=None):
+    def open(self, project_id, diff_consent=False, max_bytes=None, analysis_id=None, source_consent=False):
         project = require_project(self.projects, project_id)
         analyses = ([self.scans.get(project_id, analysis_id)] if analysis_id is not None
                     else self.scans.list(project_id))
         if not analyses or analyses[0] is None:
             raise QueryError(NO_ANALYSIS, "Aucune analyse globale pour ce projet : lancez-la d'abord.")
         budget = max(MIN_EXCHANGE_BYTES, min(max_bytes or DEFAULT_EXCHANGE_BYTES, MAX_EXCHANGE_BYTES))
-        return Exchange(self, project.id, analyses[0], diff_consent, budget)
+        return Exchange(self, project.id, analyses[0], diff_consent, budget, source_consent)
 
 
 class Exchange:
     """Un echange : un projet, une analyse, un budget, des references."""
 
-    def __init__(self, service, project_id, scan, diff_consent, budget):
+    def __init__(self, service, project_id, scan, diff_consent, budget, source_consent=False):
         self.service, self.project_id, self.scan = service, project_id, scan
         self.diff_allowed = service.source_context == 'diff'
         self.diff_consent = bool(diff_consent) and self.diff_allowed
+        # Le code d'un symbole : son propre double consentement, independant de celui du diff.
+        self.source_allowed = service.source_reading == _source.SYMBOL and bool(service.readers)
+        self.source_consent = bool(source_consent) and self.source_allowed
         self.budget, self.used, self.calls = budget, 0, 0
         self.refs = References()
         evaluations = scan.result.get('evaluations', [])
@@ -198,6 +213,7 @@ class Exchange:
         self._coverage = None
         self._languages = None
         self._commits = None
+        self._sources = None
 
     # --- Contexte commun -------------------------------------------------------------------------
 
@@ -222,6 +238,13 @@ class Exchange:
         if self._commits is None:
             self._commits = CommitOperations(self, self.service.history)
         return self._commits
+
+    @property
+    def sources(self):
+        """La lecture du code d'un symbole, creee au premier usage."""
+        if self._sources is None:
+            self._sources = SourceOperation(self, self.service.history, self.service.readers)
+        return self._sources
 
     def query(self, **filters):
         return self.service.facts.query(self.scan.id, **filters)
@@ -320,6 +343,9 @@ class Exchange:
             operations += ['get_commit', 'diff_facts']
             if self.diff_allowed:
                 operations.append('get_diff')
+        # Le code d'un symbole n'est propose qu'a un echange qui l'a autorise : Minia ne le voit pas (TAXO-MIP-ADT-01).
+        if self.source_consent and self.snapshot['commit'] is not None:
+            operations.append('get_source')
         return [name for name in OPERATIONS if name in operations]
 
     def response(self, operation, coverage, max_bytes, **fields):
@@ -385,6 +411,10 @@ class Exchange:
         if operation not in self.available():
             if operation == 'get_diff' and self._history_available():
                 raise OperationError(NO_CONSENT, 'La lecture du diff est désactivée pour ce Taxo.')
+            if operation == 'get_source' and self.service.source_reading != _source.SYMBOL:
+                raise OperationError(NO_CONSENT, 'La lecture du code est désactivée pour ce Taxo.')
+            if operation == 'get_source' and not self.source_consent:
+                raise OperationError(NO_CONSENT, 'La lecture du code n’a pas été autorisée pour cet échange.')
             raise OperationError(NOT_AVAILABLE, f'{operation} : aucun analyseur ne le nourrit pour ce projet.')
         return arguments, max_bytes
 
@@ -413,8 +443,11 @@ class Exchange:
 
     def describe(self, arguments, max_bytes):
         _no_other(arguments, ())
-        response = self.response('describe', self.envelope_coverage(), max_bytes,
-                                  consent={'diff': self.diff_consent})
+        # L'accord de lecture du code n'est dit que si ce Taxo l'active : sinon, `describe` reste celui d'avant.
+        consent = {'diff': self.diff_consent}
+        if self.service.source_reading == _source.SYMBOL:
+            consent['source'] = self.source_consent
+        response = self.response('describe', self.envelope_coverage(), max_bytes, consent=consent)
         for name in self.available():
             response.add('items', {'kind': 'operation', 'operation': name, 'arguments': _ARGUMENTS[name]})
         response.add('items', {'kind': _LANGUAGES, 'present': list(self.languages),
@@ -534,6 +567,9 @@ class Exchange:
     def diff_facts(self, arguments, max_bytes):
         return self.commits.diff_facts(arguments, max_bytes)
 
+    def get_source(self, arguments, max_bytes):
+        return self.sources.get_source(arguments, max_bytes)
+
     def verify_claim(self, arguments, max_bytes):
         _no_other(arguments, ('subject', 'relation', 'object'))
         subject = _reference(arguments, 'subject', required=True)
@@ -602,4 +638,5 @@ _SERVED = {
     'diff_facts': Exchange.diff_facts,
     'get_neighborhood': Exchange.get_neighborhood,
     'find_references': Exchange.find_references,
+    'get_source': Exchange.get_source,
 }

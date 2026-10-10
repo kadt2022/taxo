@@ -22,7 +22,7 @@ DISCLOSURE_VERSION = 'tile-disclosure/1'
 FACTS, RELATIONS, EVIDENCE = 'FACTS', 'RELATIONS', 'EVIDENCE'
 CODE_SOURCE, COMMIT_METADATA, COVERAGE, FRONTIER = 'CODE_SOURCE', 'COMMIT_METADATA', 'COVERAGE', 'FRONTIER'
 # L'ordre de présentation des catégories ; `CODE_SOURCE` n'est jamais annoncée par une Tuile de faits : une pièce
-# source est consultée à part, sous son propre consentement (`get_source`, réservée).
+# source est consultée à part, sous son propre consentement (`get_source` de `taxo-query/1`, classée à part).
 CATEGORIES = (FACTS, RELATIONS, EVIDENCE, CODE_SOURCE, COMMIT_METADATA, COVERAGE, FRONTIER)
 
 PERSON_IDENTITY, COMMIT_MESSAGE = 'PERSON_IDENTITY', 'COMMIT_MESSAGE'
