@@ -30,9 +30,11 @@ _EMAIL = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*')
 _PSEUDONYM = re.compile(r'personne-[1-9]\d*')
 # Une reference de Taxo (`file:src/A.java`, `class:com.x.A`) : ses noms ne sont pas des personnes.
 _REFERENCE = re.compile(r'(?!person:)[a-z][a-z_-]*:\S+')
-_TRAILER = re.compile(
-    r'^[ \t]*(?:[A-Za-z][\w-]*-by|Co-authored|Cc|Change-Id|Claude-Session)[ \t]*:.*(?:\r?\n|$)',
-    re.IGNORECASE | re.MULTILINE)
+_TRAILER_LINE = r'[ \t]*(?:[A-Za-z][\w-]*-by|Co-authored|Cc|Change-Id|Claude-Session)[ \t]*:[^\r\n]*'
+# Les trailers d'un message de commit forment son dernier paragraphe : une ligne de meme forme ailleurs (`order-by:`
+# dans un fichier) n'en est pas un et reste transmise.
+_TRAILERS = re.compile(rf'(?:\A|(?<=\n)[ \t]*\r?\n)(?P<block>{_TRAILER_LINE}(?:\r?\n{_TRAILER_LINE})*)\s*\Z',
+                       re.IGNORECASE)
 # Secrets de forme connue : remplaces en entier.
 _TOKENS = re.compile('|'.join((
     r'-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END[A-Z ]*PRIVATE KEY-----|$)',
@@ -49,13 +51,21 @@ _URL_CREDENTIALS = re.compile(r'(\b[a-z][a-z0-9+.-]*://)[^\s/:@]+:[^\s/@]+@', re
 _SECRET_NAME = r'[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credentials?)[\w.-]*'
 # Une valeur affectee a un nom de secret : `password = "x"`, `password: x`, `.password("x")`, `"token": "x"`, ou un
 # bloc YAML (`password: |` puis des lignes indentees), masque en entier. Une chaine citee peut echapper ses guillemets.
-_BLOCK = r'[|>][-+]?[ \t]*\r?\n(?:[ \t]+\S[^\r\n]*(?:\r?\n|$))+'
+_BLOCK = r'[|>][-+]?[ \t]*\r?\n(?:(?:[ \t]*\r?\n)*[ \t]+\S[^\r\n]*(?:\r?\n|$))+'
 _ASSIGNED = re.compile(
     rf'(?P<name>\b{_SECRET_NAME}["\']?)(?P<sep>\s*(?:[:=]|=>)\s*|\(\s*)'
     rf'(?P<value>{_BLOCK}|"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|[^\s"\',;(){{}}\[\]]+(?![\w(.{{]))',
     re.IGNORECASE)
 # Valeurs qui ne sont pas des secrets : vides, litteraux, ou renvoi a une variable d'environnement.
 _NOT_A_SECRET = re.compile(r'["\']?(?:|null|none|true|false|\$\{[^}]*\}|\*+)["\']?', re.IGNORECASE)
+
+
+def _strip_trailers(text):
+    """Le texte sans le paragraphe final de trailers, et le nombre de trailers retires."""
+    match = _TRAILERS.search(text)
+    if match is None:
+        return text, 0
+    return text[:match.start()].rstrip('\r\n'), len(match['block'].splitlines())
 
 
 def _identity_parts(value, words=True):
@@ -90,6 +100,7 @@ class Disclosure:
         self._displays = {}     # pseudonyme -> nom affiche localement
         self._references = {}   # pseudonyme -> reference `person:` d'origine
         self._protected = {}    # reference envoyee (courriel remplace) -> reference d'origine
+        self._anchored = set()  # pseudonymes lies a un courriel ou a une reference `person:`
         self._withheld = {'identities': set(), 'secrets': 0, 'trailers': 0}
         for identity in known:
             self._identity(identity, words=False)
@@ -126,7 +137,7 @@ class Disclosure:
         elif isinstance(value, str) and not authored_only:
             if _REFERENCE.fullmatch(value) is None:
                 # Une identite citee seulement dans un trailer n'est pas transmise : rien a lui attribuer.
-                value = _TRAILER.sub('', value)
+                value, _ = _strip_trailers(value)
             if author_field:
                 self._identity(value)
             if value.startswith(_PERSON):
@@ -144,10 +155,19 @@ class Disclosure:
         if not parts:
             return
         # Deux mentions ne sont liees que par une forme entiere ou un courriel, jamais par un mot du nom :
-        # deux personnes qui partagent un prenom gardent deux pseudonymes.
-        linking = sorted({*plain, *(email for form in plain for email in _EMAIL.findall(form))})
-        known = next((self._pseudonyms[form] for form in linking if form in self._pseudonyms), None)
+        # deux personnes qui partagent un prenom gardent deux pseudonymes. Une identite qui a un courriel ou
+        # une reference n'est liee que par eux : deux auteurs homonymes aux courriels differents restent deux.
+        emails = {email for form in plain for email in _EMAIL.findall(form)}
+        identified = emails | {form.removeprefix(_PERSON) for form in forms if form.startswith(_PERSON)}
+        known = next((self._pseudonyms[form] for form in sorted(identified) if form in self._pseudonyms), None)
+        if known is None:
+            # Un nom deja vu sans courriel (un auteur cite seulement par son nom) se lie a son courriel ; un nom deja
+            # lie a un autre courriel, non.
+            named = (self._pseudonyms.get(form) for form in sorted(plain))
+            known = next((item for item in named if item and not (identified and item in self._anchored)), None)
         pseudonym = known or PSEUDONYM.format(len(self._displays) + 1)
+        if identified:
+            self._anchored.add(pseudonym)
         self._displays.setdefault(pseudonym, next((form for form in plain if not _EMAIL.fullmatch(form)), plain[0]))
         for form in forms:
             if form.startswith(_PERSON):
@@ -172,7 +192,7 @@ class Disclosure:
                 return _PERSON + pseudonym
         reference = _REFERENCE.fullmatch(text) is not None
         if not reference:
-            text, removed = _TRAILER.subn('', text)
+            text, removed = _strip_trailers(text)
             self._withheld['trailers'] += removed
         protected = self._people(self._secrets(text), names=not reference)
         if reference and protected != text:

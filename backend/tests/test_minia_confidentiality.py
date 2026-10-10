@@ -57,9 +57,26 @@ def test_commit_trailers_are_removed_and_unknown_emails_masked():
     disclosure = Disclosure()
     sent = protect({'message': 'fix: corrige\n\nCo-authored-by: Bob <bob@example.org>\nSigned-off-by: X <x@y.org>\n',
                     'diff': 'contact: carol@example.org'}, disclosure)
-    assert sent['message'] == 'fix: corrige\n\n'
+    assert sent['message'] == 'fix: corrige'
     assert sent['diff'] == 'contact: personne-1'
     assert disclosure.report() == {'identities': 1, 'secrets': 0, 'trailers': 2}
+
+
+def test_only_the_final_trailer_paragraph_of_a_message_is_removed():
+    source = 'spring:\n  data:\n    order-by: created_at\n    cc: ops\nport: 8080'
+    assert protect({'source': source})['source'] == source, 'une ligne de fichier n’est pas un trailer'
+
+
+def test_same_named_authors_with_different_addresses_keep_two_pseudonyms():
+    disclosure = Disclosure()
+    sent = protect({'facts': [authored(), authored(email='ada@other.org', sha='def')]}, disclosure)
+    assert [fact['object'] for fact in sent['facts']] == ['person:personne-1', 'person:personne-2']
+    assert disclosure.restore('person:personne-2') == 'person:ada@other.org'
+
+
+def test_a_yaml_secret_block_is_masked_across_blank_lines():
+    sent = protect({'source': 'password: |\n  first\n\n  second\nport: 8080'})['source']
+    assert sent == f'password: {MASK}\nport: 8080'
 
 
 def test_a_masked_password_still_shows_that_a_password_is_hardcoded():
