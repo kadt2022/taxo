@@ -138,7 +138,11 @@ elle-même les bonnes méthodes depuis la Maille.
 
 Procéder par PR cohérentes :
 
-- **PR A** : extraction Java ciblée et contrat de `get_source`.
+- **PR A** : extraction Java ciblée et contrat de `get_source`. Ce récit est le seul propriétaire de
+  l'opération : la PR 3 de [TAXO-UI-06](TAXO-UI-06-vue-chaine-uml-taxo.md) n'en garde que le panneau Code de
+  l'explorateur et reprend ses règles déjà écrites (code d'un symbole localisé par une preuve, plafonds,
+  instantané de l'analyse, empreinte égale au `content_hash`, double consentement, fichiers jamais lus) comme
+  exigences de cette PR.
 - **PR B** : raccordement aux capacités MIP existantes et intégration à Minia.
 - **PR C** : tests de bout en bout, mesures et corrections nécessaires.
 
