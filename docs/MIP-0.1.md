@@ -1,6 +1,6 @@
 # MIP 0.1 — contrat de lecture d'une Tuile
 
-**Version :** `mip/0.1`. **Récit :** [TAXO-01N / MIP-01](backlog/TAXO-01N-ask-taxo-general.md) (proposé dans la PR #107, présent après sa fusion), PR A.
+**Version :** `mip/0.1`. **Récit :** [TAXO-01N / MIP-01](backlog/TAXO-01N-ask-taxo-general.md), PR A.
 **Architecture :** ARCHITECTURE § 12.0.
 
 MIP 0.1 permet à un consommateur, avec ou sans modèle de langage, de demander une **Tuile bornée** autour d'une
@@ -59,7 +59,7 @@ déjà). Aucun nom du domaine de la Maille n'est changé.
 | --- | --- | --- |
 | `mip` | non | `mip/0.1` s'il est donné. |
 | `expression` | oui | `EXPAND` est servie. `PROJECT` est refusée : `NOT_AVAILABLE`. |
-| `target.reference` | oui | Une référence **résolue** par Taxo (par exemple par `find_references`). Le MIP ne devine jamais une référence. |
+| `target.reference` | oui | Une référence **résolue** par Taxo, par exemple par `find_references`, y compris par nom (`match: NAME`, PR A2). Le MIP ne devine jamais une référence. |
 | `analysis` | non | Sans lui, la dernière analyse ; elle est rendue dans `snapshot.analysis` et doit être renvoyée aux étapes suivantes. |
 | `relations` | oui | 1 à 16 relations distinctes ; leur vocabulaire est vérifié par `get_neighborhood`. |
 | `direction` | oui | `INCOMING`, `OUTGOING` ou `BOTH`. Aucun défaut caché. « Qui appelle X ? » : `CALLS`, `INCOMING`. |
@@ -116,4 +116,4 @@ comme pour `taxo-query`.
 
 ## 6. Hors de MIP 0.1
 
-`PROJECT` servie, recherche par nom (PR A2), autorisations par consommateur, capsule de Tuile autonome, transport MCP.
+`PROJECT` servie, autorisations par consommateur, capsule de Tuile autonome, transport MCP.
