@@ -51,20 +51,20 @@ class MipService:
             expression = payload.get('expression') if isinstance(payload, dict) else None
             return failure(exc.code, str(exc), expression=expression if isinstance(expression, str) else None)
         envelope = self._call(project_id, query, query.analysis, query.bounds.get('max_bytes'))
-        if query.profile is None or envelope['outcome'] != 'OK':
+        if envelope['outcome'] != 'OK':
             return tile(query, envelope)
-        return self._profiled(project_id, query, envelope)
+        return self._fitted(project_id, query, envelope)
 
     def _call(self, project_id, query, analysis, max_bytes):
         exchange = self.taxo_query.open(project_id, analysis_id=analysis)
         arguments = _arguments(query, exchange.snapshot['analysis'])
         return exchange.call({'operation': WIRE_OPERATION, 'arguments': arguments, 'max_bytes': max_bytes})
 
-    def _profiled(self, project_id, query, envelope):
-        """Une Tuile de profil tient dans le budget du consommateur, règles et chemins compris. Le moteur, qui mesure
-        ses octets, ne connaît pas ce que le profil ajoute : si la Tuile dépasse, elle est redemandée une fois, dans
-        un nouvel échange sur la même analyse, avec un budget moteur réduit de ce surplus. Déterministe : mêmes
-        entrées, mêmes deux appels ; si elle dépasse encore, le refus `BUDGET_EXHAUSTED` est rendu."""
+    def _fitted(self, project_id, query, envelope):
+        """La Tuile tient dans le budget du consommateur, classification, règles et chemins compris. Le moteur, qui
+        mesure ses octets, ne connaît pas ce que l'adaptateur ajoute : si la Tuile dépasse, elle est redemandée une
+        fois, dans un nouvel échange sur la même analyse, avec un budget moteur réduit de ce surplus. Déterministe :
+        mêmes entrées, mêmes deux appels ; si elle dépasse encore, le refus `BUDGET_EXHAUSTED` est rendu."""
         budget = engine_budget(envelope)
         rendered = size(render(query, envelope, budget))
         surplus = rendered - size(envelope)

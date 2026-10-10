@@ -757,7 +757,11 @@ résolus (`steps`, `depth`) et, pour chaque fait, sa règle et son chemin ; le r
 `security/1` et `structure/1` ne suivent que des relations produites aujourd'hui. `security/1` ne suit pas encore
 `CONFIGURES` ni `ANNOTATED_WITH` (TAXO-MINIA-SEC-01) : les ajouter fera une version 2. `calls/1` déclare
 `DISPATCHES_TO`, qui n'a pas de producteur : la Tuile rend la frontière `CONTEXT` du moteur. `ANNOTATED_WITH` n'est
-relevée que pour l'activation de la sécurité de méthode : `method-context/1` le déclare dans ses `limits`. `commit-impact/1` n'est
+relevée que pour l'activation de la sécurité de méthode : `method-context/1` le déclare dans ses `limits`.
+
+Toute Tuile MIP porte aussi une **classification** versionnée (nature, langage, profil, catégories de contenu
+effectivement transmises, provenance) et, à part, ses **restrictions de divulgation** ([MIP-0.1.md](MIP-0.1.md) § 3.1).
+Elles décrivent la Tuile rendue, ne la changent pas et ne contiennent aucune interprétation du code. `commit-impact/1` n'est
 pas encore parcourable : `CHANGES` mène à un `file:`, mais aucune relation ne relie un fichier aux
 symboles qu'il déclare, donc aux routes qu'ils traitent (le fichier n'apparaît que dans les **preuves**
 de `HANDLED_BY`). Deux voies, à trancher avant ce profil :

@@ -137,7 +137,8 @@ def test_each_fact_says_which_rule_kept_it_and_relations_keep_their_orientation(
 
 def test_a_fact_reached_through_a_handler_carries_its_whole_path(courses, route):
     taxo, _ = courses
-    tile = ask(taxo, profiled(route, 'calls/1'))
+    tile = ask(taxo, profiled(route, 'calls/1', bounds={'max_bytes': 32_000}))
+    assert not tile['truncated']
     handler, = [fact for fact in tile['facts'] if fact['selection']['rule'] == 'handler']
     assert (handler['fact']['subject'], handler['fact']['object']) == (route, REGISTER)
     assert handler['selection']['path'] == [handler['ref']]

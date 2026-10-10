@@ -4,10 +4,12 @@ Une présentation, jamais une seconde construction : chaque fait, nœud, preuve 
 vient tel quel de la réponse du moteur. Ce qui s'ajoute ne dit que ce que cette réponse établit déjà : les bornes
 demandées et appliquées, et si la Tuile a été coupée par un budget. Rien n'est renommé dans le domaine de la Maille.
 
-Une Tuile servie par un profil (récit TAXO-MIP-ADT-01) rend en plus le manifeste appliqué et ses paramètres résolus,
+Toute Tuile rendue porte sa classification et ses restrictions de divulgation, calculées sur son contenu transmis
+(`classification.py`). Une Tuile servie par un profil (récit TAXO-MIP-ADT-01) rend en plus le manifeste appliqué et ses paramètres résolus,
 et dit pour chaque fait la règle du profil qui l'a retenu et son chemin depuis l'ancre : les références des faits
 parcourus, reconstruites depuis le fait qui a découvert chaque nœud. Rien n'est ajouté à la sélection du moteur.
 """
+from app.mip.domain.classification import classify, disclosure
 from app.mip.domain.query import CONTINUATION, EXPRESSION, VERSION
 from app.protocol.domain.envelope import BUDGET_EXHAUSTED, size
 
@@ -88,6 +90,9 @@ def render(query, envelope, budget):
     if query.profile is not None:
         rendered['facts'] = _profiled(query.profile, envelope, envelope['items'])
         rendered['profile'] = {**query.profile.manifest(), 'resolved': envelope['parameters']}
+    # Calculées sur la Tuile achevée : elles décrivent ce qui est transmis, jamais ce qui aurait pu l'être.
+    rendered['classification'] = classify(rendered, query.profile)
+    rendered['disclosure'] = disclosure(rendered)
     return rendered
 
 
