@@ -1055,3 +1055,14 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .category-none{background:transparent;border:1px dashed var(--border-strong);color:var(--muted);font-weight:500}
 .explorer-node-line strong{min-width:0}
 .explorer-panel-head .link,.explorer-actions .ghost{flex:none;overflow-wrap:normal;white-space:nowrap}
+
+/* TAXO-01N : l'element que la question nomme, retrouve sans modele. */
+.element{margin:14px 0;padding:14px 18px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2)}
+.element .eyebrow{margin-bottom:6px}
+.element.found{border-color:#cde8d6;background:var(--ok-soft)}.element.found .eyebrow{color:var(--ok)}
+.element.ambiguous{border-color:#f1dfb9;background:var(--warn-soft)}.element.ambiguous .eyebrow{color:var(--warn)}
+.element .muted{margin:6px 0 0}
+.element-name{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px;margin:0}
+.element-name code{font-size:13.5px;color:var(--text)}
+.element-candidates{list-style:none;padding:0;margin:10px 0 0;display:grid;gap:6px}
+.element-candidates li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px;padding:6px 10px;border-radius:var(--r-sm);background:var(--surface)}

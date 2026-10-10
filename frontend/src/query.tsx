@@ -7,6 +7,7 @@ import {ask as askMinia, askButton, createStop, MiniaProgress, type MiniaLive, t
 import {MiniaChoice, modelLabel, type AnswerModel, type MiniaStatus} from './minia';
 import {openStream, type ServerEvent} from './sse';
 import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
+import {ElementView, type Located} from './element';
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
 type SelectedCommit = {sha:string; authored_at?:string; subject?:string};
@@ -16,12 +17,16 @@ export type GitFact = {subject:string; relation:string; object?:string; qualifie
   status?:string; derivation?:Derivation;
   produced_by?:{producer_id:string; producer_version:string}; evidence?:{object?:string; commit:string}[]};
 export type Selection = {status:string; request:Request; analysis:{id:string; created_at:string};
-  total_commits:number|null; commits:SelectedCommit[]; facts:GitFact[]; not_interpreted:string[]};
+  total_commits:number|null; commits:SelectedCommit[]; facts:GitFact[]; not_interpreted:string[];
+  // TAXO-01N : sans selection de commits, l'element que la question nomme, retrouve sans modele.
+  element?:Located};
 export type SelectionAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'|'NEEDS_SELECTION'; question:string; request:Request;
   model:AnswerModel; commits:SelectedCommit[]; facts:(GitFact&{ref:string})[];
   answer:string; unknown:string; not_interpreted:string[]; facts_not_sent:number; rejected_citations:string[];
   // MINIA-09 : en exploration, la reponse est faite d'enonces types ; en repli, le paquet dit pourquoi.
-  mode?:'exploration'|'paquet'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string};
+  mode?:'exploration'|'paquet'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string;
+  // TAXO-01N : en repli paquet sans commits, l'element dont la Tuile a ete interpretee, ou les candidates.
+  anchor?:Located};
 type Run = <T>(path:string, init?:RequestInit)=>Promise<T>;
 
 /** La selection demandee, dite en clair. */
@@ -60,10 +65,13 @@ const short=(sha:string)=>sha.slice(0,12);
 export const when=(value?:string)=>{const moment=new Date(value??'');return Number.isNaN(moment.getTime())?value??'':moment.toLocaleString('fr-CA');};
 
 export function SelectionView({result}:Readonly<{result:Selection}>){
-  const message=outcome(result);
+  // Un element reconnu dit deja de quoi parle la question : la requete globale n'a rien a ajouter.
+  const named=result.element&&result.element.status!=='NONE';
+  const message=named?null:outcome(result);
   return <section className="selection" aria-label="Sélection de Taxo">
     <p className="eyebrow">REQUÊTE · {describe(result.request)}</p>
     {message&&<p className="empty">{message}</p>}
+    {result.element&&<ElementView located={result.element}/>}
     {result.commits.length>0&&<div className="table-wrap"><table><thead><tr><th>Commit</th><th>Date</th><th>Message</th></tr></thead><tbody>
       {result.commits.map(c=><tr key={c.sha}><td><code>{short(c.sha)}</code></td><td>{when(c.authored_at)}</td><td>{c.subject??''}</td></tr>)}
     </tbody></table></div>}
@@ -85,8 +93,9 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:''].filter(Boolean);
   return <section className="minia" aria-label="Réponse de Minia">
-    <p className="eyebrow">MINIA{modelLabel(answer.model)} · {describe(answer.request)}</p>
+    <p className="eyebrow">MINIA{modelLabel(answer.model)} · {answer.anchor?.anchor?reference(answer.anchor.anchor):describe(answer.request)}</p>
     <p className="minia-question">{answer.question}</p>
+    {answer.anchor&&answer.anchor.status!=='NONE'&&<ElementView located={answer.anchor}/>}
     <div className="minia-blocks">
       <article className="minia-block fact">
         <h3>Ce que Taxo sait</h3>
@@ -111,6 +120,16 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
 }
 
 export const queryPath=(base:string, text:string)=>`${base}/query?${new URLSearchParams({q:text})}`;
+export const elementsPath=(base:string, text:string)=>`${base}/elements?${new URLSearchParams({q:text})}`;
+
+/** La selection, et, quand elle ne choisit aucun commit, l'element que la question nomme. Une recherche d'element
+ *  qui echoue n'empeche jamais de montrer la selection. */
+export async function selectWithElement(base:string, text:string, request:Run):Promise<Selection>{
+  const selected=await request<Selection>(queryPath(base,text));
+  if(selected.status!=='GLOBAL')return selected;
+  const element=await request<Located>(elementsPath(base,text)).catch(()=>undefined);
+  return element?{...selected, element}:selected;
+}
 export const askInit=(text:string, provider=''):RequestInit=>({method:'POST', headers:{'Content-Type':'application/json'},
   body:JSON.stringify(provider?{question:text, provider}:{question:text})});
 
@@ -138,7 +157,7 @@ export function actions(base:string, text:string, request:Run, set:PanelSetters,
   control:{current:MiniaStop|null}={current:null}){
   const common={setBusy:set.setBusy, setError:set.setError};
   return {
-    select:()=>track(()=>request<Selection>(queryPath(base,text)), {...common, setValue:(value:Selection)=>{set.setResult(value);set.setLive(()=>null);}}),
+    select:()=>track(()=>selectWithElement(base,text,request), {...common, setValue:(value:Selection)=>{set.setResult(value);set.setLive(()=>null);}}),
     explain:()=>{
       const run=createStop();
       control.current=run;
@@ -156,7 +175,7 @@ export function AskTaxo({base, request, stream, minia=null}:Readonly<{base:strin
   useEffect(()=>()=>control.current?.stop(),[]);
   const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setLive},stream,provider,control);
   return <section className="results ask-taxo" aria-label="Interroger Taxo">
-    <div className="section-heading"><div><h2>Interroger Taxo</h2><p>Taxo sélectionne parmi les faits de la dernière analyse globale : « les 3 derniers commits », « le commit 5b9022b », « depuis 2026-09-01 ».</p></div></div>
+    <div className="section-heading"><div><h2>Interroger Taxo</h2><p>Taxo répond à partir des faits de la dernière analyse globale. Sur l’historique : « les 3 derniers commits », « le commit 5b9022b », « depuis 2026-09-01 ». Sur le code : « qui appelle OwnerRepository.findById ? », « que contient `VetController` ? ».</p></div></div>
     <form onSubmit={submitWith(select)}>
       <label htmlFor="taxo-query">Votre requête</label>
       <input id="taxo-query" required maxLength={1000} value={text} onChange={typed(setText)} placeholder="les 3 derniers commits"/>

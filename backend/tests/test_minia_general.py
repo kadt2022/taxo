@@ -212,12 +212,7 @@ class Pages:
 
 
 def resolved(exchange, question):
-    steps = anchoring.anchor(exchange, None, 'p', question, [], None)
-    try:
-        while True:
-            next(steps)
-    except StopIteration as end:
-        return end.value.resolution
+    return anchoring.drained(anchoring.anchor(exchange, None, 'p', question, [], None)).resolution
 
 
 def test_homonyms_spread_over_two_pages_never_make_a_unique_anchor():
@@ -261,3 +256,16 @@ class Refusing(Pages):
                                           ('BUDGET_EXHAUSTED', anchors.AMBIGUOUS)])
 def test_a_refused_search_concludes_only_when_the_name_itself_was_refused(code, status):
     assert resolved(Refusing(code), 'Que fait Items.list ?').status == status
+
+
+def test_the_named_element_is_located_without_any_model(courses, tmp_path):
+    _, app, project = ask(courses, tmp_path, Scripted(packet_answer(), explores=False), WHO_CALLS)
+    with TestClient(app) as client:
+        found = client.get(f'/api/projects/{project}/elements', params={'q': WHO_CALLS}).json()
+        several = client.get(f'/api/projects/{project}/elements', params={'q': 'Qui appelle `register` ?'}).json()
+        empty = client.get(f'/api/projects/{project}/elements', params={'q': ' '})
+    assert (found['status'], found['anchor'], found['candidates']) == ('FOUND', SERVICE, [SERVICE])
+    assert found['analysis'], 'l’analyse lue, pour ouvrir l’explorateur sur la même'
+    assert several['status'] == 'AMBIGUOUS' and several['anchor'] is None and {REGISTER, SERVICE} <= set(
+        several['candidates'])
+    assert empty.status_code == 422
