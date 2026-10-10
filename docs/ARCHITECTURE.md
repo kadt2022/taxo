@@ -176,6 +176,7 @@ Règles de dépendance :
 | **Arbre** | projection hiérarchique déterministe depuis une racine, avec renvois pour les revisites (§ 10) | la topologie native de la Maille |
 | **Forêt** | ensemble **nommé** de vues arborescentes sur une même analyse (§ 10) | un stockage ou un cloisonnement |
 | **Contexte** | sélection de résultats, Tuiles et références remise pour une tâche, avec budget et provenance | une copie de la Maille ; une mémoire de conclusions du modèle |
+| **MIP** (Maille Interaction Protocol) | le contrat qui permet d'interroger une Maille et d'en transporter des Tuiles vérifiables, en préservant preuves, limites et autorité de Taxo (§ 12.0) | une API pour modèles de langage ; une copie de la Maille ; un transport particulier |
 
 **Règle de vocabulaire.** Le graphe décrit la forme ; la Maille désigne la connaissance ; le chemin relie ;
 l'arbre et la forêt organisent une lecture ; la Tuile borne une restitution ; le contexte rassemble ce
@@ -790,7 +791,68 @@ deux révisions ; relier cette méthode à une route demande les faits correspon
 protection a changé demande de comparer les faits de sécurité. Un chemin vers une méthode modifiée est
 une **piste**, pas la preuve qu'une route change de comportement.
 
-## 12. Minia et le protocole `taxo-query/1` (normatif, Existant sauf mention)
+## 12. Le MIP, son protocole `taxo-query/1` et Minia (normatif, Existant sauf mention)
+
+### 12.0 Le MIP (Maille Interaction Protocol)
+
+> La Maille est la connaissance. La Tuile est la portion transportable de cette connaissance. Le MIP est le
+> contrat qui permet d'interagir avec elle, en préservant les preuves, les limites et l'autorité de Taxo.
+
+Le MIP est au centre de Taxo (décision du 2026-10-09, TAXO-01N). Il permet d'interroger une Maille et de
+transporter des Tuiles vérifiables **sans transmettre toute la Maille**. Il ne dépend ni de Minia, ni d'un modèle de
+langage, ni d'un transport, ni d'un algorithme de parcours, ni d'un langage de programmation. Minia en est un
+consommateur ; l'Explorer en est un autre (§ 9, « Explorateur ») ; un client d'API ou un autre agent en serait un troisième.
+
+**Cycle.** Une intention arrive ; le MIP la valide et la borne (périmètre, budget, consentement) ; Taxo explore
+**localement** et construit une Tuile ; le MIP la transporte ; le consommateur interprète et propose des
+affirmations structurées ; le MIP les fait vérifier par Taxo, qui rend un verdict fondé sur les preuves ou les
+laisse explicitement non prouvées. Le consommateur peut demander une autre Tuile depuis les références déjà
+reçues. Un consensus entre consommateurs ne devient jamais un fait.
+
+**Autorité.** Un consommateur propose ; Taxo décide de façon déterministe ce qui est exécuté (INTENTION →
+PREUVES → VALIDATION → AUTORISATION → ACTION). Une demande est validée en entier avant d'être servie, jamais
+interprétée ; une demande de lecture et une demande d'action n'exigent pas la même validation. Le MIP n'a
+aujourd'hui que des lectures.
+
+**Version filaire.** `taxo-query/1` (§ 12.2 à § 12.6) est la première version filaire du MIP ; son nom ne change
+pas. Ajouter une opération ou un champ facultatif reste compatible ; changer une sémantique crée une version.
+
+**MIP 0.1 (À construire, TAXO-01N / MIP-01).** Un contrat sémantique au-dessus de `taxo-query/1`, servi par un
+**adaptateur** qui réutilise ses capacités (aucun second moteur, aucun second stockage) :
+`MIP 0.1 → adaptateur → taxo-query/1 → Maille`. Il accepte deux expressions, et n'en sert qu'une :
+
+- `EXPAND` : exploration bornée autour d'une **référence résolue**, selon des relations et un sens donnés
+  explicitement (`relations`, `direction` : « qui appelle X » est `CALLS` entrant) ; voisinage et relations
+  viennent du seul moteur existant (§ 9). Servie en 0.1, sans modèle de langage. Trois formes, un seul nom et la même
+  opération `get_neighborhood` : la première Tuile autour d'une référence (TILE, § 9.5) ; l'extension depuis un
+  nœud de frontière arrêté par la profondeur ou non atteint, sans jeton, comme une nouvelle Tuile centrée sur ce
+  nœud ; la reprise d'une adjacence coupée par un budget, avec le jeton de sa frontière (l'EXPAND du § 9.5).
+- `PROJECT` : projection bornée selon des règles servies par le moteur. Aucune règle n'est écrite : refusée en 0.1
+  par une erreur de protocole, jamais par une Tuile vide.
+
+La réponse est une Tuile autodescriptive : analyse, centre résolu, références, faits avec statut, preuves,
+couverture, frontières, bornes appliquées et troncature. Les bornes demandées sont plafonnées par celles du
+serveur. Le MIP ne devine pas une référence : la retrouver par un nom est une étape séparée (`find_references`).
+Une requête est adressée à un projet et porte l'analyse rendue par la première étape : recherche, Tuile et
+vérification restent sur le même instantané. Le premier adaptateur de transport est
+`POST /api/projects/{project_id}/mip/query`, à côté de `taxo-query`, soumis aux mêmes droits et limites ; la sémantique se
+teste sans serveur HTTP. Ce n'est **pas un second protocole** (§ 12.3) : une requête MIP devient exactement une
+opération `taxo-query/1`, dont la validation, les budgets et les codes d'erreur s'appliquent tels quels ; l'adaptateur
+ne vérifie que la forme de sa propre requête et plafonne les bornes. Le schéma JSON exact est figé sur les structures existantes avec la première réalisation.
+
+| Élément du MIP | Réalisation | État |
+| --- | --- | --- |
+| Interrogation structurée, neutre, bornée à un projet et une analyse | `taxo-query/1`, `describe`, `find_facts`, `find_references` | Existant |
+| Tuile : faits, preuves, provenance, statuts, frontières localisées, reprises | `get_neighborhood` (§ 9) | Existant |
+| Vérification des affirmations, verdicts | `verify_claim` (§ 12.4) | Existant |
+| Budgets, trajectoire visible | § 12.5 | Existant |
+| Consentement par nature de contenu | `get_diff`, § 12.6 | Existant |
+| Transport indépendant | appel interne, HTTP | Existant ; MCP proposé |
+| Trouver un élément par son nom simple | champ facultatif de `find_references` | À construire (TAXO-01N) |
+| Exploration bornée sans modèle de langage, en une requête | MIP 0.1 `EXPAND`, adaptateur `POST /api/projects/{project_id}/mip/query` | À construire (TAXO-01N) |
+| Projection bornée | MIP `PROJECT` | Proposé : refusée tant qu'aucune règle servie n'existe |
+| Intentions et autorisations par consommateur | périmètre et validation par consommateur | Proposé |
+| Capsule de Tuile autonome, vérifiable hors de l'échange | — | Proposé |
 
 ### 12.1 Rôles
 
@@ -800,7 +862,8 @@ une **piste**, pas la preuve qu'une route change de comportement.
 | **Minia** | comprend la question, choisit les opérations, raisonne, explique | produire un fait, affirmer sans l'avoir demandé à Taxo, lire le dépôt hors protocole |
 | **Humain** | pose la question, juge, décide | — |
 
-Le protocole est **neutre** : il ne connaît ni langage, ni framework, ni projet, ni fournisseur de
+Minia tient ici le rôle de consommateur du MIP ; tout autre consommateur a les mêmes droits et les mêmes
+limites. Le protocole est **neutre** : il ne connaît ni langage, ni framework, ni projet, ni fournisseur de
 modèle. Une opération dont le nom ou la sémantique cite une technologie est au mauvais niveau.
 
 ### 12.2 Requête et réponse
@@ -845,7 +908,8 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 
 `describe` ne propose que les opérations servables pour le projet. Correspondance avec les opérations
 d'une Tuile adaptative : CAPABILITIES = `describe`, TILE et EXPAND = `get_neighborhood`, VERIFY =
-`verify_claim`. Il n'y a pas de second protocole.
+`verify_claim`. Il n'y a pas de second protocole ; l'adaptateur MIP 0.1 (§ 12.0) traduit une requête en une de ces
+opérations, sans sémantique propre.
 
 ### 12.4 Verdicts : Minia propose, Taxo vérifie
 
@@ -1065,6 +1129,7 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
 | Applications Spring Boot, route → application → chaînes chargées | Existant (#50) |
 | Page Routes, raison exacte des zones non interprétées | Existant (#51) |
 | Protocole `taxo-query/1`, verdicts, Minia (exploration et paquet) | Existants |
+| MIP (§ 12.0) : contrat écrit, `taxo-query/1` première version filaire | Existant ; MIP 0.1 `EXPAND` et recherche par nom à construire (TAXO-01N) ; `PROJECT` proposée ; autorisations par consommateur et capsule de Tuile proposées |
 | `get_neighborhood` explicite à un saut, budgets et reprise | Première tranche implémentée après le commit de référence |
 | Voisinage multiniveau, sens combiné, couverture locale, `find_references` | Implémentés par TAXO-01J (moteur), après le commit de référence |
 | Profils adaptatifs, Arbre, Forêt | À construire |
@@ -1217,3 +1282,10 @@ record vers chaque accesseur que son corps n'écrit pas. Le contrat admet ce sta
 vers son propre membre seulement (ajout, conformité étendue) ; § 5.5 n'est pas assoupli. Avec
 `java.calls.declared-receiver-unique-target/4`, `r.x()` devient un `CALLS` vers `R#x()`. Aucun code, aucune
 catégorie n'entre au contrat.
+
+**2026-10-09** — Le MIP au centre (TAXO-01N, tranche 0). Le MIP (Maille Interaction Protocol) est le contrat qui
+permet d'interroger une Maille et d'en transporter des Tuiles vérifiables, sans dépendre de Minia, d'un modèle, d'un
+transport ni d'un langage (§ 12.0). Décisions : `taxo-query/1` en est la première version filaire et garde son nom ;
+Minia et l'Explorer en sont des consommateurs ; ce qui existe, ce qui est à construire et ce qui est proposé est
+tenu au § 12.0. Aucune opération, aucune sémantique ne change. Première réalisation : MIP 0.1, adaptateur sur
+`taxo-query/1` qui sert `EXPAND` et refuse `PROJECT` ; l'opération `run_plan` un temps envisagée est abandonnée.
