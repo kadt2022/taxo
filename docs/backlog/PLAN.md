@@ -39,6 +39,11 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
      faits de sécurité Spring, masquage centralisé avant tout fournisseur, transparence des refus et limites.
    - **Lecture du code à travers la Maille** ([TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md)) :
      `get_source` et lecture progressive des méthodes par Minia. Commence seulement quand TAXO-MINIA-SEC-01 est terminé.
+   - **Adaptive Tile** ([TAXO-MIP-ADT-01](TAXO-MIP-ADT-01-adaptive-tile.md)), proposé le 2026-10-10, en attente de
+     validation : profils déclarés et versionnés (§ 9.5) sur le moteur existant, puis la lecture du code. Fusion
+     proposée avec TAXO-MIP-SOURCE-01, qu'il reprend en PR B à D. Seule la PR A (profils, sans transmission de code)
+     peut commencer avant la fin de TAXO-MINIA-SEC-01 ; le champ `profile` du MIP et les annotations observées
+     (`ANNOTATED_WITH` générique) attendent une décision.
 7. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 8. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
 9. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
