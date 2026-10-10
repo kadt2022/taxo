@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-10-02. Référence : [ARCHITECTURE.md](../ARCHITECTURE.md).
+Mise à jour : 2026-10-10. Référence : [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Priorité active
 
@@ -34,6 +34,11 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
    protocole `taxo-query/1` en est la première version filaire. Tranches : A (contrat MIP 0.1, `EXPAND` sans
    LLM), A2 (recherche par nom), B (Minia et repli paquet ; base proposée en #108, non fusionnée), C (portail), D (mesures).
    Accepté le 2026-10-09 ; passe avant l'Arbre. Autorisations par consommateur et capsule de Tuile : tranche suivante.
+   - → **Fiabilité et confidentialité de Minia** ([TAXO-MINIA-SEC-01](TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md)),
+     priorité critique, acceptée le 2026-10-10 après le banc `student-course-demo` : verdicts `CONFIRMED` exacts,
+     faits de sécurité Spring, masquage centralisé avant tout fournisseur, transparence des refus et limites.
+   - **Lecture du code à travers la Maille** ([TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md)) :
+     `get_source` et lecture progressive des méthodes par Minia. Commence seulement quand TAXO-MINIA-SEC-01 est terminé.
 7. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 8. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
 9. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
