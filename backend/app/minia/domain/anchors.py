@@ -23,13 +23,17 @@ _QUOTED = re.compile(r'`([^`\n]{1,200})`')
 # Un nom de code : des segments séparés par . # $ ou /, et peut-être une liste de paramètres.
 _CODE = re.compile(r'[A-Za-z_][\w$.#/<>]*(?:\([\w$.<>\[\], ]*\))?')
 _INNER_CAPITAL = re.compile(r'[a-z\d][A-Z]')
-_VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS'
+# Les méthodes de HTTP (RFC 9110), pas celles d'un framework.
+_VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE'
 # Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc ; une clé de route garde le
 # blanc entre son verbe et son chemin (`endpoint:GET /api/students`).
-_REFERENCE = re.compile(r'\b[a-z][a-z-]*:(?:(?:' + _VERBS + r') /\S+|\S+)')
+# Jamais au milieu d'un chemin : `{id:[0-9]+}` est une variable de route, pas une référence.
+_REFERENCE = re.compile(r'(?<![{/])\b[a-z][a-z-]*:(?:(?:' + _VERBS + r') /\S+|\S+)')
 # Une route HTTP : un chemin qui commence par `/` puis une lettre, une variable ou un joker (jamais `et/ou`, ni une
-# barre isolée), et peut-être son verbe en majuscules juste avant.
-_ROUTE = re.compile(r'(?<![\w/])(?:(?:' + _VERBS + r')\s+)?/[A-Za-z_{*][\w\-{}.*~/]*')
+# barre isolée), et peut-être son verbe en majuscules juste avant. Le chemin va jusqu'au prochain blanc, tel qu'il est
+# écrit (`/api/{id:[0-9]+}`), moins la ponctuation qui le suit dans la phrase.
+_ROUTE = re.compile(r'(?<![\w/])(?:(?:' + _VERBS + r')\s+)?/[A-Za-z_{*]\S*')
+_TRAILING = '?!.,;:'
 
 
 @dataclass(frozen=True)
@@ -84,7 +88,7 @@ def candidates(question):
         keep(Candidate(NAME, match.group(1).strip()[:MAX_NAME]))
     rest = _QUOTED.sub(' ', rest)
     for match in _ROUTE.finditer(rest):
-        keep(Candidate(NAME, match.group(0).rstrip('.')[:MAX_NAME]))
+        keep(Candidate(NAME, match.group(0).rstrip(_TRAILING)[:MAX_NAME]))
     rest = _ROUTE.sub(' ', rest)
     for match in _CODE.finditer(rest):
         token = match.group(0).rstrip('.')

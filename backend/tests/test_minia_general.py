@@ -240,6 +240,8 @@ def test_a_search_cut_before_its_end_concludes_nothing():
     ('Et GET /api/courses/{id}/eligible-students.', [('NAME', 'GET /api/courses/{id}/eligible-students')]),
     ('Que fait endpoint:GET /api/students ?', [('KEY', 'endpoint:GET /api/students')]),
     ('Les commits et/ou les routes, 2026/09', []),
+    ('Que fait GET /api/{id:[0-9]+} ?', [('NAME', 'GET /api/{id:[0-9]+}')]),
+    ('Et TRACE /api/x, et endpoint:TRACE /api/y ?', [('KEY', 'endpoint:TRACE /api/y'), ('NAME', 'TRACE /api/x')]),
 ])
 def test_only_code_names_and_complete_references_are_anchors(question, expected):
     assert [(item.mode, item.text) for item in anchors.candidates(question)] == expected
