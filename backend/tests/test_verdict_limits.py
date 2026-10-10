@@ -49,6 +49,12 @@ def test_a_handled_by_confirmation_carries_only_the_limits_of_its_own_relation(t
     assert response['limits'] == [], 'la sécurité n’est pas une limite de HANDLED_BY : chaque relation garde son sens'
 
 
+def test_a_single_valued_confirmation_is_not_limited_by_the_security_left_unread(taxo):
+    response = verify(taxo, subject=ENDPOINT, relation='MATCHED_BY', object='route-pattern:/api/**')
+    assert response['verdict'] == 'CONFIRMED'
+    assert response['limits'] == [], 'la sécurité de méthode ne change pas le motif qui capture la route'
+
+
 def test_a_claim_that_is_not_proven_still_says_why_and_what_was_not_read(taxo):
     response = verify(taxo, subject=ENDPOINT, relation='PROTECTED_BY', object="policy-rule:hasRole('ADMIN')")
     assert (response['verdict'], response['reason']) == ('NOT_PROVEN', 'NOT_INTERPRETED')

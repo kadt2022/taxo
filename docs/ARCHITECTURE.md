@@ -938,7 +938,10 @@ Chaque verdict porte ses **limites** (`limits`, TAXO-MINIA-SEC-01) : les zones `
 `READ_ERROR` que les analyseurs de la relation déclarent sur le sujet ou l'objet, avec leur raison. Un
 verdict ne vaut que pour ce qui a été lu : une règle d'URL `CONFIRMED` dont la route porte une sécurité de
 méthode non interprétée est affichée « Confirmée par Taxo, avec limites », la limite à côté. Chaque relation
-garde son sens : la limite d'une relation de sécurité n'accompagne pas un `HANDLED_BY`.
+garde son sens : la limite d'une relation de sécurité n'accompagne pas un `HANDLED_BY`. Une confirmation
+d'une relation à une seule valeur par sujet (`MATCHED_BY`, `HANDLED_BY`, `AUTHORED_BY`, `TYPED_AS`,
+`WRITTEN_IN`) n'en porte aucune : ce qui n'a pas été lu ne peut pas lui ajouter une seconde valeur, et ses
+propres doutes sont dans sa dérivation.
 
 Ce que Minia rend dépend du mode (§ 12.5) :
 

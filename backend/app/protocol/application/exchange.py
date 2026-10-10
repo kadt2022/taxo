@@ -47,6 +47,9 @@ _ASSERTION, _LANGUAGES = 'ASSERTION', 'languages'
 # Les types de reference que le vocabulaire peut nommer, de part et d'autre de ses relations.
 _REFERENCE_TYPES = frozenset(kind for sources, targets, _ in RELATIONS.values() for kind in (*sources, *targets))
 NATURES = (_ASSERTION, 'ABSENCE', 'COVERAGE')
+# Relations a une seule valeur par sujet : une confirmation n'est pas completee par ce qui n'a pas ete lu, et ses
+# propres doutes sont dans sa derivation (une route correspond a un motif, une requete a un traitement).
+_SINGLE_VALUED = frozenset({'AUTHORED_BY', 'HANDLED_BY', 'MATCHED_BY', 'TYPED_AS', 'WRITTEN_IN'})
 V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'get_diff', 'verify_claim')
 # Operations reservees d'ARCHITECTURE § 12 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
 # commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01).
@@ -289,11 +292,14 @@ class Exchange:
         return entries or [{'subject': None, 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
                             'relation': relation}]
 
-    def limits(self, relation, concerned):
+    def limits(self, relation, concerned, verdict=None):
         """Ce que les analyseurs de la relation n'ont pas su lire sur le sujet ou l'objet d'une affirmation, avec
         leur raison (TAXO-MINIA-SEC-01, E1). Un verdict vaut pour ce qui a ete lu : une confirmation qui porte ces
         limites ne couvre pas ce qu'elles taisent (une regle d'URL confirmee, la securite de methode de la meme
-        route non interpretee)."""
+        route non interpretee). Une confirmation d'une relation a une seule valeur n'en porte aucune : ce qui n'a
+        pas ete lu ne peut pas lui ajouter une seconde valeur."""
+        if verdict == 'CONFIRMED' and relation in _SINGLE_VALUED:
+            return []
         return [{'subject': fact['subject'], 'type': fact['coverage_type'],
                  'producer': fact.get('produced_by', {}).get('producer_id'), 'reason': fact.get('reason')}
                 for analyzer in self.analyzers() if relation in analyzer.relations
@@ -544,7 +550,7 @@ class Exchange:
         concerned = {subject, target} - {None}
         response = self.response('verify_claim', self.envelope_coverage(relation, concerned), max_bytes,
                                  claim=claim, verdict=verdict.verdict, reason=verdict.reason,
-                                 limits=self.limits(relation, concerned))
+                                 limits=self.limits(relation, concerned, verdict.verdict))
         self.add_facts(response, list(verdict.facts), evidence=True)
         return response
 
