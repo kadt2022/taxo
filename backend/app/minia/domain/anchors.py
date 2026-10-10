@@ -21,8 +21,8 @@ FOUND, AMBIGUOUS, NONE = 'FOUND', 'AMBIGUOUS', 'NONE'
 _REFERENCE = re.compile(r'\b[a-z][a-z-]*:\S+')
 _QUOTED = re.compile(r'`([^`\n]{1,200})`')
 # Un nom de code : des segments séparés par . # $ ou /, et peut-être une liste de paramètres.
-_CODE = re.compile(r'[A-Za-z_][\w$]*(?:[.#/$][A-Za-z_<][\w$<>]*)*(?:\([^()\s]*(?:,\s?[^()\s]*)*\))?')
-_INNER_CAPITAL = re.compile(r'[a-z0-9][A-Z]')
+_CODE = re.compile(r'[A-Za-z_][\w$.#/<>]*(?:\([\w$.<>\[\], ]*\))?')
+_INNER_CAPITAL = re.compile(r'[a-z\d][A-Z]')
 
 
 @dataclass(frozen=True)
