@@ -21,9 +21,24 @@ _ASKS = re.compile(
     re.IGNORECASE)
 
 
+# Ce qui peut entourer la demande d'auteur sans rien demander d'autre : le commit vise, sa position, sa reference.
+_SCOPE_WORDS = frozenset({
+    'du', 'des', 'de', 'd', 'ce', 'cet', 'ces', 'cette', 'le', 'les', 'la', 'l', 'un', 'une', 'commit', 'commits',
+    'dernier', 'derniers', 'dernière', 'dernières', 'derniere', 'dernieres', 'récent', 'récents', 'recent',
+    'of', 'this', 'these', 'that', 'the', 'last', 'latest', 'recent', 'a', 'an', 'please', 'stp', 'svp'})
+_WORD = re.compile(r"\b[0-9a-f]{7,40}\b|[^\W\d_]+|\d+", re.IGNORECASE)
+
+
 def asks_author(question):
-    """La question demande-t-elle l'auteur d'un ou plusieurs commits ?"""
-    return bool(_ASKS.search(question or ''))
+    """La question ne demande-t-elle que l'auteur d'un ou plusieurs commits ? Une question qui demande autre chose
+    en plus (« qui l'a écrit et quel est son impact ? ») reste a Minia : la reponse directe en perdrait une partie."""
+    question = question or ''
+    match = _ASKS.search(question)
+    if match is None:
+        return False
+    rest = question[:match.start()] + ' ' + question[match.end():]
+    return all(word.lower() in _SCOPE_WORDS or word.isdigit() or re.fullmatch(r'[0-9a-f]{7,40}', word, re.I)
+               for word in _WORD.findall(rest))
 
 
 def commit_answer(commit):

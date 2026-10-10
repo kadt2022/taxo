@@ -79,6 +79,11 @@ def test_a_yaml_secret_block_is_masked_across_blank_lines():
     assert sent == f'password: {MASK}\nport: 8080'
 
 
+def test_a_yaml_secret_block_ends_where_its_indentation_ends():
+    nested = 'database:\n  password: |2-\n    secret\n\n    more\n  port: 8080'
+    assert protect({'source': nested})['source'] == f'database:\n  password: {MASK}\n  port: 8080'
+
+
 def test_a_masked_password_still_shows_that_a_password_is_hardcoded():
     code = ('private String password = "admin123";\n'
             'spring.datasource.password=s3cr3t-value\n'
@@ -162,14 +167,16 @@ def test_what_the_model_returns_is_restored_locally():
 
 @pytest.mark.parametrize('question', [
     'Qui est l’auteur de ce commit ?', 'Qui est l\'auteur ?', 'Qui a écrit les 2 derniers commits ?',
-    'Quels sont les auteurs des 3 derniers commits ?', 'Who is the author?', 'Who wrote this commit?'])
+    'Quels sont les auteurs des 3 derniers commits ?', 'Who is the author?', 'Who wrote this commit?',
+    'Qui est l’auteur du commit abc1234 ?'])
 def test_an_explicit_author_question_is_recognised(question):
     assert asks_author(question)
 
 
 @pytest.mark.parametrize('question', [
     'Qui a fait échouer les tests ?', 'Who did this change affect?', 'Que change ce commit selon son auteur ?',
-    'Quel risque apporte ce commit ?', 'Qui appelle CourseService.register ?'])
+    'Quel risque apporte ce commit ?', 'Qui appelle CourseService.register ?',
+    'Who authored this commit and what security impact did it have?', 'Qui est l’auteur et pourquoi ?'])
 def test_a_question_that_only_mentions_an_author_stays_with_minia(question):
     assert not asks_author(question), 'l’intention de la question n’est jamais écartée'
 

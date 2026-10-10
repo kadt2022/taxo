@@ -49,15 +49,23 @@ _TOKENS = re.compile('|'.join((
 # Identifiants dans une URL : `scheme://utilisateur:motdepasse@hote`.
 _URL_CREDENTIALS = re.compile(r'(\b[a-z][a-z0-9+.-]*://)[^\s/:@]+:[^\s/@]+@', re.IGNORECASE)
 _SECRET_NAME = r'[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credentials?)[\w.-]*'
-# Une valeur affectee a un nom de secret : `password = "x"`, `password: x`, `.password("x")`, `"token": "x"`, ou un
-# bloc YAML (`password: |` puis des lignes indentees), masque en entier. Une chaine citee peut echapper ses guillemets.
-_BLOCK = r'[|>][-+]?[ \t]*\r?\n(?:(?:[ \t]*\r?\n)*[ \t]+\S[^\r\n]*(?:\r?\n|$))+'
+# Une valeur affectee a un nom de secret : `password = "x"`, `password: x`, `.password("x")`, `"token": "x"`. Une
+# chaine citee peut echapper ses guillemets.
 _ASSIGNED = re.compile(
     rf'(?P<name>\b{_SECRET_NAME}["\']?)(?P<sep>\s*(?:[:=]|=>)\s*|\(\s*)'
-    rf'(?P<value>{_BLOCK}|"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|[^\s"\',;(){{}}\[\]]+(?![\w(.{{]))',
+    r'(?P<value>"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|[^\s"\',;(){}\[\]]+(?![\w(.{]))',
     re.IGNORECASE)
+# L'en-tete d'un bloc YAML affecte a un nom de secret (`password: |`, `|2-`, `>+`) : son contenu est fait des lignes
+# suivantes plus indentees que la cle, lignes vides comprises ; il s'arrete a la premiere ligne qui ne l'est pas.
+_BLOCK_HEADER = re.compile(
+    rf'^(?P<indent>[ \t]*)(?P<key>-?[ \t]*["\']?{_SECRET_NAME}["\']?[ \t]*:[ \t]*)[|>](?:[1-9][-+]?|[-+][1-9]?)?'
+    r'[ \t]*(?:#[^\r\n]*)?$', re.IGNORECASE)
 # Valeurs qui ne sont pas des secrets : vides, litteraux, ou renvoi a une variable d'environnement.
 _NOT_A_SECRET = re.compile(r'["\']?(?:|null|none|true|false|\$\{[^}]*\}|\*+)["\']?', re.IGNORECASE)
+
+
+def _indent(line):
+    return len(line) - len(line.lstrip(' \t'))
 
 
 def _strip_trailers(text):
@@ -200,6 +208,7 @@ class Disclosure:
         return protected
 
     def _secrets(self, text):
+        text = self._blocks(text)
         text, found = _TOKENS.subn(MASK, text)
         text, credentials = _URL_CREDENTIALS.subn(rf'\g<1>{MASK}:{MASK}@', text)
         self._withheld['secrets'] += found + credentials
@@ -211,10 +220,28 @@ class Disclosure:
             if _NOT_A_SECRET.fullmatch(value) or (match['sep'].startswith('(') and not quote):
                 return match[0]
             self._withheld['secrets'] += 1
-            # Un bloc masque garde sa fin de ligne : la ligne suivante reste a sa place.
-            end = value[len(value.rstrip('\r\n')):] if value[0] in '|>' else ''
-            return f"{match['name']}{match['sep']}{quote}{MASK}{quote}{end}"
+            return f"{match['name']}{match['sep']}{quote}{MASK}{quote}"
         return _ASSIGNED.sub(assigned, text)
+
+    def _blocks(self, text):
+        """Masque le contenu de chaque bloc YAML affecte a un nom de secret ; la cle et les lignes soeurs restent."""
+        lines = text.split('\n')
+        kept, index = [], 0
+        while index < len(lines):
+            header = _BLOCK_HEADER.match(lines[index].rstrip('\r'))
+            kept.append(lines[index] if header is None else f"{header['indent']}{header['key']}{MASK}")
+            index += 1
+            if header is None:
+                continue
+            depth = len(header['indent'])
+            start = index
+            while index < len(lines) and (not lines[index].strip() or _indent(lines[index]) > depth):
+                index += 1
+            # Les lignes vides qui suivent le bloc ne lui appartiennent pas : elles restent.
+            while index > start and not lines[index - 1].strip():
+                index -= 1
+            self._withheld['secrets'] += index > start
+        return '\n'.join(kept)
 
     def _people(self, text, names=True):
         """Remplace chaque forme connue d'une identite par son pseudonyme (la plus longue d'abord)."""
