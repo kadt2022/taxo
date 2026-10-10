@@ -36,6 +36,8 @@ from app.projection.application.query import ProjectQuery
 from app.projection.api.router import create_router as query_router
 from app.protocol.application.exchange import TaxoQuery
 from app.protocol.api.router import create_router as protocol_router
+from app.mip.application.service import MipService
+from app.mip.api.router import create_router as mip_router
 from app.minia.infrastructure.claude import ClaudeModel
 from app.minia.infrastructure.gemini import GeminiModel
 from app.minia.infrastructure.mistral import MistralModel
@@ -120,6 +122,8 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     source = settings.minia_source_context(source_context)
     api.state.taxo_query = TaxoQuery(projects, scans, facts, history, registry.all(), source, contracts)
     api.include_router(protocol_router(api.state.taxo_query))
+    # MIP 0.1 (ARCHITECTURE § 12.0) : un adaptateur sur ce même protocole, qui sert une Tuile sans modèle de langage.
+    api.include_router(mip_router(MipService(api.state.taxo_query)))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ARCHITECTURE § 2, principe 5).
     # Plusieurs fournisseurs peuvent servir Minia (Ollama local, Claude distant) : chaque demande choisit.
     options = settings.minia()
