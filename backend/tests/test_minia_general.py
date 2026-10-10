@@ -221,6 +221,19 @@ def test_homonyms_spread_over_two_pages_never_make_a_unique_anchor():
     assert exchange.asked[1]['after'] == 'page-2', 'la page suivante est lue'
 
 
+def test_a_route_retains_only_the_whole_route_never_a_longer_one_ending_like_it():
+    longer, file = 'endpoint:GET /v1/api/students', 'file:src/api/students'
+    alone = resolved(Pages(([longer, file], None)), 'Qui traite /api/students ?')
+    assert alone.status == anchors.NONE, 'une fin de clé n’est pas la route citée'
+    both = resolved(Pages((['endpoint:GET /api/students', 'endpoint:POST /api/students', longer], None)),
+                    'Qui traite /api/students ?')
+    assert both.status == anchors.AMBIGUOUS and set(both.candidates) == {
+        'endpoint:GET /api/students', 'endpoint:POST /api/students'}
+    exact = anchoring.drained(anchoring.locate(Pages((['endpoint:get /api/students', 'route-pattern:/api/students'],
+                                                      None)), 'Que fait GET /api/students ?', []))
+    assert (exact.status, exact.anchor) == (anchors.FOUND, 'endpoint:get /api/students'), 'avec son verbe, sans casse'
+
+
 def test_a_search_cut_before_its_end_concludes_nothing():
     pages = [(['symbol:java:a.Items#list()'], f'page-{index}') for index in range(anchoring.MAX_PAGES)]
     pages[1:] = [([], f'page-{index}') for index in range(1, anchoring.MAX_PAGES)]
@@ -240,6 +253,7 @@ def test_a_search_cut_before_its_end_concludes_nothing():
     ('Et GET /api/courses/{id}/eligible-students.', [('NAME', 'GET /api/courses/{id}/eligible-students')]),
     ('Que fait endpoint:GET /api/students ?', [('KEY', 'endpoint:GET /api/students')]),
     ('Les commits et/ou les routes, 2026/09', []),
+    ('Que fait GET /123 ou /-interne ? Et / seul, /? ou //x ?', [('NAME', 'GET /123'), ('NAME', '/-interne')]),
     ('Que fait GET /api/{id:[0-9]+} ?', [('NAME', 'GET /api/{id:[0-9]+}')]),
     ('Que sert ANY /api/ping, (GET /api/x) et « endpoint:ANY /api/y » ?',
      [('KEY', 'endpoint:ANY /api/y'), ('NAME', 'ANY /api/ping'), ('NAME', 'GET /api/x')]),

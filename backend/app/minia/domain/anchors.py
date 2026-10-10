@@ -12,6 +12,7 @@ Une ancre n'est retenue que si elle est **unique** : une seule référence, trou
 candidates, et c'est l'utilisateur qui choisit, jamais Taxo.
 """
 import re
+import unicodedata
 from dataclasses import dataclass
 
 MAX_CANDIDATES = 4
@@ -29,10 +30,10 @@ _VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|ANY'
 # blanc entre son verbe et son chemin (`endpoint:GET /api/students`).
 # Jamais au milieu d'un chemin : `{id:[0-9]+}` est une variable de route, pas une référence.
 _REFERENCE = re.compile(r'(?<![{/])\b[a-z][a-z-]*:(?:(?:' + _VERBS + r') /\S+|\S+)')
-# Une route HTTP : un chemin qui commence par `/` puis une lettre, une variable ou un joker (jamais `et/ou`, ni une
-# barre isolée), et peut-être son verbe en majuscules juste avant. Le chemin va jusqu'au prochain blanc, tel qu'il est
+# Une route HTTP : un chemin qui commence par `/` hors d'un mot (jamais `et/ou` ni `2026/09`), suivi d'autre chose
+# qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant. Le chemin va jusqu'au prochain blanc, tel qu'il est
 # écrit (`/api/{id:[0-9]+}`), moins la ponctuation qui le suit dans la phrase.
-_ROUTE = re.compile(r'(?<![\w/])(?:(?:' + _VERBS + r')\s+)?/[A-Za-z_{*]\S*')
+_ROUTE = re.compile(r'(?<![\w/])(?:(?:' + _VERBS + r')\s+)?/[^\s/]\S*')
 _TRAILING = '?!.,;:"\'»”’'
 _CLOSING = {')': '(', ']': '['}
 _BLANKS = re.compile(r'\s+')
@@ -50,11 +51,28 @@ def _trimmed(text):
     return text
 
 
+def _folded(text):
+    return unicodedata.normalize('NFC', text).casefold()
+
+
 @dataclass(frozen=True)
 class Candidate:
-    """Ce que la question nomme : une référence complète (`KEY`), ou un nom à retrouver (`NAME`)."""
+    """Ce que la question nomme : une référence complète (`KEY`), ou un nom à retrouver (`NAME`). Une route
+    (`route`) se cherche par son nom, mais ne retient que les références dont la clé est cette route entière."""
     mode: str
     text: str
+    route: bool = False
+
+    def accepts(self, reference):
+        """La recherche par nom compare une fin de clé : `/api/students` y trouverait aussi `GET /v1/api/students`.
+        Une route ne retient que la clé égale à la route citée, avec son verbe s'il est cité, sinon avec ou sans
+        verbe (`endpoint:POST /api/students`, `route-pattern:/api/students`)."""
+        if not self.route:
+            return True
+        key, route = _folded(reference.partition(':')[2]), _folded(self.text)
+        if not route.startswith('/'):
+            return key == route
+        return route in (key, key.partition(' ')[2])
 
     @property
     def search(self):
@@ -103,7 +121,9 @@ def candidates(question):
     rest = _QUOTED.sub(' ', rest)
     for match in _ROUTE.finditer(rest):
         # Un seul blanc entre le verbe et le chemin, comme dans la clé.
-        keep(Candidate(NAME, _BLANKS.sub(' ', _trimmed(match.group(0)))[:MAX_NAME]))
+        route = _BLANKS.sub(' ', _trimmed(match.group(0)))[:MAX_NAME]
+        if route.rstrip('/'):
+            keep(Candidate(NAME, route, route=True))
     rest = _ROUTE.sub(' ', rest)
     for match in _CODE.finditer(rest):
         token = match.group(0).rstrip('.')
