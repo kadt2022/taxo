@@ -193,10 +193,12 @@ class JavaFile:
         """L'arbre syntaxique du fichier, pour les lecteurs du paquetage Java ; None si le fichier n'a pas ete lu."""
         return self._root
 
-    def resolve(self, written, owner):
+    def resolve(self, written, owner, on_demand=True):
         """Nom qualifie du type ecrit `written`, vu depuis le type `owner`, s'il est un type des sources connu sans
-        ambiguite ; None sinon. Rien n'est devine : un type externe ou une variable de type n'est pas resolu."""
-        return self._reader.type_of(written, owner) if self._reader is not None else None
+        ambiguite ; None sinon. Rien n'est devine : un type externe ou une variable de type n'est pas resolu.
+        `on_demand=False` n'accepte pas un nom trouve par un seul import `*` : un autre import `*` hors des sources
+        pourrait fournir le meme nom."""
+        return self._reader.type_of(written, owner, on_demand) if self._reader is not None else None
 
     def imported(self, simple):
         """Nom qualifie d'un import explicite (non statique) dont le nom simple est `simple`, ou None."""
@@ -286,8 +288,8 @@ class _Reader:
                         self._clauses(node, qualified),
                         node.child_by_field_name('name').start_point[0] + 1, _modifiers(node))
 
-    def type_of(self, written, owner):
-        return self._type(written, owner)
+    def type_of(self, written, owner, on_demand=True):
+        return self._type(written, owner, on_demand)
 
     def chain(self, node):
         """La chaine d'appels dont `node` est l'appel le plus exterieur."""
@@ -504,7 +506,7 @@ class _Reader:
                     return value
         return None
 
-    def _type(self, written, owner):
+    def _type(self, written, owner, on_demand=True):
         """Nom qualifie du type ecrit `written`, s'il est connu sans ambiguite ; sinon None."""
         if written in self.known:
             return written
@@ -513,7 +515,8 @@ class _Reader:
         candidates = [f'{scope}.{head}' for scope in self._scopes(owner)]
         candidates += [name for name in plain if name.rsplit('.', 1)[-1] == head]
         candidates.append(f'{self.package}.{head}' if self.package else head)
-        candidates += [f'{name[:-2]}.{head}' for name in plain if name.endswith('.*')]
+        if on_demand:
+            candidates += [f'{name[:-2]}.{head}' for name in plain if name.endswith('.*')]
         full = (f'{candidate}.{rest}' if rest else candidate for candidate in candidates)
         return next((name for name in full if name in self.known), None)
 
