@@ -2,8 +2,10 @@
 
 Quand Minia ne peut pas explorer, Taxo cherche lui-même, sans modèle, de quoi la question parle : une référence
 complète (`symbol:java:…#register(String)`), ou un nom qui a la forme d'un nom de code (`VetController`,
-`OwnerRepository.findById`, ou tout texte entre accents graves). Un mot ordinaire n'est jamais cherché : « service »
-trouverait un paquet par hasard. Aucune règle propre à un langage.
+`OwnerRepository.findById`, ou tout texte entre accents graves), ou une route HTTP (`GET /api/students`,
+`/api/admin/**`). Un mot ordinaire n'est jamais cherché : « service » trouverait un paquet par hasard. Aucune règle
+propre à un langage : une route se reconnaît à sa forme HTTP (un chemin qui commence par `/`, peut-être précédé de
+son verbe en majuscules), pas à un framework.
 
 Une ancre n'est retenue que si elle est **unique** : une seule référence, trouvée par des recherches épuisées
 (aucune reprise, rien de non transmis). Une page tronquée ne prouve rien ; plusieurs références restent des
@@ -17,12 +19,17 @@ MAX_NAME = 200
 NAME, KEY = 'NAME', 'KEY'
 FOUND, AMBIGUOUS, NONE = 'FOUND', 'AMBIGUOUS', 'NONE'
 
-# Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc.
-_REFERENCE = re.compile(r'\b[a-z][a-z-]*:\S+')
 _QUOTED = re.compile(r'`([^`\n]{1,200})`')
 # Un nom de code : des segments séparés par . # $ ou /, et peut-être une liste de paramètres.
 _CODE = re.compile(r'[A-Za-z_][\w$.#/<>]*(?:\([\w$.<>\[\], ]*\))?')
 _INNER_CAPITAL = re.compile(r'[a-z\d][A-Z]')
+_VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS'
+# Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc ; une clé de route garde le
+# blanc entre son verbe et son chemin (`endpoint:GET /api/students`).
+_REFERENCE = re.compile(r'\b[a-z][a-z-]*:(?:(?:' + _VERBS + r') /\S+|\S+)')
+# Une route HTTP : un chemin qui commence par `/` puis une lettre, une variable ou un joker (jamais `et/ou`, ni une
+# barre isolée), et peut-être son verbe en majuscules juste avant.
+_ROUTE = re.compile(r'(?<![\w/])(?:(?:' + _VERBS + r')\s+)?/[A-Za-z_{*][\w\-{}.*~/]*')
 
 
 @dataclass(frozen=True)
@@ -76,6 +83,9 @@ def candidates(question):
     for match in _QUOTED.finditer(rest):
         keep(Candidate(NAME, match.group(1).strip()[:MAX_NAME]))
     rest = _QUOTED.sub(' ', rest)
+    for match in _ROUTE.finditer(rest):
+        keep(Candidate(NAME, match.group(0).rstrip('.')[:MAX_NAME]))
+    rest = _ROUTE.sub(' ', rest)
     for match in _CODE.finditer(rest):
         token = match.group(0).rstrip('.')
         if _looks_like_code(token):

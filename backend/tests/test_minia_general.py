@@ -235,6 +235,11 @@ def test_a_search_cut_before_its_end_concludes_nothing():
     ('Qui appelle `register` ?', [('NAME', 'register')]),
     ('Et symbol:java:a.B#c(String) ?', [('KEY', 'symbol:java:a.B#c(String)')]),
     ('Quel Service appelle le contrôleur de Spring ?', []),
+    ('que fait GET /api/students', [('NAME', 'GET /api/students')]),
+    ('Qui protège /api/admin/** ?', [('NAME', '/api/admin/**')]),
+    ('Et GET /api/courses/{id}/eligible-students.', [('NAME', 'GET /api/courses/{id}/eligible-students')]),
+    ('Que fait endpoint:GET /api/students ?', [('KEY', 'endpoint:GET /api/students')]),
+    ('Les commits et/ou les routes, 2026/09', []),
 ])
 def test_only_code_names_and_complete_references_are_anchors(question, expected):
     assert [(item.mode, item.text) for item in anchors.candidates(question)] == expected
@@ -268,3 +273,14 @@ def test_the_named_element_is_located_without_any_model(courses, tmp_path):
     assert several['status'] == 'AMBIGUOUS' and several['anchor'] is None and {REGISTER, SERVICE} <= set(
         several['candidates'])
     assert empty.status_code == 422
+
+
+def test_a_route_named_in_the_question_is_located_without_backquotes(courses, tmp_path):
+    _, app, project = ask(courses, tmp_path, Scripted(packet_answer(), explores=False), WHO_CALLS)
+    with TestClient(app) as client:
+        def located(question):
+            return client.get(f'/api/projects/{project}/elements', params={'q': question}).json()
+        exact, path = located('Que fait GET /api/courses ?'), located('Qui traite /api/courses ?')
+    assert (exact['status'], exact['anchor']) == ('FOUND', 'endpoint:GET /api/courses'), 'pas /api/courses/titles'
+    assert path['status'] == 'AMBIGUOUS' and set(path['candidates']) == {
+        'endpoint:GET /api/courses', 'endpoint:POST /api/courses'}, 'deux verbes : Taxo ne choisit pas'
