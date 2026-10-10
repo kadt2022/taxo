@@ -133,3 +133,14 @@ def test_a_member_annotation_type_is_named_by_its_explicit_import():
         'resolution']) for name in 'ABC'] == [('annotation:org.lib.Holder.Mark', 'IMPORTED'),
                                              ('annotation:org.lib.Holder.Mark', 'IMPORTED'),
                                              ('annotation:com.acme.tags.H.In', 'SOURCE_TYPE')]
+
+
+def test_an_explicit_import_shadows_a_type_of_the_same_package():
+    """Comme en Java, `import org.lib.Audit;` désigne `@Audit` même si le paquetage des sources déclare aussi `Audit`."""
+    sources = {f'{ROOT}Audit.java': 'package com.acme;\npublic @interface Audit { }\n',
+               f'{ROOT}A.java': 'package com.acme;\nimport org.lib.Audit;\n@Audit\npublic class A { }\n',
+               f'{ROOT}B.java': 'package com.acme;\n@Audit\npublic class B { }\n'}
+    found = _annotations(sources)
+    assert [(found[f'symbol:java:com.acme.{name}']['object'], found[f'symbol:java:com.acme.{name}']['qualifiers'][
+        'resolution']) for name in 'AB'] == [('annotation:org.lib.Audit', 'IMPORTED'),
+                                            ('annotation:com.acme.Audit', 'SOURCE_TYPE')]
