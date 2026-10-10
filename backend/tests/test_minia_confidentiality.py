@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 
 from app.bootstrap.database import Base
 from app.main import create_app
+from app.history.domain.errors import GIT_READ_ERROR, NOT_A_GIT_REPOSITORY, HistoryError
+from app.minia.application.ask import AskMinia
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain.authorship import asks_author
 from app.minia.domain.confidentiality import MASK, Disclosure
@@ -127,6 +129,17 @@ def test_a_yaml_secret_keeps_its_name_and_quote_style():
 @pytest.mark.parametrize('address', ['josé@exemple.fr', 'john!doe@example.com', 'ana@münchen.de'])
 def test_an_address_is_masked_whole_even_when_international(address):
     assert protect({'text': f'écrire à {address} demain'}) == {'text': 'écrire à personne-1 demain'}
+
+
+def test_a_go_assignment_is_masked_whole():
+    assert protect({'diff': 'password := "admin123"'})['diff'] == f'password := "{MASK}"'
+
+
+def test_a_known_author_asked_about_by_pseudonym_comes_back_as_its_git_reference():
+    disclosure = Disclosure(known=[f'{NAME} <{EMAIL}>'])
+    protect({'question': f'Qu’a changé {NAME} ?'}, disclosure)
+    assert disclosure.restore('person:personne-1') == f'person:{EMAIL}'
+    assert disclosure.restore('personne-1') == NAME
 
 
 def test_a_code_line_is_not_a_plain_secret():
@@ -427,3 +440,20 @@ def test_taxo_answers_who_wrote_a_commit_even_without_any_configured_model(leaky
                                json={'question': 'Qui est l’auteur de ce commit ?'})
     assert response.status_code == 200, response.text
     assert response.json()['answer'] == f'Selon Git, l’auteur du commit {sha[:12]} est {NAME}.'
+
+
+class _History:
+    def __init__(self, error):
+        self.error = error
+
+    def authors(self, project_id):
+        raise self.error
+
+
+def test_an_unreadable_history_refuses_any_transmission():
+    ask = AskMinia(_History(HistoryError(GIT_READ_ERROR, 'illisible')), {}, projects=None)
+    with pytest.raises(MiniaError) as refused:
+        ask._authors('p')
+    assert refused.value.code == CONFIDENTIALITY_REFUSED, 'un auteur que rien n’a appris à masquer ne part pas'
+    without_git = AskMinia(_History(HistoryError(NOT_A_GIT_REPOSITORY, 'pas de dépôt')), {}, projects=None)
+    assert without_git._authors('p') == (), 'sans dépôt Git, aucun auteur à protéger'

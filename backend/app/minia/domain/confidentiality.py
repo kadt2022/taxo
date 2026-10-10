@@ -53,11 +53,11 @@ _TOKENS = re.compile('|'.join((
 # Identifiants dans une URL : `scheme://utilisateur:motdepasse@hote`.
 _URL_CREDENTIALS = re.compile(r'(\b[a-z][a-z0-9+.-]*://)[^\s/:@]+:[^\s/@]+@', re.IGNORECASE)
 _SECRET_NAME = r'[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credentials?)[\w.-]*'
-# Une valeur affectee a un nom de secret : `password = "x"`, `password: x`, `.password("x")`, `"token": "x"`. Une
-# chaine citee peut echapper ses guillemets et, en YAML, continuer sur les lignes suivantes : elle est masquee
-# jusqu'a son guillemet fermant, ou jusqu'a la fin du texte s'il n'est pas ferme.
+# Une valeur affectee a un nom de secret : `password = "x"`, `password := "x"`, `password: x`, `.password("x")`,
+# `"token": "x"`. Une chaine citee peut echapper ses guillemets et, en YAML, continuer sur les lignes suivantes :
+# elle est masquee jusqu'a son guillemet fermant, ou jusqu'a la fin du texte s'il n'est pas ferme.
 _ASSIGNED = re.compile(
-    rf'(?P<name>\b{_SECRET_NAME}["\']?)(?P<sep>\s*(?:[:=]|=>)\s*|\(\s*)'
+    rf'(?P<name>\b{_SECRET_NAME}["\']?)(?P<sep>\s*(?::=|=>|[:=])\s*|\(\s*)'
     r'(?P<value>"(?:[^"\\]|\\[\s\S])*(?:"|\Z)|\'(?:[^\'\\]|\\[\s\S]|\'\')*(?:\'|\Z)|[^\s"\',;(){}\[\]]+(?![\w(.{]))',
     re.IGNORECASE)
 # Une entree YAML dont la cle est un nom de secret (`password: x`, `- token: |`, `"secret": "x"`) : sa valeur est
@@ -134,8 +134,11 @@ class Disclosure:
         self._withheld = {'identities': set(), 'secrets': 0, 'trailers': 0}
         for identity in known:
             # `Nom <courriel>` : deux formes d'une meme personne, affichee localement par son nom.
+            # Le courriel est aussi la reference `person:` des faits Git : une demande du modele sur `personne-1`
+            # revient vers cette reference.
             written = _NAMED_ADDRESS.fullmatch(identity.strip())
-            self._identity(*(written.groups() if written else (identity,)), words=False)
+            name, email = written.groups() if written else (identity, '')
+            self._identity(name, *([_PERSON + email] if email else []), words=False)
 
     # Protection -------------------------------------------------------------------------------------------
 

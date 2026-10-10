@@ -19,14 +19,15 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
-from app.history.domain.errors import HistoryError
+from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
 from app.minia.application import anchoring
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
 from app.minia.domain.confidentiality import Disclosure
 from app.minia.domain.cancellation import STOPPED, check
 from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, SYSTEM_TILE, AnswerStream, parse, with_diff
-from app.minia.domain.errors import CANCELLED, CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
+from app.minia.domain.errors import (CANCELLED, CONFIDENTIALITY_REFUSED, CONTEXT_TOO_LARGE, INVALID_ANSWER,
+                                    INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError)
 from app.minia.domain.model import MiniaModel
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.projects.application.queries import require_project
@@ -283,8 +284,14 @@ class AskMinia:
         n'est pas lisible (le controle final demeure)."""
         try:
             return tuple(self.history.authors(project_id))
-        except (HistoryError, ProjectError):
+        except ProjectError:
             return ()
+        except HistoryError as exc:
+            if exc.code == NOT_A_GIT_REPOSITORY:
+                return ()  # Sans depot Git, aucun auteur a proteger.
+            # Un historique illisible laisserait passer un nom d'auteur que rien n'a appris a masquer.
+            raise MiniaError(CONFIDENTIALITY_REFUSED, 'Les auteurs du projet ne sont pas lisibles : Taxo ne peut pas '
+                             'garantir leur confidentialité, rien n’est transmis au modèle.') from exc
 
     def _model(self, provider):
         """Le modele demande, ou celui par defaut ; un fournisseur non configure est refuse."""

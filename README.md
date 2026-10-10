@@ -549,7 +549,7 @@ l'appel (`minia/application/protected_model.py`, `minia/domain/confidentiality.p
   `password = "******"` montre encore un mot de passe écrit en dur ;
 - les trailers des messages de commit (`Co-Authored-By`, `Signed-off-by`…) sont retirés ;
 - un message de forme inattendue, ou dans lequel une donnée protégée subsisterait, n'est pas envoyé
-  (`MINIA_CONFIDENTIALITY_REFUSED`).
+  (`MINIA_CONFIDENTIALITY_REFUSED`), ni quand l'historique Git du projet ne permet pas de lire ses auteurs.
 
 Taxo garde les valeurs d'origine : ce que le modèle rend est restitué localement (une référence
 `person:personne-1` redevient celle de Git avant d'être vérifiée, le nom revient dans le texte affiché).
