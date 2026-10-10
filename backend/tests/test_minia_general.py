@@ -237,6 +237,8 @@ def test_a_route_retains_only_the_whole_route_never_a_longer_one_ending_like_it(
     exact = anchoring.drained(anchoring.locate(Pages((['endpoint:get /api/students', 'route-pattern:/api/students'],
                                                       None)), 'Que fait GET /api/students ?', []))
     assert (exact.status, exact.anchor) == (anchors.FOUND, 'endpoint:get /api/students'), 'avec son verbe, sans casse'
+    cased = resolved(Pages((['endpoint:GET /api/students'], None)), 'Que fait GET /API/STUDENTS ?')
+    assert cased.status == anchors.NONE, 'le chemin garde sa casse : une autre route'
 
 
 def test_a_search_cut_before_its_end_concludes_nothing():
@@ -261,6 +263,7 @@ def test_a_search_cut_before_its_end_concludes_nothing():
     ('Que fait GET / et endpoint:POST / ?', [('KEY', 'endpoint:POST /'), ('NAME', 'GET /')]),
     ('Que fait GET //admin ?', []),
     ('Et endpoint:get /api/x ?', [('KEY', 'endpoint:get /api/x')]),
+    ('Que fait GET /api/{v:foo:bar} ?', [('NAME', 'GET /api/{v:foo:bar}')]),
     ('Que fait GET /123 ou /-interne ? Et / seul, /? ou //x ?', [('NAME', 'GET /123'), ('NAME', '/-interne')]),
     ('Que fait GET /api/{id:[0-9]+} ?', [('NAME', 'GET /api/{id:[0-9]+}')]),
     ('Que sert ANY /api/ping, (GET /api/x) et « endpoint:ANY /api/y » ?',

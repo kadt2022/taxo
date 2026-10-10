@@ -28,8 +28,8 @@ _INNER_CAPITAL = re.compile(r'[a-z\d][A-Z]')
 _VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|ANY'
 # Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc ; une clé de route garde le
 # blanc entre son verbe et son chemin (`endpoint:GET /api/students`), quelle que soit la casse du verbe.
-# Jamais au milieu d'un chemin : `{id:[0-9]+}` est une variable de route, pas une référence.
-_REFERENCE = re.compile(r'(?<![{/])\b[a-z][a-z-]*:(?:(?i:' + _VERBS + r') /\S*|\S+)')
+# Jamais au milieu d'un chemin : `{id:[0-9]+}` ou `{v:a:b}` est une variable de route, pas une référence.
+_REFERENCE = re.compile(r'(?<![{/:])\b[a-z][a-z-]*:(?:(?i:' + _VERBS + r') /\S*|\S+)')
 # Une route HTTP : un chemin qui commence par `/` hors d'un mot (jamais `et/ou` ni `2026/09`), suivi d'autre chose
 # qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant ; la racine `/` seule, avec son verbe
 # (jamais le début de `//…`). Le chemin va jusqu'au prochain blanc, tel qu'il est écrit (`/api/{id:[0-9]+}`), moins
@@ -57,10 +57,6 @@ def _trimmed(text):
     return text
 
 
-def _folded(text):
-    return unicodedata.normalize('NFC', text).casefold()
-
-
 @dataclass(frozen=True)
 class Candidate:
     """Ce que la question nomme : une référence complète (`KEY`), ou un nom à retrouver (`NAME`). Une route
@@ -78,11 +74,14 @@ class Candidate:
         kind, _, key = reference.partition(':')
         if kind not in ROUTE_TYPES:
             return False
-        key, route = _folded(key), _folded(self.text)
-        if not route.startswith('/'):
-            return key == route
-        verb, blank, path = key.partition(' ')
-        return key == route or (bool(blank) and verb in _VERB_SET and path == route)
+        # Le verbe se compare sans casse ; le chemin tel qu'il est écrit : `/API` et `/api` sont deux routes.
+        verb, blank, path = unicodedata.normalize('NFC', key).partition(' ')
+        if not blank:
+            verb, path = '', verb
+        route_verb, route_blank, route_path = unicodedata.normalize('NFC', self.text).rpartition(' ')
+        if route_blank:
+            return verb.casefold() == route_verb.casefold() and path == route_path
+        return path == route_path and (not verb or verb.casefold() in _VERB_SET)
 
     @property
     def search(self):
