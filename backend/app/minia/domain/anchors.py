@@ -28,9 +28,9 @@ _INNER_CAPITAL = re.compile(r'[a-z\d][A-Z]')
 _VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|ANY'
 # Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc ; une clé de route garde le
 # blanc entre son verbe et son chemin (`endpoint:GET /api/students`), quelle que soit la casse du verbe.
-# Elle commence un mot (après un blanc, une parenthèse ou un guillemet), jamais au milieu : dans `/api/{id:[a-z:]+}`, rien n'est
-# une référence.
-_REFERENCE = re.compile(r'(?<![^\s("\'«`])[a-z][a-z-]*:(?:(?i:' + _VERBS + r') /\S*|\S+)')
+# Elle commence un mot (après un blanc, et peut-être une parenthèse ou un guillemet ouvrants), jamais au milieu :
+# dans `/api/{id:(a:b)}`, rien n'est une référence.
+_REFERENCE = re.compile(r'(?:^|(?<=\s))[("\'«`]*(?P<reference>[a-z][a-z-]*:(?:(?i:' + _VERBS + r') /\S*|\S+))')
 # Une route HTTP : un chemin qui commence par `/` hors d'un mot (jamais `et/ou` ni `2026/09`), suivi d'autre chose
 # qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant ; la racine `/` seule, avec son verbe
 # (jamais le début de `//…`). Le chemin va jusqu'au prochain blanc, tel qu'il est écrit (`/api/{id:[0-9]+}`), moins
@@ -41,7 +41,7 @@ _WHOLE_ROUTE = re.compile(_ROUTE_FORM)
 # Les types du contrat qui nomment une route (ARCHITECTURE § 5) ; aucune autre référence n'est une route.
 ROUTE_TYPES = frozenset({'endpoint', 'route-pattern'})
 _VERB_SET = frozenset(verb.casefold() for verb in _VERBS.split('|'))
-_TRAILING = '?!.,;:"\'»”’'
+_TRAILING = '?!.,;:"\'»”’`'
 _CLOSING = {')': '(', ']': '['}
 _BLANKS = re.compile(r'\s+')
 
@@ -124,8 +124,8 @@ def candidates(question):
 
     rest = question
     for match in _REFERENCE.finditer(question):
-        keep(Candidate(KEY, _trimmed(match.group(0))))
-        rest = rest.replace(match.group(0), ' ')
+        keep(Candidate(KEY, _trimmed(match.group('reference'))))
+        rest = rest.replace(match.group('reference'), ' ')
     for match in _QUOTED.finditer(rest):
         quoted = match.group(1).strip()
         # Une route entre accents graves garde le sens d'une route : la route entière, jamais une fin de clé.
