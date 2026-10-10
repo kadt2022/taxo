@@ -182,11 +182,15 @@ class Disclosure:
         forms = [form for form in self._pseudonyms if names or _EMAIL.fullmatch(form)]
         if not forms:
             return text
+        # Une identite reecrite dans une autre casse (`ADA LOVELACE`) reste la meme personne.
+        folded = {}
+        for form in forms:
+            folded.setdefault(form.casefold(), self._pseudonyms[form])
         alternation = '|'.join(re.escape(form) for form in sorted(forms, key=len, reverse=True))
-        pattern = re.compile(rf'(?<![\w.@-])(?:{alternation})(?![\w@-])')
+        pattern = re.compile(rf'(?<![\w.@-])(?:{alternation})(?![\w@-])', re.IGNORECASE)
 
         def pseudonym(match):
-            found = self._pseudonyms[match[0]]
+            found = folded[match[0].casefold()]
             self._withheld['identities'].add(found)
             return found
         text = pattern.sub(pseudonym, text)
@@ -203,7 +207,8 @@ class Disclosure:
         """Dernier controle avant l'envoi : rien de ce qui doit etre protege ne subsiste."""
         whole = [form for form in self._pseudonyms if ' ' in form or _EMAIL.fullmatch(form)]
         leaked = (_EMAIL.search(protected) or _TOKENS.search(protected)
-                  or any(re.search(rf'(?<![\w.@-]){re.escape(form)}(?![\w@-])', protected) for form in whole))
+                  or any(re.search(rf'(?<![\w.@-]){re.escape(form)}(?![\w@-])', protected, re.IGNORECASE)
+                         for form in whole))
         if leaked:
             raise MiniaError(CONFIDENTIALITY_REFUSED, 'Une donnée confidentielle subsiste après protection : '
                              'le message n’est pas transmis au modèle.')

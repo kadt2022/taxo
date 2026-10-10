@@ -8,11 +8,16 @@ le chemin habituel de Minia, ou l'identite est masquee avant l'envoi.
 import re
 
 AUTHORED_BY = 'AUTHORED_BY'
+_COMMIT_OBJECT = r"(?:ce|cet|ces|le|les|la|l['’]\s*|this|these|that|the)\s*(?:[\w-]+\s+){0,3}commits?\b"
+# Seule une demande explicite d'auteur est reconnue : « qui est l'auteur », « l'auteur du commit », « qui a
+# écrit ce commit ». « Qui a fait échouer les tests ? » ou « who did this change affect? » restent a Minia.
 _ASKS = re.compile(
-    r"\b(?:auteur|autrice|author)s?\b"
-    r"|\bqui\s+(?:l['’]\s*)?a\s+(?:écrit|ecrit|fait|commité|commite|créé|cree|poussé|pousse|signé|signe|réalisé|realise)\b"
-    r"|\bpar\s+qui\b"
-    r"|\bwho\s+(?:wrote|made|committed|authored|did)\b",
+    r"\b(?:qui|quel(?:le)?s?)\s+(?:est|sont|était|etait|étaient|etaient)\s+(?:l['’]\s*|les?\s+|la\s+)?(?:auteur|autrice)s?\b"
+    r"|\b(?:auteur|autrice)s?\s+(?:du|des|de\s+(?:ce|cet|ces|la|l['’]))\s*(?:[\w-]+\s+){0,3}commits?\b"
+    r"|\bqui\s+(?:l['’]\s*)?a\s+(?:écrit|ecrit|fait|commité|commite|créé|cree|poussé|pousse|signé|signe|réalisé|realise)\s+" + _COMMIT_OBJECT +
+    r"|\bwho\s+(?:is|are|was|were)\s+the\s+authors?\b"
+    r"|\bwho\s+(?:wrote|authored|committed|made)\s+" + _COMMIT_OBJECT +
+    r"|\bauthors?\s+of\s+" + _COMMIT_OBJECT,
     re.IGNORECASE)
 
 

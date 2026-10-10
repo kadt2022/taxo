@@ -317,7 +317,7 @@ class AskMinia:
         return _final(self.about_commit_events(project_id, sha, question, parent, source, provider))
 
     def about_commit_events(self, project_id, sha, question, parent=None, source=False, provider=None, cancel=None):
-        """Valide la demande tout de suite (question, fournisseur, projet, commit), puis rend ses etapes.
+        """Valide la demande tout de suite (question, projet, commit, puis fournisseur si un modele sert), puis rend ses etapes.
 
         `source` : la demande autorise Minia a lire le diff ; il n'est joint que si le reglage le permet.
         `provider` : le fournisseur choisi pour cette demande ; celui par defaut sinon.
@@ -327,11 +327,12 @@ class AskMinia:
 
     def _commit_events(self, project_id, sha, question, parent, source, provider, cancel):
         question = self._checked(question)
-        model = self._protected(provider)
         project = require_project(self.projects, project_id)
         commit, base, files = self.history.detail(project_id, sha, parent)
         if authorship.asks_author(question):
+            # Taxo repond seul : aucun modele n'est requis, ni meme configure.
             return self._commit_author(question, project, commit, base, files)
+        model = self._protected(provider)
         return _reported(self._commit_route(model, question, project, commit, base, files, source, cancel),
                          model.disclosure)
 
@@ -437,10 +438,10 @@ class AskMinia:
 
     def _project_events(self, project_id, question, provider, cancel):
         question = self._checked(question)
-        model = self._protected(provider)
         projection = self.query(project_id, question)
         if projection['status'] == 'SELECTED' and authorship.asks_author(question):
             return self._selection_authors(question, projection)
+        model = self._protected(provider)
         return _reported(self._project_route(model, question, projection, cancel), model.disclosure)
 
     def _project_route(self, model, question, projection, cancel):

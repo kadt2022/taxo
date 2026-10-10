@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.bootstrap.database import Base
 from app.main import create_app
 from app.minia.application.protected_model import ProtectedModel
+from app.minia.domain.authorship import asks_author
 from app.minia.domain.confidentiality import MASK, Disclosure
 from app.minia.domain.errors import CONFIDENTIALITY_REFUSED, MiniaError
 
@@ -33,6 +34,12 @@ def test_an_author_becomes_one_pseudonym_wherever_it_appears():
     assert sent['facts'][0]['qualifiers']['name'] == 'personne-1'
     assert sent['commit']['author'] == 'personne-1'
     assert sent['question'] == 'Qu’a fait personne-1, alias personne-1 ?'
+
+
+def test_an_identity_written_in_another_case_is_the_same_person():
+    sent = protect({'facts': [authored()], 'message': 'merci à ADA LOVELACE et à ada lovelace', 'question': 'Et Lovelace ?'})
+    assert sent['message'] == 'merci à personne-1 et à personne-1'
+    assert sent['question'] == 'Et personne-1 ?'
 
 
 def test_two_people_sharing_a_first_name_keep_two_pseudonyms():
@@ -106,6 +113,20 @@ def test_what_the_model_returns_is_restored_locally():
     assert disclosure.restore({'object': 'person:personne-1', 'text': 'personne-1 a écrit le commit.',
                                'other': ['personne-9', 3]}) == {
         'object': f'person:{EMAIL}', 'text': f'{NAME} a écrit le commit.', 'other': ['personne-9', 3]}
+
+
+@pytest.mark.parametrize('question', [
+    'Qui est l’auteur de ce commit ?', 'Qui est l\'auteur ?', 'Qui a écrit les 2 derniers commits ?',
+    'Quels sont les auteurs des 3 derniers commits ?', 'Who is the author?', 'Who wrote this commit?'])
+def test_an_explicit_author_question_is_recognised(question):
+    assert asks_author(question)
+
+
+@pytest.mark.parametrize('question', [
+    'Qui a fait échouer les tests ?', 'Who did this change affect?', 'Que change ce commit selon son auteur ?',
+    'Quel risque apporte ce commit ?', 'Qui appelle CourseService.register ?'])
+def test_a_question_that_only_mentions_an_author_stays_with_minia(question):
+    assert not asks_author(question), 'l’intention de la question n’est jamais écartée'
 
 
 # Le seul passage vers un fournisseur ----------------------------------------------------------------------
@@ -249,3 +270,13 @@ def test_in_exploration_taxo_receives_the_original_references(leaky, tmp_path):
     assert statement['verdict'] == 'CONFIRMED' and statement['text'] == f'{NAME} a écrit ce commit.'
     for sent in model.calls:
         assert NAME not in sent and EMAIL not in sent
+
+
+def test_taxo_answers_who_wrote_a_commit_even_without_any_configured_model(leaky, tmp_path):
+    repo, sha = leaky
+    client, project = open_client(tmp_path, repo, {})
+    with client:
+        response = client.post(f'/api/projects/{project}/history/commits/{sha}/ask',
+                               json={'question': 'Qui est l’auteur de ce commit ?'})
+    assert response.status_code == 200, response.text
+    assert response.json()['answer'] == f'Selon Git, l’auteur du commit {sha[:12]} est {NAME}.'
