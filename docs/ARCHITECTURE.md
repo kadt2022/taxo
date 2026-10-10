@@ -1158,9 +1158,10 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
 L'évaluateur des appels Java (catalogue `java-calls` 2) relève chaque annotation écrite sur un type ou une méthode :
 `symbol` `ANNOTATED_WITH` `annotation:<nom>` (`OBSERVED`, preuve à ses lignes). Il ne sait rien de son rôle :
 `@Service`, `@PreAuthorize` et une annotation inconnue sont traitées de même. Le nom est le type des sources que le
-code désigne sans ambiguïté (`resolution: SOURCE_TYPE`), sinon l'import explicite (`IMPORTED`), sinon le nom écrit
-(`AS_WRITTEN`). Les arguments sont rendus tels qu'écrits (`arguments`), avec leur valeur seulement si le code
-l'écrit (`resolved`). Deux annotations de même nom sur un symbole sont deux faits si leurs arguments diffèrent. Une
+code désigne sans ambiguïté (`resolution: SOURCE_TYPE`, jamais par le seul import `*`), sinon l'import explicite,
+simple ou statique, d'un type membre aussi (`IMPORTED`), sinon le nom écrit (`AS_WRITTEN`). Les arguments sont une
+liste ordonnée par nom (`arguments: [{name, values}]` : un nom d'élément n'est jamais une clé de qualificatif),
+chaque valeur telle qu'écrite, avec son texte seulement si le code l'écrit (`resolved`). Deux annotations de même nom sur un symbole sont deux faits si leurs arguments diffèrent. Une
 méthode d'identité ambiguë n'est pas annotée. Les annotations des paramètres et des champs ne sont pas relevées. Le
 fait de Spring Security sur `@EnableMethodSecurity` est conservé tel quel : un même triplet peut alors avoir deux
 producteurs, chacun avec ses qualificatifs.
