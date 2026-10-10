@@ -71,8 +71,8 @@ METHOD_CONTEXT = _profile('method-context', {'symbol'}, 1, (
     ('IMPLEMENTS', OUTGOING, 'implemented-method'),
     ('IMPLEMENTS', INCOMING, 'implementations'),
 ), limits=(
-    'ANNOTATED_WITH : seules les annotations relevées par un analyseur sont des faits ; les autres restent dans le '
-    'code source.',
+    'ANNOTATED_WITH : les annotations des types et des méthodes Java sont relevées ; celles des paramètres et des '
+    'champs restent dans le code source.',
     'Le type de retour et les paramètres non receveurs ne sont pas des faits de la Maille.',
 ))
 

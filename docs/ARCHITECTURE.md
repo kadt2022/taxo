@@ -312,7 +312,7 @@ dans les champs textuels. Tout champ inconnu est refusé, en particulier tout ch
 | `MATCHED_BY` | endpoint → route-pattern | `INFERRED` | Spring Security |
 | `PROTECTED_BY` | endpoint → symbol, policy-rule | `INFERRED`, `HUMAN_VALIDATED` | Spring Security |
 | `CONFIGURES` | symbol → policy-rule | `OBSERVED` | Spring Security (`csrf.disable()`) |
-| `ANNOTATED_WITH` | symbol → annotation | `OBSERVED` | Spring Security (activation de la sécurité de méthode) |
+| `ANNOTATED_WITH` | symbol → annotation | `OBSERVED` | appels Java (toute annotation écrite d'un type ou d'une méthode, sans interprétation, TAXO-MIP-ADT-01) ; Spring Security (activation de la sécurité de méthode) |
 | `CALLS` | symbol → symbol | `INFERRED`, prouvé par ses sites d'appel (§ 14) | appels Java |
 | `IMPLEMENTS` | symbol → symbol | `OBSERVED` entre types, `INFERRED` entre méthodes (§ 14) | appels Java |
 | `EXTENDS` | symbol → symbol (entre types) | `OBSERVED` | appels Java |
@@ -757,7 +757,7 @@ résolus (`steps`, `depth`) et, pour chaque fait, sa règle et son chemin ; le r
 `security/1` et `structure/1` ne suivent que des relations produites aujourd'hui. `security/1` ne suit pas encore
 `CONFIGURES` ni `ANNOTATED_WITH` (TAXO-MINIA-SEC-01) : les ajouter fera une version 2. `calls/1` déclare
 `DISPATCHES_TO`, qui n'a pas de producteur : la Tuile rend la frontière `CONTEXT` du moteur. `ANNOTATED_WITH` n'est
-relevée que pour l'activation de la sécurité de méthode : `method-context/1` le déclare dans ses `limits`.
+pas relevée sur les paramètres ni les champs : `method-context/1` le déclare dans ses `limits`.
 
 Toute Tuile MIP porte aussi une **classification** versionnée (nature, langage, profil, catégories de contenu
 effectivement transmises, provenance) et, à part, ses **restrictions de divulgation** ([MIP-0.1.md](MIP-0.1.md) § 3.1).
@@ -1152,6 +1152,18 @@ retrouve exactement l'oracle ; PR C y ajoute `IMPLEMENTS` entre méthodes. Il ne
   superclasse implicite hors des sources ; un argument littéral n'écarte une déclaration que s'il contredit un
   paramètre de type connu ; `super.f()`, `new T()`, `this(...)`, un appel statique `T.f()` et un appel dans un
   initialiseur sont `UNSUPPORTED_CALL_FORM`.
+
+### Annotations écrites (TAXO-MIP-ADT-01, PR A2)
+
+L'évaluateur des appels Java (catalogue `java-calls` 2) relève chaque annotation écrite sur un type ou une méthode :
+`symbol` `ANNOTATED_WITH` `annotation:<nom>` (`OBSERVED`, preuve à ses lignes). Il ne sait rien de son rôle :
+`@Service`, `@PreAuthorize` et une annotation inconnue sont traitées de même. Le nom est le type des sources que le
+code désigne sans ambiguïté (`resolution: SOURCE_TYPE`), sinon l'import explicite (`IMPORTED`), sinon le nom écrit
+(`AS_WRITTEN`). Les arguments sont rendus tels qu'écrits (`arguments`), avec leur valeur seulement si le code
+l'écrit (`resolved`). Deux annotations de même nom sur un symbole sont deux faits si leurs arguments diffèrent. Une
+méthode d'identité ambiguë n'est pas annotée. Les annotations des paramètres et des champs ne sont pas relevées. Le
+fait de Spring Security sur `@EnableMethodSecurity` est conservé tel quel : un même triplet peut alors avoir deux
+producteurs, chacun avec ses qualificatifs.
 
 ## 15. Versionnement, projections, invalidation
 

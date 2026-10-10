@@ -3,6 +3,8 @@
 Une identite n'est ecrite qu'une fois par execution : deux preuves d'un meme fait (deux sites d'un meme appel, une
 declaration vue dans deux fichiers) sont deux preuves de la meme assertion.
 """
+import json
+
 from app.facts import content_hash
 
 from . import accessors, classification, implementations, resolution
@@ -21,6 +23,18 @@ class Facts:
         """Une declaration ecrite (`OBSERVED`), prouvee par la ligne qui l'ecrit."""
         evidence = self._evidence(path, line, line, DECLARATION, target if relation == 'CONTAINS' else subject)
         self._add(subject, relation, target, 'OBSERVED', evidence)
+
+    def annotation(self, subject, annotated, path):
+        """Une annotation écrite (`OBSERVED`), prouvée par ses lignes. Deux annotations de même nom sur un même
+        symbole (annotation répétable) ne sont un même fait que si leurs qualificatifs sont égaux."""
+        evidence = self._evidence(path, annotated.line_start, annotated.line_end, DECLARATION, subject)
+        key = (subject, 'ANNOTATED_WITH', annotated.reference, json.dumps(annotated.qualifiers, sort_keys=True))
+        fact = self._assertions.setdefault(key, {
+            'contract_version': 1, 'kind': 'ASSERTION', 'status': 'OBSERVED', 'validity': 'VALID',
+            'subject': subject, 'relation': 'ANNOTATED_WITH', 'object': annotated.reference,
+            'qualifiers': annotated.qualifiers, 'evidence': []})
+        if evidence not in fact['evidence']:
+            fact['evidence'].append(evidence)
 
     def call(self, subject, target, path, site, premises, counter_examples):
         """Un appel (`INFERRED`), prouve par son site ; les sites d'un meme appel s'ajoutent a la meme assertion."""

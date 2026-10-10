@@ -207,3 +207,19 @@ def test_a_tile_that_the_profile_would_push_over_budget_is_served_by_a_smaller_e
     assert tile['outcome'] == 'OK' and tile['bounds']['applied']['max_bytes'] == 8_000
     assert len(json.dumps(tile, ensure_ascii=False, separators=(',', ':')).encode('utf-8')) <= 8_000
     assert tile['truncated'] and (tile['stop_reason'] == 'BYTES' or tile['not_sent'])
+
+
+def test_a_wrong_annotation_claim_is_corrected_by_the_observed_annotations(courses):
+    """B2 et D6 : la Tuile rend l'annotation écrite (`@Service`) ; une affirmation sur une autre (`@Component`) reste
+    non prouvée, jamais réfutée : Taxo ne conclut pas une absence, il montre ce qui est écrit."""
+    taxo, scan = courses
+    service = 'symbol:java:com.example.demo.service.CourseServiceImpl'
+    tile = ask(taxo, expand(service, relations=('ANNOTATED_WITH',), bounds={'max_bytes': 32_000}))
+    assert [fact['fact']['object'] for fact in tile['facts']] == ['annotation:org.springframework.stereotype.Service']
+    written, other = taxo.ask(
+        ('verify_claim', {'subject': service, 'relation': 'ANNOTATED_WITH',
+                          'object': 'annotation:org.springframework.stereotype.Service'}),
+        ('verify_claim', {'subject': service, 'relation': 'ANNOTATED_WITH',
+                          'object': 'annotation:org.springframework.stereotype.Component'}), analysis=scan)
+    assert written['verdict'] == 'CONFIRMED'
+    assert other['verdict'] == 'NOT_PROVEN'

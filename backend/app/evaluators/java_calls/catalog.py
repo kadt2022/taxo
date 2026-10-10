@@ -5,10 +5,12 @@ from app.evaluations.domain.evaluator import EvaluatorCatalog
 # TAXO-01L : les versions 2 (supertypes JDK connus) et 3 (parametres et variables locales receveurs) de la regle ne
 # changent ni relations, ni couvertures, ni codes : un parametre ou une variable est un symbole sujet de `CONTAINS`
 # et `TYPED_AS`, relations deja declarees. Le vocabulaire ne change pas, la version du catalogue non plus.
+# Version 2 (TAXO-MIP-ADT-01, PR A2) : les annotations ecrites des types et des methodes (ANNOTATED_WITH), relevees
+# sans interpretation. Une relation s'ajoute au catalogue : sa version change.
 CATALOG = EvaluatorCatalog(
     catalog_id='java-calls',
-    catalog_version='1',
-    relations=('CALLS', 'CONTAINS', 'EXTENDS', 'IMPLEMENTS', 'TYPED_AS'),
+    catalog_version='2',
+    relations=('ANNOTATED_WITH', 'CALLS', 'CONTAINS', 'EXTENDS', 'IMPLEMENTS', 'TYPED_AS'),
     coverage_types=('ANALYSED', 'NOT_INTERPRETED', 'READ_ERROR'),
     # TAXO-COV-01 : ce catalogue ne lit que les sources Java.
     languages=('Java',),

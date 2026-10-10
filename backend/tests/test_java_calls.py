@@ -54,6 +54,7 @@ def test_the_declarations_are_exactly_those_of_the_oracle(execution):
     expected |= {('EXTENDS', item['subject'], item['object']) for item in ORACLE['extends']}
     expected |= {('IMPLEMENTS', item['subject'], item['object']) for item in ORACLE['implements']
                  if item['status'] == 'OBSERVED'}
+    expected |= {('ANNOTATED_WITH', item['subject'], item['object']) for item in ORACLE['annotations']}
     found = {(fact['relation'], fact['subject'], fact['object']) for fact in execution.facts
              if fact['status'] == 'OBSERVED'}
     assert found == expected
@@ -173,3 +174,15 @@ def test_a_repository_without_java_gives_no_fact():
     output = JavaCallsEvaluator().evaluate(snapshot({'README.md': '# rien\n'}))
     assert output.facts == () and output.status is EvaluationStatus.SUCCESS
     assert [fact['coverage_type'] for fact in output.coverage] == ['ANALYSED']
+
+
+def test_each_written_annotation_is_observed_at_its_line_with_its_written_value(execution):
+    """TAXO-MIP-ADT-01, PR A2 : les annotations des types et des méthodes, relevées sans interprétation."""
+    found = {(fact['subject'], fact['object']): fact for fact in of(execution, 'ANNOTATED_WITH')}
+    assert len(found) == len(ORACLE['annotations']) == len(of(execution, 'ANNOTATED_WITH'))
+    for item in ORACLE['annotations']:
+        fact = found[(item['subject'], item['object'])]
+        evidence, = fact['evidence']
+        assert (evidence['line_start'], evidence['line_end'], fact['status']) == (item['line'], item['line'], 'OBSERVED')
+        arguments = fact['qualifiers'].get('arguments', {})
+        assert [value.get('value') for value in arguments.get('value', [])] == ([item['value']] if 'value' in item else [])
