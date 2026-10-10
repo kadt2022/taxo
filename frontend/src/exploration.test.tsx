@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {claimText, proofText, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
+import {claimText, limitText, proofText, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
 import {MiniaProgress, reduceMinia, stageText, startMinia} from './minia-live';
 import {SelectionAnswerView, type SelectionAnswer} from './query';
 
@@ -180,5 +180,33 @@ describe('confirmation par déduction (TAXO-05)', ()=>{
     const open:Statement={...protectedClaim, claim:{subject:'route-pattern:/public/**', relation:'PERMITS_ALL'},
       facts:[{ref:'F2', evidence_count:0, fact:{subject:'route-pattern:/public/**', relation:'PERMITS_ALL', status:'OBSERVED'}}]};
     expect(renderToStaticMarkup(<Statements statements={[open]}/>)).toContain('routes /public/** est ouvert à tous');
+  });
+});
+
+describe('limites jointes au verdict (TAXO-MINIA-SEC-01)', ()=>{
+  const limited={type:'claim', text:'La route exige seulement une authentification.', verdict:'CONFIRMED', reason:null,
+    claim:{subject:'endpoint:GET /api/items', relation:'PROTECTED_BY', object:'policy-rule:authenticated()'}, facts:[], evidence:[],
+    limits:[{subject:'endpoint:GET /api/items', type:'NOT_INTERPRETED', producer:'taxo.spring-security',
+      reason:'sécurité de méthode non interprétée (@PreAuthorize)'}]} as Extract<Statement,{type:'claim'}>;
+  it('dit qu’une confirmation a des limites, et lesquelles', ()=>{
+    expect(verdictText(limited)).toBe('Confirmée par Taxo, avec limites');
+    expect(limitText(limited.limits![0])).toContain('sécurité de méthode non interprétée (@PreAuthorize)');
+    const html=renderToStaticMarkup(<Statements statements={[limited]}/>);
+    expect(html).toContain('verdict-limited');
+    expect(html).toContain('Taxo n’a pas lu : sécurité de méthode non interprétée (@PreAuthorize)');
+  });
+  it('une limite sans raison reste dite, selon son type', ()=>{
+    expect(limitText({...limited.limits![0], reason:null})).toContain('zone non interprétée');
+    expect(limitText({...limited.limits![0], type:'READ_ERROR', reason:null})).toContain('fichier illisible');
+  });
+  it('une limite non transmise faute de place garde la confirmation limitée', ()=>{
+    const unsent={...limited, limits:[], not_sent:[{what:'limits', count:2, reason:'BUDGET'}]};
+    expect(verdictText(unsent)).toBe('Confirmée par Taxo, avec limites');
+    const html=renderToStaticMarkup(<Statements statements={[unsent]}/>);
+    expect(html).toContain('verdict-limited');
+    expect(html).toContain('Taxo connaît 2 autres limites, non transmises faute de place.');
+  });
+  it('une confirmation sans limite reste une confirmation', ()=>{
+    expect(verdictText({...limited, limits:[]})).toBe('Confirmée par Taxo');
   });
 });

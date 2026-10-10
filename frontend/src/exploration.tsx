@@ -15,7 +15,10 @@ type Proof = {ref:string; fact:string; location:Location};
 export type Statement =
   | {type:'interpretation'|'unknown'; text:string}
   | {type:'claim'; text:string; claim:Claim; verdict:string|null; reason?:string|null; error?:ProtocolError;
-      facts?:{ref:string; fact:GitFact; evidence_count:number}[]; evidence?:Proof[]};
+      facts?:{ref:string; fact:GitFact; evidence_count:number}[]; evidence?:Proof[]; limits?:Limit[];
+      not_sent?:{what:string; count:number; reason:string}[]};
+/** Ce que Taxo n'a pas su lire sur le sujet ou l'objet d'une affirmation (TAXO-MINIA-SEC-01) : le verdict n'en dit rien. */
+export type Limit = {subject:string; type:string; producer:string|null; reason:string|null};
 
 const VERDICTS:Record<string,string>={CONFIRMED:'Confirmée par Taxo', REFUTED:'Contredite par Taxo', NOT_PROVEN:'Non prouvée'};
 const REASONS:Record<string,string>={NOT_FOUND_IN_ANALYSED_SCOPE:'Taxo a cherché là où il analyse et n’a rien établi',
@@ -29,9 +32,27 @@ export function verdictText(statement:Extract<Statement,{type:'claim'}>){
   if(statement.verdict===null)return `Non vérifiable : ${statement.error?.message??'Taxo n’a pas pu la vérifier.'}`;
   const inferred=statement.verdict==='CONFIRMED'&&statement.facts?.some(item=>item.fact.status==='INFERRED');
   // Une confirmation qui repose sur une deduction de Taxo le dit : elle n'a pas la force d'une observation.
-  const text=inferred?'Confirmée par Taxo, par déduction':VERDICTS[statement.verdict]??statement.verdict;
+  const base=inferred?'Confirmée par Taxo, par déduction':VERDICTS[statement.verdict]??statement.verdict;
+  // Une confirmation ne couvre pas ce que Taxo n'a pas su lire : elle le dit, au lieu de paraitre complete.
+  const text=limited(statement)?`${base}, avec limites`:base;
   return statement.reason?`${text} : ${REASONS[statement.reason]??statement.reason}`:text;
 }
+
+/** Les limites qu'une reponse n'a pas pu transmettre faute de place : elles existent, Taxo les compte. */
+const unsentLimits=(statement:Extract<Statement,{type:'claim'}>)=>
+  statement.not_sent?.filter(item=>item.what==='limits').reduce((total,item)=>total+item.count,0)??0;
+
+/** Une confirmation qui ne couvre pas tout : des limites jointes, ou comptees sans place pour les dire. */
+const limited=(statement:Extract<Statement,{type:'claim'}>)=>
+  statement.verdict==='CONFIRMED'&&(Boolean(statement.limits?.length)||unsentLimits(statement)>0);
+
+const unsentText=(count:number)=>count>1?`Taxo connaît ${count} autres limites, non transmises faute de place.`
+  :'Taxo connaît une autre limite, non transmise faute de place.';
+
+const UNREAD:Record<string,string>={NOT_INTERPRETED:'zone non interprétée', READ_ERROR:'fichier illisible'};
+
+/** Une limite en une phrase : ce qui n'a pas ete lu, et ou ; sans raison, son type le dit. */
+export const limitText=(limit:Limit)=>`${limit.reason??UNREAD[limit.type]??limit.type} (${reference(limit.subject)})`;
 
 /** Une deduction de Taxo, premisse par premisse (ARCHITECTURE § 12) : ce qui la fonde, et ce qu'elle ne sait pas. */
 export function DerivationView({derivation}:Readonly<{derivation:Derivation}>){
@@ -75,7 +96,8 @@ export function proofText(location:Location){
   return location.method?`${where} (${location.method})`:where;
 }
 
-const verdictClass=(verdict:string|null)=>`verdict verdict-${(verdict??'none').toLowerCase().replaceAll('_','-')}`;
+const verdictClass=(statement:Extract<Statement,{type:'claim'}>)=>limited(statement)
+  ?'verdict verdict-limited':`verdict verdict-${(statement.verdict??'none').toLowerCase().replaceAll('_','-')}`;
 
 export function Trajectory({steps}:Readonly<{steps:TrajectoryStep[]}>){
   if(!steps.length)return null;
@@ -104,7 +126,10 @@ export function Statements({statements, limits=[]}:Readonly<{statements:Statemen
     <article className="minia-block fact">
       <h3>Affirmations vérifiées par Taxo</h3>
       {claims.length?<ul>{claims.map((item,index)=><li key={index}>
-        <span className={verdictClass(item.verdict)}>{verdictText(item)}</span> {claimSentence(item.claim)}
+        <span className={verdictClass(item)}>{verdictText(item)}</span> {claimSentence(item.claim)}
+        {item.limits?.length?<ul className="claim-limits">{item.limits.map(limit=><li key={`${limit.subject}:${limit.reason}`}>
+          Taxo n’a pas lu : {limitText(limit)}</li>)}</ul>:null}
+        {unsentLimits(item)?<p className="claim-limits">{unsentText(unsentLimits(item))}</p>:null}
         <details className="proof"><summary>Ce que Taxo a vérifié</summary>
           <dl className="verified-claim">
             <div><dt>subject</dt><dd><code>{item.claim.subject}</code></dd></div>

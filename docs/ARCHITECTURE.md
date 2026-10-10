@@ -934,6 +934,17 @@ capacités déclarées ; il ne connaît aucun langage ni aucun analyseur par son
 `NOT_PROVEN` n'est jamais `REFUTED`. Le vérificateur n'est pas un prouveur général. Une résolution
 incomplète relève du diagnostic, pas d'un quatrième verdict.
 
+Chaque verdict porte ses **limites** (`limits`, TAXO-MINIA-SEC-01) : les zones `NOT_INTERPRETED` ou
+`READ_ERROR` que les analyseurs de la relation déclarent sur le sujet ou l'objet, avec leur raison. Un
+verdict ne vaut que pour ce qui a été lu : une règle d'URL `CONFIRMED` dont la route porte une sécurité de
+méthode non interprétée est affichée « Confirmée par Taxo, avec limites », la limite à côté. Chaque relation
+garde son sens : la limite d'une relation de sécurité n'accompagne pas un `HANDLED_BY`. Une confirmation
+ou une réfutation d'une relation à une seule valeur par sujet (`MATCHED_BY`, `HANDLED_BY`, `AUTHORED_BY`,
+`TYPED_AS`, `WRITTEN_IN`) ne porte que les limites de son objet (une cible ambiguë) : ce qui n'a pas été
+lu sur le sujet ne peut pas lui ajouter une seconde valeur, et ses propres doutes sont dans sa dérivation. Les limites
+passent avant les faits dans le budget de la réponse : une limite qui ne tient pas est comptée dans
+`not_sent` (`what: limits`) et ne coûte jamais le verdict ; la confirmation reste affichée « avec limites ».
+
 Ce que Minia rend dépend du mode (§ 12.5) :
 
 - **exploration** : une suite d'**énoncés typés** : `claim` (phrase et affirmation structurée, toujours
