@@ -18,10 +18,9 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
-from app.minia.domain import briefing, exploration, source_context
-from app.minia.domain.cancellation import STOPPED, check
 from app.minia.application import anchoring
-from app.minia.domain import anchors
+from app.minia.domain import anchors, briefing, exploration, source_context
+from app.minia.domain.cancellation import STOPPED, check
 from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, SYSTEM_TILE, AnswerStream, parse, with_diff
 from app.minia.domain.errors import CANCELLED, CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
 from app.minia.domain.model import MiniaModel
@@ -67,6 +66,8 @@ _UNSEARCHED = ("Taxo n'a pas pu conclure à un seul élément (recherche incompl
 _NOTHING_AROUND = "Taxo ne connaît aucun fait autour de {} dans cette analyse."
 _NOT_SERVED = "La Tuile de {} n'a pas pu être servie : {}"
 MAX_SHOWN_CANDIDATES = 5
+# L'evenement qui clot une demande, avec son resultat.
+COMPLETED = 'minia.completed'
 _EMPTY = {'SELECTED': "Aucun commit de l'historique analysé ne correspond à cette sélection.",
           'NOT_FOUND': "Aucun commit de l'historique analysé ne commence par cet identifiant.",
           'AMBIGUOUS': 'Plusieurs commits commencent par cet identifiant : donnez-en davantage de caractères.',
@@ -80,7 +81,7 @@ def _stage(stage, state, label, count=None):
 def _final(events):
     """Resultat d'une demande dont on n'observe pas les etapes : le dernier evenement, `minia.completed`."""
     for event_type, data in events:
-        if event_type == 'minia.completed':
+        if event_type == COMPLETED:
             return data
 
 
@@ -136,7 +137,7 @@ def _guarded(events, cancel):
     def run():
         try:
             for item in events:
-                if item[0] == 'minia.completed':
+                if item[0] == COMPLETED:
                     cancel.check()
                 yield item
                 cancel.check()
@@ -375,12 +376,12 @@ class AskMinia:
                   'not_interpreted': list(brief.not_interpreted), 'failures': list(brief.failures),
                   'facts_not_sent': brief.truncated, 'rejected_citations': []}
         if brief.empty:
-            yield 'minia.completed', {**result, 'status': NOTHING_KNOWN, 'facts': [], 'answer': '', 'unknown': _NOTHING}
+            yield COMPLETED, {**result, 'status': NOTHING_KNOWN, 'facts': [], 'answer': '', 'unknown': _NOTHING}
             return
         raw, served = yield from self._interpret(model, with_diff(SYSTEM) if brief.diff else SYSTEM, brief,
                                                  len(sent.get('files_sent', ())), cancel)
         answer = parse(raw, brief.refs)
-        yield 'minia.completed', {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
+        yield COMPLETED, {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [_change(ref, brief.refs[ref]) for ref in answer['cited']],
                                   'rejected_citations': answer['rejected']}
 
@@ -479,7 +480,7 @@ class AskMinia:
         yield _stage('exploration', 'done', label, len(trajectory))
         statements = yield from self._verified(step.statements, exchange, trajectory, cancel)
         check(cancel)
-        yield 'minia.completed', {
+        yield COMPLETED, {
             **result, 'status': ANSWERED, 'mode': EXPLORATION, 'statements': statements, 'trajectory': trajectory,
             'budget': {'max_bytes': exchange.budget, 'used': exchange.used}}
 
@@ -529,12 +530,12 @@ class AskMinia:
                   'facts_not_sent': 0, 'rejected_citations': [], 'facts': [], 'answer': ''}
         if projection['status'] == 'GLOBAL':
             if self.taxo_query is None or self.mip is None:
-                yield 'minia.completed', {**result, 'status': NEEDS_SELECTION, 'unknown': _SELECT}
+                yield COMPLETED, {**result, 'status': NEEDS_SELECTION, 'unknown': _SELECT}
                 return
             yield from self._anchored_steps(model, question, projection, result, cancel)
             return
         if not projection['facts']:
-            yield 'minia.completed', {**result, 'status': NOTHING_KNOWN, 'unknown': _EMPTY[projection['status']]}
+            yield COMPLETED, {**result, 'status': NOTHING_KNOWN, 'unknown': _EMPTY[projection['status']]}
             return
         project = projection['project']
         brief = briefing.selection(question, projection, (project['id'], project['name']),
@@ -542,7 +543,7 @@ class AskMinia:
         yield _stage('context', 'done', 'Préparation du contexte')
         raw, served = yield from self._interpret(model, SYSTEM_SELECTION, brief, cancel=cancel)
         answer = parse(raw, brief.refs)
-        yield 'minia.completed', {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
+        yield COMPLETED, {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
                                   'facts_not_sent': brief.truncated, 'rejected_citations': answer['rejected']}
 
@@ -563,10 +564,10 @@ class AskMinia:
             'status': resolution.status, 'reference': resolution.anchor,
             'candidates': list(resolution.candidates[:MAX_SHOWN_CANDIDATES])}}
         if resolution.status != anchors.FOUND:
-            yield 'minia.completed', {**result, 'status': NEEDS_SELECTION, 'unknown': _unanchored(resolution)}
+            yield COMPLETED, {**result, 'status': NEEDS_SELECTION, 'unknown': _unanchored(resolution)}
             return
         if found.refused:
-            yield 'minia.completed', {**result, 'status': NOTHING_KNOWN,
+            yield COMPLETED, {**result, 'status': NOTHING_KNOWN,
                                       'unknown': _NOT_SERVED.format(resolution.anchor, found.refused)}
             return
         brief = briefing.tile(question, resolution.anchor, found.tiles, (project['id'], project['name']),
@@ -574,12 +575,12 @@ class AskMinia:
         result = {**result, 'not_interpreted': list(brief.not_interpreted), 'facts_not_sent': brief.truncated}
         if not brief.refs:
             unknown = _NOTHING_AROUND.format(resolution.anchor)
-            yield 'minia.completed', {**result, 'status': NOTHING_KNOWN, 'unknown': unknown}
+            yield COMPLETED, {**result, 'status': NOTHING_KNOWN, 'unknown': unknown}
             return
         yield _stage('context', 'done', 'Préparation du contexte')
         raw, served = yield from self._interpret(model, SYSTEM_TILE, brief, cancel=cancel)
         answer = parse(raw, brief.refs)
-        yield 'minia.completed', {**result, 'model': self._model_view(model, served), 'status': ANSWERED,
+        yield COMPLETED, {**result, 'model': self._model_view(model, served), 'status': ANSWERED,
                                   'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
                                   'rejected_citations': answer['rejected']}
