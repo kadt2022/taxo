@@ -66,6 +66,11 @@ _ASSIGNED = re.compile(
 _YAML_ENTRY = re.compile(
     rf'(?P<indent>[ \t]*)(?P<dash>-[ \t]+)?(?P<key>["\']?{_SECRET_NAME}["\']?[ \t]*:)(?=[ \t]|$)(?P<rest>.*)',
     re.IGNORECASE)
+# Une entree d'une table YAML en ligne (`{password: correct horse, port: 8080}`) : sa valeur non citee va jusqu'a la
+# virgule ou l'accolade qui la ferme.
+_FLOW_ENTRY = re.compile(
+    rf'(?<=[{{,])(?P<key>[ \t]*["\']?{_SECRET_NAME}["\']?[ \t]*:[ \t]+)(?P<value>[^\s,{{}}"\'][^,{{}}\r\n]*?)'
+    r'(?=[ \t]*[,}])', re.IGNORECASE)
 _COMMENT = re.compile(r'[ \t]+#')
 # Une valeur properties non citee de plusieurs mots (`password=correct horse battery`) : masquee jusqu'au
 # commentaire de fin de ligne. Une ligne de code (`;`, `{`, `,` final ou un appel) reste a `_ASSIGNED`.
@@ -250,6 +255,7 @@ class Disclosure:
     def _secrets(self, text):
         text = self._entries(text)
         text = _PLAIN_SCALAR.sub(self._plain, text)
+        text = _FLOW_ENTRY.sub(self._plain, text)
         text, found = _TOKENS.subn(MASK, text)
         text, credentials = _URL_CREDENTIALS.subn(rf'\g<1>{MASK}:{MASK}@', text)
         self._withheld['secrets'] += found + credentials
@@ -269,7 +275,8 @@ class Disclosure:
         if _NOT_A_SECRET.fullmatch(value) or _CODE.search(value):
             return match[0]
         self._withheld['secrets'] += 1
-        return f"{match['key']}{MASK}{match['tail'] or ''}{match['end']}"
+        groups = match.groupdict()
+        return f"{match['key']}{MASK}{groups.get('tail') or ''}{groups.get('end') or ''}"
 
     def _entries(self, text):
         """Masque la valeur de chaque entree YAML dont la cle est un nom de secret ; la cle et les soeurs restent."""

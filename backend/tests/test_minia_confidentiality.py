@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.bootstrap.database import Base
 from app.main import create_app
 from app.history.domain.errors import GIT_READ_ERROR, NOT_A_GIT_REPOSITORY, HistoryError
-from app.minia.application.ask import AskMinia
+from app.minia.application.ask import AskMinia, _reported
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain.authorship import asks_author
 from app.minia.domain.confidentiality import MASK, Disclosure
@@ -457,3 +457,22 @@ def test_an_unreadable_history_refuses_any_transmission():
     assert refused.value.code == CONFIDENTIALITY_REFUSED, 'un auteur que rien n’a appris à masquer ne part pas'
     without_git = AskMinia(_History(HistoryError(NOT_A_GIT_REPOSITORY, 'pas de dépôt')), {}, projects=None)
     assert without_git._authors('p') == (), 'sans dépôt Git, aucun auteur à protéger'
+
+
+def test_streamed_text_names_the_author_locally_even_across_fragments():
+    disclosure = Disclosure()
+    protect({'facts': [authored()]}, disclosure)
+    events = [('minia.delta', {'text': 'per'}), ('minia.delta', {'text': 'sonne-1 a écrit'}),
+              ('minia.delta', {'text': ' ce commit, pers'}), ('minia.completed', {'answer': 'ok'})]
+    streamed = list(_reported(iter(events), disclosure))
+    text = ''.join(data['text'] for kind, data in streamed if kind == 'minia.delta')
+    assert text == f'{NAME} a écrit ce commit, pers', 'le pseudonyme coupé en deux fragments est restauré'
+    assert 'personne-1' not in text and streamed[-1][0] == 'minia.completed'
+
+
+@pytest.mark.parametrize('source, expected', [
+    ('config: {password: correct horse battery, port: 8080}', f'config: {{password: {MASK}, port: 8080}}'),
+    ('config: {port: 8080, token: two words}', f'config: {{port: 8080, token: {MASK}}}'),
+])
+def test_a_secret_in_a_yaml_flow_mapping_is_masked_to_its_delimiter(source, expected):
+    assert protect({'source': source})['source'] == expected

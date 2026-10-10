@@ -14,6 +14,7 @@ interpretation. Quand le fournisseur sait diffuser sa reponse, le texte provisoi
 la reponse definitive, citations validees, n'est rendue qu'a la fin.
 """
 import inspect
+import re
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -76,6 +77,7 @@ _NOT_SERVED = "La Tuile de {} n'a pas pu être servie : {}"
 MAX_SHOWN_CANDIDATES = 5
 # L'evenement qui clot une demande, avec son resultat.
 COMPLETED = 'minia.completed'
+DELTA = 'minia.delta'
 _EMPTY = {'SELECTED': "Aucun commit de l'historique analysé ne correspond à cette sélection.",
           'NOT_FOUND': "Aucun commit de l'historique analysé ne commence par cet identifiant.",
           'AMBIGUOUS': 'Plusieurs commits commencent par cet identifiant : donnez-en davantage de caractères.',
@@ -136,13 +138,31 @@ def _complete(model, system, user, schema=None, cancel=None):
     return model.complete(system, user, **options)
 
 
+# Fin de texte qui peut etre le debut d'un pseudonyme (`pers`, `personne-1`) : gardee jusqu'au fragment suivant.
+_PSEUDONYM_START = re.compile(r'p(?:e(?:r(?:s(?:o(?:n(?:n(?:e(?:-\d*)?)?)?)?)?)?)?)?\Z')
+
+
 def _reported(events, disclosure):
-    """Les etapes d'une demande ; la reponse finale dit ce que Taxo a retenu avant l'envoi au modele, compte,
-    jamais montre (recit TAXO-MINIA-SEC-01, E4)."""
+    """Les etapes d'une demande ; le texte diffuse a les identites d'origine, comme la reponse finale, qui dit ce
+    que Taxo a retenu avant l'envoi au modele, compte, jamais montre (recit TAXO-MINIA-SEC-01, E4)."""
+    pending = ''
     for event_type, data in events:
+        if event_type == DELTA:
+            pending += data['text']
+            held = _PSEUDONYM_START.search(pending)
+            cut = held.start() if held else len(pending)
+            if cut:
+                yield DELTA, {**data, 'text': disclosure.restore(pending[:cut])}
+            pending = pending[cut:]
+            continue
+        if pending:
+            yield DELTA, {'text': disclosure.restore(pending)}
+            pending = ''
         if event_type == COMPLETED:
             data = {**data, 'withheld': disclosure.report()}
         yield event_type, data
+    if pending:
+        yield DELTA, {'text': disclosure.restore(pending)}
 
 
 def _restored(model, answer):
@@ -705,7 +725,7 @@ class AskMinia:
                 chunks.append(chunk)
                 text = extractor.feed(chunk)
                 if text:
-                    yield 'minia.delta', {'text': text}
+                    yield DELTA, {'text': text}
             raw = ''.join(chunks)
         yield _stage('interpretation', 'done', label, len(brief.refs))
         return raw, served
