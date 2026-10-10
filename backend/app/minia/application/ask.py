@@ -33,8 +33,6 @@ from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
 MAX_QUESTION = 1000
-# Auteurs Git proteges d'office dans chaque demande : ceux des derniers commits du projet.
-KNOWN_AUTHORS_COMMITS = 100
 # Garde-fous de l'exploration (ARCHITECTURE § 12.5), fixes par Taxo : une description, au plus 8 operations
 # choisies par Minia, puis au plus 10 affirmations verifiees ; l'echange en permet 20.
 MAX_CALLS = 8
@@ -281,12 +279,12 @@ class AskMinia:
         return ProtectedModel(model, Disclosure(self._authors(project_id)))
 
     def _authors(self, project_id):
-        """Les auteurs Git du projet ; aucun si son historique n'est pas lisible (le controle final demeure)."""
+        """Tous les auteurs Git du projet, et pas seulement ceux des derniers commits ; aucun si son historique
+        n'est pas lisible (le controle final demeure)."""
         try:
-            commits = self.history.commits(project_id, KNOWN_AUTHORS_COMMITS)
+            return tuple(self.history.authors(project_id))
         except (HistoryError, ProjectError):
             return ()
-        return sorted({commit.author for commit in commits if commit.author})
 
     def _model(self, provider):
         """Le modele demande, ou celui par defaut ; un fournisseur non configure est refuse."""

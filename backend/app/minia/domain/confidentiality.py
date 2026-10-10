@@ -26,7 +26,11 @@ _PERSON = 'person:'
 MIN_NAME_PART = 3
 
 # Le domaine peut n'avoir qu'un label (`root@localhost`) : une adresse locale reste une adresse.
-_EMAIL = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*')
+# La partie locale et le domaine peuvent etre internationaux (`josé@exemple.fr`) ; la partie locale garde ses
+# caracteres permis (`john!doe@`) pour que l'adresse soit masquee en entier, jamais seulement sa fin ; `*` en est
+# exclu, il est celui du masque.
+_EMAIL = re.compile(r'[\w.!#$%&+?^`{|}~-]+@[\w-]+(?:\.[\w-]+)*')
+_NAMED_ADDRESS = re.compile(r'(.*?)\s*<([^<>]*)>')
 _PSEUDONYM = re.compile(r'personne-[1-9]\d*')
 # Une reference de Taxo (`file:src/A.java`, `class:com.x.A`) : ses noms ne sont pas des personnes.
 _REFERENCE = re.compile(r'(?!person:)[a-z][a-z_-]*:\S+')
@@ -54,18 +58,20 @@ _SECRET_NAME = r'[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|a
 # jusqu'a son guillemet fermant, ou jusqu'a la fin du texte s'il n'est pas ferme.
 _ASSIGNED = re.compile(
     rf'(?P<name>\b{_SECRET_NAME}["\']?)(?P<sep>\s*(?:[:=]|=>)\s*|\(\s*)'
-    r'(?P<value>"(?:[^"\\]|\\[\s\S])*(?:"|\Z)|\'(?:[^\'\\]|\\[\s\S])*(?:\'|\Z)|[^\s"\',;(){}\[\]]+(?![\w(.{]))',
+    r'(?P<value>"(?:[^"\\]|\\[\s\S])*(?:"|\Z)|\'(?:[^\'\\]|\\[\s\S]|\'\')*(?:\'|\Z)|[^\s"\',;(){}\[\]]+(?![\w(.{]))',
     re.IGNORECASE)
-# L'en-tete d'un bloc YAML affecte a un nom de secret (`password: |`, `|2-`, `>+`) : son contenu est fait des lignes
-# suivantes plus indentees que la cle, lignes vides comprises ; il s'arrete a la premiere ligne qui ne l'est pas.
-_BLOCK_HEADER = re.compile(
-    rf'^(?P<indent>[ \t]*)(?P<dash>-[ \t]+)?(?P<key>["\']?{_SECRET_NAME}["\']?[ \t]*:[ \t]*)[|>](?:[1-9][-+]?|[-+][1-9]?)?'
-    r'[ \t]*(?:#[^\r\n]*)?$', re.IGNORECASE)
-# Une valeur YAML ou properties non citee de plusieurs mots (`password: correct horse battery`) : masquee jusqu'au
+# Une entree YAML dont la cle est un nom de secret (`password: x`, `- token: |`, `"secret": "x"`) : sa valeur est
+# masquee en entier, quelle que soit sa forme (simple, citee, guillemets doubles `''`, bloc `|` ou `>`), avec les
+# lignes plus indentees que la cle qui la continuent ; un commentaire de fin d'une valeur non citee reste.
+_YAML_ENTRY = re.compile(
+    rf'(?P<indent>[ \t]*)(?P<dash>-[ \t]+)?(?P<key>["\']?{_SECRET_NAME}["\']?[ \t]*:)(?=[ \t]|$)(?P<rest>.*)',
+    re.IGNORECASE)
+_COMMENT = re.compile(r'[ \t]+#')
+# Une valeur properties non citee de plusieurs mots (`password=correct horse battery`) : masquee jusqu'au
 # commentaire de fin de ligne. Une ligne de code (`;`, `{`, `,` final ou un appel) reste a `_ASSIGNED`.
 _PLAIN_SCALAR = re.compile(
-    rf'^(?P<key>[ \t]*(?:-[ \t]+)?["\']?{_SECRET_NAME}["\']?[ \t]*[:=][ \t]*)'
-    r'(?P<value>[^\s"\'|>#][^\r\n]*?[ \t][^\r\n]*?)(?P<tail>[ \t]+#[^\r\n]*)?(?P<end>\r?)$',
+    rf'^(?P<key>[ \t]*{_SECRET_NAME}[ \t]*=[ \t]*)'
+    r'(?P<value>[^\s"\'#][^\r\n]*?[ \t][^\r\n]*?)(?P<tail>[ \t]+#[^\r\n]*)?(?P<end>\r?)$',
     re.IGNORECASE | re.MULTILINE)
 _CODE = re.compile(r'[;{,]\s*$|\(')
 # Valeurs qui ne sont pas des secrets : vides, litteraux, ou renvoi a une variable d'environnement.
@@ -74,6 +80,14 @@ _NOT_A_SECRET = re.compile(r'["\']?(?:|null|none|true|false|\$\{[^}]*\}|\*+)["\'
 
 def _indent(line):
     return len(line) - len(line.lstrip(' \t'))
+
+
+def _split_comment(value):
+    """(valeur, commentaire de fin) d'une valeur YAML ; une valeur citee garde tout, son `#` peut etre a elle."""
+    comment = None if value[:1] in ('"', "'") else _COMMENT.search(value)
+    if value.startswith('#'):
+        return '', f' {value}'
+    return (value, '') if comment is None else (value[:comment.start()], value[comment.start():])
 
 
 def _strip_trailers(text):
@@ -119,7 +133,9 @@ class Disclosure:
         self._anchored = set()  # pseudonymes lies a un courriel ou a une reference `person:`
         self._withheld = {'identities': set(), 'secrets': 0, 'trailers': 0}
         for identity in known:
-            self._identity(identity, words=False)
+            # `Nom <courriel>` : deux formes d'une meme personne, affichee localement par son nom.
+            written = _NAMED_ADDRESS.fullmatch(identity.strip())
+            self._identity(*(written.groups() if written else (identity,)), words=False)
 
     # Protection -------------------------------------------------------------------------------------------
 
@@ -229,7 +245,7 @@ class Disclosure:
         return protected
 
     def _secrets(self, text):
-        text = self._blocks(text)
+        text = self._entries(text)
         text = _PLAIN_SCALAR.sub(self._plain, text)
         text, found = _TOKENS.subn(MASK, text)
         text, credentials = _URL_CREDENTIALS.subn(rf'\g<1>{MASK}:{MASK}@', text)
@@ -252,26 +268,33 @@ class Disclosure:
         self._withheld['secrets'] += 1
         return f"{match['key']}{MASK}{match['tail'] or ''}{match['end']}"
 
-    def _blocks(self, text):
-        """Masque le contenu de chaque bloc YAML affecte a un nom de secret ; la cle et les lignes soeurs restent."""
+    def _entries(self, text):
+        """Masque la valeur de chaque entree YAML dont la cle est un nom de secret ; la cle et les soeurs restent."""
         lines = text.split('\n')
         kept, index = [], 0
         while index < len(lines):
-            header = _BLOCK_HEADER.match(lines[index].rstrip('\r'))
-            kept.append(lines[index] if header is None
-                        else f"{header['indent']}{header['dash'] or ''}{header['key']}{MASK}")
+            line = lines[index]
+            end = '\r' if line.endswith('\r') else ''
+            entry = _YAML_ENTRY.fullmatch(line.removesuffix('\r'))
             index += 1
-            if header is None:
+            if entry is None:
+                kept.append(line)
                 continue
-            # Dans une liste (`- password: |`), la cle est indentee jusqu'apres le tiret : ses soeurs aussi.
-            depth = len(header['indent']) + len(header['dash'] or '')
+            # Dans une liste (`- password: x`), la cle est indentee jusqu'apres le tiret : ses soeurs aussi.
+            depth = len(entry['indent']) + len(entry['dash'] or '')
             start = index
             while index < len(lines) and (not lines[index].strip() or _indent(lines[index]) > depth):
                 index += 1
-            # Les lignes vides qui suivent le bloc ne lui appartiennent pas : elles restent.
+            # Les lignes vides qui suivent l'entree ne lui appartiennent pas : elles restent.
             while index > start and not lines[index - 1].strip():
                 index -= 1
-            self._withheld['secrets'] += index > start
+            value, tail = _split_comment(entry['rest'].strip())
+            if index == start and _NOT_A_SECRET.fullmatch(value):
+                kept.append(line)
+                continue
+            quote = value[0] if value[:1] in ('"', "'") else ''
+            self._withheld['secrets'] += 1
+            kept.append(f"{entry['indent']}{entry['dash'] or ''}{entry['key']} {quote}{MASK}{quote}{tail}{end}")
         return '\n'.join(kept)
 
     def _people(self, text, names=True):

@@ -104,7 +104,29 @@ def test_a_quoted_secret_continued_on_the_next_lines_is_masked_whole(source):
 
 
 def test_an_unterminated_quoted_secret_is_masked_to_the_end():
-    assert protect({'source': 'password: "correct\n  horse'})['source'] == f'password: {MASK}'
+    assert protect({'source': 'password: "correct\n  horse'})['source'] == f'password: "{MASK}"'
+    assert protect({'source': 'token = "correct'})['source'] == f'token = {MASK}'
+
+
+@pytest.mark.parametrize('source', [
+    "password: 'correct ''horse'' battery'\nport: 8080",
+    'password: correct\n  horse battery\nport: 8080',
+    'password: "correct # not a comment"\nport: 8080',
+    'password:\n  correct horse\nport: 8080',
+])
+def test_every_form_of_a_yaml_secret_value_is_masked_whole(source):
+    sent = protect({'source': source})['source']
+    assert 'horse' not in sent and 'correct' not in sent, sent
+    assert sent.endswith('\nport: 8080'), 'les entrées sœurs restent'
+
+
+def test_a_yaml_secret_keeps_its_name_and_quote_style():
+    assert protect({'source': "- token: 'a ''b'''"})['source'] == f"- token: '{MASK}'"
+
+
+@pytest.mark.parametrize('address', ['josé@exemple.fr', 'john!doe@example.com', 'ana@münchen.de'])
+def test_an_address_is_masked_whole_even_when_international(address):
+    assert protect({'text': f'écrire à {address} demain'}) == {'text': 'écrire à personne-1 demain'}
 
 
 def test_a_code_line_is_not_a_plain_secret():
@@ -379,6 +401,22 @@ def test_a_project_question_naming_an_author_does_not_send_the_name(leaky, tmp_p
     for sent in model.calls:
         assert NAME not in sent and EMAIL not in sent, sent
     assert result['answer'] == f'{NAME} a configuré le projet.'
+
+
+def test_an_author_older_than_the_latest_commits_is_still_protected(leaky, git, tmp_path):
+    repo, _ = leaky
+    for index in range(101):
+        git(repo, '-c', 'user.name=Bob Martin', '-c', 'user.email=bob.martin@example.org', 'commit', '-q',
+            '--allow-empty', '-m', f'chore: étape {index}')
+    model = CapturingModel(json.dumps({'cited': [], 'unknown': '', 'answer': 'Rien à signaler.'}))
+    client, project = open_client(tmp_path, repo, model)
+    with client:
+        client.post(f'/api/projects/{project}/scans')
+        client.post(f'/api/projects/{project}/ask',
+                    json={'question': f'Qu’a changé {NAME} dans les 2 derniers commits ?'})
+    assert model.calls
+    for sent in model.calls:
+        assert NAME not in sent and EMAIL not in sent, 'tout l’historique est connu, pas seulement les derniers commits'
 
 
 def test_taxo_answers_who_wrote_a_commit_even_without_any_configured_model(leaky, tmp_path):
