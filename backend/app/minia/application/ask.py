@@ -64,6 +64,9 @@ _AMBIGUOUS = 'Plusieurs éléments correspondent à la question ; précisez lequ
 _UNSEARCHED = ("Taxo n'a pas pu conclure à un seul élément (recherche incomplète ou index des noms absent) : "
                "donnez la référence complète.")
 _NOTHING_AROUND = "Taxo ne connaît aucun fait autour de {} dans cette analyse."
+# Des faits existent, mais aucun n'a tenu dans la place du modele : ce n'est pas une absence de connaissance.
+_NOTHING_SENT = ("Taxo connaît {} fait(s) autour de {}, mais aucun n'a tenu dans la place du modèle : "
+                 "Minia n'a pas été appelée. Consultez la Tuile dans l'explorateur.")
 _NOT_SERVED = "La Tuile de {} n'a pas pu être servie : {}"
 MAX_SHOWN_CANDIDATES = 5
 # L'evenement qui clot une demande, avec son resultat.
@@ -508,9 +511,11 @@ class AskMinia:
             if response['outcome'] != 'OK':
                 verified.append({**statement, 'verdict': None, 'error': response['error']})
                 continue
+            # Les limites accompagnent le verdict : une confirmation ne couvre pas ce que Taxo n'a pas su lire.
             verified.append({**statement, 'claim': response['claim'], 'verdict': response['verdict'],
                              'reason': response['reason'], 'facts': response['items'],
-                             'evidence': response['evidence'], 'not_sent': response['not_sent']})
+                             'evidence': response['evidence'], 'not_sent': response['not_sent'],
+                             'limits': response.get('limits', [])})
         yield _stage('verification', 'done', 'Taxo vérifie les affirmations de Minia', claims)
         return verified
 
@@ -584,7 +589,8 @@ class AskMinia:
                               self._capacity(model, SYSTEM_TILE))
         result = {**result, 'not_interpreted': list(brief.not_interpreted), 'facts_not_sent': brief.truncated}
         if not brief.refs:
-            unknown = _NOTHING_AROUND.format(resolution.anchor)
+            unknown = (_NOTHING_SENT.format(brief.truncated, resolution.anchor) if brief.truncated
+                       else _NOTHING_AROUND.format(resolution.anchor))
             yield COMPLETED, {**result, 'status': NOTHING_KNOWN, 'unknown': unknown}
             return
         yield _stage('context', 'done', 'Préparation du contexte')

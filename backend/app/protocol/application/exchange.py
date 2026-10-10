@@ -289,6 +289,17 @@ class Exchange:
         return entries or [{'subject': None, 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
                             'relation': relation}]
 
+    def limits(self, relation, concerned):
+        """Ce que les analyseurs de la relation n'ont pas su lire sur le sujet ou l'objet d'une affirmation, avec
+        leur raison (TAXO-MINIA-SEC-01, E1). Un verdict vaut pour ce qui a ete lu : une confirmation qui porte ces
+        limites ne couvre pas ce qu'elles taisent (une regle d'URL confirmee, la securite de methode de la meme
+        route non interpretee)."""
+        return [{'subject': fact['subject'], 'type': fact['coverage_type'],
+                 'producer': fact.get('produced_by', {}).get('producer_id'), 'reason': fact.get('reason')}
+                for analyzer in self.analyzers() if relation in analyzer.relations
+                for fact in analyzer.coverage
+                if fact['coverage_type'] in UNREAD_COVERAGE and fact['subject'] in concerned]
+
     def _history_available(self):
         return any(item.get('status') != 'FAILED' and _HISTORY in self.service.catalogs.get(
             item['evaluator_id'], frozenset(item.get('relations', {}))) for item in self.evaluations)
@@ -530,8 +541,10 @@ class Exchange:
         established = [fact for fact in self.query(subject=subject, relation=relation, kind=_ASSERTION)
                        if fact.get('validity', 'VALID') == 'VALID']
         verdict = judge(claim, established, self.knowledge(self.analyzers()), self.needed(subject))
-        response = self.response('verify_claim', self.envelope_coverage(relation, {subject, target} - {None}),
-                                  max_bytes, claim=claim, verdict=verdict.verdict, reason=verdict.reason)
+        concerned = {subject, target} - {None}
+        response = self.response('verify_claim', self.envelope_coverage(relation, concerned), max_bytes,
+                                 claim=claim, verdict=verdict.verdict, reason=verdict.reason,
+                                 limits=self.limits(relation, concerned))
         self.add_facts(response, list(verdict.facts), evidence=True)
         return response
 
