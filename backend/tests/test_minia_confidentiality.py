@@ -100,6 +100,34 @@ def test_taxo_references_keep_their_names():
                                 'object': 'class:demo.Lovelace'}, 'une référence de Taxo reste citable'
 
 
+def test_a_known_author_named_without_any_fact_is_protected_by_whole_forms_only():
+    disclosure = Disclosure(known=[f'{NAME} <{EMAIL}>'])
+    sent = protect({'question': f'Qu’a changé {NAME.upper()} ?', 'code': 'class Ada {}'}, disclosure)
+    assert sent == {'question': 'Qu’a changé personne-1 ?', 'code': 'class Ada {}'}, \
+        'un mot isolé d’un nom connu reste un mot du code'
+    assert protect({'code': 'taxo.java-calls'}, Disclosure(known=['taxo'])) == {'code': 'taxo.java-calls'}, \
+        'un nom d’un seul mot ressemble à un mot du code'
+
+
+def test_an_address_without_a_dotted_domain_is_still_an_address():
+    sent = protect({'text': 'alerte envoyée à root@localhost'})
+    assert sent == {'text': 'alerte envoyée à personne-1'}
+
+
+def test_multiline_and_escaped_secrets_are_masked_entirely():
+    config = 'password: |\n  admin123\n  suite\nport: 8080\ntoken = "ab\\"cd"'
+    sent = protect({'source': config})['source']
+    assert sent == f'password: {MASK}\nport: 8080\ntoken = "{MASK}"'
+
+
+def test_a_reference_is_restored_only_if_protection_changed_it():
+    disclosure = Disclosure()
+    sent = protect({'facts': [authored()], 'files': ['file:docs/personne-1.md', f'file:notes/{EMAIL}']}, disclosure)
+    assert sent['files'][0] == 'file:docs/personne-1.md'
+    assert disclosure.restore(sent['files']) == ['file:docs/personne-1.md', f'file:notes/{EMAIL}'], \
+        'une référence de Taxo n’est jamais réécrite avec un nom'
+
+
 def test_a_message_of_unexpected_shape_is_refused():
     with pytest.raises(MiniaError) as refused:
         Disclosure().protect('texte libre adressé à ada@example.org')
@@ -270,6 +298,20 @@ def test_in_exploration_taxo_receives_the_original_references(leaky, tmp_path):
     assert statement['verdict'] == 'CONFIRMED' and statement['text'] == f'{NAME} a écrit ce commit.'
     for sent in model.calls:
         assert NAME not in sent and EMAIL not in sent
+
+
+def test_a_project_question_naming_an_author_does_not_send_the_name(leaky, tmp_path):
+    repo, _ = leaky
+    model = CapturingModel(json.dumps({'cited': [], 'unknown': '', 'answer': 'personne-1 a configuré le projet.'}))
+    client, project = open_client(tmp_path, repo, model)
+    with client:
+        client.post(f'/api/projects/{project}/scans')
+        result = client.post(f'/api/projects/{project}/ask',
+                             json={'question': f'Qu’a changé {NAME} dans les 2 derniers commits ?'}).json()
+    assert model.calls, result
+    for sent in model.calls:
+        assert NAME not in sent and EMAIL not in sent, sent
+    assert result['answer'] == f'{NAME} a configuré le projet.'
 
 
 def test_taxo_answers_who_wrote_a_commit_even_without_any_configured_model(leaky, tmp_path):

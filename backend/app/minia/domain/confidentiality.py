@@ -25,7 +25,8 @@ _PERSON = 'person:'
 # Une partie de nom plus courte n'est pas remplacee seule : trop de mots du code lui ressembleraient.
 MIN_NAME_PART = 3
 
-_EMAIL = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+')
+# Le domaine peut n'avoir qu'un label (`root@localhost`) : une adresse locale reste une adresse.
+_EMAIL = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*')
 _PSEUDONYM = re.compile(r'personne-[1-9]\d*')
 # Une reference de Taxo (`file:src/A.java`, `class:com.x.A`) : ses noms ne sont pas des personnes.
 _REFERENCE = re.compile(r'(?!person:)[a-z][a-z_-]*:\S+')
@@ -46,40 +47,52 @@ _TOKENS = re.compile('|'.join((
 # Identifiants dans une URL : `scheme://utilisateur:motdepasse@hote`.
 _URL_CREDENTIALS = re.compile(r'(\b[a-z][a-z0-9+.-]*://)[^\s/:@]+:[^\s/@]+@', re.IGNORECASE)
 _SECRET_NAME = r'[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credentials?)[\w.-]*'
-# Une valeur affectee a un nom de secret : `password = "x"`, `password: x`, `.password("x")`, `"token": "x"`.
+# Une valeur affectee a un nom de secret : `password = "x"`, `password: x`, `.password("x")`, `"token": "x"`, ou un
+# bloc YAML (`password: |` puis des lignes indentees), masque en entier. Une chaine citee peut echapper ses guillemets.
+_BLOCK = r'[|>][-+]?[ \t]*\r?\n(?:[ \t]+\S[^\r\n]*(?:\r?\n|$))+'
 _ASSIGNED = re.compile(
     rf'(?P<name>\b{_SECRET_NAME}["\']?)(?P<sep>\s*(?:[:=]|=>)\s*|\(\s*)'
-    r'(?P<value>"[^"\n]*"|\'[^\'\n]*\'|[^\s"\',;(){}\[\]]+(?![\w(.{]))',
+    rf'(?P<value>{_BLOCK}|"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|[^\s"\',;(){{}}\[\]]+(?![\w(.{{]))',
     re.IGNORECASE)
 # Valeurs qui ne sont pas des secrets : vides, litteraux, ou renvoi a une variable d'environnement.
 _NOT_A_SECRET = re.compile(r'["\']?(?:|null|none|true|false|\$\{[^}]*\}|\*+)["\']?', re.IGNORECASE)
 
 
-def _identity_parts(value):
-    """Les formes sous lesquelles une identite peut reapparaitre : entiere, courriel, partie locale, mots du nom."""
+def _identity_parts(value, words=True):
+    """Les formes sous lesquelles une identite peut reapparaitre : entiere, courriel, nom complet ; et, si `words`,
+    la partie locale du courriel et chaque mot du nom."""
     value = value.strip()
     parts = {value} if value else set()
     for email in _EMAIL.findall(value):
         parts.add(email)
         local = email.split('@', 1)[0]
-        if len(local) >= MIN_NAME_PART:
+        if words and len(local) >= MIN_NAME_PART:
             parts.add(local)
     name = _EMAIL.sub(' ', value).replace('<', ' ').replace('>', ' ')
-    words = [word for word in re.split(r'[\s,;]+', name) if word]
+    names = [word for word in re.split(r'[\s,;]+', name) if word]
+    if names:
+        parts.add(' '.join(names))
     if words:
-        parts.add(' '.join(words))
-    parts.update(word for word in words if len(word) >= MIN_NAME_PART)
-    return parts
+        parts.update(word for word in names if len(word) >= MIN_NAME_PART)
+        return parts
+    # Sans les mots : un nom d'un seul mot (`taxo`, `ci`) ressemble autant a un mot du code qu'un mot isole.
+    return {part for part in parts if ' ' in part or _EMAIL.fullmatch(part)}
 
 
 class Disclosure:
     """La representation controlee d'une demande : protege ce qui part vers le modele, restaure localement."""
 
-    def __init__(self):
+    def __init__(self, known=()):
+        """`known` : les identites connues du projet (auteurs Git), protegees meme quand le message les nomme
+        sans fait qui les designe. Elles ne le sont que par un nom de plusieurs mots ou un courriel : un mot
+        isole, ou un nom d'un seul mot, ressemble trop souvent a un mot du code."""
         self._pseudonyms = {}   # forme d'une identite -> pseudonyme
         self._displays = {}     # pseudonyme -> nom affiche localement
         self._references = {}   # pseudonyme -> reference `person:` d'origine
+        self._protected = {}    # reference envoyee (courriel remplace) -> reference d'origine
         self._withheld = {'identities': set(), 'secrets': 0, 'trailers': 0}
+        for identity in known:
+            self._identity(identity, words=False)
 
     # Protection -------------------------------------------------------------------------------------------
 
@@ -121,13 +134,15 @@ class Disclosure:
             for email in _EMAIL.findall(value):
                 self._identity(email)
 
-    def _identity(self, *forms):
+    def _identity(self, *forms, words=True):
         """Une personne, sous une ou plusieurs formes (reference, nom, courriel) : un seul pseudonyme."""
         forms = [form.strip() for form in forms if form and form.strip()]
         if not forms:
             return
         plain = [form.removeprefix(_PERSON) for form in forms]
-        parts = set().union(*(_identity_parts(form) for form in plain))
+        parts = set().union(*(_identity_parts(form, words) for form in plain))
+        if not parts:
+            return
         # Deux mentions ne sont liees que par une forme entiere ou un courriel, jamais par un mot du nom :
         # deux personnes qui partagent un prenom gardent deux pseudonymes.
         linking = sorted({*plain, *(email for form in plain for email in _EMAIL.findall(form))})
@@ -159,8 +174,10 @@ class Disclosure:
         if not reference:
             text, removed = _TRAILER.subn('', text)
             self._withheld['trailers'] += removed
-        text = self._secrets(text)
-        return self._people(text, names=not reference)
+        protected = self._people(self._secrets(text), names=not reference)
+        if reference and protected != text:
+            self._protected[protected] = text
+        return protected
 
     def _secrets(self, text):
         text, found = _TOKENS.subn(MASK, text)
@@ -174,7 +191,9 @@ class Disclosure:
             if _NOT_A_SECRET.fullmatch(value) or (match['sep'].startswith('(') and not quote):
                 return match[0]
             self._withheld['secrets'] += 1
-            return f"{match['name']}{match['sep']}{quote}{MASK}{quote}"
+            # Un bloc masque garde sa fin de ligne : la ligne suivante reste a sa place.
+            end = value[len(value.rstrip('\r\n')):] if value[0] in '|>' else ''
+            return f"{match['name']}{match['sep']}{quote}{MASK}{quote}{end}"
         return _ASSIGNED.sub(assigned, text)
 
     def _people(self, text, names=True):
@@ -231,6 +250,11 @@ class Disclosure:
             return value
         if value.startswith(_PERSON) and value.removeprefix(_PERSON) in self._references:
             return self._references[value.removeprefix(_PERSON)]
+        if value in self._protected:
+            return self._protected[value]
+        if _REFERENCE.fullmatch(value) is not None:
+            # Une autre reference (`file:personne-1.md`) n'a jamais porte de pseudonyme : elle reste telle quelle.
+            return value
         return _PSEUDONYM.sub(lambda match: self._displays.get(match[0], match[0]), value)
 
     def report(self):

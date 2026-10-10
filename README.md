@@ -542,9 +542,11 @@ Quel que soit le fournisseur, local ou distant, chaque message de Minia passe pa
 l'appel (`minia/application/protected_model.py`, `minia/domain/confidentiality.py`) :
 
 - les auteurs Git et les courriels deviennent des pseudonymes propres à la demande (`personne-1`) : deux
-  mentions d'une même personne gardent le même pseudonyme ;
+  mentions d'une même personne gardent le même pseudonyme. Les auteurs des 100 derniers commits sont
+  connus d'avance : une question qui en nomme un (nom de plusieurs mots ou courriel) ne le transmet pas ;
 - les secrets reconnus (mot de passe, jeton, clé privée, identifiants dans une URL) deviennent `******`.
-  Seule la valeur est masquée : `password = "******"` montre encore un mot de passe écrit en dur ;
+  Seule la valeur est masquée, bloc YAML multiligne compris : `password = "******"` montre encore un mot
+  de passe écrit en dur ;
 - les trailers des messages de commit (`Co-Authored-By`, `Signed-off-by`…) sont retirés ;
 - un message de forme inattendue, ou dans lequel une donnée protégée subsisterait, n'est pas envoyé
   (`MINIA_CONFIDENTIALITY_REFUSED`).

@@ -19,6 +19,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
+from app.history.domain.errors import HistoryError
 from app.minia.application import anchoring
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
@@ -29,8 +30,11 @@ from app.minia.domain.errors import CANCELLED, CONTEXT_TOO_LARGE, INVALID_ANSWER
 from app.minia.domain.model import MiniaModel
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.projects.application.queries import require_project
+from app.projects.domain.project import ProjectError
 
 MAX_QUESTION = 1000
+# Auteurs Git proteges d'office dans chaque demande : ceux des derniers commits du projet.
+KNOWN_AUTHORS_COMMITS = 100
 # Garde-fous de l'exploration (ARCHITECTURE § 12.5), fixes par Taxo : une description, au plus 8 operations
 # choisies par Minia, puis au plus 10 affirmations verifiees ; l'echange en permet 20.
 MAX_CALLS = 8
@@ -270,9 +274,19 @@ class AskMinia:
         return {'configured': True, **_view(self.models[self.default]), 'source_context': self.source,
                 'providers': providers}
 
-    def _protected(self, provider):
-        """Le modele de la demande, derriere sa propre protection : tout message y passe avant le fournisseur."""
-        return ProtectedModel(self._model(provider), Disclosure())
+    def _protected(self, provider, project_id):
+        """Le modele de la demande, derriere sa propre protection : tout message y passe avant le fournisseur.
+        Les auteurs du projet y sont connus d'avance : une question qui en nomme un ne le transmet pas."""
+        model = self._model(provider)
+        return ProtectedModel(model, Disclosure(self._authors(project_id)))
+
+    def _authors(self, project_id):
+        """Les auteurs Git du projet ; aucun si son historique n'est pas lisible (le controle final demeure)."""
+        try:
+            commits = self.history.commits(project_id, KNOWN_AUTHORS_COMMITS)
+        except (HistoryError, ProjectError):
+            return ()
+        return sorted({commit.author for commit in commits if commit.author})
 
     def _model(self, provider):
         """Le modele demande, ou celui par defaut ; un fournisseur non configure est refuse."""
@@ -332,7 +346,7 @@ class AskMinia:
         if authorship.asks_author(question):
             # Taxo repond seul : aucun modele n'est requis, ni meme configure.
             return self._commit_author(question, project, commit, base, files)
-        model = self._protected(provider)
+        model = self._protected(provider, project_id)
         return _reported(self._commit_route(model, question, project, commit, base, files, source, cancel),
                          model.disclosure)
 
@@ -441,7 +455,7 @@ class AskMinia:
         projection = self.query(project_id, question)
         if projection['status'] == 'SELECTED' and authorship.asks_author(question):
             return self._selection_authors(question, projection)
-        model = self._protected(provider)
+        model = self._protected(provider, project_id)
         return _reported(self._project_route(model, question, projection, cancel), model.disclosure)
 
     def _project_route(self, model, question, projection, cancel):

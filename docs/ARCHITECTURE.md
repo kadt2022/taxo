@@ -982,7 +982,8 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
    hors du dépôt.
 8. **Représentation contrôlée** (TAXO-MINIA-SEC-01) : tout message destiné à un fournisseur, local ou
    distant, passe par une couche unique avant l'appel, jamais seulement par les consignes du modèle.
-   Identités (auteurs Git, courriels) remplacées par des pseudonymes propres à la demande, secrets
+   Identités (auteurs Git, courriels, auteurs connus du projet même cités sans fait) remplacées par des
+   pseudonymes propres à la demande, secrets
    reconnus masqués (`******`, la valeur seule), trailers de commit retirés ; un message de forme
    inattendue ou qui fuirait encore est refusé. Taxo garde les valeurs d'origine et restitue localement
    ce que le modèle rend. L'auteur d'un commit est donné par Taxo seul, sans modèle.
