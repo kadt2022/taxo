@@ -7,7 +7,7 @@ import {ask as askMinia, askButton, createStop, MiniaProgress, type MiniaLive, t
 import {MiniaChoice, modelLabel, type AnswerModel, type MiniaStatus} from './minia';
 import {openStream, type ServerEvent} from './sse';
 import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
-import {ElementView, type Located} from './element';
+import {ElementView, isNamed, type Located} from './element';
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
 type SelectedCommit = {sha:string; authored_at?:string; subject?:string};
@@ -66,7 +66,7 @@ export const when=(value?:string)=>{const moment=new Date(value??'');return Numb
 
 export function SelectionView({result}:Readonly<{result:Selection}>){
   // Un element reconnu dit deja de quoi parle la question : la requete globale n'a rien a ajouter.
-  const named=result.element&&result.element.status!=='NONE';
+  const named=isNamed(result.element);
   const message=named?null:outcome(result);
   return <section className="selection" aria-label="Sélection de Taxo">
     <p className="eyebrow">REQUÊTE · {describe(result.request)}</p>
@@ -95,7 +95,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
   return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · {answer.anchor?.anchor?reference(answer.anchor.anchor):describe(answer.request)}</p>
     <p className="minia-question">{answer.question}</p>
-    {answer.anchor&&answer.anchor.status!=='NONE'&&<ElementView located={answer.anchor}/>}
+    {isNamed(answer.anchor)&&<ElementView located={answer.anchor}/>}
     <div className="minia-blocks">
       <article className="minia-block fact">
         <h3>Ce que Taxo sait</h3>

@@ -9,6 +9,9 @@ export type ElementStatus = 'FOUND'|'AMBIGUOUS'|'NONE';
 export type Located = {status:ElementStatus; anchor:string|null; candidates:string[]; more_candidates?:number;
   analysis?:string};
 
+/** La question nomme-t-elle un element (reconnu, ou parmi des candidates) ? */
+export const isNamed=(located?:Located):located is Located=>located!==undefined&&located.status!=='NONE';
+
 const HINT='Pour une question sur le code, nommez l’élément (`VetController`, `OwnerRepository.findById`) ou donnez sa référence complète.';
 
 function Explore({target, analysis, label='Ouvrir dans l’explorateur'}:Readonly<{target:string; analysis?:string; label?:string}>){
