@@ -1,8 +1,9 @@
 """Un petit projet Spring synthetique, securise par une regle d'URL et par la securite de methode.
 
 La verite est etablie a la main sur ces sources : `GET /api/items` exige une authentification par la regle
-`/api/**` (ligne 21 de SecurityConfig), et `@PreAuthorize` restreint en plus la methode aux roles ADMIN et
-EDITOR (ligne 14 d'ItemController). `@EnableMethodSecurity` (ligne 13) l'active ; CSRF est desactive (ligne 19).
+`/api/**` (ligne 20 de SecurityConfig), et `@Secured` restreint en plus la methode au role ADMIN (ligne 14
+d'ItemController). `@EnableMethodSecurity(securedEnabled = true)` (ligne 13) l'active ; CSRF est desactive
+(ligne 18). Taxo ne lit pas `@Secured` : c'est la zone non lue que les verdicts doivent signaler.
 """
 
 BUILD = """plugins {
@@ -40,7 +41,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * Regles d'URL et securite de methode.
  */
 @Configuration
-@EnableMethodSecurity
+@EnableMethodSecurity(securedEnabled = true)
 public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -56,7 +57,7 @@ public class SecurityConfig {
 
 CONTROLLER = """package com.example.shop.web;
 
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.annotation.Secured;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -67,7 +68,7 @@ import java.util.List;
 @RequestMapping("/api/items")
 public class ItemController {
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','EDITOR')")
+    @Secured("ROLE_ADMIN")
     public List<String> items() {
         return List.of();
     }

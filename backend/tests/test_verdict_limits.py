@@ -33,7 +33,7 @@ def test_a_confirmed_url_rule_carries_the_method_security_that_taxo_did_not_read
     assert response['verdict'] == 'CONFIRMED', 'la règle d’URL est bien établie'
     [limit] = response['limits']
     assert limit['subject'] == ENDPOINT and limit['type'] == 'NOT_INTERPRETED'
-    assert '@PreAuthorize' in limit['reason'], 'la confirmation dit ce qu’elle ne couvre pas'
+    assert '@Secured' in limit['reason'], 'la confirmation dit ce qu’elle ne couvre pas'
     assert limit['producer'] == 'taxo.spring-security'
 
 
@@ -52,7 +52,7 @@ def test_a_handled_by_confirmation_carries_only_the_limits_of_its_own_relation(t
 def test_a_claim_that_is_not_proven_still_says_why_and_what_was_not_read(taxo):
     response = verify(taxo, subject=ENDPOINT, relation='PROTECTED_BY', object="policy-rule:hasRole('ADMIN')")
     assert (response['verdict'], response['reason']) == ('NOT_PROVEN', 'NOT_INTERPRETED')
-    assert '@PreAuthorize' in response['limits'][0]['reason']
+    assert '@Secured' in response['limits'][0]['reason']
 
 
 # --- Minia : la limite accompagne le verdict, et un repli ne prétend pas que Taxo ne sait rien ---------------------
@@ -66,7 +66,7 @@ def test_minia_shows_the_limits_with_the_verdict_of_her_claim(make_repo, tmp_pat
     result, _, _ = ask(repo, tmp_path, Scripted(answer(claim)), 'Qui peut lire GET /api/items ?')
     [checked] = result['statements']
     assert checked['verdict'] == 'CONFIRMED'
-    assert ['@PreAuthorize' in limit['reason'] for limit in checked['limits']] == [True], \
+    assert ['@Secured' in limit['reason'] for limit in checked['limits']] == [True], \
         'le « seulement » de Minia est contredit par la limite que Taxo affiche avec le verdict'
 
 
