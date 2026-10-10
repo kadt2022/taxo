@@ -2,7 +2,8 @@
 
 Pour chaque endpoint etabli (HANDLED_BY), la projection reunit ce que les evaluateurs ont conclu : la
 methode qui le traite, l'application qui le sert (SERVED_BY), la regle qui le capture (MATCHED_BY, puis la
-regle PERMITS_ALL ou AUTHORIZED_BY de la meme chaine de filtres), sa protection (PROTECTED_BY), et chaque
+regle PERMITS_ALL ou AUTHORIZED_BY de la meme chaine de filtres), ses protections (PROTECTED_BY, par une regle
+d'URL ou par `@PreAuthorize`), et chaque
 zone non interpretee avec sa raison. Elle ne deduit rien : un etat n'est affiche que si un fait le porte.
 """
 from app.evaluations.domain.capability import UNREAD_COVERAGE

@@ -126,15 +126,15 @@ class Configuration:
 def configurations(java_file):
     """Configurations d'autorisation du fichier, et les motifs exclus de la securite (`ignoring()`)."""
     chains = java_file.chains({*AUTHORIZE, *SCOPE, 'requestMatchers', IGNORING})
-    inner = _lambda_chains(chains)
+    inner = lambda_chains(chains)
     groups, ignored = {}, []
     for chain in chains:
         if IGNORING in chain.names:
             ignored.append((*_ignoring(chain), chain.owner, chain.method))
             continue
-        receiver = OTHER if chain in inner else _receiver(chain, java_file)
-        if receiver != OTHER:
-            groups.setdefault((chain.owner, chain.method), []).append((chain, receiver))
+        kind = OTHER if chain in inner else receiver(chain, java_file)
+        if kind != OTHER:
+            groups.setdefault((chain.owner, chain.method), []).append((chain, kind))
     factories = {item.qualified_name: _factories(item) for item in java_file.types}
     found = [_checked(java_file.path, owner, method, group, factories.get(owner, set()))
              for (owner, method), group in groups.items()
@@ -142,7 +142,12 @@ def configurations(java_file):
     return found, ignored
 
 
-def _lambda_chains(chains):
+def restrictive(expression):
+    """Vrai si l'expression SpEL ne peut que restreindre : une seule restriction, ou plusieurs jointes par `and`."""
+    return _RESTRICTIVE_SPEL.fullmatch(expression) is not None
+
+
+def lambda_chains(chains):
     """Chaines ecrites dans le corps d'une lambda passee en argument : elles appartiennent a leur appel."""
     return {inner for chain in chains for call in chain.calls for argument in call.arguments
             if argument.function is not None for inner in argument.function.chains}
@@ -156,13 +161,13 @@ def _factories(java_type):
 
 def _checked(path, owner, method, group, factories):
     configuration = _configuration(path, owner, method, [chain for chain, _ in group], factories)
-    if configuration.readable and any(receiver == UNKNOWN for _, receiver in group):
+    if configuration.readable and any(kind == UNKNOWN for _, kind in group):
         # Un receveur de type inconnu est peut-etre HttpSecurity : la configuration est vue, pas lue.
         return replace(configuration, rules=(), reason='receveur dont le type n’est pas établi')
     return configuration
 
 
-def _receiver(chain, java_file):
+def receiver(chain, java_file):
     """HTTP si le receveur de la chaine est une variable de type HttpSecurity (celui de Spring, par son nom
     qualifie ou son import), OTHER s'il est d'un autre type, UNKNOWN si son type n'est pas etabli."""
     if chain.declared is None:
@@ -335,7 +340,7 @@ def _action(call, owner='', factories=frozenset()):
     argument = call.arguments[0]
     if argument.value.text is not None:
         # Expression SpEL (Spring Security 5) : non evaluee, elle n'est lue que si elle ne peut que restreindre.
-        if not _RESTRICTIVE_SPEL.fullmatch(argument.value.text):
+        if not restrictive(argument.value.text):
             return None, f'access({argument.value.written}) : expression non évaluée'
         return expression, None
     declared = argument.declared

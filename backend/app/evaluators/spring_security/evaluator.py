@@ -10,11 +10,22 @@ les configurations `authorizeHttpRequests` dans les sources Java. Il produit :
 - puis, si cette regle exige une autorisation, `endpoint` PROTECTED_BY `policy-rule:<expression>` ou
   `symbol:java:<type>` : `INFERRED`, sur MATCHED_BY et AUTHORIZED_BY, jamais sur HANDLED_BY.
 
+Securite de methode et CSRF (TAXO-MINIA-SEC-01, E2) :
+
+- le type qui active la securite de methode est ANNOTATED_WITH `annotation:<EnableMethodSecurity>` (`OBSERVED`) ;
+- la methode, ou le type, garde par `@PreAuthorize` est AUTHORIZED_BY l'expression ecrite (`OBSERVED`) ;
+- l'endpoint traite par cette methode est PROTECTED_BY `policy-rule:<expression>` (`INFERRED`, regle
+  `spring-security.method-authorization-applies`) sur HANDLED_BY, AUTHORIZED_BY et ANNOTATED_WITH, si
+  l'application qui sert la route charge le type qui active et si l'expression ne peut que restreindre ;
+- la methode qui desactive CSRF CONFIGURES `policy-rule:csrf.disable()` (`OBSERVED`).
+
 Critere anti-faux-positif : il ne conclut que si la conclusion vaut pour toute requete de la route. Une
 regle anterieure non lue ou qui ne correspond qu'a une partie des requetes, plusieurs chaines de filtres
 candidates, un perimetre non lu, `web.ignoring()` : l'endpoint est NOT_INTERPRETED, jamais declare
-protege ni public a tort. La securite de methode (`@PreAuthorize`...) et les filtres ou gestionnaires
-d'autorisation maison sont declares NOT_INTERPRETED : la protection reelle peut s'y trouver.
+protege ni public a tort. Les autres annotations de securite de methode (`@Secured`...), une expression
+`@PreAuthorize` non lue, une activation non etablie, une configuration CSRF autre que sa desactivation et
+les filtres ou gestionnaires d'autorisation maison sont declares NOT_INTERPRETED : la protection reelle
+peut s'y trouver.
 
 Applications (E1, tranche 2 ; ARCHITECTURE § 7.6) : des qu'une `@SpringBootApplication` est vue, une route n'est
 rattachee qu'aux chaines de filtres chargees par l'application qui la sert (SERVED_BY), et les chaines d'une
@@ -29,16 +40,24 @@ from app.evaluations.domain.status import EvaluationStatus
 from app.evaluators.spring_api.evaluator import analyse
 from app.evaluators.spring_boot.applications import NO, OTHER_ROUTES, UNKNOWN, YES, Deployment
 from app.facts import content_hash
-from . import rules
+from . import methods, rules
 from .catalog import CATALOG
 
 MATCHER_METHOD = 'java.spring-security.request-matcher'
 ORDER_METHOD = 'java.spring-security.authorize-http-requests'
 FIRST_MATCH = 'spring-security.first-matching-pattern'
 APPLIES = 'spring-security.route-authorization-applies'
-# Annotations de securite de methode : la regle d'URL n'est alors pas toute la protection.
+METHOD_APPLIES = 'spring-security.method-authorization-applies'
+# Modificateurs qui soustraient une methode au proxy de la securite de methode.
+UNADVISABLE = frozenset({'final', 'private', 'static'})
+PRE_AUTHORIZE_METHOD = 'java.spring-security.pre-authorize'
+ENABLING_METHOD = 'java.spring-security.enable-method-security'
+CSRF_METHOD = 'java.spring-security.csrf'
+# Annotations de securite de methode : la regle d'URL n'est alors pas toute la protection. Seule `@PreAuthorize`
+# est lue ; les autres restent declarees non interpretees.
 METHOD_SECURITY = {'PreAuthorize', 'PostAuthorize', 'PreFilter', 'PostFilter', 'Secured', 'RolesAllowed',
                    'DenyAll', 'PermitAll'}
+PRE_AUTHORIZE = 'PreAuthorize'
 # Supertypes d'un mecanisme maison : filtre de servlet, gestionnaire d'autorisation.
 CUSTOM = {'OncePerRequestFilter', 'GenericFilterBean', 'Filter', 'AuthorizationManager'}
 ROLE_ACTIONS = ('hasRole', 'hasAnyRole', 'hasAuthority', 'hasAnyAuthority')
@@ -47,7 +66,7 @@ DATA_GAP = 'les rôles et autorités des utilisateurs sont des données, hors du
 
 class SpringSecurityEvaluator:
     evaluator_id = 'taxo.spring-security'
-    producer_version = '0.3.0'
+    producer_version = '0.4.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
@@ -64,7 +83,8 @@ class SpringSecurityEvaluator:
             f'{subject} : {" ; ".join(reasons)}' for subject, (_, reasons) in sorted(run.gaps.items())]
         partial = run.gaps or analysis.read_errors
         status = EvaluationStatus.PARTIAL if partial else EvaluationStatus.SUCCESS
-        legacy = {'configurations': len(run.configurations), 'matched': run.matched, 'protected': run.protected}
+        legacy = {'configurations': len(run.configurations), 'matched': run.matched, 'protected': run.protected,
+                  'method_protected': run.method_protected}
         return EvaluationOutput(tuple(run.facts.values()), tuple(coverage), status, tuple(warnings), legacy)
 
 
@@ -82,13 +102,18 @@ class _Run:
     def __init__(self, snapshot, analysis, deployment):
         self.snapshot, self.analysis, self.deployment = snapshot, analysis, deployment
         self.facts, self.gaps, self.warnings = {}, {}, []
-        self.configurations, self.ignored = [], []
-        self.matched = self.protected = 0
+        self.configurations, self.ignored, self.enablings, self.csrf = [], [], [], []
+        self.matched = self.protected = self.method_protected = 0
         for java_file in analysis.parsed:
-            if b'authorize' in analysis.contents[java_file.path] or b'ignoring' in analysis.contents[java_file.path]:
+            data = analysis.contents[java_file.path]
+            if b'authorize' in data or b'ignoring' in data:
                 found, ignored = rules.configurations(java_file)
                 self.configurations += found
                 self.ignored += [(java_file.path, *item) for item in ignored]
+            if b'MethodSecurity' in data:
+                self.enablings += methods.enablings(java_file, deployment.types)
+            if b'csrf' in data:
+                self.csrf += methods.csrf(java_file, deployment.types)
 
     def evaluate(self):
         for subject, (path, message) in self.analysis.run.gaps.items():
@@ -98,6 +123,10 @@ class _Run:
             self._custom(java_file)
         for configuration in self.configurations:
             self._configuration_facts(configuration)
+        for enabling in self.enablings:
+            self._enabling_facts(enabling)
+        for setting in self.csrf:
+            self._csrf_facts(setting)
         endpoints = list(self.analysis.endpoints())
         if endpoints and not self.configurations:
             self.warnings.append('Aucune règle authorizeHttpRequests trouvée : la protection des routes n’est pas '
@@ -172,7 +201,7 @@ class _Run:
             reasons.append(reason)
 
     def _add(self, fact):
-        key = (fact['subject'], fact['relation'], fact.get('object'), fact['qualifiers']['filter_chain'])
+        key = (fact['subject'], fact['relation'], fact.get('object'), tuple(sorted(fact['qualifiers'].items())))
         self.facts.setdefault(key, fact)
 
     def _custom(self, java_file):
@@ -202,13 +231,121 @@ class _Run:
                 else:
                     self._add(_assertion(reference, 'AUTHORIZED_BY', rule.target or rule.expression, [evidence], chain))
 
+    def _enabling_facts(self, enabling):
+        annotation = enabling.annotation
+        evidence = self._evidence(enabling.path, annotation.line_start, annotation.line_end, ENABLING_METHOD)
+        qualifiers = {methods.PRE_POST: enabling.written} if enabling.written is not None else {}
+        self._add(_observed(enabling.symbol, 'ANNOTATED_WITH', enabling.reference, [evidence], qualifiers))
+        if enabling.state == methods.UNKNOWN:
+            self._gap(enabling.symbol, f'file:{enabling.path}',
+                      f'activation de la sécurité de méthode non établie ({enabling.unread})')
+
+    def _csrf_facts(self, setting):
+        if not setting.disabled:
+            self._gap(setting.symbol, f'file:{setting.path}', f'configuration CSRF non interprétée (ligne '
+                                                              f'{setting.line_start})')
+            return
+        evidence = self._evidence(setting.path, setting.line_start, setting.line_end, CSRF_METHOD)
+        self._add(_observed(setting.symbol, 'CONFIGURES', f'policy-rule:{methods.CSRF_DISABLED}', [evidence], {}))
+
     def _method_security(self, endpoint):
+        """La garde `@PreAuthorize` de la methode qui traite l'endpoint, et ce qu'elle protege ; les autres
+        annotations de securite de methode sont declarees non interpretees."""
+        scope = f'file:{endpoint.path}'
         annotations = [item for method in endpoint.methods for item in method.annotations]
         annotations += endpoint.java_type.annotations
-        found = sorted({item.simple_name for item in annotations if item.simple_name in METHOD_SECURITY})
-        if found:
-            self._gap(endpoint.reference, f'file:{endpoint.path}',
-                      f'sécurité de méthode non interprétée ({", ".join("@" + name for name in found)})')
+        others = sorted({item.simple_name for item in annotations
+                         if item.simple_name in METHOD_SECURITY and item.simple_name != PRE_AUTHORIZE})
+        if others:
+            self._gap(endpoint.reference, scope,
+                      f'sécurité de méthode non interprétée ({", ".join("@" + name for name in others)})')
+        if not endpoint.methods:
+            return
+        java_file = self.analysis.run.types[endpoint.java_type.qualified_name][0]
+        if not any(item.simple_name == PRE_AUTHORIZE for item in annotations):
+            hidden = methods.hidden(java_file, endpoint.java_type, endpoint.methods[0], self.deployment.types)
+            if hidden:
+                self._gap(endpoint.reference, scope, f'sécurité de méthode non interprétée ({", ".join(hidden)})')
+            return
+        guard = methods.guard(java_file, endpoint.java_type, endpoint.methods[0], endpoint.handler,
+                              self.deployment.types)
+        if guard is None:
+            self._gap(endpoint.reference, scope, 'sécurité de méthode non interprétée (@PreAuthorize non résolue '
+                                                 'vers Spring)')
+            return
+        if guard.expression is None:
+            self._gap(endpoint.reference, scope, 'sécurité de méthode non interprétée (expression @PreAuthorize '
+                                                 'non résolue)')
+            return
+        annotation = guard.annotation
+        evidence = [self._evidence(endpoint.path, annotation.line_start, annotation.line_end, PRE_AUTHORIZE_METHOD)]
+        qualifiers = {'annotation': PRE_AUTHORIZE}
+        self._add(_observed(guard.symbol, 'AUTHORIZED_BY', guard.expression, evidence, qualifiers))
+        if not guard.restrictive:
+            self._gap(endpoint.reference, scope,
+                      'sécurité de méthode non interprétée (@PreAuthorize : expression non évaluée)')
+            return
+        sealed = sorted(UNADVISABLE & _modifiers(endpoint.java_type, endpoint.methods[0]))
+        if sealed:
+            # Un proxy Spring (sous-classe CGLIB ou interface) n'intercepte pas une methode final, private ou static.
+            self._gap(endpoint.reference, scope, f'sécurité de méthode non interprétée (méthode {" ".join(sealed)} : '
+                                                 'non interceptée par un proxy Spring)')
+            return
+        if 'final' in endpoint.java_type.modifiers:
+            # Spring Boot proxie par sous-classe : une classe final ne peut pas l'etre.
+            self._gap(endpoint.reference, scope, 'sécurité de méthode non interprétée (classe final : non proxiable '
+                                                 'par sous-classe)')
+            return
+        enabling = self._enabling(endpoint)
+        if enabling is None:
+            return
+        premises = [f'HANDLED_BY : {endpoint.reference} -> {endpoint.handler}',
+                    f'AUTHORIZED_BY : {guard.symbol} -> {guard.expression}', *enabling[0]]
+        # Une liste neuve : les preuves de l'AUTHORIZED_BY observe restent celles de l'annotation seule.
+        evidence = [*evidence, *enabling[1]]
+        gaps = [DATA_GAP] if any(f'{action}(' in guard.expression for action in ROLE_ACTIONS) else []
+        self._add({**_observed(endpoint.reference, 'PROTECTED_BY', f'policy-rule:{guard.expression.strip()}',
+                               evidence, qualifiers), 'status': 'INFERRED',
+                   'derivation': {'premises': premises, 'rule': METHOD_APPLIES, 'counter_examples_checked': [],
+                                  'known_gaps': gaps}})
+        self.method_protected += 1
+
+    def _enabling(self, endpoint):
+        """(premisses, preuves) de l'activation de la securite de methode pour l'application qui sert l'endpoint ;
+        None, la raison declaree, si elle n'est pas etablie."""
+        scope = f'file:{endpoint.path}'
+        enabled = [item for item in self.enablings if item.state == methods.ENABLED]
+        if not enabled:
+            self._gap(endpoint.reference, scope, 'sécurité de méthode : activation non établie (aucune '
+                                                 '@EnableMethodSecurity lue qui active @PreAuthorize)')
+            return None
+        if not self.deployment.applications:
+            # Sans application Spring Boot lue, rien ne dit qu'une activation lue est chargee avec cette route.
+            self._gap(endpoint.reference, scope, 'sécurité de méthode : application qui sert la route non établie '
+                                                 '(aucune application Spring Boot lue)')
+            return None
+        outcomes = [(application, self.deployment.loads(application, endpoint.java_type.qualified_name).outcome)
+                    for application in self.deployment.applications]
+        if any(outcome == UNKNOWN for _, outcome in outcomes):
+            self._gap(endpoint.reference, scope, 'sécurité de méthode : application qui sert la route non établie')
+            return None
+        serving = [application for application, outcome in outcomes if outcome == YES]
+        chosen = []
+        for application in serving:
+            loaded = [item for item in enabled if self.deployment.loads(application, item.owner).outcome == YES]
+            if not loaded:
+                self._gap(endpoint.reference, scope, f'sécurité de méthode : activation par '
+                                                     f'{application.reference} non établie')
+                return None
+            chosen += [item for item in loaded if item not in chosen]
+        if not chosen:
+            self._gap(endpoint.reference, scope, 'sécurité de méthode : aucune application établie ne sert '
+                                                 'cette route')
+            return None
+        premises = [f'ANNOTATED_WITH : {item.symbol} -> {item.reference}' for item in chosen]
+        evidence = [self._evidence(item.path, item.annotation.line_start, item.annotation.line_end, ENABLING_METHOD)
+                    for item in chosen]
+        return premises, evidence
 
     def _endpoint(self, endpoint, configurations, serving):
         """Rattache l'endpoint a sa regle gagnante, ou dit pourquoi il ne le peut pas."""
@@ -322,6 +459,19 @@ def _assertion(subject, relation, target, evidence, chain):
     if target is not None:
         fact['object'] = target
     return fact
+
+
+def _modifiers(java_type, method):
+    """Les modificateurs ecrits de la methode, lus sur sa declaration (les methodes annotees n'en portent pas)."""
+    return next((item.modifiers for item in java_type.declarations
+                 if item.signature == method.signature and item.line_start == method.line_start), frozenset())
+
+
+def _observed(subject, relation, target, evidence, qualifiers):
+    """Un fait ecrit dans le code, hors regle d'URL : ses qualificatifs ne nomment pas de chaine de filtres."""
+    return {'contract_version': 1, 'kind': 'ASSERTION', 'status': 'OBSERVED', 'validity': 'VALID',
+            'subject': subject, 'relation': relation, 'object': target, 'qualifiers': qualifiers,
+            'evidence': evidence}
 
 
 def _inference(subject, relation, target, evidence, chain, premises, rule, checked, gaps):

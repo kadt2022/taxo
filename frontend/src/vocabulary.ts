@@ -35,7 +35,7 @@ export const RELATIONS:Record<string,string>={CONTAINS:'Fichiers du projet', WRI
   TYPED_AS:'Types déclarés', DISPATCHES_TO:'Délégations',
   HANDLED_BY:'Routes traitées', ACCEPTS:'Entrées acceptées', RETURNS:'Réponses renvoyées',
   PERMITS_ALL:'Routes ouvertes à tous', AUTHORIZED_BY:'Autorisations', MATCHED_BY:'Correspondances de routes',
-  PROTECTED_BY:'Protections', DEPENDS_ON:'Dépendances entre modules', BUILT_FROM:'Applications construites',
+  PROTECTED_BY:'Protections', CONFIGURES:'Réglages de sécurité', DEPENDS_ON:'Dépendances entre modules', BUILT_FROM:'Applications construites',
   SERVED_BY:'Routes servies'};
 
 /** Ce qu'une relation affirme, dans une phrase « sujet verbe objet ». */
@@ -44,7 +44,7 @@ export const VERBS:Record<string,string>={CONTAINS:'contient', WRITTEN_IN:'est �
   CHANGES:'modifie', ANNOTATED_WITH:'est annoté', CALLS:'appelle', IMPLEMENTS:'implémente', EXTENDS:'étend',
   TYPED_AS:'est de type', DISPATCHES_TO:'délègue à',
   HANDLED_BY:'est traité par', ACCEPTS:'accepte', RETURNS:'renvoie', PERMITS_ALL:'est ouvert à tous',
-  AUTHORIZED_BY:'est autorisé par', MATCHED_BY:'correspond à', PROTECTED_BY:'est protégé par',
+  AUTHORIZED_BY:'est autorisé par', MATCHED_BY:'correspond à', PROTECTED_BY:'est protégé par', CONFIGURES:'configure',
   DEPENDS_ON:'dépend de', BUILT_FROM:'est construite depuis',
   SERVED_BY:'est servie par'};
 
