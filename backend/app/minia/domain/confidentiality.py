@@ -58,8 +58,15 @@ _ASSIGNED = re.compile(
 # L'en-tete d'un bloc YAML affecte a un nom de secret (`password: |`, `|2-`, `>+`) : son contenu est fait des lignes
 # suivantes plus indentees que la cle, lignes vides comprises ; il s'arrete a la premiere ligne qui ne l'est pas.
 _BLOCK_HEADER = re.compile(
-    rf'^(?P<indent>[ \t]*)(?P<key>-?[ \t]*["\']?{_SECRET_NAME}["\']?[ \t]*:[ \t]*)[|>](?:[1-9][-+]?|[-+][1-9]?)?'
+    rf'^(?P<indent>[ \t]*)(?P<dash>-[ \t]+)?(?P<key>["\']?{_SECRET_NAME}["\']?[ \t]*:[ \t]*)[|>](?:[1-9][-+]?|[-+][1-9]?)?'
     r'[ \t]*(?:#[^\r\n]*)?$', re.IGNORECASE)
+# Une valeur YAML ou properties non citee de plusieurs mots (`password: correct horse battery`) : masquee jusqu'au
+# commentaire de fin de ligne. Une ligne de code (`;`, `{`, `,` final ou un appel) reste a `_ASSIGNED`.
+_PLAIN_SCALAR = re.compile(
+    rf'^(?P<key>[ \t]*(?:-[ \t]+)?["\']?{_SECRET_NAME}["\']?[ \t]*[:=][ \t]*)'
+    r'(?P<value>[^\s"\'|>#][^\r\n]*?[ \t][^\r\n]*?)(?P<tail>[ \t]+#[^\r\n]*)?(?P<end>\r?)$',
+    re.IGNORECASE | re.MULTILINE)
+_CODE = re.compile(r'[;{,]\s*$|\(')
 # Valeurs qui ne sont pas des secrets : vides, litteraux, ou renvoi a une variable d'environnement.
 _NOT_A_SECRET = re.compile(r'["\']?(?:|null|none|true|false|\$\{[^}]*\}|\*+)["\']?', re.IGNORECASE)
 
@@ -185,12 +192,25 @@ class Disclosure:
 
     def _value(self, value):
         if isinstance(value, dict):
-            return {key: self._value(item) for key, item in value.items()}
+            protected = {key: self._value(item) for key, item in value.items()}
+            if value.get('relation') == 'AUTHORED_BY':
+                self._bind_name(value, protected)
+            return protected
         if isinstance(value, list):
             return [self._value(item) for item in value]
         if isinstance(value, str):
             return self._text(value)
         return value
+
+    def _bind_name(self, fact, protected):
+        """Le nom d'un fait AUTHORED_BY prend le pseudonyme de sa propre reference : deux homonymes aux courriels
+        differents ne partagent pas le nom du premier."""
+        name = (fact.get('qualifiers') or {}).get('name')
+        reference = next((item for item in fact.values() if isinstance(item, str) and item.startswith(_PERSON)), None)
+        pseudonym = reference and self._pseudonyms.get(reference.removeprefix(_PERSON).strip())
+        if isinstance(name, str) and name.strip() and pseudonym and isinstance(protected.get('qualifiers'), dict):
+            protected['qualifiers'] = {**protected['qualifiers'], 'name': pseudonym}
+            self._withheld['identities'].add(pseudonym)
 
     def _text(self, text):
         if text.startswith(_PERSON):
@@ -209,6 +229,7 @@ class Disclosure:
 
     def _secrets(self, text):
         text = self._blocks(text)
+        text = _PLAIN_SCALAR.sub(self._plain, text)
         text, found = _TOKENS.subn(MASK, text)
         text, credentials = _URL_CREDENTIALS.subn(rf'\g<1>{MASK}:{MASK}@', text)
         self._withheld['secrets'] += found + credentials
@@ -223,17 +244,26 @@ class Disclosure:
             return f"{match['name']}{match['sep']}{quote}{MASK}{quote}"
         return _ASSIGNED.sub(assigned, text)
 
+    def _plain(self, match):
+        value = match['value']
+        if _NOT_A_SECRET.fullmatch(value) or _CODE.search(value):
+            return match[0]
+        self._withheld['secrets'] += 1
+        return f"{match['key']}{MASK}{match['tail'] or ''}{match['end']}"
+
     def _blocks(self, text):
         """Masque le contenu de chaque bloc YAML affecte a un nom de secret ; la cle et les lignes soeurs restent."""
         lines = text.split('\n')
         kept, index = [], 0
         while index < len(lines):
             header = _BLOCK_HEADER.match(lines[index].rstrip('\r'))
-            kept.append(lines[index] if header is None else f"{header['indent']}{header['key']}{MASK}")
+            kept.append(lines[index] if header is None
+                        else f"{header['indent']}{header['dash'] or ''}{header['key']}{MASK}")
             index += 1
             if header is None:
                 continue
-            depth = len(header['indent'])
+            # Dans une liste (`- password: |`), la cle est indentee jusqu'apres le tiret : ses soeurs aussi.
+            depth = len(header['indent']) + len(header['dash'] or '')
             start = index
             while index < len(lines) and (not lines[index].strip() or _indent(lines[index]) > depth):
                 index += 1

@@ -74,6 +74,35 @@ def test_same_named_authors_with_different_addresses_keep_two_pseudonyms():
     assert disclosure.restore('person:personne-2') == 'person:ada@other.org'
 
 
+def test_same_named_authors_keep_their_own_pseudonym_as_name():
+    sent = protect({'facts': [authored(), authored(email='ada@other.org', sha='def')]})
+    assert [fact['qualifiers']['name'] for fact in sent['facts']] == ['personne-1', 'personne-2']
+
+
+@pytest.mark.parametrize('line', [
+    'password: correct horse battery staple',
+    '- password: correct horse battery staple',
+    'spring.datasource.password=correct horse battery staple',
+])
+def test_a_plain_secret_of_several_words_is_masked_whole(line):
+    key = line.split('correct')[0]
+    assert protect({'source': f'{line}\nport: 8080'})['source'] == f'{key}{MASK}\nport: 8080'
+
+
+def test_a_plain_secret_keeps_its_end_of_line_comment():
+    assert protect({'source': 'password: two words # rotate'})['source'] == f'password: {MASK} # rotate'
+
+
+def test_a_code_line_is_not_a_plain_secret():
+    line = 'password = encoder.encode(raw, salt);'
+    assert protect({'source': line})['source'] == line
+
+
+def test_a_yaml_secret_block_in_a_sequence_ends_at_its_siblings():
+    source = '- password: |\n    secret\n  port: 8080'
+    assert protect({'source': source})['source'] == f'- password: {MASK}\n  port: 8080'
+
+
 def test_a_yaml_secret_block_is_masked_across_blank_lines():
     sent = protect({'source': 'password: |\n  first\n\n  second\nport: 8080'})['source']
     assert sent == f'password: {MASK}\nport: 8080'
