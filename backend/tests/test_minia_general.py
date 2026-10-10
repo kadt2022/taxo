@@ -221,6 +221,26 @@ def test_homonyms_spread_over_two_pages_never_make_a_unique_anchor():
     assert exchange.asked[1]['after'] == 'page-2', 'la page suivante est lue'
 
 
+def test_a_route_retains_only_the_whole_route_never_a_longer_one_ending_like_it():
+    longer, file = 'endpoint:GET /v1/api/students', 'file:src/api/students'
+    alone = resolved(Pages(([longer, file], None)), 'Qui traite /api/students ?')
+    assert alone.status == anchors.NONE, 'une fin de clé n’est pas la route citée'
+    both = resolved(Pages((['endpoint:GET /api/students', 'endpoint:POST /api/students', longer], None)),
+                    'Qui traite /api/students ?')
+    assert both.status == anchors.AMBIGUOUS and set(both.candidates) == {
+        'endpoint:GET /api/students', 'endpoint:POST /api/students'}
+    quoted = resolved(Pages(([longer], None)), 'Qui traite `/api/students` ?')
+    assert quoted.status == anchors.NONE, 'entre accents graves aussi, une route reste la route entière'
+    other = resolved(Pages((['policy-rule:rule /api/students', 'policy-rule:/api/students'], None)),
+                     'Qui traite /api/students ?')
+    assert other.status == anchors.NONE, 'seul un endpoint ou un motif de route, chemin précédé d’une méthode HTTP'
+    exact = anchoring.drained(anchoring.locate(Pages((['endpoint:get /api/students', 'route-pattern:/api/students'],
+                                                      None)), 'Que fait GET /api/students ?', []))
+    assert (exact.status, exact.anchor) == (anchors.FOUND, 'endpoint:get /api/students'), 'avec son verbe, sans casse'
+    cased = resolved(Pages((['endpoint:GET /api/students'], None)), 'Que fait GET /API/STUDENTS ?')
+    assert cased.status == anchors.NONE, 'le chemin garde sa casse : une autre route'
+
+
 def test_a_search_cut_before_its_end_concludes_nothing():
     pages = [(['symbol:java:a.Items#list()'], f'page-{index}') for index in range(anchoring.MAX_PAGES)]
     pages[1:] = [([], f'page-{index}') for index in range(1, anchoring.MAX_PAGES)]
@@ -235,6 +255,26 @@ def test_a_search_cut_before_its_end_concludes_nothing():
     ('Qui appelle `register` ?', [('NAME', 'register')]),
     ('Et symbol:java:a.B#c(String) ?', [('KEY', 'symbol:java:a.B#c(String)')]),
     ('Quel Service appelle le contrôleur de Spring ?', []),
+    ('que fait GET /api/students', [('NAME', 'GET /api/students')]),
+    ('Qui protège /api/admin/** ?', [('NAME', '/api/admin/**')]),
+    ('Et GET /api/courses/{id}/eligible-students.', [('NAME', 'GET /api/courses/{id}/eligible-students')]),
+    ('Que fait endpoint:GET /api/students ?', [('KEY', 'endpoint:GET /api/students')]),
+    ('Les commits et/ou les routes, 2026/09', []),
+    ('Que fait GET / et endpoint:POST / ?', [('KEY', 'endpoint:POST /'), ('NAME', 'GET /')]),
+    ('Que fait GET //admin ?', []),
+    ('Et endpoint:get /api/x ?', [('KEY', 'endpoint:get /api/x')]),
+    ('Que fait GET /api/{v:foo:bar} ?', [('NAME', 'GET /api/{v:foo:bar}')]),
+    ('Que fait GET /api/{id:[a-z:]+} ?', [('NAME', 'GET /api/{id:[a-z:]+}')]),
+    ('Que fait GET /api/{id:(foo:bar)} ?', [('NAME', 'GET /api/{id:(foo:bar)}')]),
+    ('Que fait `endpoint:GET /api/x` ?', [('KEY', 'endpoint:GET /api/x')]),
+    ('Que fait GET /' + 'a' * 200 + ' ?', []),
+    ('Que fait GET /123 ou /-interne ? Et / seul, /? ou //x ?', [('NAME', 'GET /123'), ('NAME', '/-interne')]),
+    ('Que fait GET /api/{id:[0-9]+} ?', [('NAME', 'GET /api/{id:[0-9]+}')]),
+    ('Que sert ANY /api/ping, (GET /api/x) et « endpoint:ANY /api/y » ?',
+     [('KEY', 'endpoint:ANY /api/y'), ('NAME', 'ANY /api/ping'), ('NAME', 'GET /api/x')]),
+    ('Que fait "GET  /api/a" ou GET\n/api/b ?', [('NAME', 'GET /api/a'), ('NAME', 'GET /api/b')]),
+    ('Et (symbol:java:a.B#c(String)) ?', [('KEY', 'symbol:java:a.B#c(String)')]),
+    ('Et TRACE /api/x, et endpoint:TRACE /api/y ?', [('KEY', 'endpoint:TRACE /api/y'), ('NAME', 'TRACE /api/x')]),
 ])
 def test_only_code_names_and_complete_references_are_anchors(question, expected):
     assert [(item.mode, item.text) for item in anchors.candidates(question)] == expected
@@ -268,3 +308,14 @@ def test_the_named_element_is_located_without_any_model(courses, tmp_path):
     assert several['status'] == 'AMBIGUOUS' and several['anchor'] is None and {REGISTER, SERVICE} <= set(
         several['candidates'])
     assert empty.status_code == 422
+
+
+def test_a_route_named_in_the_question_is_located_without_backquotes(courses, tmp_path):
+    _, app, project = ask(courses, tmp_path, Scripted(packet_answer(), explores=False), WHO_CALLS)
+    with TestClient(app) as client:
+        def located(question):
+            return client.get(f'/api/projects/{project}/elements', params={'q': question}).json()
+        exact, path = located('Que fait GET /api/courses ?'), located('Qui traite /api/courses ?')
+    assert (exact['status'], exact['anchor']) == ('FOUND', 'endpoint:GET /api/courses'), 'pas /api/courses/titles'
+    assert path['status'] == 'AMBIGUOUS' and set(path['candidates']) == {
+        'endpoint:GET /api/courses', 'endpoint:POST /api/courses'}, 'deux verbes : Taxo ne choisit pas'

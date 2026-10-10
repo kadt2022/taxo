@@ -902,7 +902,7 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 | `verify_claim` | verdict sur une affirmation structurée | Existant |
 | `diff_facts` | faits introduits, modifiés ou retirés par un commit ; depuis les analyses enregistrées du commit et de son parent quand elles existent (`source`, `analyses`), sinon en relisant le dépôt (TAXO-01F, tranche E) | Existant |
 | `get_neighborhood` | voisinage explicite, à un saut (`neighborhood/1`) ou sur plusieurs niveaux (`neighborhood/2`), avec reprises, frontière localisée et preuves accessibles | Existant ; profils à construire (§ 9.5) |
-| `find_references` | références de l'analyse qui commencent par un préfixe, page bornée avec reprise ; avec `match: NAME`, celles qui se retrouvent sous un nom simple ou qualifié (une fin de clé prise à un début de segment, séparateurs `. / # : $` confondus, liste de paramètres lue sur les seuls symboles appelables), chacune une fois, sans descendants | Existant (TAXO-01J) ; `match: NAME` (TAXO-01N, PR A2) |
+| `find_references` | références de l'analyse qui commencent par un préfixe, page bornée avec reprise ; avec `match: NAME`, celles qui se retrouvent sous un nom simple ou qualifié (une fin de clé prise à un début de segment, séparateurs `. / # : $` confondus, un séparateur en tête du nom ignoré pour qu'un chemin `/api/students` se retrouve, liste de paramètres lue sur les seuls symboles appelables), chacune une fois, sans descendants | Existant (TAXO-01J) ; `match: NAME` (TAXO-01N, PR A2) |
 | `find_callers`, `find_callees`, `find_dependencies`, `find_configuration`, `trace_access_control`, `find_endpoint` | questions génériques | réservées, activées par les analyseurs |
 | `get_source` | code d'un **symbole**, jamais un fichier entier, sous son propre consentement | réservée |
 
@@ -991,6 +991,13 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
 6. Minia ne construit jamais de chemin, de requête ou de commande exécutée telle quelle.
 7. Aucune clé d'API dans le dépôt ni dans les scripts ; elles viennent de l'environnement ou de fichiers
    hors du dépôt.
+8. **Représentation contrôlée** (TAXO-MINIA-SEC-01) : tout message destiné à un fournisseur, local ou
+   distant, passe par une couche unique avant l'appel, jamais seulement par les consignes du modèle.
+   Identités (auteurs Git, courriels, auteurs connus du projet même cités sans fait) remplacées par des
+   pseudonymes propres à la demande, secrets
+   reconnus masqués (`******`, la valeur seule), trailers de commit retirés ; un message de forme
+   inattendue ou qui fuirait encore est refusé. Taxo garde les valeurs d'origine et restitue localement
+   ce que le modèle rend. L'auteur d'un commit est donné par Taxo seul, sans modèle.
 
 ## 13. Hypothèses statistiques (Proposé, capacité non branchée)
 

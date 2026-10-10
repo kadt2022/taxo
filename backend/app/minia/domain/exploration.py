@@ -183,3 +183,11 @@ def message(question, operations, trajectory, calls_left, context=None):
     if calls_left <= 0:
         payload['instruction'] = LAST_CALL
     return json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+
+
+def restored(step, disclosure):
+    """Le tour du modele avec les valeurs d'origine (recit TAXO-MINIA-SEC-01, E3) : le modele n'a vu que des
+    pseudonymes ; Taxo recoit les references qu'il connait, et l'humain lit les noms d'origine."""
+    if isinstance(step, Call):
+        return Call(step.operation, disclosure.restore(step.arguments))
+    return Answer(tuple(disclosure.restore(statement) for statement in step.statements))
