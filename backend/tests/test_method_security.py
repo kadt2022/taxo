@@ -145,7 +145,7 @@ def test_the_written_facts_are_observed_at_their_line():
     output = evaluate(shop())
     [guard] = found(output, 'AUTHORIZED_BY', HANDLER)
     assert (guard['status'], guard['object'], guard['qualifiers']) == ('OBSERVED', ROLES, {'annotation': 'PreAuthorize'})
-    assert guard['evidence'][0]['line_start'] == 14
+    assert [item['line_start'] for item in guard['evidence']] == [14], 'la garde n’a que sa propre ligne pour preuve'
     [enabling] = found(output, 'ANNOTATED_WITH')
     assert (enabling['subject'], enabling['object']) == (CONFIG, f'annotation:{ENABLE}')
     assert enabling['evidence'][0]['line_start'] == 13
@@ -204,6 +204,15 @@ def test_a_homonym_of_pre_authorize_is_never_taken_for_spring():
     output = evaluate(shop(web=controller(imports='import com.example.shop.web.security.PreAuthorize;')))
     assert found(output, 'AUTHORIZED_BY', HANDLER) == [] and method_protection(output) == []
     assert any('non résolue vers Spring' in reason for reason in reasons(output, ENDPOINT))
+
+
+def test_a_same_package_annotation_wins_over_a_wildcard_import_of_spring():
+    local = 'package com.example.shop.web;\n\npublic @interface PreAuthorize {\n    String value();\n}\n'
+    output = evaluate(shop(web=controller(imports='import org.springframework.security.access.prepost.*;'),
+                           **{'src/main/java/com/example/shop/web/PreAuthorize.java': local}))
+    assert found(output, 'AUTHORIZED_BY', HANDLER) == [] and method_protection(output) == []
+    alone = evaluate(shop(web=controller(imports='import org.springframework.security.access.prepost.*;')))
+    assert len(method_protection(alone)) == 1, 'sans homonyme, l’import du paquetage désigne Spring'
 
 
 def test_other_method_security_annotations_stay_not_interpreted():

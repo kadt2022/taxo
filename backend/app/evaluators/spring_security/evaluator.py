@@ -111,9 +111,9 @@ class _Run:
                 self.configurations += found
                 self.ignored += [(java_file.path, *item) for item in ignored]
             if b'MethodSecurity' in data:
-                self.enablings += methods.enablings(java_file)
+                self.enablings += methods.enablings(java_file, deployment.types)
             if b'csrf' in data:
-                self.csrf += methods.csrf(java_file)
+                self.csrf += methods.csrf(java_file, deployment.types)
 
     def evaluate(self):
         for subject, (path, message) in self.analysis.run.gaps.items():
@@ -267,7 +267,8 @@ class _Run:
             if hidden:
                 self._gap(endpoint.reference, scope, f'sécurité de méthode non interprétée ({", ".join(hidden)})')
             return
-        guard = methods.guard(java_file, endpoint.java_type, endpoint.methods[0], endpoint.handler)
+        guard = methods.guard(java_file, endpoint.java_type, endpoint.methods[0], endpoint.handler,
+                              self.deployment.types)
         if guard is None:
             self._gap(endpoint.reference, scope, 'sécurité de méthode non interprétée (@PreAuthorize non résolue '
                                                  'vers Spring)')
@@ -295,7 +296,8 @@ class _Run:
             return
         premises = [f'HANDLED_BY : {endpoint.reference} -> {endpoint.handler}',
                     f'AUTHORIZED_BY : {guard.symbol} -> {guard.expression}', *enabling[0]]
-        evidence += enabling[1]
+        # Une liste neuve : les preuves de l'AUTHORIZED_BY observe restent celles de l'annotation seule.
+        evidence = [*evidence, *enabling[1]]
         gaps = [DATA_GAP] if any(f'{action}(' in guard.expression for action in ROLE_ACTIONS) else []
         self._add({**_observed(endpoint.reference, 'PROTECTED_BY', f'policy-rule:{guard.expression.strip()}',
                                evidence, qualifiers), 'status': 'INFERRED',

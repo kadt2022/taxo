@@ -73,18 +73,19 @@ class Csrf:
     disabled: bool
 
 
-def resolves(annotation, java_file, qualified):
-    """Vrai si l'annotation designe `qualified` par le code ecrit : nom qualifie, import explicite ou import du paquetage."""
-    return _names(java_file, annotation.name, qualified)
+def resolves(annotation, java_file, qualified, types=()):
+    """Vrai si l'annotation designe `qualified` par le code ecrit : nom qualifie, import explicite ou import du paquetage.
+    `types` : les noms qualifies des types des sources, pour qu'un type du meme paquetage l'emporte sur un import."""
+    return _names(java_file, annotation.name, qualified, types)
 
 
-def enablings(java_file):
+def enablings(java_file, types=()):
     """Les types du fichier qui portent une annotation d'activation de la securite de methode."""
     found = []
     for java_type in java_file.types:
         for annotation in java_type.annotations:
             for qualified in (ENABLE_METHOD_SECURITY, ENABLE_GLOBAL_METHOD_SECURITY):
-                if resolves(annotation, java_file, qualified):
+                if resolves(annotation, java_file, qualified, types):
                     state, written = _state(annotation, qualified)
                     found.append(Enabling(java_file.path, java_type.qualified_name, annotation, qualified, state,
                                           written))
@@ -103,11 +104,11 @@ def _state(annotation, qualified):
     return (ENABLED if written == 'true' else DISABLED), written
 
 
-def guard(java_file, java_type, method, handler):
+def guard(java_file, java_type, method, handler, types=()):
     """L'expression `@PreAuthorize` de la methode, sinon celle du type ; None si aucune ne la garde."""
     for annotations, symbol in ((method.annotations, handler), (java_type.annotations,
                                                                 f'symbol:java:{java_type.qualified_name}')):
-        found = [item for item in annotations if resolves(item, java_file, PRE_AUTHORIZE)]
+        found = [item for item in annotations if resolves(item, java_file, PRE_AUTHORIZE, types)]
         if found:
             values = found[0].arguments.get('value') or []
             expression = values[0].text if len(values) == 1 and values[0].resolved else None
@@ -115,7 +116,7 @@ def guard(java_file, java_type, method, handler):
     return None
 
 
-def csrf(java_file):
+def csrf(java_file, types=()):
     """Les appels `csrf` des chaines HttpSecurity du fichier, desactivations reconnues ou configurations non lues."""
     found = []
     chains = java_file.chains({CSRF})
@@ -128,13 +129,13 @@ def csrf(java_file):
             if call.name != CSRF:
                 continue
             following = chain.calls[index + 1] if index + 1 < len(chain.calls) else None
-            disabled = _disables(java_file, call, following)
+            disabled = _disables(java_file, call, following, types)
             end = following.line_end if disabled and not call.arguments else call.line_end
             found.append(Csrf(java_file.path, symbol, call.line_start, end, disabled))
     return found
 
 
-def _disables(java_file, call, following):
+def _disables(java_file, call, following, types=()):
     """Vrai pour `csrf().disable()`, `csrf(c -> c.disable())` et `csrf(AbstractHttpConfigurer::disable)`, ce dernier
     seulement si `AbstractHttpConfigurer` est celui de Spring : une methode `disable` d'un autre type peut ne rien
     desactiver."""
@@ -146,13 +147,14 @@ def _disables(java_file, call, following):
     function = argument.function
     if function is None:
         owner, _, name = argument.value.written.replace(' ', '').partition('::')
-        return name == DISABLE and _names(java_file, owner, CONFIGURER)
+        return name == DISABLE and _names(java_file, owner, CONFIGURER, types)
     return (function.complete and len(function.parameters) == 1 and len(function.chains) == 1
             and function.chains[0].receiver == function.parameters[0] and function.chains[0].names == (DISABLE,))
 
 
-def _names(java_file, written, qualified):
-    """Vrai si le nom de type ecrit designe `qualified` par le code ecrit : nom qualifie ou import."""
+def _names(java_file, written, qualified, types=()):
+    """Vrai si le nom de type ecrit designe `qualified` par le code ecrit : nom qualifie ou import. Comme en Java
+    (JLS 6.4.1), un import explicite l'emporte sur un type du meme paquetage, qui l'emporte sur un import `*`."""
     if '.' in written:
         return written == qualified
     simple = qualified.rsplit('.', 1)[-1]
@@ -160,7 +162,10 @@ def _names(java_file, written, qualified):
         return False
     imports = [name for name, static in java_file.imports if not static]
     explicit = [name for name in imports if name.rsplit('.', 1)[-1] == simple]
-    return explicit == [qualified] if explicit else f'{qualified.rpartition(".")[0]}.*' in imports
+    if explicit:
+        return explicit == [qualified]
+    sibling = f'{java_file.package}.{simple}' if java_file.package else simple
+    return sibling not in types and f'{qualified.rpartition(".")[0]}.*' in imports
 
 
 def hidden(java_file, java_type, method, types):
