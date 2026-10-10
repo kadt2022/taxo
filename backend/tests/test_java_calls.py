@@ -184,5 +184,6 @@ def test_each_written_annotation_is_observed_at_its_line_with_its_written_value(
         fact = found[(item['subject'], item['object'])]
         evidence, = fact['evidence']
         assert (evidence['line_start'], evidence['line_end'], fact['status']) == (item['line'], item['line'], 'OBSERVED')
-        arguments = fact['qualifiers'].get('arguments', {})
-        assert [value.get('value') for value in arguments.get('value', [])] == ([item['value']] if 'value' in item else [])
+        values = [value.get('value') for argument in fact['qualifiers'].get('arguments', [])
+                  if argument['name'] == 'value' for value in argument['values']]
+        assert values == ([item['value']] if 'value' in item else [])
