@@ -144,3 +144,13 @@ def test_an_explicit_import_shadows_a_type_of_the_same_package():
     assert [(found[f'symbol:java:com.acme.{name}']['object'], found[f'symbol:java:com.acme.{name}']['qualifiers'][
         'resolution']) for name in 'AB'] == [('annotation:org.lib.Audit', 'IMPORTED'),
                                             ('annotation:com.acme.Audit', 'SOURCE_TYPE')]
+
+
+def test_an_explicit_import_shadows_a_type_of_the_unnamed_package():
+    """Un type du paquetage sans nom ne court-circuite pas l'import explicite, et reste nommé sans import."""
+    sources = {f'{ROOT}Audit.java': 'public @interface Audit { }\n',
+               f'{ROOT}A.java': 'import q.Audit;\n@Audit\npublic class A { }\n',
+               f'{ROOT}B.java': '@Audit\npublic class B { }\n'}
+    found = _annotations(sources)
+    assert [(found[f'symbol:java:{name}']['object'], found[f'symbol:java:{name}']['qualifiers']['resolution'])
+            for name in 'AB'] == [('annotation:q.Audit', 'IMPORTED'), ('annotation:Audit', 'SOURCE_TYPE')]
