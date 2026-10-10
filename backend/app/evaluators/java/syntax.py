@@ -120,6 +120,8 @@ class JavaType:
     fields: tuple = ()
     clauses: tuple = ()
     name_line: int = 0
+    # Modificateurs ecrits du type (`public`, `final`, `abstract`...), sans les annotations.
+    modifiers: frozenset = frozenset()
 
     @property
     def implicit_accessors(self):
@@ -282,7 +284,7 @@ class _Reader:
                         self._methods(node, qualified), self.known[qualified], self._supertypes(node, qualified),
                         _signatures(node), _declarations(node), self._fields(node, qualified),
                         self._clauses(node, qualified),
-                        node.child_by_field_name('name').start_point[0] + 1)
+                        node.child_by_field_name('name').start_point[0] + 1, _modifiers(node))
 
     def type_of(self, written, owner):
         return self._type(written, owner)

@@ -271,9 +271,16 @@ restreindre (`hasRole('X') and isAuthenticated()`), et `access(manager)` que si 
 les sources, ou `access(manager())` que si la méthode sans paramètre est déclarée dans la configuration
 elle-même : la décision qu'il prend reste une limite connue.
 
-La sécurité de méthode (`@PreAuthorize`, `@Secured`, `@RolesAllowed`…) et les mécanismes maison
-(filtres, `AuthorizationManager`) sont déclarés non interprétés : la protection réelle peut s'y
-trouver. Sans règle `authorizeHttpRequests` dans les sources, Taxo n'affirme rien et le dit.
+`@PreAuthorize` est lue (TAXO-MINIA-SEC-01) : la méthode gardée est autorisée par l'expression écrite, et
+la route qu'elle traite est protégée par cette expression si `@EnableMethodSecurity` (ou
+`@EnableGlobalMethodSecurity(prePostEnabled = true)`) est chargée par l'application qui sert la route, et
+si l'expression ne peut que restreindre. Les deux protections, règle d'URL et méthode, sont dites côte à
+côte. La désactivation de CSRF (`csrf.disable()`) est un fait observé. Les autres annotations
+(`@Secured`, `@RolesAllowed`…), une garde héritée d'un supertype ou portée par une méta-annotation, une
+expression qui peut tout permettre, une activation non établie, une
+autre configuration CSRF et les mécanismes maison (filtres, `AuthorizationManager`) sont déclarés non
+interprétés : la protection réelle peut s'y trouver. Sans règle `authorizeHttpRequests` dans les
+sources, Taxo n'affirme rien et le dit.
 
 Dans Minia, une affirmation confirmée par une déduction s'affiche « Confirmée par Taxo, par déduction »,
 avec ses prémisses, ce qui a été écarté et ses limites.

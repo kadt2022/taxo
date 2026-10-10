@@ -31,6 +31,10 @@ describe('rendu humain typé des faits', ()=>{
     expect(said('DEPENDS_ON : module:web -> module:security (implementation)'))
       .toBe('Le module web dépend du module security (implementation).');
     expect(said('AUTHORIZED_BY : /admin/** -> hasRole("ADMIN")')).toBe('Le motif /admin/** exige le rôle ADMIN.');
+    expect(said("AUTHORIZED_BY : symbol:java:a.ItemController#items() -> hasAnyRole('ADMIN','EDITOR')"))
+      .toBe('La méthode ItemController.items() exige l’un des rôles ADMIN, EDITOR.');
+    expect(said('ANNOTATED_WITH : symbol:java:a.SecurityConfig -> annotation:org.springframework.EnableMethodSecurity'))
+      .toBe('La classe SecurityConfig porte l’annotation @EnableMethodSecurity.');
     // Des types inattendus pour la relation : une phrase neutre, rien de deviné.
     expect(plain(relation('HANDLED_BY', entity('module:web'), entity('file:a.java'))))
       .toBe('Le module web est traité par le fichier a.java.');
@@ -67,6 +71,10 @@ describe('rendu humain typé des faits', ()=>{
       {id:'p1', name:'Boutique'}));
     expect(say('PROTECTED_BY', 'endpoint:GET /a', 'policy-rule:hasRole("USER")')).toBe('La route GET /a exige le rôle USER.');
     expect(say('PERMITS_ALL', 'endpoint:GET /a', 'policy-rule:permitAll()')).toBe('La route GET /a est ouverte à tous.');
+    expect(say('CONFIGURES', 'symbol:java:a.SecurityConfig#chain(HttpSecurity)', 'policy-rule:csrf.disable()'))
+      .toBe('La méthode SecurityConfig.chain(HttpSecurity) désactive la protection CSRF.');
+    expect(say('CONFIGURES', 'symbol:java:a.SecurityConfig#chain(HttpSecurity)', 'policy-rule:other()'))
+      .toBe('La méthode SecurityConfig.chain(HttpSecurity) configure la règle other().');
     expect(say('WRITTEN_IN', 'file:A.java', 'language:Java')).toBe('Le fichier A.java est écrit en Java.');
     expect(say('HAS_COMMIT', 'repository:p1', 'commit:0123456789abcdef')).toBe('Le dépôt Boutique contient le commit 0123456789ab.');
     expect(say('CHILD_OF', 'commit:aaaa', 'commit:bbbb')).toBe('Le commit aaaa suit le commit bbbb.');

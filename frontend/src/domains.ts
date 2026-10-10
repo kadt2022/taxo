@@ -17,7 +17,7 @@ export type DomainId=typeof DOMAINS[number]['id'];
 
 /** Le domaine de chaque relation ; `CONTAINS` depend de qui la produit (un module, une declaration, un fichier). */
 const BY_RELATION:Record<string, DomainId>={HANDLED_BY:'api', SERVED_BY:'api',
-  PROTECTED_BY:'securite', PERMITS_ALL:'securite', AUTHORIZED_BY:'securite', MATCHED_BY:'securite',
+  PROTECTED_BY:'securite', PERMITS_ALL:'securite', AUTHORIZED_BY:'securite', MATCHED_BY:'securite', CONFIGURES:'securite',
   DEPENDS_ON:'architecture', BUILT_FROM:'architecture',
   CALLS:'architecture', IMPLEMENTS:'architecture', EXTENDS:'architecture', TYPED_AS:'architecture',
   USES_TECHNOLOGY:'technologies', DECLARED_BY:'technologies', WRITTEN_IN:'fichiers', CONTAINS:'fichiers',
@@ -53,6 +53,7 @@ const NOUNS:Record<string, Noun>={
   PERMITS_ALL:{one:'route ouverte à tous', many:'routes ouvertes à tous', feminine:true},
   AUTHORIZED_BY:{one:'règle de sécurité', many:'règles de sécurité', feminine:true},
   MATCHED_BY:{one:'correspondance de route à un motif', many:'correspondances de route à un motif', feminine:true},
+  CONFIGURES:{one:'réglage de sécurité', many:'réglages de sécurité'},
   DEPENDS_ON:{one:'dépendance entre modules', many:'dépendances entre modules', feminine:true},
   BUILT_FROM:{one:'composition d’application', many:'compositions d’application', feminine:true},
   CALLS:{one:'appel entre méthodes', many:'appels entre méthodes'},

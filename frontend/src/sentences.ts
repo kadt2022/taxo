@@ -91,8 +91,14 @@ const RULES:Record<string, (subject:Entity, object:Entity, project?:Project)=>Se
   MATCHED_BY:(subject, object)=>subject.type==='endpoint'&&(object.type==='route-pattern'||object.type==='')
     ?['la route ', code(subject), ' correspond au motif ', code(object)]:null,
   PROTECTED_BY:(subject, object)=>subject.type==='endpoint'?['la route ', code(subject), ' ', ...requirement(policy(object))]:null,
-  AUTHORIZED_BY:(subject, object)=>subject.type==='route-pattern'||subject.type===''
-    ?['le motif ', {code:subject.key}, ' ', ...requirement(policy(object))]:null,
+  // Une regle d'URL garde un motif ; `@PreAuthorize` garde une methode ou un type (TAXO-MINIA-SEC-01).
+  AUTHORIZED_BY:(subject, object, project)=>subject.type==='route-pattern'||subject.type===''
+    ?['le motif ', {code:subject.key}, ' ', ...requirement(policy(object))]
+    :subject.type==='symbol'?[...noun(subject, project), ' ', ...requirement(policy(object))]:null,
+  ANNOTATED_WITH:(subject, object, project)=>subject.type==='symbol'&&object.type==='annotation'
+    ?[...noun(subject, project), ' porte l’annotation ', {code:`@${object.key.split('.').pop()}`}]:null,
+  CONFIGURES:(subject, object, project)=>subject.type==='symbol'&&object.type==='policy-rule'&&object.key==='csrf.disable()'
+    ?[...noun(subject, project), ' désactive la protection CSRF']:null,
   PERMITS_ALL:subject=>subject.type==='endpoint'?['la route ', code(subject), ' est ouverte à tous']:null,
   BUILT_FROM:(subject, object, project)=>subject.type==='application'&&object.type==='module'
     ?[...noun(subject, project), ' est construite à partir du module ', code(object)]:null,
