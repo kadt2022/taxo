@@ -17,7 +17,7 @@ from app.neighborhood.domain.references import KEY_LENGTH, fold
 from app.platform.database.base import Base
 
 
-def _ordered(length):
+def ordered(length):
     """Un ordre d'octets, le même partout : sans lui, PostgreSQL comparerait selon la langue de la base."""
     return String(length).with_variant(postgresql.VARCHAR(length, collation='C'), 'postgresql')
 
@@ -25,8 +25,8 @@ def _ordered(length):
 class AnalysisReferenceRow(Base):
     __tablename__ = 'analysis_references'
     scan_id = Column(String, ForeignKey('scans.id'), primary_key=True)
-    reference_hash = Column(_ordered(64), primary_key=True)
-    search_key = Column(_ordered(KEY_LENGTH), nullable=False)
+    reference_hash = Column(ordered(64), primary_key=True)
+    search_key = Column(ordered(KEY_LENGTH), nullable=False)
     type = Column(String, nullable=False)
     reference = Column(Text, nullable=False)
     __table_args__ = (Index('ix_analysis_references_key', 'scan_id', 'search_key', 'reference_hash'),
@@ -66,13 +66,17 @@ def rows(scan_id, references):
 
 def record(db, rows_):
     """Enregistre ces lignes ; une référence déjà indexée pour l'analyse reste telle quelle."""
+    insert_new(db, AnalysisReferenceRow.__table__, rows_)
+
+
+def insert_new(db, table, rows_):
+    """Insère ces lignes par lots ; une ligne dont la clé primaire existe déjà reste telle quelle."""
     if not rows_:
         return
     dialect = postgresql if db.get_bind().dialect.name == 'postgresql' else sqlite
-    table = AnalysisReferenceRow.__table__
+    keys = [column.name for column in table.primary_key.columns]
     for start in range(0, len(rows_), 500):
-        db.execute(dialect.insert(table).on_conflict_do_nothing(index_elements=['scan_id', 'reference_hash']),
-                   rows_[start:start + 500])
+        db.execute(dialect.insert(table).on_conflict_do_nothing(index_elements=keys), rows_[start:start + 500])
 
 
 def search(db, scan_id, prefix, kind, after, limit):
