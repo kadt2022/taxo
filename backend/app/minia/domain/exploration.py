@@ -65,7 +65,7 @@ Le message JSON contient :
 
 Chaque reponse de Taxo porte "outcome" (OK ou ERROR), des faits sous references courtes (F1, E1...),
 une couverture (ou Taxo a cherche, avec quel analyseur) et "not_sent" (ce qui n'a pas tenu dans le budget).
-Un resultat vide ne veut pas dire faux : "non trouve" n'est jamais "faux".
+Un resultat vide n'est ni "faux" ni la preuve d'une absence dans le code.
 
 A chaque tour, rends un seul objet JSON avec tous ses champs (chaine vide ou liste vide s'il n'y a rien) :
 - pour demander une operation : "action": "call", "operation" et "arguments", objet JSON ecrit en chaine
@@ -183,3 +183,11 @@ def message(question, operations, trajectory, calls_left, context=None):
     if calls_left <= 0:
         payload['instruction'] = LAST_CALL
     return json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+
+
+def restored(step, disclosure):
+    """Le tour du modele avec les valeurs d'origine (recit TAXO-MINIA-SEC-01, E3) : le modele n'a vu que des
+    pseudonymes ; Taxo recoit les references qu'il connait, et l'humain lit les noms d'origine."""
+    if isinstance(step, Call):
+        return Call(step.operation, disclosure.restore(step.arguments))
+    return Answer(tuple(disclosure.restore(statement) for statement in step.statements))

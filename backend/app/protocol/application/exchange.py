@@ -47,6 +47,11 @@ _ASSERTION, _LANGUAGES = 'ASSERTION', 'languages'
 # Les types de reference que le vocabulaire peut nommer, de part et d'autre de ses relations.
 _REFERENCE_TYPES = frozenset(kind for sources, targets, _ in RELATIONS.values() for kind in (*sources, *targets))
 NATURES = (_ASSERTION, 'ABSENCE', 'COVERAGE')
+# Relations a une seule valeur par sujet : une confirmation n'est pas completee par ce qui n'a pas ete lu, et ses
+# propres doutes sont dans sa derivation (une route correspond a un motif, une requete a un traitement).
+# Verdicts tranches : une relation a une seule valeur les rend sur la valeur etablie du sujet.
+_DECISIVE = frozenset({'CONFIRMED', 'REFUTED'})
+_SINGLE_VALUED = frozenset({'AUTHORED_BY', 'HANDLED_BY', 'MATCHED_BY', 'TYPED_AS', 'WRITTEN_IN'})
 V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'get_diff', 'verify_claim')
 # Operations reservees d'ARCHITECTURE § 12 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
 # commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01).
@@ -289,6 +294,21 @@ class Exchange:
         return entries or [{'subject': None, 'type': 'NOT_ANALYSED', 'scope': None, 'producer': None,
                             'relation': relation}]
 
+    def limits(self, relation, concerned, verdict=None, subject=None):
+        """Ce que les analyseurs de la relation n'ont pas su lire sur le sujet ou l'objet d'une affirmation, avec
+        leur raison (TAXO-MINIA-SEC-01, E1). Un verdict vaut pour ce qui a ete lu : une confirmation qui porte ces
+        limites ne couvre pas ce qu'elles taisent (une regle d'URL confirmee, la securite de methode de la meme
+        route non interpretee). Une confirmation d'une relation a une seule valeur ne porte que les limites de son
+        objet (une cible ambigue) : ce qui n'a pas ete lu sur le sujet ne peut pas lui ajouter une seconde valeur.
+        Une refutation de cette relation vaut de meme : la valeur etablie du sujet en exclut toute autre."""
+        if verdict in _DECISIVE and relation in _SINGLE_VALUED:
+            concerned = set(concerned) - {subject}
+        return [{'subject': fact['subject'], 'type': fact['coverage_type'],
+                 'producer': fact.get('produced_by', {}).get('producer_id'), 'reason': fact.get('reason')}
+                for analyzer in self.analyzers() if relation in analyzer.relations
+                for fact in analyzer.coverage
+                if fact['coverage_type'] in UNREAD_COVERAGE and fact['subject'] in concerned]
+
     def _history_available(self):
         return any(item.get('status') != 'FAILED' and _HISTORY in self.service.catalogs.get(
             item['evaluator_id'], frozenset(item.get('relations', {}))) for item in self.evaluations)
@@ -530,8 +550,16 @@ class Exchange:
         established = [fact for fact in self.query(subject=subject, relation=relation, kind=_ASSERTION)
                        if fact.get('validity', 'VALID') == 'VALID']
         verdict = judge(claim, established, self.knowledge(self.analyzers()), self.needed(subject))
-        response = self.response('verify_claim', self.envelope_coverage(relation, {subject, target} - {None}),
-                                  max_bytes, claim=claim, verdict=verdict.verdict, reason=verdict.reason)
+        concerned = {subject, target} - {None}
+        response = self.response('verify_claim', self.envelope_coverage(relation, concerned), max_bytes,
+                                 claim=claim, verdict=verdict.verdict, reason=verdict.reason, limits=[])
+        # Les limites passent avant les faits, dans le budget : une raison longue ne coute jamais le verdict, et
+        # une limite qui ne tient pas est comptee dans `not_sent`.
+        limits = self.limits(relation, concerned, verdict.verdict, subject)
+        for index, limit in enumerate(limits):
+            if not response.add('limits', limit):
+                response.skip('limits', len(limits) - index - 1)
+                break
         self.add_facts(response, list(verdict.facts), evidence=True)
         return response
 

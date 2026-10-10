@@ -55,7 +55,7 @@ def _search(exchange, candidate, trajectory, cancel):
             if candidate.text in references:
                 return anchors.Search(candidate, (candidate.text,), True)
         else:
-            found.extend(references)
+            found.extend(reference for reference in references if candidate.accepts(reference))
         if response['next'] is None and not response['not_sent']:
             return anchors.Search(candidate, tuple(found), True)
         after = {'after': response['next']} if response['next'] else {}

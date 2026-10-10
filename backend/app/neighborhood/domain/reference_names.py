@@ -9,6 +9,10 @@ La liste de paramètres n'a de sens que pour un symbole appelable : une clé `sy
 un `#` et se termine par `(…)`. Un nom sans liste trouve toutes ses surcharges ; un nom avec liste ne trouve que
 la sienne. Ailleurs (le fichier `file:Items.list(String)`), les parenthèses sont des caractères ordinaires.
 
+Un nom qui commence par un séparateur (le chemin `/api/students`) se compare sans lui : une fin de clé commence
+après un séparateur, jamais sur lui. `/api/students` trouve donc `endpoint:GET /api/students` comme le ferait
+`api/students`.
+
 Chaque fin de clé possible est une entrée de l'index ; une entrée plus longue que la clé de l'index ne peut être
 égale à aucun nom accepté et n'est pas gardée. La comparaison est une égalité : jamais de troncature.
 """
@@ -60,7 +64,9 @@ def name_keys(reference):
 
 def name_key(name):
     """Le nom demandé tel qu'il se compare ; refusé s'il dépasse la clé de l'index une fois replié."""
-    compared = _canonical(unicodedata.normalize('NFC', name))
+    compared = _canonical(unicodedata.normalize('NFC', name)).lstrip(CANONICAL)
+    if not compared:
+        raise ReferenceSearchError('prefix : un nom ne peut pas être fait que de séparateurs.')
     if len(compared) > KEY_LENGTH:
         raise ReferenceSearchError(f'prefix : plus de {KEY_LENGTH} caractères une fois replié en casse.')
     return compared

@@ -73,6 +73,13 @@ class GitHistoryReader:
             return []
         return _commits(_output(root, 'log', f'--max-count={limit}', f'--format={_FORMAT}', 'HEAD'))
 
+    def authors(self, root):
+        """Les auteurs de tous les commits du depot (`nom <courriel>`), sans doublon, tries ; vide sans commit."""
+        root = _repository(root)
+        raw = _output(root, 'log', '--all', '--format=%an%x00%ae')
+        pairs = {tuple(_text(field).strip() for field in line.split(b'\x00', 1)) for line in raw.splitlines() if line}
+        return sorted(f'{name} <{email}>' if email else name for name, email in pairs if name or email)
+
     def commit(self, root, sha):
         root = _repository(root)
         if not (isinstance(sha, str) and _COMMIT_ID.fullmatch(sha)):
