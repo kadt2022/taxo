@@ -1,0 +1,374 @@
+"""Ce qu'un fournisseur de modele recoit : une representation controlee, jamais les valeurs d'origine
+(recit TAXO-MINIA-SEC-01, E3 ; ARCHITECTURE § 12.6).
+
+Taxo garde localement les valeurs d'origine ; le modele ne voit que leur version protegee :
+
+- une **personne** (auteur Git, courriel) devient un pseudonyme propre a la demande (`personne-1`) : deux
+  mentions d'une meme personne gardent le meme pseudonyme, la relation entre identites reste lisible ;
+- un **secret** (mot de passe, jeton, cle privee, identifiants dans une URL) devient `******`. Seule la valeur
+  est masquee : `password = "******"` montre encore qu'un mot de passe est ecrit en dur ;
+- les **trailers** d'un message de commit (`Co-Authored-By`, `Signed-off-by`...) sont retires.
+
+Le message est lu comme du JSON, valeur par valeur : une forme inattendue est refusee, jamais envoyee telle
+quelle. Apres protection, un dernier controle cherche encore un courriel, un secret de forme connue ou une
+identite connue ; s'il en trouve, la transmission est refusee. Une demande a sa propre `Disclosure` : les
+pseudonymes ne survivent pas a la demande, et rien de ce qu'elle protege n'est journalise.
+"""
+import json
+import re
+
+from .errors import CONFIDENTIALITY_REFUSED, MiniaError
+
+MASK = '******'
+PSEUDONYM = 'personne-{}'
+_PERSON = 'person:'
+# Une partie de nom plus courte n'est pas remplacee seule : trop de mots du code lui ressembleraient.
+MIN_NAME_PART = 3
+
+# Le domaine peut n'avoir qu'un label (`root@localhost`) : une adresse locale reste une adresse.
+# La partie locale et le domaine peuvent etre internationaux (`josé@exemple.fr`) ; la partie locale garde ses
+# caracteres permis (`john!doe@`) pour que l'adresse soit masquee en entier, jamais seulement sa fin ; `*` en est
+# exclu, il est celui du masque.
+_EMAIL = re.compile(r'[\w.!#$%&+?^`{|}~-]+@[\w-]+(?:\.[\w-]+)*')
+_NAMED_ADDRESS = re.compile(r'(.*?)\s*<([^<>]*)>')
+_PSEUDONYM = re.compile(r'personne-[1-9]\d*')
+# Une reference de Taxo (`file:src/A.java`, `class:com.x.A`) : ses noms ne sont pas des personnes.
+_REFERENCE = re.compile(r'(?!person:)[a-z][a-z_-]*:\S+')
+_TRAILER_LINE = r'[ \t]*(?:[A-Za-z][\w-]*-by|Co-authored|Cc|Change-Id|Claude-Session)[ \t]*:[^\r\n]*'
+# Les trailers d'un message de commit forment son dernier paragraphe : une ligne de meme forme ailleurs (`order-by:`
+# dans un fichier) n'en est pas un et reste transmise.
+_TRAILERS = re.compile(rf'(?:\A|(?<=\n)[ \t]*\r?\n)(?P<block>{_TRAILER_LINE}(?:\r?\n{_TRAILER_LINE})*)\s*\Z',
+                       re.IGNORECASE)
+# Secrets de forme connue : remplaces en entier.
+_TOKENS = re.compile('|'.join((
+    r'-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END[A-Z ]*PRIVATE KEY-----|$)',
+    r'\b(?:AKIA|ASIA)[0-9A-Z]{16}\b',
+    r'\bgh[pousr]_[A-Za-z0-9]{20,}\b',
+    r'\bgithub_pat_[A-Za-z0-9_]{20,}\b',
+    r'\bxox[abposr]-[A-Za-z0-9-]{10,}\b',
+    r'\bsk-[A-Za-z0-9_-]{16,}\b',
+    r'\bAIza[0-9A-Za-z_-]{35}\b',
+    r'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b',
+)))
+# Identifiants dans une URL : `scheme://utilisateur:motdepasse@hote`.
+_URL_CREDENTIALS = re.compile(r'(\b[a-z][a-z0-9+.-]*://)[^\s/:@]+:[^\s/@]+@', re.IGNORECASE)
+_SECRET_NAME = r'[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credentials?)[\w.-]*'
+# Une valeur affectee a un nom de secret : `password = "x"`, `password := "x"`, `password: x`, `.password("x")`,
+# `"token": "x"`. Une chaine citee peut echapper ses guillemets et, en YAML, continuer sur les lignes suivantes :
+# elle est masquee jusqu'a son guillemet fermant, ou jusqu'a la fin du texte s'il n'est pas ferme.
+_ASSIGNED = re.compile(
+    rf'(?P<name>\b{_SECRET_NAME}["\']?)(?P<sep>\s*(?::=|=>|[:=])\s*|\(\s*)'
+    r'(?P<value>"(?:[^"\\]|\\[\s\S])*(?:"|\Z)|\'(?:[^\'\\]|\\[\s\S]|\'\')*(?:\'|\Z)|[^\s"\',;(){}\[\]]+(?![\w(.{]))',
+    re.IGNORECASE)
+# Une entree YAML dont la cle est un nom de secret (`password: x`, `- token: |`, `"secret": "x"`) : sa valeur est
+# masquee en entier, quelle que soit sa forme (simple, citee, guillemets doubles `''`, bloc `|` ou `>`), avec les
+# lignes plus indentees que la cle qui la continuent ; un commentaire de fin d'une valeur non citee reste.
+_YAML_ENTRY = re.compile(
+    rf'(?P<indent>[ \t]*)(?P<dash>-[ \t]+)?(?P<key>["\']?{_SECRET_NAME}["\']?[ \t]*:)(?=[ \t]|$)(?P<rest>.*)',
+    re.IGNORECASE)
+# Une entree d'une table YAML en ligne (`{password: correct horse, port: 8080}`) : sa valeur non citee va jusqu'a la
+# virgule ou l'accolade qui la ferme.
+_FLOW_ENTRY = re.compile(
+    rf'(?<=[{{,])(?P<key>[ \t]*["\']?{_SECRET_NAME}["\']?[ \t]*:[ \t]+)(?P<value>[^\s,{{}}"\'][^,{{}}\r\n]*?)'
+    r'(?=[ \t]*[,}])', re.IGNORECASE)
+_COMMENT = re.compile(r'[ \t]+#')
+# Une valeur properties non citee de plusieurs mots (`password=correct horse battery`) : masquee jusqu'au
+# commentaire de fin de ligne. Une ligne de code (`;`, `{`, `,` final ou un appel) reste a `_ASSIGNED`.
+_PLAIN_SCALAR = re.compile(
+    rf'^(?P<key>[ \t]*{_SECRET_NAME}[ \t]*=[ \t]*)'
+    r'(?P<value>[^\s"\'#][^\r\n]*?[ \t][^\r\n]*?)(?P<tail>[ \t]+#[^\r\n]*)?(?P<end>\r?)$',
+    re.IGNORECASE | re.MULTILINE)
+_CODE = re.compile(r'[;{,]\s*$|\(')
+# Valeurs qui ne sont pas des secrets : vides, litteraux, ou renvoi a une variable d'environnement.
+_NOT_A_SECRET = re.compile(r'["\']?(?:|null|none|true|false|\$\{[^}]*\}|\*+)["\']?', re.IGNORECASE)
+
+
+def _indent(line):
+    return len(line) - len(line.lstrip(' \t'))
+
+
+def _split_comment(value):
+    """(valeur, commentaire de fin) d'une valeur YAML ; une valeur citee garde tout, son `#` peut etre a elle."""
+    comment = None if value[:1] in ('"', "'") else _COMMENT.search(value)
+    if value.startswith('#'):
+        return '', f' {value}'
+    return (value, '') if comment is None else (value[:comment.start()], value[comment.start():])
+
+
+def _strip_trailers(text):
+    """Le texte sans le paragraphe final de trailers, et le nombre de trailers retires."""
+    match = _TRAILERS.search(text)
+    if match is None:
+        return text, 0
+    return text[:match.start()].rstrip('\r\n'), len(match['block'].splitlines())
+
+
+def _identity_parts(value, words=True):
+    """Les formes sous lesquelles une identite peut reapparaitre : entiere, courriel, nom complet ; et, si `words`,
+    la partie locale du courriel et chaque mot du nom."""
+    value = value.strip()
+    parts = {value} if value else set()
+    for email in _EMAIL.findall(value):
+        parts.add(email)
+        local = email.split('@', 1)[0]
+        if words and len(local) >= MIN_NAME_PART:
+            parts.add(local)
+    name = _EMAIL.sub(' ', value).replace('<', ' ').replace('>', ' ')
+    names = [word for word in re.split(r'[\s,;]+', name) if word]
+    if names:
+        parts.add(' '.join(names))
+    if words:
+        parts.update(word for word in names if len(word) >= MIN_NAME_PART)
+        return parts
+    # Sans les mots : un nom d'un seul mot (`taxo`, `ci`) ressemble autant a un mot du code qu'un mot isole.
+    return {part for part in parts if ' ' in part or _EMAIL.fullmatch(part)}
+
+
+class Disclosure:
+    """La representation controlee d'une demande : protege ce qui part vers le modele, restaure localement."""
+
+    def __init__(self, known=()):
+        """`known` : les identites connues du projet (auteurs Git), protegees meme quand le message les nomme
+        sans fait qui les designe. Elles ne le sont que par un nom de plusieurs mots ou un courriel : un mot
+        isole, ou un nom d'un seul mot, ressemble trop souvent a un mot du code."""
+        self._pseudonyms = {}   # forme d'une identite -> pseudonyme
+        self._displays = {}     # pseudonyme -> nom affiche localement
+        self._references = {}   # pseudonyme -> reference `person:` d'origine
+        self._protected = {}    # reference envoyee (courriel remplace) -> reference d'origine
+        self._anchored = set()  # pseudonymes lies a un courriel ou a une reference `person:`
+        self._withheld = {'identities': set(), 'secrets': 0, 'trailers': 0}
+        for identity in known:
+            # `Nom <courriel>` : deux formes d'une meme personne, affichee localement par son nom.
+            # Le courriel est aussi la reference `person:` des faits Git : une demande du modele sur `personne-1`
+            # revient vers cette reference.
+            written = _NAMED_ADDRESS.fullmatch(identity.strip())
+            name, email = written.groups() if written else (identity, '')
+            self._identity(name, *([_PERSON + email] if email else []), words=False)
+
+    # Protection -------------------------------------------------------------------------------------------
+
+    def protect(self, message):
+        """Le message, protege. Refuse (MiniaError) ce qui n'est pas un objet JSON, ou ce qui fuirait encore."""
+        try:
+            payload = json.loads(message)
+        except (TypeError, ValueError) as exc:
+            raise MiniaError(CONFIDENTIALITY_REFUSED, 'Message de forme inattendue : Taxo ne peut pas garantir '
+                             'sa confidentialité, il n’est pas transmis au modèle.') from exc
+        # D'abord les faits AUTHORED_BY, qui lient un nom a son courriel ; puis toutes les autres mentions.
+        self._collect(payload, authored_only=True)
+        self._collect(payload)
+        protected = json.dumps(self._value(payload), ensure_ascii=False, separators=(',', ':'))
+        self._check(protected)
+        return protected
+
+    def _collect(self, value, author_field=False, authored_only=False):
+        """Repere les identites avant toute ecriture : une personne citee plus loin est masquee partout."""
+        if isinstance(value, dict):
+            authored = value.get('relation') == 'AUTHORED_BY'
+            for key, item in value.items():
+                self._collect(item, author_field=key == 'author', authored_only=authored_only)
+            if authored:
+                names = [(value.get('qualifiers') or {}).get('name')]
+                references = [item for item in value.values() if isinstance(item, str) and item.startswith(_PERSON)]
+                self._identity(*references, *[name for name in names if isinstance(name, str)])
+        elif isinstance(value, list):
+            for item in value:
+                self._collect(item, authored_only=authored_only)
+        elif isinstance(value, str) and not authored_only:
+            if _REFERENCE.fullmatch(value) is None:
+                # Une identite citee seulement dans un trailer n'est pas transmise : rien a lui attribuer.
+                value, _ = _strip_trailers(value)
+            if author_field:
+                self._identity(value)
+            if value.startswith(_PERSON):
+                self._identity(value)
+            for email in _EMAIL.findall(value):
+                self._identity(email)
+
+    def _identity(self, *forms, words=True):
+        """Une personne, sous une ou plusieurs formes (reference, nom, courriel) : un seul pseudonyme."""
+        forms = [form.strip() for form in forms if form and form.strip()]
+        if not forms:
+            return
+        plain = [form.removeprefix(_PERSON) for form in forms]
+        parts = set().union(*(_identity_parts(form, words) for form in plain))
+        if not parts:
+            return
+        # Deux mentions ne sont liees que par une forme entiere ou un courriel, jamais par un mot du nom :
+        # deux personnes qui partagent un prenom gardent deux pseudonymes. Une identite qui a un courriel ou
+        # une reference n'est liee que par eux : deux auteurs homonymes aux courriels differents restent deux.
+        emails = {email for form in plain for email in _EMAIL.findall(form)}
+        identified = emails | {form.removeprefix(_PERSON) for form in forms if form.startswith(_PERSON)}
+        known = next((self._pseudonyms[form] for form in sorted(identified) if form in self._pseudonyms), None)
+        if known is None:
+            # Un nom deja vu sans courriel (un auteur cite seulement par son nom) se lie a son courriel ; un nom deja
+            # lie a un autre courriel, non.
+            named = (self._pseudonyms.get(form) for form in sorted(plain))
+            known = next((item for item in named if item and not (identified and item in self._anchored)), None)
+        pseudonym = known or PSEUDONYM.format(len(self._displays) + 1)
+        if identified:
+            self._anchored.add(pseudonym)
+        self._displays.setdefault(pseudonym, next((form for form in plain if not _EMAIL.fullmatch(form)), plain[0]))
+        for form in forms:
+            if form.startswith(_PERSON):
+                self._references.setdefault(pseudonym, form)
+        for part in parts:
+            self._pseudonyms.setdefault(part, pseudonym)
+
+    def _value(self, value):
+        if isinstance(value, dict):
+            protected = {key: self._value(item) for key, item in value.items()}
+            if value.get('relation') == 'AUTHORED_BY':
+                self._bind_name(value, protected)
+            return protected
+        if isinstance(value, list):
+            return [self._value(item) for item in value]
+        if isinstance(value, str):
+            return self._text(value)
+        return value
+
+    def _bind_name(self, fact, protected):
+        """Le nom d'un fait AUTHORED_BY prend le pseudonyme de sa propre reference : deux homonymes aux courriels
+        differents ne partagent pas le nom du premier."""
+        name = (fact.get('qualifiers') or {}).get('name')
+        reference = next((item for item in fact.values() if isinstance(item, str) and item.startswith(_PERSON)), None)
+        pseudonym = reference and self._pseudonyms.get(reference.removeprefix(_PERSON).strip())
+        if isinstance(name, str) and name.strip() and pseudonym and isinstance(protected.get('qualifiers'), dict):
+            protected['qualifiers'] = {**protected['qualifiers'], 'name': pseudonym}
+            self._withheld['identities'].add(pseudonym)
+
+    def _text(self, text):
+        if text.startswith(_PERSON):
+            pseudonym = self._pseudonyms.get(text.removeprefix(_PERSON).strip())
+            if pseudonym:
+                self._withheld['identities'].add(pseudonym)
+                return _PERSON + pseudonym
+        reference = _REFERENCE.fullmatch(text) is not None
+        if not reference:
+            text, removed = _strip_trailers(text)
+            self._withheld['trailers'] += removed
+        protected = self._people(self._secrets(text), names=not reference)
+        if reference and protected != text:
+            self._protected[protected] = text
+        return protected
+
+    def _secrets(self, text):
+        text = self._entries(text)
+        text = _PLAIN_SCALAR.sub(self._plain, text)
+        text = _FLOW_ENTRY.sub(self._plain, text)
+        text, found = _TOKENS.subn(MASK, text)
+        text, credentials = _URL_CREDENTIALS.subn(rf'\g<1>{MASK}:{MASK}@', text)
+        self._withheld['secrets'] += found + credentials
+
+        def assigned(match):
+            value = match['value']
+            quote = value[0] if value[0] in '"\'' and value[-1] == value[0] and len(value) > 1 else ''
+            # Un argument non cite (`.password(encoder)`) est une variable du code, pas une valeur ecrite.
+            if _NOT_A_SECRET.fullmatch(value) or (match['sep'].startswith('(') and not quote):
+                return match[0]
+            self._withheld['secrets'] += 1
+            return f"{match['name']}{match['sep']}{quote}{MASK}{quote}"
+        return _ASSIGNED.sub(assigned, text)
+
+    def _plain(self, match):
+        value = match['value']
+        if _NOT_A_SECRET.fullmatch(value) or _CODE.search(value):
+            return match[0]
+        self._withheld['secrets'] += 1
+        groups = match.groupdict()
+        return f"{match['key']}{MASK}{groups.get('tail') or ''}{groups.get('end') or ''}"
+
+    def _entries(self, text):
+        """Masque la valeur de chaque entree YAML dont la cle est un nom de secret ; la cle et les soeurs restent."""
+        lines = text.split('\n')
+        kept, index = [], 0
+        while index < len(lines):
+            line = lines[index]
+            end = '\r' if line.endswith('\r') else ''
+            entry = _YAML_ENTRY.fullmatch(line.removesuffix('\r'))
+            index += 1
+            if entry is None:
+                kept.append(line)
+                continue
+            # Dans une liste (`- password: x`), la cle est indentee jusqu'apres le tiret : ses soeurs aussi.
+            depth = len(entry['indent']) + len(entry['dash'] or '')
+            start = index
+            while index < len(lines) and (not lines[index].strip() or _indent(lines[index]) > depth):
+                index += 1
+            # Les lignes vides qui suivent l'entree ne lui appartiennent pas : elles restent.
+            while index > start and not lines[index - 1].strip():
+                index -= 1
+            value, tail = _split_comment(entry['rest'].strip())
+            if index == start and _NOT_A_SECRET.fullmatch(value):
+                kept.append(line)
+                continue
+            quote = value[0] if value[:1] in ('"', "'") else ''
+            self._withheld['secrets'] += 1
+            kept.append(f"{entry['indent']}{entry['dash'] or ''}{entry['key']} {quote}{MASK}{quote}{tail}{end}")
+        return '\n'.join(kept)
+
+    def _people(self, text, names=True):
+        """Remplace chaque forme connue d'une identite par son pseudonyme (la plus longue d'abord)."""
+        forms = [form for form in self._pseudonyms if names or _EMAIL.fullmatch(form)]
+        if not forms:
+            return text
+        # Une identite reecrite dans une autre casse (`ADA LOVELACE`) reste la meme personne.
+        folded = {}
+        for form in forms:
+            folded.setdefault(form.casefold(), self._pseudonyms[form])
+        alternation = '|'.join(re.escape(form) for form in sorted(forms, key=len, reverse=True))
+        pattern = re.compile(rf'(?<![\w.@-])(?:{alternation})(?![\w@-])', re.IGNORECASE)
+
+        def pseudonym(match):
+            found = folded[match[0].casefold()]
+            self._withheld['identities'].add(found)
+            return found
+        text = pattern.sub(pseudonym, text)
+        # Un courriel inconnu (dans un diff, un message) est masque lui aussi.
+        return _EMAIL.sub(lambda match: self._unknown_email(match[0]), text)
+
+    def _unknown_email(self, email):
+        self._identity(email)
+        pseudonym = self._pseudonyms[email]
+        self._withheld['identities'].add(pseudonym)
+        return pseudonym
+
+    def _check(self, protected):
+        """Dernier controle avant l'envoi : rien de ce qui doit etre protege ne subsiste."""
+        whole = [form for form in self._pseudonyms if ' ' in form or _EMAIL.fullmatch(form)]
+        leaked = (_EMAIL.search(protected) or _TOKENS.search(protected)
+                  or any(re.search(rf'(?<![\w.@-]){re.escape(form)}(?![\w@-])', protected, re.IGNORECASE)
+                         for form in whole))
+        if leaked:
+            raise MiniaError(CONFIDENTIALITY_REFUSED, 'Une donnée confidentielle subsiste après protection : '
+                             'le message n’est pas transmis au modèle.')
+
+    # Restitution locale -----------------------------------------------------------------------------------
+
+    def restore(self, value):
+        """Ce que le modele a rendu, avec les identites d'origine : pour Taxo et pour l'affichage local.
+
+        Une reference `person:personne-N` redevient la reference d'origine ; un pseudonyme seul, le nom.
+        Un secret masque ne se restaure pas : le modele ne l'a jamais eu.
+        """
+        if isinstance(value, dict):
+            return {key: self.restore(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self.restore(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self.restore(item) for item in value)
+        if not isinstance(value, str) or not self._displays:
+            return value
+        if value.startswith(_PERSON) and value.removeprefix(_PERSON) in self._references:
+            return self._references[value.removeprefix(_PERSON)]
+        if value in self._protected:
+            return self._protected[value]
+        if _REFERENCE.fullmatch(value) is not None:
+            # Une autre reference (`file:personne-1.md`) n'a jamais porte de pseudonyme : elle reste telle quelle.
+            return value
+        return _PSEUDONYM.sub(lambda match: self._displays.get(match[0], match[0]), value)
+
+    def report(self):
+        """Ce qui a ete retenu, compte, sans aucune valeur : pour la transparence de la reponse (E4)."""
+        return {'identities': len(self._withheld['identities']), 'secrets': self._withheld['secrets'],
+                'trailers': self._withheld['trailers']}

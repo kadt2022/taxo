@@ -58,6 +58,17 @@ group('vues', ()=>{
     expect(empty).not.toContain('<table');
     expect(empty).toContain('Non interprété par Taxo : commit:x.');
   });
+  it('montre les auteurs donnés par Taxo seul, sans modèle (TAXO-MINIA-SEC-01)', ()=>{
+    const html=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, mode:'taxo', answer:'Selon Git : bbbb : Ada.',
+      facts:[{ref:'F1', subject:'commit:bbbb', relation:'AUTHORED_BY', object:'person:ada@example.org', qualifiers:{name:'Ada'}}]}}/>);
+    expect(html).toContain('TAXO · réponse directe, sans modèle');
+    expect(html).toContain('Selon Git : bbbb : Ada.');
+    expect(html).not.toContain('non vérifié');
+  });
+  it('signale ce que Taxo a protégé avant l’envoi, sans valeur', ()=>{
+    const html=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, withheld:{identities:1, secrets:0, trailers:0}}}/>);
+    expect(html).toContain('1 identité remplacée par un pseudonyme');
+  });
   it('sépare les faits de Taxo, l’interprétation et l’inconnu', ()=>{
     const html=renderToStaticMarkup(<SelectionAnswerView answer={answer}/>);
     expect(html).toContain('MINIA · ollama qwen2.5:3b · 3 derniers commits');

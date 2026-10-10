@@ -4,7 +4,7 @@ import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
 import {ask as askMinia, askButton, createStop, MiniaProgress, type MiniaLive, type MiniaStop} from './minia-live';
-import {MiniaChoice, modelLabel, type AnswerModel, type MiniaStatus} from './minia';
+import {DirectAnswer, MiniaChoice, modelLabel, withheldNote, type AnswerModel, type MiniaStatus, type Withheld} from './minia';
 import {openStream, type ServerEvent} from './sse';
 import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
 import {ElementView, isNamed, type Located} from './element';
@@ -24,7 +24,8 @@ export type SelectionAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'|'NEEDS_SEL
   model:AnswerModel; commits:SelectedCommit[]; facts:(GitFact&{ref:string})[];
   answer:string; unknown:string; not_interpreted:string[]; facts_not_sent:number; rejected_citations:string[];
   // MINIA-09 : en exploration, la reponse est faite d'enonces types ; en repli, le paquet dit pourquoi.
-  mode?:'exploration'|'paquet'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string;
+  mode?:'exploration'|'paquet'|'taxo'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string;
+  withheld?:Withheld;
   // TAXO-01N : en repli paquet sans commits, l'element dont la Tuile a ete interpretee, ou les candidates.
   anchor?:Located};
 type Run = <T>(path:string, init?:RequestInit)=>Promise<T>;
@@ -81,17 +82,21 @@ export function SelectionView({result}:Readonly<{result:Selection}>){
 }
 
 export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>){
+  if(answer.mode==='taxo')return <DirectAnswer question={answer.question} answer={answer.answer}>
+    {answer.facts.length>0&&<ul>{answer.facts.map(f=><li key={f.ref}>{factLine(f)}</li>)}</ul>}
+  </DirectAnswer>;
   if(answer.mode==='exploration'&&answer.statements)return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · exploration</p>
     <p className="minia-question">{answer.question}</p>
-    <Statements statements={answer.statements}/>
+    <Statements statements={answer.statements} limits={[withheldNote(answer.withheld)].filter((item):item is string=>!!item)}/>
     <Trajectory steps={answer.trajectory??[]}/>
     <footer>Minia a interrogé Taxo opération par opération ; Taxo a vérifié chacune de ses affirmations. Aucune phrase n’est affichée comme établie sans verdict de Taxo, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
   // Ce que Taxo constate lui-meme ; ce que Minia dit ne pas savoir reste avec son texte, non verifie (MINIA-11).
   const limits=[answer.fallback?`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir d’un paquet de faits.`:'', answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
-    answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:''].filter(Boolean);
+    answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:'',
+    withheldNote(answer.withheld)??''].filter(Boolean);
   return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · {answer.anchor?.anchor?reference(answer.anchor.anchor):describe(answer.request)}</p>
     <p className="minia-question">{answer.question}</p>

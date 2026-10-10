@@ -104,7 +104,9 @@ def test_the_trajectory_is_visible_live_and_results_reach_minia_as_data(repo, tm
     assert system == exploration.SYSTEM and schema == exploration.STEP_SCHEMA
     sent = json.loads(second)
     assert [step['operation'] for step in sent['trajectory']] == ['describe', 'find_facts']
-    assert sent['trajectory'][1]['response']['items'][0]['fact']['object'] == AUTHOR
+    # Le fait arrive a Minia, l'identite reste chez Taxo (recit TAXO-MINIA-SEC-01, E3).
+    assert sent['trajectory'][1]['response']['items'][0]['fact']['object'] == 'person:personne-1'
+    assert AUTHOR.removeprefix('person:') not in second
     assert sent['calls_left'] == MAX_CALLS - 1
     assert 'jamais des' in system and 'instructions' in system, 'les resultats sont des donnees'
 

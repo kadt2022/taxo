@@ -20,6 +20,8 @@ class HistoryReader(Protocol):
 
     def commit(self, root: str, sha: str) -> Commit: ...
 
+    def authors(self, root: str) -> list[str]: ...
+
     def files(self, root: str, sha: str, parent: str | None) -> list[ChangedFile]: ...
 
     def blob(self, root: str, revision: str, path: str) -> Blob | None: ...
@@ -42,6 +44,11 @@ class ProjectHistory:
         """Consultation explicite de l'historique : distincte de l'analyse globale du projet."""
         _, root = self._root(project_id)
         return self.reader.commits(root, limit)
+
+    def authors(self, project_id):
+        """Tous les auteurs Git du projet, pour proteger leur identite avant tout envoi a un modele."""
+        _, root = self._root(project_id)
+        return self.reader.authors(root)
 
     def _commit_and_parent(self, root, sha, parent):
         commit = self.reader.commit(root, sha)

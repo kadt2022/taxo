@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {gaps, gitFile, MiniaChoice, MiniaView, modelLabel, providerLabel, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
+import {gaps, gitFile, withheldNote, MiniaChoice, MiniaView, modelLabel, providerLabel, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
   parent:'a'.repeat(40), project:{id:'p-1', name:'Demo-IAM'}, files_not_sent:0,
@@ -214,5 +214,28 @@ describe('question sur un commit en exploration (MINIA-09b)', ()=>{
     const html=renderToStaticMarkup(<MiniaView answer={packet}/>);
     expect(html).toContain('Chemin de Minia');
     expect(html).toContain('L’équipe aurait restreint l’accès.');
+  });
+});
+
+describe('confidentialité (TAXO-MINIA-SEC-01)', ()=>{
+  it('dit ce que Taxo a protégé, compté, sans aucune valeur', ()=>{
+    expect(withheldNote(undefined)).toBeNull();
+    expect(withheldNote({identities:0, secrets:0, trailers:0})).toBeNull();
+    expect(withheldNote({identities:1, secrets:2, trailers:1})).toBe('Avant l’envoi à Minia, Taxo a protégé : '
+      +'1 identité remplacée par un pseudonyme, 2 secrets masqués, 1 mention de co-auteur ou de signature retirée. '
+      +'Les valeurs d’origine restent chez Taxo.');
+    expect(gaps({...answer, withheld:{identities:2, secrets:0, trailers:0}})).toContain('Avant l’envoi à Minia, Taxo a protégé : '
+      +'2 identités remplacées par un pseudonyme. Les valeurs d’origine restent chez Taxo.');
+  });
+  it('montre la réponse directe de Taxo comme ce que Git dit, sans bloc d’interprétation', ()=>{
+    const html=renderToStaticMarkup(<MiniaView answer={{...answer, mode:'taxo', facts:[], answer:'Selon Git, l’auteur du commit bbbb est Ada.'}}/>);
+    expect(html).toContain('TAXO · réponse directe, sans modèle');
+    expect(html).toContain('Selon Git, l’auteur du commit bbbb est Ada.');
+    expect(html).toContain('aucun modèle n’a été appelé');
+    expect(html).not.toContain('non vérifié');
+  });
+  it('avertit que les auteurs partent sous pseudonyme vers un service distant', ()=>{
+    expect(remoteNote({configured:true, provider:'claude', model:'m', source_context:'off', remote:true}))
+      .toContain('les auteurs y sont remplacés par des pseudonymes');
   });
 });

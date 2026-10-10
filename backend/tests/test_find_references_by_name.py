@@ -114,6 +114,36 @@ def test_the_key_mode_is_unchanged(twin, storage):
     assert found(search(twin, storage, prefix='VetController')) == [], 'le préfixe de clé ne trouve pas le nom seul'
 
 
+STUDENTS, STUDENT_CREATE = 'endpoint:GET /api/students', 'endpoint:POST /api/students'
+STUDENT, ADMIN = 'endpoint:GET /api/students/{id}', 'route-pattern:/api/admin/**'
+ROOT = 'endpoint:GET /'
+
+
+@pytest.fixture
+def routes(tmp_path):
+    made = Twin(tmp_path)
+    handler = JAVA + 'web.StudentController#list()'
+    made.add([edge(handler, 'HANDLED_BY', subject=endpoint) for endpoint in (STUDENTS, STUDENT_CREATE, STUDENT, ROOT)]
+             + [edge(handler, 'AUTHORIZED_BY', subject=ADMIN)])
+    return made
+
+
+@pytest.mark.parametrize('storage', STORAGES)
+def test_a_route_is_found_by_its_path_written_with_its_leading_slash(routes, storage):
+    assert named(routes, storage, '/api/students') == sorted([STUDENTS, STUDENT_CREATE]), \
+        'le chemin tel qu’on l’écrit, comme api/students ; ni la route plus longue'
+    assert named(routes, storage, '/api/students') == named(routes, storage, 'api/students')
+    assert named(routes, storage, 'GET /api/students') == [STUDENTS], 'avec son verbe, une seule route'
+    assert named(routes, storage, '/api/students/{id}') == [STUDENT]
+    assert named(routes, storage, '/api/admin/**') == [ADMIN]
+    assert named(routes, storage, 'GET /') == [ROOT], 'la racine, avec son verbe'
+
+
+@pytest.mark.parametrize('name', ['/', '/./#'])
+def test_a_name_made_only_of_separators_is_refused(routes, name):
+    assert by_name(routes, 'fact_memory', name)['error']['code'] == 'INVALID_ARGUMENT'
+
+
 @pytest.mark.parametrize('arguments', [{'match': 'name'}, {'match': 3}, {'match': ['NAME']},
                                        {'match': 'NAME', 'prefix': 'ß' * 129}])
 def test_bad_modes_are_refused(twin, arguments):
