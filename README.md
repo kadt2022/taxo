@@ -536,6 +536,25 @@ Il faut aussi cocher « Autoriser Minia à lire le diff de ce commit » (`"sourc
 l'API). Si `MINIA_OLLAMA_URL` vise une autre machine, le portail avertit que le diff quittera la machine
 de Taxo, et la case n'est pas cochée par défaut.
 
+### Ce qui part vers un modèle : représentation contrôlée (TAXO-MINIA-SEC-01, ARCHITECTURE § 12.6)
+
+Quel que soit le fournisseur, local ou distant, chaque message de Minia passe par une seule couche avant
+l'appel (`minia/application/protected_model.py`, `minia/domain/confidentiality.py`) :
+
+- les auteurs Git et les courriels deviennent des pseudonymes propres à la demande (`personne-1`) : deux
+  mentions d'une même personne gardent le même pseudonyme ;
+- les secrets reconnus (mot de passe, jeton, clé privée, identifiants dans une URL) deviennent `******`.
+  Seule la valeur est masquée : `password = "******"` montre encore un mot de passe écrit en dur ;
+- les trailers des messages de commit (`Co-Authored-By`, `Signed-off-by`…) sont retirés ;
+- un message de forme inattendue, ou dans lequel une donnée protégée subsisterait, n'est pas envoyé
+  (`MINIA_CONFIDENTIALITY_REFUSED`).
+
+Taxo garde les valeurs d'origine : ce que le modèle rend est restitué localement (une référence
+`person:personne-1` redevient celle de Git avant d'être vérifiée, le nom revient dans le texte affiché).
+La réponse compte ce qui a été protégé (`withheld`), sans aucune valeur. « Qui est l'auteur de ce
+commit ? » (ou des derniers commits) reçoit une réponse de Taxo seul, d'après Git, sans appeler de modèle
+(`"mode": "taxo"`).
+
 ### Minia Ollama ou Minia Claude (TAXO-MINIA-05)
 
 Minia peut être servie par plusieurs fournisseurs. Elle fait le même travail quel que soit celui choisi :

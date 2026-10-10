@@ -1,5 +1,6 @@
 // Reponse de Minia (TAXO-MINIA-01) : les faits de Taxo, l'interpretation de Minia et ce qui reste inconnu,
 // toujours separes. Les faits affiches sont ceux de Taxo, jamais du texte du modele.
+import type {ReactNode} from 'react';
 import {CHANGE_LABELS, type FactChange} from './diff';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
 import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
@@ -24,7 +25,35 @@ export type MiniaAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'; question:stri
   model:AnswerModel; facts:CitedFact[]; answer:string; unknown:string;
   not_interpreted:string[]; failures:string[]; facts_not_sent:number; rejected_citations:string[];
   // MINIA-09b : en exploration, des enonces types et la trajectoire ; en repli, le paquet dit pourquoi.
-  mode?:'exploration'|'paquet'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string};
+  mode?:'exploration'|'paquet'|'taxo'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string;
+  // TAXO-MINIA-SEC-01 : ce que Taxo a retenu avant l'envoi au modele, compte, jamais montre.
+  withheld?:Withheld};
+/** Valeurs retenues par Taxo avant l'envoi au modele : identites pseudonymisees, secrets masques, trailers retires. */
+export type Withheld = {identities:number; secrets:number; trailers:number};
+
+const plural=(count:number, word:string)=>`${count} ${word}${count>1?'s':''}`;
+/** Ce que Taxo a protege avant l'envoi au modele, dit sans aucune valeur ; null si rien. */
+export function withheldNote(withheld:Withheld|undefined){
+  if(!withheld)return null;
+  const parts=[withheld.identities?`${plural(withheld.identities,'identité')} remplacée${withheld.identities>1?'s':''} par un pseudonyme`:'',
+    withheld.secrets?`${plural(withheld.secrets,'secret')} masqué${withheld.secrets>1?'s':''}`:'',
+    withheld.trailers?`${plural(withheld.trailers,'mention')} de co-auteur ou de signature retirée${withheld.trailers>1?'s':''}`:''].filter(Boolean);
+  return parts.length?`Avant l’envoi à Minia, Taxo a protégé : ${parts.join(', ')}. Les valeurs d’origine restent chez Taxo.`:null;
+}
+
+/** Reponse donnee par Taxo seul, sans modele : l'identite d'un auteur ne quitte jamais Taxo. */
+export function DirectAnswer({question, answer, children}:Readonly<{question:string; answer:string; children?:ReactNode}>){
+  return <section className="minia" aria-label="Réponse de Taxo">
+    <p className="eyebrow">TAXO · réponse directe, sans modèle</p>
+    <p className="minia-question">{question}</p>
+    <article className="minia-block fact">
+      <h3>Ce que Git dit</h3>
+      <p>{answer}</p>
+      {children}
+    </article>
+    <footer>Taxo a répondu seul d’après Git : aucun modèle n’a été appelé, l’identité n’a pas quitté Taxo. Pour une autre question sur ce commit, posez-la à part.</footer>
+  </section>;
+}
 
 /** Localisation d'une preuve : chemin, puis lignes quand elles sont connues. */
 export function place(evidence:Evidence){
@@ -82,7 +111,7 @@ export const providerLabel=(item:MiniaProvider)=>`${providerName(item.provider)}
 /** Avertissement d'un fournisseur distant : la question et le contexte transmis quittent la machine. */
 export function remoteNote(status:MiniaStatus|null){
   if(!status?.configured||!status.remote||!status.provider)return '';
-  const note=`Minia ${providerName(status.provider)} est un service distant : la question et les faits Taxo transmis (chemins, messages de commit, auteurs) quittent la machine de Taxo.`;
+  const note=`Minia ${providerName(status.provider)} est un service distant : la question et les faits Taxo transmis (chemins, messages de commit) quittent la machine de Taxo ; les auteurs y sont remplacés par des pseudonymes et les secrets reconnus masqués.`;
   // Niveau gratuit : le service peut en outre utiliser ces donnees pour ameliorer ses modeles.
   return status.data_use?`${note} Au niveau gratuit, le fournisseur peut aussi s’en servir pour améliorer ses modèles : à éviter pour du code privé.`:note;
 }
@@ -125,6 +154,8 @@ export function gaps(answer:MiniaAnswer){
   if(answer.files_not_sent)items.push(`${answer.files_not_sent} fichiers du commit n’ont pas été transmis à Minia (limite de taille).`);
   if(answer.facts_not_sent)items.push(`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`);
   if(answer.rejected_citations.length)items.push(`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`);
+  const protectedNote=withheldNote(answer.withheld);
+  if(protectedNote)items.push(protectedNote);
   return items;
 }
 
@@ -138,6 +169,7 @@ export function CommitFacts({git}:Readonly<{git:GitCommit}>){
 }
 
 export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
+  if(answer.mode==='taxo')return <DirectAnswer question={answer.question} answer={answer.answer}><CommitFacts git={answer.git}/></DirectAnswer>;
   const limits=gaps(answer), diff=answer.source_context?.status==='SENT';
   if(answer.mode==='exploration'&&answer.statements)return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · exploration</p>
