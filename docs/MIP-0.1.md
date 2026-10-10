@@ -64,9 +64,31 @@ déjà). Aucun nom du domaine de la Maille n'est changé.
 | `relations` | oui | 1 à 16 relations distinctes ; leur vocabulaire est vérifié par `get_neighborhood`. |
 | `direction` | oui | `INCOMING`, `OUTGOING` ou `BOTH`. Aucun défaut caché. « Qui appelle X ? » : `CALLS`, `INCOMING`. |
 | `bounds` | non | `depth`, `max_nodes`, `max_facts`, `max_bytes` : entiers de 1 à 10⁶. `max_bytes` vaut pour la Tuile MIP telle qu'elle est reçue : si elle ne tient pas, `BUDGET_EXHAUSTED`. Une valeur au-dessus du plafond du serveur est **plafonnée**, pas refusée. Sans valeur, le défaut du moteur. |
-| `continuation` | non | La reprise d'une frontière `SELECTION` d'une Tuile précédente, avec les mêmes `relations`, `direction` et `analysis`. |
+| `continuation` | non | La reprise d'une frontière `SELECTION` d'une Tuile précédente, avec les mêmes `relations`, `direction` (ou le même `profile`) et `analysis`. |
+| `profile` | non | Un profil déclaré (§ 2.1). Il remplace `relations` et `direction`, qui sont alors interdits. |
 
 Tout autre champ, tout type faux et toute valeur hors du contrat donnent `INVALID_ARGUMENT`.
+
+### 2.1 Profils de Tuile adaptative (TAXO-MIP-ADT-01, PR A)
+
+Champ facultatif et additif : une requête sans `profile` est servie exactement comme avant. Un profil est un
+manifeste fermé et versionné (`app/mip/domain/profiles.py`, ARCHITECTURE § 9.5) : types d'ancre acceptés, pas suivis
+(relation et sens, dans leur ordre de priorité), chacun nommé par sa règle, profondeur par défaut, preuves résumées, et
+limites connues. Il se résout en `steps` et `depth` de `neighborhood/2` : la même demande écrite en mode explicite
+rend la même sélection, dans le même ordre. `bounds.depth` remplace la profondeur du profil. Un profil inconnu, ou une
+ancre d'un type qu'il n'accepte pas, donne `INVALID_ARGUMENT`. `PROJECT` reste refusée.
+
+| Profil | Ancre | Pas (règle) | Profondeur |
+| --- | --- | --- | --- |
+| `method-context/1` | `symbol` | `CONTAINS` entrant (`owner`), `ANNOTATED_WITH` sortant (`annotations`), `CALLS` sortant (`callees`) et entrant (`callers`), `IMPLEMENTS` sortant (`implemented-method`) et entrant (`implementations`) | 1 |
+| `calls/1` | `endpoint`, `symbol` | `HANDLED_BY` (`handler`), `CALLS` (`callees`), `DISPATCHES_TO` (`dispatch`), sortants | 2 |
+| `structure/1` | `module`, `application` | `CONTAINS` (`members`), `DEPENDS_ON` (`dependencies`), `BUILT_FROM` (`built-from`), sortants | 1 |
+| `security/1` | `endpoint` | `HANDLED_BY` (`handler`), `SERVED_BY` (`application`), `MATCHED_BY` (`route-rule`), `AUTHORIZED_BY` (`authorization`), `PROTECTED_BY` (`protection`), sortants | 2 |
+
+Ce qu'un profil ne peut pas promettre est dit, jamais tu : une relation sans producteur exécuté (`DISPATCHES_TO`
+aujourd'hui) rend la frontière `CONTEXT` `NO_ANALYZER` du moteur ; une relation produite en partie
+(`ANNOTATED_WITH`, relevée pour la seule activation de la sécurité de méthode) est déclarée dans `limits`.
+`security/1` est un parcours documentaire : il ne démontre pas qu'une route est protégée.
 
 ## 3. Réponse : la Tuile
 
@@ -85,6 +107,17 @@ Tout autre champ, tout type faux et toute valeur hors du contrat donnent `INVALI
 | `not_sent` | ce qui n'a pas tenu dans les octets | `not_sent` |
 | `continuation` | la reprise de l'arrêt, quand le moteur en rend une ; sinon `null`, et les reprises sont dans `frontier` | `continuation` |
 | `wire` | `taxo-query/1`, `get_neighborhood`, `neighborhood/2`, révision des faits | — |
+| `profile` | avec un profil seulement : son manifeste (`id`, `anchors`, `depth`, `steps` avec leur `rule`, `evidence`, `limits`) et `resolved`, les paramètres explicites appliqués par le moteur | profil, `parameters` |
+| `facts[].selection` | avec un profil seulement : `rule`, la règle du pas qui a retenu le fait, et `path`, les références des faits parcourus depuis l'ancre jusqu'à lui (`null` si un fait du chemin n'a pas été rendu) | `via`, `node_details.discovered_by` |
+
+| `classification` | toute Tuile `OK` : `version` (`tile-classification/1`), `nature`, `language`, `profile`, `content`, `provenance`, et `commit_metadata` quand des faits Git sont transmis (§ 3.1) | calculée sur la Tuile rendue |
+| `disclosure` | toute Tuile `OK` : `version` (`tile-disclosure/1`) et `restrictions`, les protections qui s'appliquent au contenu présent avant un fournisseur de modèle (§ 3.1) | calculée sur la Tuile rendue |
+
+`bounds.applied.max_bytes` est le budget de la Tuile reçue. Le moteur mesure ses propres octets mais ignore ce que
+l'adaptateur ajoute (classification, et pour un profil : manifeste, règles, chemins) : si la Tuile dépasse, l'adaptateur la redemande **une fois**, dans un
+nouvel échange sur la même analyse, avec un budget moteur réduit de ce surplus. Les deux appels sont déterministes ;
+la Tuile rendue est coupée par les octets et le dit (`truncated`). Si elle dépasse encore, ou si le budget ne contient
+pas l'enveloppe du moteur, le refus est `BUDGET_EXHAUSTED`.
 
 Lecture honnête d'une Tuile :
 
@@ -93,6 +126,28 @@ Lecture honnête d'une Tuile :
 - `stop_reason = DEPTH` : la profondeur demandée est atteinte. C'est une borne choisie, pas une troncature.
 - `truncated = true` : la Tuile ne dit pas tout faute de place. Une reprise est dans `frontier`.
 - Une zone `NOT_INTERPRETED` est une lacune, jamais une absence d'appel.
+
+### 3.1 Classification et divulgation (TAXO-MIP-ADT-01 § 21 bis)
+
+La classification **décrit** la Tuile rendue ; elle n'en fait pas partie, ne change pas sa sélection et ne duplique
+aucun fait. Elle est calculée après la coupe par les budgets : une catégorie est annoncée si et seulement si un
+contenu de cette catégorie est transmis. Champs additifs : un consommateur qui les ignore lit la Tuile comme avant.
+
+| Champ | Règle |
+| --- | --- |
+| `nature` | Le type de la référence centrale, lu dans sa syntaxe : `METHOD` (symbole appelable `…#nom(…)`), `TYPE` (symbole sans membre : la Maille ne distingue pas classe, interface, record ou énumération), `MEMBER` (autre symbole), sinon le type de référence en majuscules (`ENDPOINT`, `COMMIT`, `MODULE`, `FILE`, `ROUTE_PATTERN`…). Vaut aussi pour une ancre inconnue de l'analyse. |
+| `language` | Celui que la référence écrit (`symbol:java:…`), sinon celui d'un fait `WRITTEN_IN` transmis, sinon `null`. |
+| `profile` | L'identifiant du profil appliqué, ou `null`. |
+| `content` | Dans cet ordre, parmi : `FACTS` (au moins un fait), `RELATIONS` (un fait qui relie deux nœuds de la Tuile, jamais une valeur littérale), `EVIDENCE` (une preuve résumée transmise), `CODE_SOURCE`, `COMMIT_METADATA` (un fait `HAS_COMMIT`, `CHILD_OF`, `AUTHORED_BY` ou `CHANGES`), `COVERAGE`, `FRONTIER`. `CODE_SOURCE` n'est jamais annoncé par une Tuile : le code n'y est jamais (ARCHITECTURE § 9.5, règle 6) ; une pièce source sera consultée à part, sous consentement (`get_source`, réservée). |
+| `commit_metadata` | Présent avec `COMMIT_METADATA` : nombre de commits et champs Git transmis (`sha`, puis ceux des qualificatifs présents : `authored_at`, `committed_at`, `message`, et `author` seulement si un fait `AUTHORED_BY` est transmis). |
+| `provenance` | `snapshot` de la Tuile, `facts_revision`, et les producteurs (identifiant, version) des faits transmis. |
+
+`disclosure.restrictions` est séparé de la classification. `PERSON_IDENTITY` : une référence `person:` est transmise ;
+elle est remplacée par un pseudonyme avant tout fournisseur de modèle. `COMMIT_MESSAGE` : un message de commit est
+transmis ; ses trailers sont retirés et ses identités pseudonymisées (ARCHITECTURE § 12.6, point 8). Une restriction
+décrit une protection à appliquer, jamais ce que le contenu signifie.
+
+Un refus ne transporte aucun contenu : il n'a ni `classification` ni `disclosure`.
 
 ## 4. Refus
 
@@ -116,4 +171,4 @@ comme pour `taxo-query`.
 
 ## 6. Hors de MIP 0.1
 
-`PROJECT` servie, autorisations par consommateur, capsule de Tuile autonome, transport MCP.
+`PROJECT` servie, profils au-delà des quatre du § 2.1, autorisations par consommateur, capsule de Tuile autonome, transport MCP.

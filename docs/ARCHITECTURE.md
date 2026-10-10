@@ -295,7 +295,7 @@ dans les champs textuels. Tout champ inconnu est refusé, en particulier tout ch
 
 | Relation | Sujet → objet | Statut | Producteur livré |
 | --- | --- | --- | --- |
-| `CONTAINS` | repository, module → module, file ; file → symbol ; symbol → symbol | `OBSERVED` ; `INFERRED` d'un symbole vers son propre membre implicite | inventaire, structure ; aucun pour les symboles |
+| `CONTAINS` | repository, module → module, file ; file → symbol ; symbol → symbol | `OBSERVED` ; `INFERRED` d'un symbole vers son propre membre implicite | inventaire, structure ; appels Java pour les fichiers et symboles Java |
 | `WRITTEN_IN` | file → language | `OBSERVED` | inventaire |
 | `USES_TECHNOLOGY` | repository, module → technology | `OBSERVED` | inventaire |
 | `DECLARED_BY` | technology → file | `OBSERVED` | inventaire |
@@ -313,10 +313,10 @@ dans les champs textuels. Tout champ inconnu est refusé, en particulier tout ch
 | `PROTECTED_BY` | endpoint → symbol, policy-rule | `INFERRED`, `HUMAN_VALIDATED` | Spring Security |
 | `CONFIGURES` | symbol → policy-rule | `OBSERVED` | Spring Security (`csrf.disable()`) |
 | `ANNOTATED_WITH` | symbol → annotation | `OBSERVED` | Spring Security (activation de la sécurité de méthode) |
-| `CALLS` | symbol → symbol | `INFERRED`, prouvé par ses sites d'appel (§ 14) | aucun |
-| `IMPLEMENTS` | symbol → symbol | `OBSERVED` entre types, `INFERRED` entre méthodes (§ 14) | aucun |
-| `EXTENDS` | symbol → symbol | `OBSERVED` | aucun |
-| `TYPED_AS` | symbol → symbol (champ → type déclaré) | `OBSERVED` | aucun |
+| `CALLS` | symbol → symbol | `INFERRED`, prouvé par ses sites d'appel (§ 14) | appels Java |
+| `IMPLEMENTS` | symbol → symbol | `OBSERVED` entre types, `INFERRED` entre méthodes (§ 14) | appels Java |
+| `EXTENDS` | symbol → symbol (entre types) | `OBSERVED` | appels Java |
+| `TYPED_AS` | symbol → symbol (champ, paramètre ou variable receveur → type déclaré des sources) | `OBSERVED` | appels Java |
 | `DISPATCHES_TO` | symbol → symbol | `INFERRED` (suspendu, § 14) | aucun |
 | `ACCEPTS`, `RETURNS` | endpoint → symbol | `OBSERVED` | aucun |
 
@@ -742,15 +742,26 @@ Règles :
 7. **EXPAND** est la même opération relancée depuis un nœud de la frontière de sélection, avec reprise ;
    il n'ajoute que la branche demandée.
 
-Premiers profils possibles avec les faits existants :
+Profils servis par MIP 0.1 `EXPAND` (champ `profile`, récit TAXO-MIP-ADT-01, PR A ; manifestes dans
+`app/mip/domain/profiles.py`, contrat dans [MIP-0.1.md](MIP-0.1.md) § 2.1). La Tuile rend le manifeste, les paramètres
+résolus (`steps`, `depth`) et, pour chaque fait, sa règle et son chemin ; le rejeu en mode explicite est testé :
 
 | Profil | Relations | Ancre |
 | --- | --- | --- |
-| `security/1` | `HANDLED_BY`, `SERVED_BY`, `MATCHED_BY`, `AUTHORIZED_BY`, `PROTECTED_BY` | une route |
-| `structure/1` | `CONTAINS`, `DEPENDS_ON`, `BUILT_FROM` | un module, une application |
-| `commit-impact/1` | `CHANGES` → fichiers → routes traitées → application → protection | un commit ; **prérequis manquant**, voir ci-dessous |
+| `method-context/1` | `CONTAINS` entrant, `ANNOTATED_WITH`, `CALLS` dans les deux sens, `IMPLEMENTS` dans les deux sens ; profondeur 1 | une méthode (`symbol`) |
+| `calls/1` | `HANDLED_BY`, `CALLS`, `DISPATCHES_TO` ; profondeur 2 | une route ou une méthode |
+| `security/1` | `HANDLED_BY`, `SERVED_BY`, `MATCHED_BY`, `AUTHORIZED_BY`, `PROTECTED_BY` ; profondeur 2 | une route |
+| `structure/1` | `CONTAINS`, `DEPENDS_ON`, `BUILT_FROM` ; profondeur 1 | un module, une application |
+| `commit-impact/1` | `CHANGES` → fichiers → routes traitées → application → protection | un commit ; **proposé, prérequis manquant**, voir ci-dessous |
 
-`security/1` et `structure/1` ne suivent que des relations produites aujourd'hui. `commit-impact/1` n'est
+`security/1` et `structure/1` ne suivent que des relations produites aujourd'hui. `security/1` ne suit pas encore
+`CONFIGURES` ni `ANNOTATED_WITH` (TAXO-MINIA-SEC-01) : les ajouter fera une version 2. `calls/1` déclare
+`DISPATCHES_TO`, qui n'a pas de producteur : la Tuile rend la frontière `CONTEXT` du moteur. `ANNOTATED_WITH` n'est
+relevée que pour l'activation de la sécurité de méthode : `method-context/1` le déclare dans ses `limits`.
+
+Toute Tuile MIP porte aussi une **classification** versionnée (nature, langage, profil, catégories de contenu
+effectivement transmises, provenance) et, à part, ses **restrictions de divulgation** ([MIP-0.1.md](MIP-0.1.md) § 3.1).
+Elles décrivent la Tuile rendue, ne la changent pas et ne contiennent aucune interprétation du code. `commit-impact/1` n'est
 pas encore parcourable : `CHANGES` mène à un `file:`, mais aucune relation ne relie un fichier aux
 symboles qu'il déclare, donc aux routes qu'ils traitent (le fichier n'apparaît que dans les **preuves**
 de `HANDLED_BY`). Deux voies, à trancher avant ce profil :
@@ -871,6 +882,7 @@ ne vérifie que la forme de sa propre requête et plafonne les bornes. Le schém
 | Transport indépendant | appel interne, HTTP | Existant ; MCP proposé |
 | Trouver un élément par son nom simple | champ facultatif de `find_references` | À construire (TAXO-01N) |
 | Exploration bornée sans modèle de langage, en une requête | MIP 0.1 `EXPAND`, adaptateur `POST /api/projects/{project_id}/mip/query` | À construire (TAXO-01N) |
+| Tuile adaptative : profils fermés et versionnés | champ facultatif `profile` de MIP 0.1 `EXPAND` (§ 9.5) | Existant (TAXO-MIP-ADT-01, PR A) |
 | Projection bornée | MIP `PROJECT` | Proposé : refusée tant qu'aucune règle servie n'existe |
 | Intentions et autorisations par consommateur | périmètre et validation par consommateur | Proposé |
 | Capsule de Tuile autonome, vérifiable hors de l'échange | — | Proposé |
@@ -922,7 +934,7 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 | `get_diff` | blocs modifiés d'un fichier touché, sous double consentement | Existant |
 | `verify_claim` | verdict sur une affirmation structurée | Existant |
 | `diff_facts` | faits introduits, modifiés ou retirés par un commit ; depuis les analyses enregistrées du commit et de son parent quand elles existent (`source`, `analyses`), sinon en relisant le dépôt (TAXO-01F, tranche E) | Existant |
-| `get_neighborhood` | voisinage explicite, à un saut (`neighborhood/1`) ou sur plusieurs niveaux (`neighborhood/2`), avec reprises, frontière localisée et preuves accessibles | Existant ; profils à construire (§ 9.5) |
+| `get_neighborhood` | voisinage explicite, à un saut (`neighborhood/1`) ou sur plusieurs niveaux (`neighborhood/2`), avec reprises, frontière localisée et preuves accessibles | Existant ; profils servis par MIP `EXPAND` (§ 9.5, TAXO-MIP-ADT-01) |
 | `find_references` | références de l'analyse qui commencent par un préfixe, page bornée avec reprise ; avec `match: NAME`, celles qui se retrouvent sous un nom simple ou qualifié (une fin de clé prise à un début de segment, séparateurs `. / # : $` confondus, un séparateur en tête du nom ignoré pour qu'un chemin `/api/students` se retrouve, liste de paramètres lue sur les seuls symboles appelables), chacune une fois, sans descendants | Existant (TAXO-01J) ; `match: NAME` (TAXO-01N, PR A2) |
 | `find_callers`, `find_callees`, `find_dependencies`, `find_configuration`, `trace_access_control`, `find_endpoint` | questions génériques | réservées, activées par les analyseurs |
 | `get_source` | code d'un **symbole**, jamais un fichier entier, sous son propre consentement | réservée |

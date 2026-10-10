@@ -3,7 +3,13 @@
 Une présentation, jamais une seconde construction : chaque fait, nœud, preuve résumée, couverture et frontière
 vient tel quel de la réponse du moteur. Ce qui s'ajoute ne dit que ce que cette réponse établit déjà : les bornes
 demandées et appliquées, et si la Tuile a été coupée par un budget. Rien n'est renommé dans le domaine de la Maille.
+
+Toute Tuile rendue porte sa classification et ses restrictions de divulgation, calculées sur son contenu transmis
+(`classification.py`). Une Tuile servie par un profil (récit TAXO-MIP-ADT-01) rend en plus le manifeste appliqué et ses paramètres résolus,
+et dit pour chaque fait la règle du profil qui l'a retenu et son chemin depuis l'ancre : les références des faits
+parcourus, reconstruites depuis le fait qui a découvert chaque nœud. Rien n'est ajouté à la sélection du moteur.
 """
+from app.mip.domain.classification import classify, disclosure
 from app.mip.domain.query import CONTINUATION, EXPRESSION, VERSION
 from app.protocol.domain.envelope import BUDGET_EXHAUSTED, size
 
@@ -22,20 +28,46 @@ def failure(code, message, snapshot=None, expression=None):
     return refused
 
 
-def _bounds(query, envelope):
-    """Ce qui a été demandé, ce que le serveur a appliqué après plafonnement, et ce que la Tuile a consommé."""
+def _bounds(query, envelope, budget):
+    """Ce qui a été demandé, ce que le serveur a appliqué après plafonnement, et ce que la Tuile a consommé. Le budget
+    d'octets appliqué est celui de la Tuile reçue, que l'adaptateur a pu répartir entre le moteur et le profil."""
     limits, consumed = envelope[BOUNDS], envelope['consumed']
     applied = {'depth': envelope['parameters']['depth'], 'max_nodes': limits['max_nodes'],
-               'max_facts': limits['max_edges'], MAX_BYTES: limits[MAX_BYTES]}
+               'max_facts': limits['max_edges'], MAX_BYTES: budget}
     return {'requested': dict(query.bounds), 'applied': applied,
             'consumed': {NODES: consumed[NODES], 'facts': consumed['edges']}}
 
 
-def tile(query, envelope):
-    """La Tuile MIP d'une réponse `OK` de `get_neighborhood` ; un refus du moteur reste un refus."""
-    if envelope['outcome'] != 'OK':
-        error = envelope['error']
-        return failure(error['code'], error['message'], envelope.get(SNAPSHOT), query.expression)
+def _paths(envelope):
+    """Le chemin de chaque nœud depuis l'ancre : les références des faits qui l'ont découvert, de proche en proche.
+    Un nœud découvert par un fait non rendu (coupé par les octets) n'a pas de chemin connu : `None`."""
+    items, paths = envelope['items'], {}
+    for node in envelope['node_details']:
+        found = node['discovered_by']
+        if found is None:
+            paths[node['reference']] = []
+        elif found < len(items):
+            origin = paths.get(items[found]['via']['from'])
+            paths[node['reference']] = None if origin is None else [*origin, items[found]['ref']]
+        else:
+            paths[node['reference']] = None
+    return paths
+
+
+def _profiled(profile, envelope, facts):
+    """Chaque fait avec sa règle et son chemin ; les nœuds sont rendus dans l'ordre de leur découverte, donc le
+    chemin d'un nœud d'origine est toujours connu avant celui des faits qui en partent."""
+    paths = _paths(envelope)
+    rendered = []
+    for item in facts:
+        via, origin = item['via'], paths.get(item['via']['from'])
+        rendered.append({**item, 'selection': {'rule': profile.rule(via['relation'], via['direction']),
+                                               'path': None if origin is None else [*origin, item['ref']]}})
+    return rendered
+
+
+def render(query, envelope, budget):
+    """La Tuile MIP d'une réponse `OK` du moteur, sans contrôle de taille."""
     stop, not_sent = envelope['stop_reason'], envelope['not_sent']
     rendered = {
         'mip': VERSION,
@@ -47,7 +79,7 @@ def tile(query, envelope):
         'facts': envelope['items'],
         'coverage': envelope['coverage'],
         'frontier': envelope['frontier'],
-        BOUNDS: _bounds(query, envelope),
+        BOUNDS: _bounds(query, envelope, budget),
         'stop_reason': stop,
         'truncated': stop in BUDGET_STOPS or bool(not_sent),
         'not_sent': not_sent,
@@ -55,8 +87,30 @@ def tile(query, envelope):
         'wire': {'protocol': envelope['protocol'], 'operation': WIRE_OPERATION,
                  'engine': envelope['engine_version'], 'facts_revision': envelope['facts_revision']},
     }
+    if query.profile is not None:
+        rendered['facts'] = _profiled(query.profile, envelope, envelope['items'])
+        rendered['profile'] = {**query.profile.manifest(), 'resolved': envelope['parameters']}
+    # Calculées sur la Tuile achevée : elles décrivent ce qui est transmis, jamais ce qui aurait pu l'être.
+    rendered['classification'] = classify(rendered, query.profile)
+    rendered['disclosure'] = disclosure(rendered)
+    return rendered
+
+
+def engine_budget(envelope):
+    """Le budget d'octets que le moteur a appliqué à son enveloppe."""
+    return envelope[BOUNDS][MAX_BYTES]
+
+
+def tile(query, envelope, budget=None):
+    """La Tuile MIP d'une réponse de `get_neighborhood` ; un refus du moteur reste un refus. `budget` : le budget de
+    la Tuile reçue, par défaut celui que le moteur a appliqué."""
+    if envelope['outcome'] != 'OK':
+        error = envelope['error']
+        return failure(error['code'], error['message'], envelope.get(SNAPSHOT), query.expression)
+    budget = engine_budget(envelope) if budget is None else budget
+    rendered = render(query, envelope, budget)
     # Le budget d'octets vaut pour ce que le consommateur reçoit, pas seulement pour l'enveloppe du moteur.
-    if size(rendered) > rendered[BOUNDS]['applied'][MAX_BYTES]:
+    if size(rendered) > budget:
         return failure(BUDGET_EXHAUSTED, 'La Tuile MIP dépasse le budget d’octets : augmenter max_bytes.',
                        envelope[SNAPSHOT], query.expression)
     return rendered

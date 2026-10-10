@@ -6,9 +6,13 @@ est une erreur de protocole, pas une frontière de connaissance. Seule la forme 
 relations, les références et les budgets sont validés par l'opération `taxo-query/1` servie, une seule fois. Les
 bornes demandées sont plafonnées par celles du serveur, jamais l'inverse ; c'est l'affaire du service, qui connaît
 les plafonds du moteur.
+
+Une requête nomme soit ses relations et leur sens, soit un profil déclaré (récit TAXO-MIP-ADT-01) : jamais les deux.
+Un profil inconnu, ou une ancre d'un type qu'il n'accepte pas, est refusé ; aucun profil n'est improvisé.
 """
 from dataclasses import dataclass
 
+from app.mip.domain.profiles import PROFILES, Profile
 from app.protocol.domain.envelope import INVALID_ARGUMENT, NOT_AVAILABLE
 
 VERSION = 'mip/0.1'
@@ -18,7 +22,8 @@ SERVED = frozenset({EXPAND})
 DIRECTIONS = frozenset({'INCOMING', 'OUTGOING', 'BOTH'})
 BOUNDS = ('depth', 'max_nodes', 'max_facts', 'max_bytes')
 EXPRESSION, ANALYSIS, DIRECTION, CONTINUATION = 'expression', 'analysis', 'direction', 'continuation'
-_FIELDS = frozenset({'mip', EXPRESSION, 'target', ANALYSIS, 'relations', DIRECTION, 'bounds', CONTINUATION})
+RELATIONS, PROFILE = 'relations', 'profile'
+_FIELDS = frozenset({'mip', EXPRESSION, 'target', ANALYSIS, RELATIONS, DIRECTION, PROFILE, 'bounds', CONTINUATION})
 MAX_TEXT = 1000
 MAX_CONTINUATION = 4000
 MAX_RELATIONS = 16
@@ -36,14 +41,16 @@ class MipError(Exception):
 
 @dataclass(frozen=True)
 class MipQuery:
-    """Une requête lue : ce qui est demandé, sans encore rien de la Maille."""
+    """Une requête lue : ce qui est demandé, sans encore rien de la Maille. Avec un profil, `relations` et
+    `direction` sont vides : ses pas les remplacent."""
     expression: str
     reference: str
     relations: tuple
-    direction: str
+    direction: str | None
     bounds: dict
     analysis: str | None = None
     continuation: str | None = None
+    profile: Profile | None = None
 
 
 def _invalid(message):
@@ -88,6 +95,15 @@ def _bounds(value):
     return dict(value)
 
 
+def _profile(value, reference):
+    profile = PROFILES.get(value) if isinstance(value, str) else None
+    if profile is None:
+        _invalid(f'profile : un profil déclaré parmi {", ".join(sorted(PROFILES))}.')
+    if not profile.accepts(reference):
+        _invalid(f'{profile.identifier} accepte une ancre de type {" ou ".join(sorted(profile.anchors))}.')
+    return profile
+
+
 def read_query(payload) -> MipQuery:
     """La requête lue en entier, ou le refus qui dit quoi corriger."""
     if not isinstance(payload, dict):
@@ -101,7 +117,15 @@ def read_query(payload) -> MipQuery:
     if expression not in SERVED:
         raise MipError(NOT_AVAILABLE, f'{expression} n’est pas servie en {VERSION} : aucune règle de projection '
                                       'n’est encore écrite.')
+    reference = _target(payload.get('target'))
+    bounds = _bounds(payload.get('bounds'))
+    analysis = _text(payload.get(ANALYSIS), ANALYSIS, required=False)
+    continuation = _text(payload.get(CONTINUATION), CONTINUATION, required=False, longest=MAX_CONTINUATION)
+    if PROFILE in payload:
+        if {RELATIONS, DIRECTION} & set(payload):
+            _invalid('profile exclut relations et direction : ses pas les déclarent.')
+        return MipQuery(expression, reference, (), None, bounds, analysis, continuation,
+                        _profile(payload[PROFILE], reference))
     direction = _choice(payload.get(DIRECTION), DIRECTION, DIRECTIONS)
-    return MipQuery(expression, _target(payload.get('target')), _relations(payload.get('relations')), direction,
-                    _bounds(payload.get('bounds')), _text(payload.get(ANALYSIS), ANALYSIS, required=False),
-                    _text(payload.get(CONTINUATION), CONTINUATION, required=False, longest=MAX_CONTINUATION))
+    return MipQuery(expression, reference, _relations(payload.get(RELATIONS)), direction, bounds, analysis,
+                    continuation)
