@@ -231,8 +231,9 @@ def test_a_route_retains_only_the_whole_route_never_a_longer_one_ending_like_it(
         'endpoint:GET /api/students', 'endpoint:POST /api/students'}
     quoted = resolved(Pages(([longer], None)), 'Qui traite `/api/students` ?')
     assert quoted.status == anchors.NONE, 'entre accents graves aussi, une route reste la route entière'
-    other = resolved(Pages((['policy-rule:rule /api/students'], None)), 'Qui traite /api/students ?')
-    assert other.status == anchors.NONE, 'ce qui précède le chemin doit être une méthode HTTP'
+    other = resolved(Pages((['policy-rule:rule /api/students', 'policy-rule:/api/students'], None)),
+                     'Qui traite /api/students ?')
+    assert other.status == anchors.NONE, 'seul un endpoint ou un motif de route, chemin précédé d’une méthode HTTP'
     exact = anchoring.drained(anchoring.locate(Pages((['endpoint:get /api/students', 'route-pattern:/api/students'],
                                                       None)), 'Que fait GET /api/students ?', []))
     assert (exact.status, exact.anchor) == (anchors.FOUND, 'endpoint:get /api/students'), 'avec son verbe, sans casse'

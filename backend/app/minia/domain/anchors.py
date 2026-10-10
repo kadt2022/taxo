@@ -31,11 +31,13 @@ _VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|ANY'
 # Jamais au milieu d'un chemin : `{id:[0-9]+}` est une variable de route, pas une référence.
 _REFERENCE = re.compile(r'(?<![{/])\b[a-z][a-z-]*:(?:(?:' + _VERBS + r') /\S+|\S+)')
 # Une route HTTP : un chemin qui commence par `/` hors d'un mot (jamais `et/ou` ni `2026/09`), suivi d'autre chose
-# qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant. Le chemin va jusqu'au prochain blanc, tel qu'il est
-# écrit (`/api/{id:[0-9]+}`), moins la ponctuation qui le suit dans la phrase.
+# qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant. Le chemin va jusqu'au prochain blanc,
+# tel qu'il est écrit (`/api/{id:[0-9]+}`), moins la ponctuation qui le suit dans la phrase.
 _ROUTE_FORM = r'(?:(?:' + _VERBS + r')\s+)?/[^\s/]\S*'
 _ROUTE = re.compile(r'(?<![\w/])' + _ROUTE_FORM)
 _WHOLE_ROUTE = re.compile(_ROUTE_FORM)
+# Les types du contrat qui nomment une route (ARCHITECTURE § 5) ; aucune autre référence n'est une route.
+ROUTE_TYPES = frozenset({'endpoint', 'route-pattern'})
 _VERB_SET = frozenset(verb.casefold() for verb in _VERBS.split('|'))
 _TRAILING = '?!.,;:"\'»”’'
 _CLOSING = {')': '(', ']': '['}
@@ -68,11 +70,14 @@ class Candidate:
 
     def accepts(self, reference):
         """La recherche par nom compare une fin de clé : `/api/students` y trouverait aussi `GET /v1/api/students`.
-        Une route ne retient que la clé égale à la route citée, avec son verbe s'il est cité, sinon avec ou sans
-        verbe (`endpoint:POST /api/students`, `route-pattern:/api/students`)."""
+        Une route ne retient qu'un endpoint ou un motif de route dont la clé est égale à la route citée : avec son
+        verbe s'il est cité, sinon avec ou sans verbe (`endpoint:POST /api/students`, `route-pattern:/api/students`)."""
         if not self.route:
             return True
-        key, route = _folded(reference.partition(':')[2]), _folded(self.text)
+        kind, _, key = reference.partition(':')
+        if kind not in ROUTE_TYPES:
+            return False
+        key, route = _folded(key), _folded(self.text)
         if not route.startswith('/'):
             return key == route
         verb, blank, path = key.partition(' ')
