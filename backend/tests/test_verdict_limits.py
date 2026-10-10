@@ -55,6 +55,23 @@ def test_a_single_valued_confirmation_is_not_limited_by_the_security_left_unread
     assert response['limits'] == [], 'la sécurité de méthode ne change pas le motif qui capture la route'
 
 
+def test_a_single_valued_confirmation_keeps_the_limits_of_an_ambiguous_target(make_repo, tmp_path):
+    duplicated = {'src/main/java/demo/A.java': 'package demo;\n\npublic class A {\n    private B b;\n}\n',
+                  'src/main/java/demo/B.java': 'package demo;\n\npublic class B {\n}\n',
+                  'src/other/java/demo/B.java': 'package demo;\n\npublic class B {\n}\n'}
+    repo = make_repo(duplicated, 'ambigu')
+    app = create_app(f'sqlite:///{tmp_path / "ambigu.db"}', [repo], minia={})
+    Base.metadata.create_all(app.state.engine)
+    with TestClient(app) as client:
+        project = client.post('/api/projects', json={'name': 'Ambigu', 'path': str(repo)}).json()
+        client.post(f'/api/projects/{project["id"]}/scans')
+        taxo = client, f'/api/projects/{project["id"]}/taxo-query'
+        response = verify(taxo, subject='symbol:java:demo.A#b', relation='TYPED_AS', object='symbol:java:demo.B')
+    assert response['verdict'] == 'CONFIRMED'
+    assert {limit['subject'] for limit in response['limits']} == {'symbol:java:demo.B'}, \
+        'la cible ambiguë accompagne la confirmation'
+
+
 def test_a_claim_that_is_not_proven_still_says_why_and_what_was_not_read(taxo):
     response = verify(taxo, subject=ENDPOINT, relation='PROTECTED_BY', object="policy-rule:hasRole('ADMIN')")
     assert (response['verdict'], response['reason']) == ('NOT_PROVEN', 'NOT_INTERPRETED')
