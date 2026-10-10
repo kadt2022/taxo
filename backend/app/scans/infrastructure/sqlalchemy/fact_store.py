@@ -14,6 +14,7 @@ from app.platform.database.base import Base
 from app.evaluations.domain.capability import UNREAD_COVERAGE, unread_reasons
 from app.facts import is_reference
 from app.facts.domain.diagnostic import category_counts
+from app.neighborhood.domain.reference_names import name_keys
 from app.neighborhood.domain.traversal import Adjacent
 from app.scans.domain.fact_order import adjacency_keys
 from app.scans.infrastructure.sqlalchemy import reference_index
@@ -141,16 +142,28 @@ class SqlAlchemyAnalysisFacts:
     def references(self, scan_id, prefix, kind, after, limit):
         """The same search over this fallback table, which is no longer fed: it keeps no index of references,
         and reads the references of the analysis to sort them. Kept for the equivalence tests only."""
+        found = sorted((key, hash_, reference, kind_) for reference in self._references_of(scan_id)
+                       for kind_, key, hash_ in [_searched(reference)]
+                       if (kind is None or kind_ == kind) and key.startswith(prefix)
+                       and (after is None or (key, hash_) > tuple(after)))
+        return found[:limit], len(found) > limit
+
+    def named(self, scan_id, name, kind, after, limit):
+        """The same search by name over this fallback table: every reference of the analysis is read."""
+        found = sorted((hash_, reference, kind_) for reference in self._references_of(scan_id)
+                       for kind_, _, hash_ in [_searched(reference)]
+                       if (kind is None or kind_ == kind) and name in name_keys(reference)
+                       and (after is None or hash_ > after[1]))
+        return [(name, *row) for row in found[:limit]], len(found) > limit
+
+    def _references_of(self, scan_id):
+        """The references named by the assertions of the analysis."""
         row = AnalysisFactRow
         with Session(self.engine) as db:
             named = set(db.scalars(select(row.subject).where(row.scan_id == scan_id, row.kind == 'ASSERTION')))
             named |= {value for value in db.scalars(select(row.object).where(
                 row.scan_id == scan_id, row.kind == 'ASSERTION')) if isinstance(value, str) and is_reference(value)}
-        found = sorted((key, hash_, reference, kind_) for reference in named
-                       for kind_, key, hash_ in [_searched(reference)]
-                       if (kind is None or kind_ == kind) and key.startswith(prefix)
-                       and (after is None or (key, hash_) > tuple(after)))
-        return found[:limit], len(found) > limit
+        return named
 
     def revision(self, scan_id):
         """Append-only fact generation, read through a fixed-size index."""

@@ -27,7 +27,8 @@ from app.protocol.application.arguments import claim_object as _claim_object, no
 from app.protocol.application.arguments import reference as _reference, relation as _relation, text as _text
 from app.knowledge.domain.knowledge import AnalysisKnowledge, contains
 from app.protocol.domain.verdict import judge
-from app.neighborhood.application.references import find_references
+from app.neighborhood.application.references import compared, find_references
+from app.neighborhood.domain.reference_names import KEY, MATCHES, NAME
 from app.neighborhood.domain import handle, references
 from app.protocol.application.neighborhood_operation import neighborhood
 
@@ -80,8 +81,11 @@ _ARGUMENTS = {
                          'form': 'FULL|COMPACT (neighborhood/2 ; COMPACT : instantané et provenance une fois, '
                                  'renvois par indice)',
                          'continuation': 'reprise d’une adjacence coupée (facultatif)'},
-    'find_references': {'analysis': 'identifiant de l’analyse', 'prefix': 'début de la clé (après le type), 1..200',
-                        'type': 'type de référence (facultatif)', 'limit': '1..50', 'after': 'reprise (facultatif)'},
+    'find_references': {'analysis': 'identifiant de l’analyse', 'prefix': 'début de la clé (après le type), 1..200 ; '
+                                                                         'en NAME, le nom cherché',
+                        'type': 'type de référence (facultatif)', 'limit': '1..50', 'after': 'reprise (facultatif)',
+                        'match': 'KEY (défaut) | NAME : nom simple ou qualifié (VetController, '
+                                 'OwnerRepository.findById, Items.list(String)), égal à la fin de la clé'},
 }
 
 
@@ -460,14 +464,18 @@ class Exchange:
     def find_references(self, arguments, max_bytes):
         """Les references de l'analyse qui commencent par un prefixe (TAXO-01J) : une page bornee, dans l'ordre
         de leur cle, avec une reprise. Une liste ordonnee : ni score ni compte de degre."""
-        prefix, kind, limit = _search(arguments, self.scan.id)
+        prefix, kind, limit, match = _search(arguments, self.scan.id)
         revision = self.facts.revision(self.scan.id)
         try:
-            folded = references.prefix_key(prefix)
-            after = references.decode(arguments.get('after'), self.scan.id, revision, folded, kind)
+            folded = compared(prefix, match)
+            after = references.decode(arguments.get('after'), self.scan.id, revision, folded, kind, match)
         except references.ReferenceSearchError as exc:
             raise OperationError(INVALID_ARGUMENT, str(exc)) from exc
-        rows, more = find_references(self.facts, self.scan.id, prefix, kind, after, limit)
+        page = find_references(self.facts, self.scan.id, prefix, kind, after, limit, match)
+        if page is None:
+            raise OperationError(NOT_AVAILABLE, 'Cette analyse n’a pas d’index des noms : relancer l’analyse, ou '
+                                                'chercher par préfixe de clé (match KEY).')
+        rows, more = page
         if self.facts.revision(self.scan.id) != revision:
             # Comme une Tuile : une page ne mêle jamais deux générations, et sa reprise ne lie que la sienne.
             raise OperationError(INVALID_ARGUMENT, 'Les faits de cette analyse ont changé pendant la recherche ; '
@@ -476,8 +484,11 @@ class Exchange:
         # La page la plus longue qui tient avec sa reprise : celle-ci est mesuree avec la page, jamais ajoutee apres.
         for count in range(len(rows), 0 if rows else -1, -1):
             last = rows[count - 1][:2] if count < len(rows) or more else None
-            token = references.encode(self.scan.id, revision, folded, kind, last) if last else None
-            response = self.response('find_references', coverage, max_bytes, prefix=prefix, type=kind, next=token)
+            token = references.encode(self.scan.id, revision, folded, kind, last, match) if last else None
+            # Le mode n'est rendu que s'il a été choisi : une réponse du mode KEY reste celle d'avant.
+            chosen = {'match': match} if match == NAME else {}
+            response = self.response('find_references', coverage, max_bytes, prefix=prefix, type=kind,
+                                     **chosen, next=token)
             if all(response.add('items', {'reference': row[2], 'type': row[3]}) for row in rows[:count]):
                 response.skip('items', len(rows) - count)
                 return response
@@ -527,7 +538,7 @@ class Exchange:
 
 def _search(arguments, analysis):
     """Les arguments d'une recherche de references, verifies : prefixe, type, taille de page."""
-    _no_other(arguments, ('analysis', 'prefix', 'type', 'limit', 'after'))
+    _no_other(arguments, ('analysis', 'prefix', 'type', 'limit', 'after', 'match'))
     if arguments.get('analysis') != analysis:
         raise OperationError(INVALID_ARGUMENT, 'analysis doit identifier l’analyse de cet échange (describe).')
     prefix = arguments.get('prefix')
@@ -539,7 +550,10 @@ def _search(arguments, analysis):
     limit = arguments.get('limit', references.DEFAULT_LIMIT)
     if type(limit) is not int or not 1 <= limit <= references.MAX_LIMIT:
         raise OperationError(INVALID_ARGUMENT, f'limit doit être un entier entre 1 et {references.MAX_LIMIT}.')
-    return prefix, kind, limit
+    match = arguments.get('match', KEY)
+    if not isinstance(match, str) or match not in MATCHES:
+        raise OperationError(INVALID_ARGUMENT, 'match : KEY (préfixe de la clé) ou NAME (nom simple ou qualifié).')
+    return prefix, kind, limit, match
 
 
 def _operation(request):

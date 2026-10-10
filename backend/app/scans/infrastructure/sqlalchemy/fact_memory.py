@@ -27,7 +27,7 @@ from app.neighborhood.domain.traversal import Adjacent
 from app.platform.database.base import Base
 from app.scans.domain.fact_order import occurrence_fingerprint, order_key
 from app.scans.domain.occurrence import EVIDENCE_FIELDS, Occurrence, OccurrenceError, rebuild, split
-from app.scans.infrastructure.sqlalchemy import reference_index
+from app.scans.infrastructure.sqlalchemy import name_index, reference_index
 
 _SCAN = 'scans.id'
 
@@ -274,7 +274,9 @@ class SqlAlchemyFactMemory:
                        for position, item in enumerate(occurrence.evidence or ()))
             db.flush()
             _rank_adjacencies(db, scan_id, anchors)
-            reference_index.record(db, reference_index.rows(scan_id, _references(fact for fact, _, _ in prepared)))
+            named = reference_index.rows(scan_id, _references(fact for fact, _, _ in prepared))
+            reference_index.record(db, named)
+            name_index.record(db, name_index.rows(named))
             db.commit()
 
     def query(self, scan_id, **filters):
@@ -377,6 +379,12 @@ class SqlAlchemyFactMemory:
         """References of the analysis whose key starts with `prefix`: one range read of a fixed-size index."""
         with Session(self.engine) as db:
             return reference_index.search(db, scan_id, prefix, kind, after, limit)
+
+    def named(self, scan_id, name, kind, after, limit):
+        """References of the analysis found under `name`: one equality read of a fixed-size index, or None
+        when the analysis predates that index."""
+        with Session(self.engine) as db:
+            return name_index.search(db, scan_id, name, kind, after, limit)
 
     def revision(self, scan_id):
         """Append-only fact generation, read through a fixed-size index."""
