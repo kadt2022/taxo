@@ -93,6 +93,20 @@ def test_a_plain_secret_keeps_its_end_of_line_comment():
     assert protect({'source': 'password: two words # rotate'})['source'] == f'password: {MASK} # rotate'
 
 
+@pytest.mark.parametrize('source', [
+    'password: "correct\n  horse"\nport: 8080',
+    "password: 'correct\n  horse'\nport: 8080",
+    'password: "correct \\\n  horse"\nport: 8080',
+])
+def test_a_quoted_secret_continued_on_the_next_lines_is_masked_whole(source):
+    quote = source[len('password: ')]
+    assert protect({'source': source})['source'] == f'password: {quote}{MASK}{quote}\nport: 8080'
+
+
+def test_an_unterminated_quoted_secret_is_masked_to_the_end():
+    assert protect({'source': 'password: "correct\n  horse'})['source'] == f'password: {MASK}'
+
+
 def test_a_code_line_is_not_a_plain_secret():
     line = 'password = encoder.encode(raw, salt);'
     assert protect({'source': line})['source'] == line

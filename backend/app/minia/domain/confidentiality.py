@@ -50,10 +50,11 @@ _TOKENS = re.compile('|'.join((
 _URL_CREDENTIALS = re.compile(r'(\b[a-z][a-z0-9+.-]*://)[^\s/:@]+:[^\s/@]+@', re.IGNORECASE)
 _SECRET_NAME = r'[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credentials?)[\w.-]*'
 # Une valeur affectee a un nom de secret : `password = "x"`, `password: x`, `.password("x")`, `"token": "x"`. Une
-# chaine citee peut echapper ses guillemets.
+# chaine citee peut echapper ses guillemets et, en YAML, continuer sur les lignes suivantes : elle est masquee
+# jusqu'a son guillemet fermant, ou jusqu'a la fin du texte s'il n'est pas ferme.
 _ASSIGNED = re.compile(
     rf'(?P<name>\b{_SECRET_NAME}["\']?)(?P<sep>\s*(?:[:=]|=>)\s*|\(\s*)'
-    r'(?P<value>"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|[^\s"\',;(){}\[\]]+(?![\w(.{]))',
+    r'(?P<value>"(?:[^"\\]|\\[\s\S])*(?:"|\Z)|\'(?:[^\'\\]|\\[\s\S])*(?:\'|\Z)|[^\s"\',;(){}\[\]]+(?![\w(.{]))',
     re.IGNORECASE)
 # L'en-tete d'un bloc YAML affecte a un nom de secret (`password: |`, `|2-`, `>+`) : son contenu est fait des lignes
 # suivantes plus indentees que la cle, lignes vides comprises ; il s'arrete a la premiere ligne qui ne l'est pas.
