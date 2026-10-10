@@ -27,9 +27,9 @@ _INNER_CAPITAL = re.compile(r'[a-z\d][A-Z]')
 # Les méthodes de HTTP (RFC 9110), et `ANY`, la route servie pour toute méthode (`endpoint:ANY /…` du contrat).
 _VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|ANY'
 # Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc ; une clé de route garde le
-# blanc entre son verbe et son chemin (`endpoint:GET /api/students`).
+# blanc entre son verbe et son chemin (`endpoint:GET /api/students`), quelle que soit la casse du verbe.
 # Jamais au milieu d'un chemin : `{id:[0-9]+}` est une variable de route, pas une référence.
-_REFERENCE = re.compile(r'(?<![{/])\b[a-z][a-z-]*:(?:(?:' + _VERBS + r') /\S*|\S+)')
+_REFERENCE = re.compile(r'(?<![{/])\b[a-z][a-z-]*:(?:(?i:' + _VERBS + r') /\S*|\S+)')
 # Une route HTTP : un chemin qui commence par `/` hors d'un mot (jamais `et/ou` ni `2026/09`), suivi d'autre chose
 # qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant ; la racine `/` seule, avec son verbe
 # (jamais le début de `//…`). Le chemin va jusqu'au prochain blanc, tel qu'il est écrit (`/api/{id:[0-9]+}`), moins

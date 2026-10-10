@@ -260,6 +260,7 @@ def test_a_search_cut_before_its_end_concludes_nothing():
     ('Les commits et/ou les routes, 2026/09', []),
     ('Que fait GET / et endpoint:POST / ?', [('KEY', 'endpoint:POST /'), ('NAME', 'GET /')]),
     ('Que fait GET //admin ?', []),
+    ('Et endpoint:get /api/x ?', [('KEY', 'endpoint:get /api/x')]),
     ('Que fait GET /123 ou /-interne ? Et / seul, /? ou //x ?', [('NAME', 'GET /123'), ('NAME', '/-interne')]),
     ('Que fait GET /api/{id:[0-9]+} ?', [('NAME', 'GET /api/{id:[0-9]+}')]),
     ('Que sert ANY /api/ping, (GET /api/x) et « endpoint:ANY /api/y » ?',
