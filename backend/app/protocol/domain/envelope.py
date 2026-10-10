@@ -21,9 +21,13 @@ INTERNAL = 'INTERNAL'
 ERROR_CODES = frozenset({INVALID_ARGUMENT, NO_CONSENT, NOT_AVAILABLE, OUT_OF_SCOPE, BUDGET_EXHAUSTED, INTERNAL})
 
 BUDGET = 'BUDGET'
-# Place gardee pour `not_sent` et pour la taille elle-meme, qui ne sont connues qu'a la fin.
-_RESERVED = [{'what': 'evidence', 'count': 10 ** 7, 'reason': BUDGET},
-             {'what': 'items', 'count': 10 ** 7, 'reason': BUDGET}]
+# Place gardee pour `not_sent` et pour la taille elle-meme, qui ne sont connues qu'a la fin : une mention par
+# section qui peut ne pas tenir.
+_SECTIONS = ('evidence', 'items')
+
+
+def _reserved(sections):
+    return [{'what': section, 'count': 10 ** 7, 'reason': BUDGET} for section in sections]
 _SIZE_PLACEHOLDER = 10 ** 9
 # Taille maximale d'une reponse `ERROR` : l'echange garde toujours de quoi refuser les operations restantes.
 MAX_ERROR_BYTES = 512
@@ -71,7 +75,9 @@ class Response:
         self.envelope = {'protocol': PROTOCOL, 'operation': operation, 'outcome': OK, 'snapshot': snapshot,
                          **fields, 'items': [], 'evidence': [], 'coverage': list(coverage), 'not_sent': []}
         self.max_bytes = max_bytes
-        self.used = size({**self.envelope, 'not_sent': _RESERVED, 'bytes': _SIZE_PLACEHOLDER})
+        # Un champ passe vide (`limits=[]`) est une section de plus, remplie par `add` : sa mention est reservee.
+        sections = (*_SECTIONS, *(name for name, value in fields.items() if value == []))
+        self.used = size({**self.envelope, 'not_sent': _reserved(sections), 'bytes': _SIZE_PLACEHOLDER})
         self.full = set()
         self.skipped = {}
 
