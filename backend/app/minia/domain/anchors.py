@@ -29,11 +29,11 @@ _VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|ANY'
 # Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc ; une clé de route garde le
 # blanc entre son verbe et son chemin (`endpoint:GET /api/students`).
 # Jamais au milieu d'un chemin : `{id:[0-9]+}` est une variable de route, pas une référence.
-_REFERENCE = re.compile(r'(?<![{/])\b[a-z][a-z-]*:(?:(?:' + _VERBS + r') /\S+|\S+)')
+_REFERENCE = re.compile(r'(?<![{/])\b[a-z][a-z-]*:(?:(?:' + _VERBS + r') /\S*|\S+)')
 # Une route HTTP : un chemin qui commence par `/` hors d'un mot (jamais `et/ou` ni `2026/09`), suivi d'autre chose
-# qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant. Le chemin va jusqu'au prochain blanc,
+# qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant ; la racine `/` seule, avec son verbe. Le chemin va jusqu'au prochain blanc,
 # tel qu'il est écrit (`/api/{id:[0-9]+}`), moins la ponctuation qui le suit dans la phrase.
-_ROUTE_FORM = r'(?:(?:' + _VERBS + r')\s+)?/[^\s/]\S*'
+_ROUTE_FORM = r'(?:(?:' + _VERBS + r')\s+/(?:[^\s/]\S*)?|/[^\s/]\S*)'
 _ROUTE = re.compile(r'(?<![\w/])' + _ROUTE_FORM)
 _WHOLE_ROUTE = re.compile(_ROUTE_FORM)
 # Les types du contrat qui nomment une route (ARCHITECTURE § 5) ; aucune autre référence n'est une route.

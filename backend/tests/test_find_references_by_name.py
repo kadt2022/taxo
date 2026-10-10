@@ -116,13 +116,14 @@ def test_the_key_mode_is_unchanged(twin, storage):
 
 STUDENTS, STUDENT_CREATE = 'endpoint:GET /api/students', 'endpoint:POST /api/students'
 STUDENT, ADMIN = 'endpoint:GET /api/students/{id}', 'route-pattern:/api/admin/**'
+ROOT = 'endpoint:GET /'
 
 
 @pytest.fixture
 def routes(tmp_path):
     made = Twin(tmp_path)
     handler = JAVA + 'web.StudentController#list()'
-    made.add([edge(handler, 'HANDLED_BY', subject=endpoint) for endpoint in (STUDENTS, STUDENT_CREATE, STUDENT)]
+    made.add([edge(handler, 'HANDLED_BY', subject=endpoint) for endpoint in (STUDENTS, STUDENT_CREATE, STUDENT, ROOT)]
              + [edge(handler, 'AUTHORIZED_BY', subject=ADMIN)])
     return made
 
@@ -135,6 +136,7 @@ def test_a_route_is_found_by_its_path_written_with_its_leading_slash(routes, sto
     assert named(routes, storage, 'GET /api/students') == [STUDENTS], 'avec son verbe, une seule route'
     assert named(routes, storage, '/api/students/{id}') == [STUDENT]
     assert named(routes, storage, '/api/admin/**') == [ADMIN]
+    assert named(routes, storage, 'GET /') == [ROOT], 'la racine, avec son verbe'
 
 
 @pytest.mark.parametrize('name', ['/', '/./#'])
