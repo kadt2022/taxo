@@ -489,9 +489,9 @@ class _Reader:
     def _scopes(self, owner):
         """Le type `owner`, puis ses types englobants, jusqu'au paquetage exclu."""
         scope = owner
-        while scope:
+        while scope and scope != self.package:
             yield scope
-            scope = scope.rpartition('.')[0] if scope != self.package else ''
+            scope = scope.rpartition('.')[0]
 
     def _constant(self, owner, name):
         """Constante `name` vue depuis le type `owner` : le type et ses types englobants, puis les imports statiques."""
@@ -513,9 +513,13 @@ class _Reader:
         head, _, rest = written.partition('.')
         plain = [name for name, static in self.imports if not static]
         candidates = [f'{scope}.{head}' for scope in self._scopes(owner)]
-        candidates += [name for name in plain if name.rsplit('.', 1)[-1] == head]
-        candidates.append(f'{self.package}.{head}' if self.package else head)
-        if on_demand:
+        imported = [name for name in plain if name.rsplit('.', 1)[-1] == head]
+        # Un import explicite masque le meme nom du paquetage et des imports `*` (JLS 6.4.1) : s'il nomme un type
+        # hors des sources, le nom ecrit n'en designe aucun.
+        candidates += imported
+        if not imported:
+            candidates.append(f'{self.package}.{head}' if self.package else head)
+        if on_demand and not imported:
             candidates += [f'{name[:-2]}.{head}' for name in plain if name.endswith('.*')]
         full = (f'{candidate}.{rest}' if rest else candidate for candidate in candidates)
         return next((name for name in full if name in self.known), None)
