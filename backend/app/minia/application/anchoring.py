@@ -72,12 +72,26 @@ def _relations(exchange):
     return [item['relation'] for item in described['items'] if item.get('kind') == 'relation' and item.get('count')]
 
 
-def anchor(exchange, mip, project_id, question, trajectory, max_bytes, cancel=None):
-    """Cherche l'ancre de la question ; si elle est unique, ses Tuiles MIP. Rend `Anchored`."""
+def drained(steps):
+    """La valeur rendue par des étapes dont on ne montre pas les événements."""
+    while True:
+        try:
+            next(steps)
+        except StopIteration as end:
+            return end.value
+
+
+def locate(exchange, question, trajectory, cancel=None):
+    """Les ancres explicites de la question, cherchées dans l'analyse de l'échange. Rend `anchors.Resolution`."""
     searches = []
     for candidate in anchors.candidates(question):
         searches.append((yield from _search(exchange, candidate, trajectory, cancel)))
-    resolution = anchors.resolve(searches)
+    return anchors.resolve(searches)
+
+
+def anchor(exchange, mip, project_id, question, trajectory, max_bytes, cancel=None):
+    """Cherche l'ancre de la question ; si elle est unique, ses Tuiles MIP. Rend `Anchored`."""
+    resolution = yield from locate(exchange, question, trajectory, cancel)
     if resolution.status != anchors.FOUND:
         return Anchored(resolution, ())
     relations = _relations(exchange)

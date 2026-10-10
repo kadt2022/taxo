@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe as group, expect, it, vi} from 'vitest';
-import {actions, askInit, when, AskTaxo, describe, factLine, outcome, queryPath, SelectionAnswerView, SelectionView, submitWith, track,
+import {actions, askInit, elementsPath, selectWithElement, when, AskTaxo, describe, factLine, outcome, queryPath, SelectionAnswerView, SelectionView, submitWith, track,
   type Selection, type SelectionAnswer} from './query';
 
 const request={kind:'LATEST' as const, text:'3 derniers', count:3, commit:null, since:null, until:null};
@@ -82,6 +82,43 @@ group('vues', ()=>{
     expect(html).toContain('id="taxo-query"');
     expect(html).toContain('value=""');
     expect(run).not.toHaveBeenCalled();
+  });
+});
+
+group('élément nommé', ()=>{
+  const SERVICE='symbol:java:a.Service#register(String)';
+  const global:Selection={...selection, status:'GLOBAL', request:{...request, kind:'GLOBAL'}, commits:[], facts:[], total_commits:null};
+  it('cherche l’élément seulement quand aucun commit n’est sélectionné', async ()=>{
+    const run=vi.fn().mockResolvedValueOnce(global).mockResolvedValueOnce({status:'FOUND', anchor:SERVICE, candidates:[SERVICE], analysis:'s1'});
+    const found=await selectWithElement('/projects/p', 'qui appelle Service.register ?', run);
+    expect(run.mock.calls.map(call=>call[0])).toEqual(['/projects/p/query?q=qui+appelle+Service.register+%3F',
+      elementsPath('/projects/p', 'qui appelle Service.register ?')]);
+    expect(found.element?.anchor).toBe(SERVICE);
+    const commits=vi.fn().mockResolvedValueOnce(selection);
+    expect(await selectWithElement('/projects/p', '3 derniers', commits)).toBe(selection);
+    expect(commits).toHaveBeenCalledTimes(1);
+  });
+  it('montre la sélection même si la recherche d’élément échoue', async ()=>{
+    const run=vi.fn().mockResolvedValueOnce(global).mockRejectedValueOnce(new Error('panne'));
+    expect(await selectWithElement('/projects/p', 'X', run)).toBe(global);
+  });
+  it('remplace le message de requête globale par l’élément reconnu', ()=>{
+    const html=renderToStaticMarkup(<SelectionView result={{...global, element:{status:'FOUND', anchor:SERVICE, candidates:[SERVICE]}}}/>);
+    expect(html).toContain('ÉLÉMENT RECONNU');
+    expect(html).not.toContain('Requête globale');
+    const none=renderToStaticMarkup(<SelectionView result={{...global, element:{status:'NONE', anchor:null, candidates:[]}}}/>);
+    expect(none).toContain('Requête globale');
+    expect(none).toContain('nommez l’élément');
+  });
+  it('montre l’élément dont Minia a interprété la Tuile', ()=>{
+    const html=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, request:global.request, mode:'paquet',
+      anchor:{status:'FOUND', anchor:SERVICE, candidates:[SERVICE]}}}/>);
+    expect(html).toContain('MINIA · ollama qwen2.5:3b · symbole java:a.Service#register(String)');
+    expect(html).toContain('ÉLÉMENT RECONNU');
+    expect(html).toContain('non vérifié');
+    const choose=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, status:'NEEDS_SELECTION', request:global.request,
+      anchor:{status:'AMBIGUOUS', anchor:null, candidates:[SERVICE, 'symbol:java:b.Service#register(String)']}}}/>);
+    expect(choose).toContain('PLUSIEURS ÉLÉMENTS');
   });
 });
 

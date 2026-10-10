@@ -547,6 +547,16 @@ class AskMinia:
                                   'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
                                   'facts_not_sent': brief.truncated, 'rejected_citations': answer['rejected']}
 
+    def locate(self, project_id, question):
+        """L'élément que la question nomme, sans modèle (récit TAXO-01N / MIP-01 § 5.1) : son ancre si elle est
+        unique, sinon les candidates entre lesquelles choisir ; jamais un choix fait par Taxo."""
+        question = self._checked(question)
+        exchange = self.taxo_query.open(project_id, max_bytes=EXCHANGE_BYTES)
+        resolution = anchoring.drained(anchoring.locate(exchange, question, []))
+        return {'question': question, 'analysis': exchange.snapshot['analysis'], 'status': resolution.status,
+                'anchor': resolution.anchor, 'candidates': list(resolution.candidates[:MAX_SHOWN_CANDIDATES]),
+                'more_candidates': max(len(resolution.candidates) - MAX_SHOWN_CANDIDATES, 0)}
+
     def _anchored_steps(self, model, question, projection, result, cancel=None):
         """Repli paquet sans sélection de commits : l'ancre explicite de la question, sa Tuile MIP, puis Minia
         n'interprète que cette Tuile. Sans ancre unique, Taxo dit quoi préciser ; le modèle n'est pas appelé."""
