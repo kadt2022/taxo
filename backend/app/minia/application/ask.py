@@ -1,7 +1,8 @@
 """Demander a Minia ce que signifie un commit, a partir de ce que Taxo en sait.
 
 Minia ne lit ni le depot ni le code : elle recoit ce que Git sait du commit (auteur, date, message,
-fichiers et statuts), les faits changes par le commit (impact de Taxo), leurs preuves et la couverture.
+fichiers et statuts), les faits changes par le commit (impact de Taxo), leurs preuves et la couverture ; chaque
+message passe d'abord par la representation controlee (TAXO-MINIA-SEC-01) : identites pseudonymisees, secrets masques.
 Seule exception, a double consentement (TAXO-MINIA-02, ARCHITECTURE § 12.6) : si le reglage MINIA_SOURCE_CONTEXT
 vaut `diff` et que la demande l'autorise, le diff du commit est joint, lu par l'historique avec ses refus.
 Ce que Git sait est toujours renvoye tel quel, quelle que soit la reponse du modele. Sans fait change et
@@ -13,19 +14,25 @@ interpretation. Quand le fournisseur sait diffuser sa reponse, le texte provisoi
 la reponse definitive, citations validees, n'est rendue qu'a la fin.
 """
 import inspect
+import re
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
+from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
 from app.minia.application import anchoring
-from app.minia.domain import anchors, briefing, exploration, source_context
+from app.minia.application.protected_model import ProtectedModel
+from app.minia.domain import anchors, authorship, briefing, exploration, source_context
+from app.minia.domain.confidentiality import Disclosure
 from app.minia.domain.cancellation import STOPPED, check
 from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, SYSTEM_TILE, AnswerStream, parse, with_diff
-from app.minia.domain.errors import CANCELLED, CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
+from app.minia.domain.errors import (CANCELLED, CONFIDENTIALITY_REFUSED, CONTEXT_TOO_LARGE, INVALID_ANSWER,
+                                    INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError)
 from app.minia.domain.model import MiniaModel
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
 from app.projects.application.queries import require_project
+from app.projects.domain.project import ProjectError
 
 MAX_QUESTION = 1000
 # Garde-fous de l'exploration (ARCHITECTURE § 12.5), fixes par Taxo : une description, au plus 8 operations
@@ -48,6 +55,8 @@ HEARTBEAT_SECONDS = 15.0
 # Frequence a laquelle l'attente du modele regarde si la demande a ete arretee (TAXO-UX-03).
 CANCEL_POLL_SECONDS = 0.25
 EXPLORATION, PACKET = 'exploration', 'paquet'
+# Reponse donnee par Taxo seul, sans modele (recit TAXO-MINIA-SEC-01, E3) : l'auteur d'un commit, par exemple.
+DIRECT = 'taxo'
 ANSWERED, NOTHING_KNOWN, NEEDS_SELECTION = 'ANSWERED', 'TAXO_KNOWS_NOTHING', 'NEEDS_SELECTION'
 _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
 _DISABLED = {'status': 'DISABLED'}
@@ -68,6 +77,7 @@ _NOT_SERVED = "La Tuile de {} n'a pas pu être servie : {}"
 MAX_SHOWN_CANDIDATES = 5
 # L'evenement qui clot une demande, avec son resultat.
 COMPLETED = 'minia.completed'
+DELTA = 'minia.delta'
 _EMPTY = {'SELECTED': "Aucun commit de l'historique analysé ne correspond à cette sélection.",
           'NOT_FOUND': "Aucun commit de l'historique analysé ne commence par cet identifiant.",
           'AMBIGUOUS': 'Plusieurs commits commencent par cet identifiant : donnez-en davantage de caractères.',
@@ -126,6 +136,39 @@ def _complete(model, system, user, schema=None, cancel=None):
     if cancel is not None and _accepts(model.complete, 'cancel'):
         options['cancel'] = cancel
     return model.complete(system, user, **options)
+
+
+# Fin de texte qui peut etre le debut d'un pseudonyme (`pers`, `personne-1`) : gardee jusqu'au fragment suivant.
+_PSEUDONYM_START = re.compile(r'p(?:e(?:r(?:s(?:o(?:n(?:n(?:e(?:-\d*)?)?)?)?)?)?)?)?\Z')
+
+
+def _reported(events, disclosure):
+    """Les etapes d'une demande ; le texte diffuse a les identites d'origine, comme la reponse finale, qui dit ce
+    que Taxo a retenu avant l'envoi au modele, compte, jamais montre (recit TAXO-MINIA-SEC-01, E4)."""
+    pending = ''
+    for event_type, data in events:
+        if event_type == DELTA:
+            pending += data['text']
+            held = _PSEUDONYM_START.search(pending)
+            cut = held.start() if held else len(pending)
+            if cut:
+                yield DELTA, {**data, 'text': disclosure.restore(pending[:cut])}
+            pending = pending[cut:]
+            continue
+        if pending:
+            yield DELTA, {'text': disclosure.restore(pending)}
+            pending = ''
+        if event_type == COMPLETED:
+            data = {**data, 'withheld': disclosure.report()}
+        yield event_type, data
+    if pending:
+        yield DELTA, {'text': disclosure.restore(pending)}
+
+
+def _restored(model, answer):
+    """La reponse lue d'un paquet, avec les identites d'origine pour l'affichage local."""
+    return {**answer, 'answer': model.disclosure.restore(answer['answer']),
+            'unknown': model.disclosure.restore(answer['unknown'])}
 
 
 def _guarded(events, cancel):
@@ -250,6 +293,26 @@ class AskMinia:
         return {'configured': True, **_view(self.models[self.default]), 'source_context': self.source,
                 'providers': providers}
 
+    def _protected(self, provider, project_id):
+        """Le modele de la demande, derriere sa propre protection : tout message y passe avant le fournisseur.
+        Les auteurs du projet y sont connus d'avance : une question qui en nomme un ne le transmet pas."""
+        model = self._model(provider)
+        return ProtectedModel(model, Disclosure(self._authors(project_id)))
+
+    def _authors(self, project_id):
+        """Tous les auteurs Git du projet, et pas seulement ceux des derniers commits ; aucun si son historique
+        n'est pas lisible (le controle final demeure)."""
+        try:
+            return tuple(self.history.authors(project_id))
+        except ProjectError:
+            return ()
+        except HistoryError as exc:
+            if exc.code == NOT_A_GIT_REPOSITORY:
+                return ()  # Sans depot Git, aucun auteur a proteger.
+            # Un historique illisible laisserait passer un nom d'auteur que rien n'a appris a masquer.
+            raise MiniaError(CONFIDENTIALITY_REFUSED, 'Les auteurs du projet ne sont pas lisibles : Taxo ne peut pas '
+                             'garantir leur confidentialité, rien n’est transmis au modèle.') from exc
+
     def _model(self, provider):
         """Le modele demande, ou celui par defaut ; un fournisseur non configure est refuse."""
         if self.default is None:
@@ -293,7 +356,7 @@ class AskMinia:
         return _final(self.about_commit_events(project_id, sha, question, parent, source, provider))
 
     def about_commit_events(self, project_id, sha, question, parent=None, source=False, provider=None, cancel=None):
-        """Valide la demande tout de suite (question, fournisseur, projet, commit), puis rend ses etapes.
+        """Valide la demande tout de suite (question, projet, commit, puis fournisseur si un modele sert), puis rend ses etapes.
 
         `source` : la demande autorise Minia a lire le diff ; il n'est joint que si le reglage le permet.
         `provider` : le fournisseur choisi pour cette demande ; celui par defaut sinon.
@@ -303,9 +366,17 @@ class AskMinia:
 
     def _commit_events(self, project_id, sha, question, parent, source, provider, cancel):
         question = self._checked(question)
-        model = self._model(provider)
         project = require_project(self.projects, project_id)
         commit, base, files = self.history.detail(project_id, sha, parent)
+        if authorship.asks_author(question):
+            # Taxo repond seul : aucun modele n'est requis, ni meme configure.
+            return self._commit_author(question, project, commit, base, files)
+        model = self._protected(provider, project_id)
+        return _reported(self._commit_route(model, question, project, commit, base, files, source, cancel),
+                         model.disclosure)
+
+    def _commit_route(self, model, question, project, commit, base, files, source, cancel):
+        project_id = project.id
         if self.taxo_query is not None and getattr(model, 'explores', False):
             try:
                 # Le diff n'est lisible dans l'echange que si le reglage et la demande l'autorisent (ARCHITECTURE § 12.6).
@@ -320,6 +391,17 @@ class AskMinia:
                                           fallback=str(exc), trajectory=[], cancel=cancel)
             return self._explore_commit(model, question, project, commit, base, files, source, exchange, cancel)
         return self._commit_steps(model, question, project, commit, base, files, source, cancel=cancel)
+
+    @staticmethod
+    def _commit_author(question, project, commit, base, files):
+        """L'auteur du commit, dit par Taxo d'apres Git : aucun modele n'est appele, l'identite ne sort pas."""
+        yield _stage('facts', 'done', 'Taxo répond d’après Git, sans modèle', 1)
+        yield COMPLETED, {'mode': DIRECT, 'status': ANSWERED, 'question': question, 'commit': commit.sha,
+                          'parent': base, 'model': {'configured': True, 'provider': None, 'model': None},
+                          'source_context': _NOT_REQUESTED, 'project': {'id': project.id, 'name': project.name},
+                          'git': briefing.commit_view(commit, base, files), 'files_not_sent': 0,
+                          'not_interpreted': [], 'failures': [], 'facts_not_sent': 0, 'rejected_citations': [],
+                          'facts': [], 'answer': authorship.commit_answer(commit), 'unknown': ''}
 
     def _explore_commit(self, model, question, project, commit, base, files, source, exchange, cancel=None):
         """Question sur un commit, en exploration (MINIA-09b) : Taxo commence par ce que Git sait du commit ;
@@ -380,7 +462,7 @@ class AskMinia:
             return
         raw, served = yield from self._interpret(model, with_diff(SYSTEM) if brief.diff else SYSTEM, brief,
                                                  len(sent.get('files_sent', ())), cancel)
-        answer = parse(raw, brief.refs)
+        answer = _restored(model, parse(raw, brief.refs))
         yield COMPLETED, {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [_change(ref, brief.refs[ref]) for ref in answer['cited']],
                                   'rejected_citations': answer['rejected']}
@@ -395,8 +477,14 @@ class AskMinia:
 
     def _project_events(self, project_id, question, provider, cancel):
         question = self._checked(question)
-        model = self._model(provider)
         projection = self.query(project_id, question)
+        if projection['status'] == 'SELECTED' and authorship.asks_author(question):
+            return self._selection_authors(question, projection)
+        model = self._protected(provider, project_id)
+        return _reported(self._project_route(model, question, projection, cancel), model.disclosure)
+
+    def _project_route(self, model, question, projection, cancel):
+        project_id = projection['project']['id']
         if self.taxo_query is not None and getattr(model, 'explores', False):
             exchange = self.taxo_query.open(project_id, max_bytes=self._exchange_bytes(model))
 
@@ -457,7 +545,8 @@ class AskMinia:
                 check(cancel)
                 raw = yield from _waiting(
                     lambda: _complete(model, exploration.SYSTEM, text, exploration.STEP_SCHEMA, cancel), cancel)
-                step = exploration.parse_step(raw)
+                # Ce que le modele rend porte des pseudonymes : Taxo travaille sur les valeurs d'origine.
+                step = exploration.restored(exploration.parse_step(raw), model.disclosure)
                 if isinstance(step, exploration.Answer):
                     break
                 if calls_left <= 0 or step.key in seen:
@@ -542,10 +631,24 @@ class AskMinia:
                                    self._capacity(model, SYSTEM_SELECTION))
         yield _stage('context', 'done', 'Préparation du contexte')
         raw, served = yield from self._interpret(model, SYSTEM_SELECTION, brief, cancel=cancel)
-        answer = parse(raw, brief.refs)
+        answer = _restored(model, parse(raw, brief.refs))
         yield COMPLETED, {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
                                   'facts_not_sent': brief.truncated, 'rejected_citations': answer['rejected']}
+
+    @staticmethod
+    def _selection_authors(question, projection):
+        """Les auteurs d'une selection de commits, dits par Taxo d'apres ses faits Git, sans modele."""
+        text, authored = authorship.selection_answer(projection['facts'])
+        yield _stage('facts', 'done', 'Taxo répond d’après Git, sans modèle', len(authored))
+        yield COMPLETED, {'mode': DIRECT, 'status': ANSWERED, 'question': question,
+                          'model': {'configured': True, 'provider': None, 'model': None},
+                          'project': projection['project'], 'analysis': projection['analysis'],
+                          'request': projection['request'], 'selection': projection['status'],
+                          'commits': projection['commits'], 'total_commits': projection['total_commits'],
+                          'not_interpreted': projection['not_interpreted'], 'facts_not_sent': 0,
+                          'rejected_citations': [], 'answer': text, 'unknown': '',
+                          'facts': [{'ref': f'F{index}', **fact} for index, fact in enumerate(authored, 1)]}
 
     def locate(self, project_id, question):
         """L'élément que la question nomme, sans modèle (récit TAXO-01N / MIP-01 § 5.1) : son ancre si elle est
@@ -589,7 +692,7 @@ class AskMinia:
             return
         yield _stage('context', 'done', 'Préparation du contexte')
         raw, served = yield from self._interpret(model, SYSTEM_TILE, brief, cancel=cancel)
-        answer = parse(raw, brief.refs)
+        answer = _restored(model, parse(raw, brief.refs))
         yield COMPLETED, {**result, 'model': self._model_view(model, served), 'status': ANSWERED,
                                   'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
@@ -622,7 +725,7 @@ class AskMinia:
                 chunks.append(chunk)
                 text = extractor.feed(chunk)
                 if text:
-                    yield 'minia.delta', {'text': text}
+                    yield DELTA, {'text': text}
             raw = ''.join(chunks)
         yield _stage('interpretation', 'done', label, len(brief.refs))
         return raw, served

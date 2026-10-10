@@ -191,3 +191,14 @@ def test_a_failed_evaluation_is_not_comparable_and_invents_no_change(history):
     assert '50 000 fichiers' in failed['failures'][0]
     _, _, (healthy,) = history_of.impact('demo', second)
     assert healthy['comparable'] is True and healthy['changes']
+
+
+def test_the_authors_cover_every_branch_without_duplicates(make_repo, git):
+    repo = make_repo({'App.java': 'class App {}\n'}, 'auteurs')
+    git(repo, 'checkout', '-qb', 'side')
+    git(repo, '-c', 'user.name=Ada Lovelace', '-c', 'user.email=ada@example.org', 'commit', '-q', '--allow-empty',
+        '-m', 'side')
+    git(repo, 'checkout', '-q', '-')
+    authors = READER.authors(str(repo))
+    assert 'Ada Lovelace <ada@example.org>' in authors, 'un auteur d’une autre branche est connu'
+    assert len(authors) == len(set(authors))
