@@ -1,7 +1,9 @@
 # TAXO-MIP-SOURCE-01 — Lecture progressive du code Java à travers la Maille
 
 **Statut :** récit accepté par le responsable du produit le 10 octobre 2026 ; à implémenter après
-[TAXO-MINIA-SEC-01](TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md).  
+[TAXO-MINIA-SEC-01](TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md). **Fusionné** le 10 octobre 2026 dans
+[TAXO-MIP-ADT-01](TAXO-MIP-ADT-01-adaptive-tile.md) (§ 0) : ses PR B, C et D reprendraient
+les PR A, B et C ci-dessous, et ses exigences E1 à E6 sans changement.  
 **Priorité :** haute.  
 **Dépendance :** confidentialité et fiabilisation de Minia (TAXO-MINIA-SEC-01), qui doit être terminé avant.  
 **Référence :** architecture MIP (`ARCHITECTURE.md` § 12, où `get_source` est réservée) et rapport du banc
