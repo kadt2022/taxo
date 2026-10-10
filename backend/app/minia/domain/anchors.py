@@ -33,7 +33,10 @@ _REFERENCE = re.compile(r'(?<![{/])\b[a-z][a-z-]*:(?:(?:' + _VERBS + r') /\S+|\S
 # Une route HTTP : un chemin qui commence par `/` hors d'un mot (jamais `et/ou` ni `2026/09`), suivi d'autre chose
 # qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant. Le chemin va jusqu'au prochain blanc, tel qu'il est
 # écrit (`/api/{id:[0-9]+}`), moins la ponctuation qui le suit dans la phrase.
-_ROUTE = re.compile(r'(?<![\w/])(?:(?:' + _VERBS + r')\s+)?/[^\s/]\S*')
+_ROUTE_FORM = r'(?:(?:' + _VERBS + r')\s+)?/[^\s/]\S*'
+_ROUTE = re.compile(r'(?<![\w/])' + _ROUTE_FORM)
+_WHOLE_ROUTE = re.compile(_ROUTE_FORM)
+_VERB_SET = frozenset(verb.casefold() for verb in _VERBS.split('|'))
 _TRAILING = '?!.,;:"\'»”’'
 _CLOSING = {')': '(', ']': '['}
 _BLANKS = re.compile(r'\s+')
@@ -72,7 +75,8 @@ class Candidate:
         key, route = _folded(reference.partition(':')[2]), _folded(self.text)
         if not route.startswith('/'):
             return key == route
-        return route in (key, key.partition(' ')[2])
+        verb, blank, path = key.partition(' ')
+        return key == route or (bool(blank) and verb in _VERB_SET and path == route)
 
     @property
     def search(self):
@@ -117,7 +121,11 @@ def candidates(question):
         keep(Candidate(KEY, _trimmed(match.group(0))))
         rest = rest.replace(match.group(0), ' ')
     for match in _QUOTED.finditer(rest):
-        keep(Candidate(NAME, match.group(1).strip()[:MAX_NAME]))
+        quoted = match.group(1).strip()
+        # Une route entre accents graves garde le sens d'une route : la route entière, jamais une fin de clé.
+        if _WHOLE_ROUTE.fullmatch(quoted):
+            quoted = _BLANKS.sub(' ', quoted)
+        keep(Candidate(NAME, quoted[:MAX_NAME], route=bool(_WHOLE_ROUTE.fullmatch(quoted))))
     rest = _QUOTED.sub(' ', rest)
     for match in _ROUTE.finditer(rest):
         # Un seul blanc entre le verbe et le chemin, comme dans la clé.
