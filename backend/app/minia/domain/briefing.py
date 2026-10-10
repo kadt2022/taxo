@@ -160,3 +160,53 @@ def selection(question, projection, project=None, max_bytes=None):
     count = _fitting(render, min(len(facts), MAX_FACTS), max_bytes)
     refs = {f'F{index}': fact for index, fact in enumerate(facts[:count], 1)}
     return Briefing(render(count), refs, len(facts) - count, 0, tuple(projection['not_interpreted']), ())
+
+
+def _said(fact):
+    return fact['subject'], fact['relation'], fact.get('object')
+
+
+def _tile_fact(ref, item):
+    fact = item['fact']
+    return {'ref': ref, 'subject': fact['subject'], 'relation': fact['relation'], 'object': fact.get('object'),
+            'status': fact.get('status'), 'validity': fact.get('validity'),
+            'evidence': _evidence(item.get('evidence') or [])}
+
+
+def limits(tiles):
+    """Ce que les Tuiles disent ne pas savoir : zones non interprétées, analyse absente, coupes par un budget."""
+    found = []
+    for tile in tiles:
+        for entry in tile['frontier']:
+            if entry.get('reason') in ('DEPTH', 'NOT_REACHED'):
+                continue
+            categories = ', '.join(f"{item['category']} {item['count'].get('value', '?')}"
+                                   for item in entry.get('categories') or [])
+            where = entry.get('node') or entry.get('scope') or 'Tuile'
+            said = f"{where} : {entry.get('reason')}" + (f" ({entry['producer']})" if entry.get('producer') else '')
+            found.append(said + (f' [{categories}]' if categories else ''))
+        if tile['truncated']:
+            found.append(f"Tuile coupée par un budget ({tile['stop_reason']}) : elle ne dit pas tout.")
+    return tuple(dict.fromkeys(found))
+
+
+def tile(question, anchor, tiles, project=None, max_bytes=None):
+    """Message transmis au modele pour une ancre : les faits de ses Tuiles MIP, leurs preuves réduites à leur
+    localisation, et ce que les Tuiles ne savent pas. Les faits qui ne tiennent pas ne sont pas transmis."""
+    repository, name = (f'repository:{project[0]}', project[1]) if project else (None, None)
+    # Une Tuile par groupe de relations : un fait vu par deux d'entre elles n'est transmis qu'une fois.
+    items = list({_said(item['fact']): item for found in tiles for item in found['facts']}.values())
+    unknown = limits(tiles)
+
+    def render(count):
+        facts = []
+        for index, item in enumerate(items[:count], 1):
+            fact = _tile_fact(f'F{index}', item)
+            facts.append({**fact, 'subject': _named(fact['subject'], repository, name),
+                          'object': _named(fact['object'], repository, name)})
+        return _compact({'question': question, 'anchor': anchor, 'facts': facts,
+                         'facts_not_sent': len(items) - count, 'not_interpreted': list(unknown)})
+
+    count = _fitting(render, min(len(items), MAX_FACTS), max_bytes)
+    refs = {f'F{index}': item['fact'] for index, item in enumerate(items[:count], 1)}
+    return Briefing(render(count), refs, len(items) - count, 0, unknown, ())

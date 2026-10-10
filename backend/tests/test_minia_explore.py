@@ -10,7 +10,7 @@ from app.bootstrap.database import Base
 from app.main import create_app
 from app.minia.application.ask import MAX_CALLS, MAX_CLAIMS
 from app.minia.domain import exploration
-from app.minia.domain.errors import CONTEXT_TOO_LARGE, MiniaError
+from app.minia.domain.errors import CONTEXT_TOO_LARGE, INVALID_ANSWER, MiniaError
 from app.minia.infrastructure.claude import ClaudeModel
 from app.minia.infrastructure.gemini import GeminiModel, gemini_schema
 from app.minia.infrastructure.ollama import OllamaModel
@@ -483,20 +483,45 @@ def test_a_slow_provider_is_a_failure_not_a_fallback(repo, tmp_path):
         'un delai depasse n est pas un echec du protocole : pas de repli en paquet, aussi lent'
 
 
-def test_a_model_that_fills_every_field_only_passes_what_each_operation_reads(repo, tmp_path):
+def test_an_undeclared_argument_is_refused_by_taxo_then_minia_corrects_its_call(repo, tmp_path):
+    """Récit TAXO-01N § 5.2 : un champ que l'opération ne déclare pas est refusé, jamais ignoré ; une faute de frappe
+    sur un filtre rendrait sinon une requête plus large qui semblerait réussir."""
     repo, sha = repo
-    everything = {'subject': f'commit:{sha}', 'relation': 'CHANGES', 'object': 'commit:' + '0' * 40,
-                  'nature': 'ASSERTION', 'fact': 'F4', 'scope': 'repository:ailleurs', 'commit': sha,
-                  'path': 'src/app.txt'}
-    model, bodies = ollama_scripted(call('diff_facts', **everything), call('get_diff', **everything),
+    model, bodies = ollama_scripted(call('diff_facts', commit=sha, relaton='CHANGES'), call('diff_facts', commit=sha),
                                     answer(statement('unknown', 'Rien de plus.')))
     result = completed(ask_commit(repo, tmp_path, model, sha, source=True))
-    diff_facts, get_diff = result['trajectory'][2:4]
-    assert (diff_facts['outcome'], diff_facts['arguments']) == ('OK', {'commit': sha})
-    assert diff_facts['ignored'] == ['fact', 'nature', 'object', 'path', 'relation', 'scope', 'subject']
-    assert (get_diff['outcome'], get_diff['arguments']) == ('OK', {'commit': sha, 'path': 'src/app.txt'})
-    told = json.loads(bodies[1]['messages'][1]['content'])['trajectory'][2]
-    assert told['ignored_arguments'] == diff_facts['ignored'], 'Minia sait ce que Taxo n a pas lu'
+    assert result['mode'] == 'exploration', 'un refus de Taxo est un résultat, pas un échec de l exploration'
+    refused, corrected = result['trajectory'][2:4]
+    assert (refused['outcome'], refused['error']['code']) == ('ERROR', 'INVALID_ARGUMENT')
+    assert refused['arguments'] == {'commit': sha, 'relaton': 'CHANGES'}, 'transmis tel quel'
+    assert (corrected['outcome'], corrected['arguments']) == ('OK', {'commit': sha})
+    told = json.loads(bodies[1]['messages'][1]['content'])['trajectory'][2]['response']
+    assert told['error']['code'] == 'INVALID_ARGUMENT', 'Minia voit le refus et corrige son appel'
+
+
+@pytest.mark.parametrize('operation', ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit',
+                                       'verify_claim', 'diff_facts', 'get_neighborhood', 'find_references'])
+def test_every_operation_refuses_an_argument_it_does_not_declare(repo, tmp_path, operation):
+    repo, sha = repo
+    app = create_app(f'sqlite:///{tmp_path / "undeclared.db"}', [repo], minia={})
+    Base.metadata.create_all(app.state.engine)
+    with TestClient(app) as client:
+        project = client.post('/api/projects', json={'name': 'Arguments', 'path': str(repo)}).json()
+        client.post(f'/api/projects/{project["id"]}/scans')
+        response, = client.post(f'/api/projects/{project["id"]}/taxo-query', json={'requests': [
+            {'operation': operation, 'arguments': {'undeclared_field': 'x'}}]}).json()['responses']
+    assert (response['outcome'], response['error']['code']) == ('ERROR', 'INVALID_ARGUMENT'), response
+
+
+def test_arguments_beyond_their_size_limit_are_refused_never_truncated():
+    big = json.dumps({'prefix': 'x' * exploration.MAX_ARGUMENTS_BYTES})
+    with pytest.raises(MiniaError) as refused:
+        exploration.parse_step(json.dumps({'action': 'call', 'operation': 'find_references', 'arguments': big,
+                                           'statements': []}))
+    assert refused.value.code == INVALID_ANSWER
+    with pytest.raises(MiniaError):
+        exploration.parse_step(json.dumps({'action': 'call', 'operation': 'find_references',
+                                           'arguments': json.loads(big), 'statements': []}))
 
 
 def test_a_declared_argument_stays_validated(repo, tmp_path):

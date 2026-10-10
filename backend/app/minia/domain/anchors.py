@@ -1,0 +1,94 @@
+"""Le repli paquet sans invention (récit TAXO-01N / MIP-01 § 5.3) : les ancres explicites d'une question.
+
+Quand Minia ne peut pas explorer, Taxo cherche lui-même, sans modèle, de quoi la question parle : une référence
+complète (`symbol:java:…#register(String)`), ou un nom qui a la forme d'un nom de code (`VetController`,
+`OwnerRepository.findById`, ou tout texte entre accents graves). Un mot ordinaire n'est jamais cherché : « service »
+trouverait un paquet par hasard. Aucune règle propre à un langage.
+
+Une ancre n'est retenue que si elle est **unique** : une seule référence, trouvée par des recherches épuisées
+(aucune reprise, rien de non transmis). Une page tronquée ne prouve rien ; plusieurs références restent des
+candidates, et c'est l'utilisateur qui choisit, jamais Taxo.
+"""
+import re
+from dataclasses import dataclass
+
+MAX_CANDIDATES = 4
+MAX_NAME = 200
+NAME, KEY = 'NAME', 'KEY'
+FOUND, AMBIGUOUS, NONE = 'FOUND', 'AMBIGUOUS', 'NONE'
+
+# Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc.
+_REFERENCE = re.compile(r'\b[a-z][a-z-]*:\S+')
+_QUOTED = re.compile(r'`([^`\n]{1,200})`')
+# Un nom de code : des segments séparés par . # $ ou /, et peut-être une liste de paramètres.
+_CODE = re.compile(r'[A-Za-z_][\w$]*(?:[.#/$][A-Za-z_<][\w$<>]*)*(?:\([^()\s]*(?:,\s?[^()\s]*)*\))?')
+_INNER_CAPITAL = re.compile(r'[a-z0-9][A-Z]')
+
+
+@dataclass(frozen=True)
+class Candidate:
+    """Ce que la question nomme : une référence complète (`KEY`), ou un nom à retrouver (`NAME`)."""
+    mode: str
+    text: str
+
+    @property
+    def search(self):
+        """Les arguments de `find_references` qui la cherchent."""
+        if self.mode == NAME:
+            return {'prefix': self.text, 'match': NAME}
+        kind, _, key = self.text.partition(':')
+        return {'prefix': key[:MAX_NAME], 'type': kind}
+
+
+@dataclass(frozen=True)
+class Search:
+    """Ce qu'une recherche a rendu : ses références, et si elle est allée jusqu'au bout."""
+    candidate: Candidate
+    references: tuple
+    exhausted: bool
+
+
+@dataclass(frozen=True)
+class Resolution:
+    status: str
+    anchor: str | None
+    candidates: tuple
+
+
+def _looks_like_code(token):
+    """Un nom qui ne peut pas être un mot ordinaire : qualifié, appelé, ou en casse mixte (`findById`)."""
+    return any(mark in token for mark in '.#$(') or bool(_INNER_CAPITAL.search(token))
+
+
+def candidates(question):
+    """Les ancres explicites de la question, dans leur ordre, chacune une fois, au plus MAX_CANDIDATES."""
+    found, taken = [], set()
+
+    def keep(candidate):
+        if candidate.text and candidate not in taken and len(found) < MAX_CANDIDATES:
+            taken.add(candidate)
+            found.append(candidate)
+
+    rest = question
+    for match in _REFERENCE.finditer(question):
+        keep(Candidate(KEY, match.group(0).rstrip('?!.,;')))
+        rest = rest.replace(match.group(0), ' ')
+    for match in _QUOTED.finditer(rest):
+        keep(Candidate(NAME, match.group(1).strip()[:MAX_NAME]))
+    rest = _QUOTED.sub(' ', rest)
+    for match in _CODE.finditer(rest):
+        token = match.group(0).rstrip('.')
+        if _looks_like_code(token):
+            keep(Candidate(NAME, token[:MAX_NAME]))
+    return found
+
+
+def resolve(searches):
+    """L'ancre unique, ou les candidates : une seule référence en tout, et toutes les recherches épuisées."""
+    references = tuple(dict.fromkeys(reference for search in searches for reference in search.references))
+    if not references:
+        status = AMBIGUOUS if any(not search.exhausted for search in searches) else NONE
+        return Resolution(status, None, ())
+    if len(references) == 1 and all(search.exhausted for search in searches):
+        return Resolution(FOUND, references[0], references)
+    return Resolution(AMBIGUOUS, None, references)

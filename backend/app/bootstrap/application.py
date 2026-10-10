@@ -123,13 +123,15 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     api.state.taxo_query = TaxoQuery(projects, scans, facts, history, registry.all(), source, contracts)
     api.include_router(protocol_router(api.state.taxo_query))
     # MIP 0.1 (ARCHITECTURE § 12.0) : un adaptateur sur ce même protocole, qui sert une Tuile sans modèle de langage.
-    api.include_router(mip_router(MipService(api.state.taxo_query)))
+    mip = MipService(api.state.taxo_query)
+    api.include_router(mip_router(mip))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ARCHITECTURE § 2, principe 5).
     # Plusieurs fournisseurs peuvent servir Minia (Ollama local, Claude distant) : chaque demande choisit.
     options = settings.minia()
     models = minia_models(options) if minia is _FROM_SETTINGS else minia
     default = options['provider'] if minia is _FROM_SETTINGS and options['provider'] in models else None
     # Le diff d'un commit ne lui est joint que si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise (ARCHITECTURE § 12.6).
-    api.state.minia = AskMinia(history, models, projects, query, source, default, taxo_query=api.state.taxo_query)
+    api.state.minia = AskMinia(history, models, projects, query, source, default, taxo_query=api.state.taxo_query,
+                               mip=mip)
     api.include_router(minia_router(api.state.minia))
     return api

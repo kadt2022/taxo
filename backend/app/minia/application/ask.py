@@ -20,7 +20,9 @@ from concurrent.futures import TimeoutError as StillWaiting
 
 from app.minia.domain import briefing, exploration, source_context
 from app.minia.domain.cancellation import STOPPED, check
-from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, AnswerStream, parse, with_diff
+from app.minia.application import anchoring
+from app.minia.domain import anchors
+from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, SYSTEM_TILE, AnswerStream, parse, with_diff
 from app.minia.domain.errors import CANCELLED, CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError
 from app.minia.domain.model import MiniaModel
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
@@ -56,6 +58,15 @@ _NOTHING = ("Taxo n'a vu changer aucun fait dans ce commit, parmi ceux que ses �
             "Minia ne peut rien affirmer au-delà.")
 _SELECT = ("Minia répond sur une sélection de l'historique : précisez un nombre de derniers commits "
            "(« les 3 derniers commits »), un commit ou une période (« depuis 2026-09-01 »).")
+# Sans sélection de commits, le repli cherche un élément nommé (récit TAXO-01N / MIP-01 § 5.3).
+_NAME_IT = (" Pour une question sur le code, nommez l'élément (`VetController`, `OwnerRepository.findById`) "
+            "ou donnez sa référence complète.")
+_AMBIGUOUS = 'Plusieurs éléments correspondent à la question ; précisez lequel : {}.'
+_UNSEARCHED = ("Taxo n'a pas pu conclure à un seul élément (recherche incomplète ou index des noms absent) : "
+               "donnez la référence complète.")
+_NOTHING_AROUND = "Taxo ne connaît aucun fait autour de {} dans cette analyse."
+_NOT_SERVED = "La Tuile de {} n'a pas pu être servie : {}"
+MAX_SHOWN_CANDIDATES = 5
 _EMPTY = {'SELECTED': "Aucun commit de l'historique analysé ne correspond à cette sélection.",
           'NOT_FOUND': "Aucun commit de l'historique analysé ne commence par cet identifiant.",
           'AMBIGUOUS': 'Plusieurs commits commencent par cet identifiant : donnez-en davantage de caractères.',
@@ -174,6 +185,17 @@ def _view(model):
             'data_use': bool(getattr(model, 'data_use', False))}
 
 
+def _unanchored(resolution):
+    """Ce que Taxo dit quand la question ne nomme pas un seul élément : quoi préciser, jamais un choix."""
+    if resolution.status == anchors.NONE:
+        return _SELECT + _NAME_IT
+    if not resolution.candidates:
+        return _UNSEARCHED
+    shown = ', '.join(resolution.candidates[:MAX_SHOWN_CANDIDATES])
+    more = len(resolution.candidates) - MAX_SHOWN_CANDIDATES
+    return _AMBIGUOUS.format(shown + (f' et {more} autre(s)' if more > 0 else ''))
+
+
 class AskMinia:
     """Minia, servie par un ou plusieurs fournisseurs (Ollama, Claude...) : chaque demande peut choisir le sien.
 
@@ -182,12 +204,14 @@ class AskMinia:
     """
 
     def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None,
-                 taxo_query=None):
+                 taxo_query=None, mip=None):
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
         self.history, self.projects, self.query = history, projects, query
         # Protocole Taxo (ARCHITECTURE § 12) : sans lui, Minia recoit toujours un paquet de contexte.
         self.taxo_query = taxo_query
+        # Service MIP (récit TAXO-01N / MIP-01) : la Tuile d'un élément nommé, en repli paquet hors Git.
+        self.mip = mip
         self.models, self.source = _models(models), source
         if default is not None and default not in self.models:
             raise ValueError(f'MINIA_PROVIDER : « {default} » n’est pas configuré ({", ".join(self.models) or "aucun"}).')
@@ -435,16 +459,13 @@ class AskMinia:
                 step = exploration.parse_step(raw)
                 if isinstance(step, exploration.Answer):
                     break
-                step, ignored = exploration.for_operation(step, operations)
                 if calls_left <= 0 or step.key in seen:
                     raise MiniaError(INVALID_ANSWER, 'Minia ne progressait plus (opération répétée ou limite atteinte).')
                 seen.add(step.key)
                 check(cancel)
                 response = exchange.call(bounded(step.operation, step.arguments, space))
-                exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response,
-                                  **({'ignored_arguments': ignored} if ignored else {})})
-                trajectory.append({**_step(step.operation, step.arguments, response),
-                                   **({'ignored': ignored} if ignored else {})})
+                exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
+                trajectory.append(_step(step.operation, step.arguments, response))
                 yield 'minia.operation', trajectory[-1]
                 yield _stage('exploration', 'running', label, len(trajectory))
         except MiniaError as exc:
@@ -507,7 +528,10 @@ class AskMinia:
                   'total_commits': projection['total_commits'], 'not_interpreted': projection['not_interpreted'],
                   'facts_not_sent': 0, 'rejected_citations': [], 'facts': [], 'answer': ''}
         if projection['status'] == 'GLOBAL':
-            yield 'minia.completed', {**result, 'status': NEEDS_SELECTION, 'unknown': _SELECT}
+            if self.taxo_query is None or self.mip is None:
+                yield 'minia.completed', {**result, 'status': NEEDS_SELECTION, 'unknown': _SELECT}
+                return
+            yield from self._anchored_steps(model, question, projection, result, cancel)
             return
         if not projection['facts']:
             yield 'minia.completed', {**result, 'status': NOTHING_KNOWN, 'unknown': _EMPTY[projection['status']]}
@@ -521,6 +545,44 @@ class AskMinia:
         yield 'minia.completed', {**result, 'model': self._model_view(model, served), 'status': ANSWERED, 'answer': answer['answer'], 'unknown': answer['unknown'],
                                   'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
                                   'facts_not_sent': brief.truncated, 'rejected_citations': answer['rejected']}
+
+    def _anchored_steps(self, model, question, projection, result, cancel=None):
+        """Repli paquet sans sélection de commits : l'ancre explicite de la question, sa Tuile MIP, puis Minia
+        n'interprète que cette Tuile. Sans ancre unique, Taxo dit quoi préciser ; le modèle n'est pas appelé."""
+        project = projection['project']
+        exchange = self.taxo_query.open(project['id'], analysis_id=projection['analysis']['id'],
+                                        max_bytes=EXCHANGE_BYTES)
+        trajectory = list(result.get('trajectory') or [])
+        label = 'Taxo cherche l’élément nommé par la question'
+        yield _stage('anchor', 'running', label)
+        found = yield from anchoring.anchor(exchange, self.mip, project['id'], question, trajectory,
+                                            self._capacity(model, SYSTEM_TILE), cancel)
+        resolution = found.resolution
+        yield _stage('anchor', 'done', label, len(resolution.candidates))
+        result = {**result, 'trajectory': trajectory, 'anchor': {
+            'status': resolution.status, 'reference': resolution.anchor,
+            'candidates': list(resolution.candidates[:MAX_SHOWN_CANDIDATES])}}
+        if resolution.status != anchors.FOUND:
+            yield 'minia.completed', {**result, 'status': NEEDS_SELECTION, 'unknown': _unanchored(resolution)}
+            return
+        if found.refused:
+            yield 'minia.completed', {**result, 'status': NOTHING_KNOWN,
+                                      'unknown': _NOT_SERVED.format(resolution.anchor, found.refused)}
+            return
+        brief = briefing.tile(question, resolution.anchor, found.tiles, (project['id'], project['name']),
+                              self._capacity(model, SYSTEM_TILE))
+        result = {**result, 'not_interpreted': list(brief.not_interpreted), 'facts_not_sent': brief.truncated}
+        if not brief.refs:
+            unknown = _NOTHING_AROUND.format(resolution.anchor)
+            yield 'minia.completed', {**result, 'status': NOTHING_KNOWN, 'unknown': unknown}
+            return
+        yield _stage('context', 'done', 'Préparation du contexte')
+        raw, served = yield from self._interpret(model, SYSTEM_TILE, brief, cancel=cancel)
+        answer = parse(raw, brief.refs)
+        yield 'minia.completed', {**result, 'model': self._model_view(model, served), 'status': ANSWERED,
+                                  'answer': answer['answer'], 'unknown': answer['unknown'],
+                                  'facts': [{'ref': ref, **brief.refs[ref]} for ref in answer['cited']],
+                                  'rejected_citations': answer['rejected']}
 
     @staticmethod
     def _interpret(model, system, brief, diff_files=0, cancel=None):
