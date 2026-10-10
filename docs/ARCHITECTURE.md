@@ -939,9 +939,9 @@ Chaque verdict porte ses **limites** (`limits`, TAXO-MINIA-SEC-01) : les zones `
 verdict ne vaut que pour ce qui a été lu : une règle d'URL `CONFIRMED` dont la route porte une sécurité de
 méthode non interprétée est affichée « Confirmée par Taxo, avec limites », la limite à côté. Chaque relation
 garde son sens : la limite d'une relation de sécurité n'accompagne pas un `HANDLED_BY`. Une confirmation
-d'une relation à une seule valeur par sujet (`MATCHED_BY`, `HANDLED_BY`, `AUTHORED_BY`, `TYPED_AS`,
-`WRITTEN_IN`) ne porte que les limites de son objet (une cible ambiguë) : ce qui n'a pas été lu sur le sujet
-ne peut pas lui ajouter une seconde valeur, et ses propres doutes sont dans sa dérivation. Les limites
+ou une réfutation d'une relation à une seule valeur par sujet (`MATCHED_BY`, `HANDLED_BY`, `AUTHORED_BY`,
+`TYPED_AS`, `WRITTEN_IN`) ne porte que les limites de son objet (une cible ambiguë) : ce qui n'a pas été
+lu sur le sujet ne peut pas lui ajouter une seconde valeur, et ses propres doutes sont dans sa dérivation. Les limites
 passent avant les faits dans le budget de la réponse : une limite qui ne tient pas est comptée dans
 `not_sent` (`what: limits`) et ne coûte jamais le verdict ; la confirmation reste affichée « avec limites ».
 

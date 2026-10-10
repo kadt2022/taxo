@@ -1,10 +1,13 @@
 """TAXO-MINIA-SEC-01, E1 : un verdict vaut pour ce que Taxo a lu. Une confirmation porte les limites que Taxo
 connait sur le sujet ou l'objet de l'affirmation, avec leur raison."""
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.bootstrap.database import Base
 from app.main import create_app
+from app.protocol.application.exchange import Exchange
 from tests.method_security_sources import FILES
 
 ENDPOINT = 'endpoint:GET /api/items'
@@ -119,3 +122,13 @@ def test_limits_that_do_not_fit_are_counted_never_cost_the_verdict(taxo):
     assert tight['verdict'] == 'CONFIRMED', 'le verdict reste servi'
     assert tight['limits'] == []
     assert {'what': 'limits', 'count': 1, 'reason': 'BUDGET'} in tight['not_sent'], 'la limite tue est comptée'
+
+
+@pytest.mark.parametrize('verdict, expected', [('CONFIRMED', []), ('REFUTED', []), ('NOT_PROVEN', ['commit:abc'])])
+def test_a_decisive_verdict_on_a_single_valued_relation_ignores_what_was_not_read_on_its_subject(verdict, expected):
+    gap = {'subject': 'commit:abc', 'coverage_type': 'NOT_INTERPRETED', 'reason': 'chemin non représentable',
+           'produced_by': {'producer_id': 'taxo.git'}}
+    git = SimpleNamespace(relations={'AUTHORED_BY'}, coverage=[gap])
+    exchange = SimpleNamespace(analyzers=lambda: [git])
+    limits = Exchange.limits(exchange, 'AUTHORED_BY', {'commit:abc', 'person:x@example.org'}, verdict, 'commit:abc')
+    assert [limit['subject'] for limit in limits] == expected, 'l’auteur établi exclut tout autre'

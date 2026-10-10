@@ -49,6 +49,8 @@ _REFERENCE_TYPES = frozenset(kind for sources, targets, _ in RELATIONS.values() 
 NATURES = (_ASSERTION, 'ABSENCE', 'COVERAGE')
 # Relations a une seule valeur par sujet : une confirmation n'est pas completee par ce qui n'a pas ete lu, et ses
 # propres doutes sont dans sa derivation (une route correspond a un motif, une requete a un traitement).
+# Verdicts tranches : une relation a une seule valeur les rend sur la valeur etablie du sujet.
+_DECISIVE = frozenset({'CONFIRMED', 'REFUTED'})
 _SINGLE_VALUED = frozenset({'AUTHORED_BY', 'HANDLED_BY', 'MATCHED_BY', 'TYPED_AS', 'WRITTEN_IN'})
 V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'get_diff', 'verify_claim')
 # Operations reservees d'ARCHITECTURE § 12 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
@@ -297,8 +299,9 @@ class Exchange:
         leur raison (TAXO-MINIA-SEC-01, E1). Un verdict vaut pour ce qui a ete lu : une confirmation qui porte ces
         limites ne couvre pas ce qu'elles taisent (une regle d'URL confirmee, la securite de methode de la meme
         route non interpretee). Une confirmation d'une relation a une seule valeur ne porte que les limites de son
-        objet (une cible ambigue) : ce qui n'a pas ete lu sur le sujet ne peut pas lui ajouter une seconde valeur."""
-        if verdict == 'CONFIRMED' and relation in _SINGLE_VALUED:
+        objet (une cible ambigue) : ce qui n'a pas ete lu sur le sujet ne peut pas lui ajouter une seconde valeur.
+        Une refutation de cette relation vaut de meme : la valeur etablie du sujet en exclut toute autre."""
+        if verdict in _DECISIVE and relation in _SINGLE_VALUED:
             concerned = set(concerned) - {subject}
         return [{'subject': fact['subject'], 'type': fact['coverage_type'],
                  'producer': fact.get('produced_by', {}).get('producer_id'), 'reason': fact.get('reason')}
