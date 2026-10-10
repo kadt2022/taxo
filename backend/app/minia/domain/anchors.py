@@ -23,8 +23,8 @@ _QUOTED = re.compile(r'`([^`\n]{1,200})`')
 # Un nom de code : des segments séparés par . # $ ou /, et peut-être une liste de paramètres.
 _CODE = re.compile(r'[A-Za-z_][\w$.#/<>]*(?:\([\w$.<>\[\], ]*\))?')
 _INNER_CAPITAL = re.compile(r'[a-z\d][A-Z]')
-# Les méthodes de HTTP (RFC 9110), pas celles d'un framework.
-_VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE'
+# Les méthodes de HTTP (RFC 9110), et `ANY`, la route servie pour toute méthode (`endpoint:ANY /…` du contrat).
+_VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|ANY'
 # Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc ; une clé de route garde le
 # blanc entre son verbe et son chemin (`endpoint:GET /api/students`).
 # Jamais au milieu d'un chemin : `{id:[0-9]+}` est une variable de route, pas une référence.
@@ -33,7 +33,21 @@ _REFERENCE = re.compile(r'(?<![{/])\b[a-z][a-z-]*:(?:(?:' + _VERBS + r') /\S+|\S
 # barre isolée), et peut-être son verbe en majuscules juste avant. Le chemin va jusqu'au prochain blanc, tel qu'il est
 # écrit (`/api/{id:[0-9]+}`), moins la ponctuation qui le suit dans la phrase.
 _ROUTE = re.compile(r'(?<![\w/])(?:(?:' + _VERBS + r')\s+)?/[A-Za-z_{*]\S*')
-_TRAILING = '?!.,;:'
+_TRAILING = '?!.,;:"\'»”’'
+_CLOSING = {')': '(', ']': '['}
+_BLANKS = re.compile(r'\s+')
+
+
+def _trimmed(text):
+    """Le texte cité, sans la ponctuation ni les guillemets qui le suivent dans la phrase ; une parenthèse ou un
+    crochet fermant n'est retiré que s'il ne ferme rien dans le texte (`(GET /api/x)`, pas `#c(String)`)."""
+    while text:
+        last = text[-1]
+        if last in _TRAILING or (last in _CLOSING and text.count(_CLOSING[last]) < text.count(last)):
+            text = text[:-1]
+        else:
+            return text
+    return text
 
 
 @dataclass(frozen=True)
@@ -82,13 +96,14 @@ def candidates(question):
 
     rest = question
     for match in _REFERENCE.finditer(question):
-        keep(Candidate(KEY, match.group(0).rstrip('?!.,;')))
+        keep(Candidate(KEY, _trimmed(match.group(0))))
         rest = rest.replace(match.group(0), ' ')
     for match in _QUOTED.finditer(rest):
         keep(Candidate(NAME, match.group(1).strip()[:MAX_NAME]))
     rest = _QUOTED.sub(' ', rest)
     for match in _ROUTE.finditer(rest):
-        keep(Candidate(NAME, match.group(0).rstrip(_TRAILING)[:MAX_NAME]))
+        # Un seul blanc entre le verbe et le chemin, comme dans la clé.
+        keep(Candidate(NAME, _BLANKS.sub(' ', _trimmed(match.group(0)))[:MAX_NAME]))
     rest = _ROUTE.sub(' ', rest)
     for match in _CODE.finditer(rest):
         token = match.group(0).rstrip('.')
