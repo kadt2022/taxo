@@ -545,8 +545,8 @@ l'appel (`minia/application/protected_model.py`, `minia/domain/confidentiality.p
   mentions d'une même personne gardent le même pseudonyme. Tous les auteurs de l'historique Git sont
   connus d'avance : une question qui en nomme un (nom de plusieurs mots ou courriel) ne le transmet pas ;
 - les secrets reconnus (mot de passe, jeton, clé privée, identifiants dans une URL) deviennent `******`.
-  Seule la valeur est masquée, en entier quelle que soit sa forme (citée, sur plusieurs lignes, bloc YAML) : `password = "******"` montre encore un mot
-  de passe écrit en dur ;
+  Seule la valeur est masquée, en entier quelle que soit sa forme (citée, sur plusieurs lignes, bloc YAML) :
+  `password = "******"` montre encore un mot de passe écrit en dur ;
 - les trailers des messages de commit (`Co-Authored-By`, `Signed-off-by`…) sont retirés ;
 - un message de forme inattendue, ou dans lequel une donnée protégée subsisterait, n'est pas envoyé
   (`MINIA_CONFIDENTIALITY_REFUSED`).
