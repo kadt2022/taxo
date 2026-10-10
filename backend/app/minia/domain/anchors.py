@@ -2,14 +2,17 @@
 
 Quand Minia ne peut pas explorer, Taxo cherche lui-même, sans modèle, de quoi la question parle : une référence
 complète (`symbol:java:…#register(String)`), ou un nom qui a la forme d'un nom de code (`VetController`,
-`OwnerRepository.findById`, ou tout texte entre accents graves). Un mot ordinaire n'est jamais cherché : « service »
-trouverait un paquet par hasard. Aucune règle propre à un langage.
+`OwnerRepository.findById`, ou tout texte entre accents graves), ou une route HTTP (`GET /api/students`,
+`/api/admin/**`). Un mot ordinaire n'est jamais cherché : « service » trouverait un paquet par hasard. Aucune règle
+propre à un langage : une route se reconnaît à sa forme HTTP (un chemin qui commence par `/`, peut-être précédé de
+son verbe en majuscules), pas à un framework.
 
 Une ancre n'est retenue que si elle est **unique** : une seule référence, trouvée par des recherches épuisées
 (aucune reprise, rien de non transmis). Une page tronquée ne prouve rien ; plusieurs références restent des
 candidates, et c'est l'utilisateur qui choisit, jamais Taxo.
 """
 import re
+import unicodedata
 from dataclasses import dataclass
 
 MAX_CANDIDATES = 4
@@ -17,19 +20,69 @@ MAX_NAME = 200
 NAME, KEY = 'NAME', 'KEY'
 FOUND, AMBIGUOUS, NONE = 'FOUND', 'AMBIGUOUS', 'NONE'
 
-# Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc.
-_REFERENCE = re.compile(r'\b[a-z][a-z-]*:\S+')
 _QUOTED = re.compile(r'`([^`\n]{1,200})`')
 # Un nom de code : des segments séparés par . # $ ou /, et peut-être une liste de paramètres.
 _CODE = re.compile(r'[A-Za-z_][\w$.#/<>]*(?:\([\w$.<>\[\], ]*\))?')
 _INNER_CAPITAL = re.compile(r'[a-z\d][A-Z]')
+# Les méthodes de HTTP (RFC 9110), et `ANY`, la route servie pour toute méthode (`endpoint:ANY /…` du contrat).
+_VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|ANY'
+# Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc ; une clé de route garde le
+# blanc entre son verbe et son chemin (`endpoint:GET /api/students`), quelle que soit la casse du verbe.
+# Elle commence un mot (après un blanc, et peut-être une parenthèse ou un guillemet ouvrants), jamais au milieu :
+# dans `/api/{id:(a:b)}`, rien n'est une référence.
+_REFERENCE = re.compile(r'(?:^|(?<=\s))[("\'«`]*(?P<reference>[a-z][a-z-]*:(?:(?i:' + _VERBS + r') /\S*|\S+))')
+# Une route HTTP : un chemin qui commence par `/` hors d'un mot (jamais `et/ou` ni `2026/09`), suivi d'autre chose
+# qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant ; la racine `/` seule, avec son verbe
+# (jamais le début de `//…`). Le chemin va jusqu'au prochain blanc, tel qu'il est écrit (`/api/{id:[0-9]+}`), moins
+# la ponctuation qui le suit dans la phrase.
+_ROUTE_FORM = r'(?:(?:' + _VERBS + r')\s+/(?:[^\s/]\S*|(?!/))|/[^\s/]\S*)'
+_ROUTE = re.compile(r'(?<![\w/])' + _ROUTE_FORM)
+_WHOLE_ROUTE = re.compile(_ROUTE_FORM)
+# Les types du contrat qui nomment une route (ARCHITECTURE § 5) ; aucune autre référence n'est une route.
+ROUTE_TYPES = frozenset({'endpoint', 'route-pattern'})
+_VERB_SET = frozenset(verb.casefold() for verb in _VERBS.split('|'))
+_TRAILING = '?!.,;:"\'»”’`'
+_CLOSING = {')': '(', ']': '['}
+_BLANKS = re.compile(r'\s+')
+
+
+def _trimmed(text):
+    """Le texte cité, sans la ponctuation ni les guillemets qui le suivent dans la phrase ; une parenthèse ou un
+    crochet fermant n'est retiré que s'il ne ferme rien dans le texte (`(GET /api/x)`, pas `#c(String)`)."""
+    while text:
+        last = text[-1]
+        if last in _TRAILING or (last in _CLOSING and text.count(_CLOSING[last]) < text.count(last)):
+            text = text[:-1]
+        else:
+            return text
+    return text
 
 
 @dataclass(frozen=True)
 class Candidate:
-    """Ce que la question nomme : une référence complète (`KEY`), ou un nom à retrouver (`NAME`)."""
+    """Ce que la question nomme : une référence complète (`KEY`), ou un nom à retrouver (`NAME`). Une route
+    (`route`) se cherche par son nom, mais ne retient que les références dont la clé est cette route entière."""
     mode: str
     text: str
+    route: bool = False
+
+    def accepts(self, reference):
+        """La recherche par nom compare une fin de clé : `/api/students` y trouverait aussi `GET /v1/api/students`.
+        Une route ne retient qu'un endpoint ou un motif de route dont la clé est égale à la route citée : avec son
+        verbe s'il est cité, sinon avec ou sans verbe (`endpoint:POST /api/students`, `route-pattern:/api/students`)."""
+        if not self.route:
+            return True
+        kind, _, key = reference.partition(':')
+        if kind not in ROUTE_TYPES:
+            return False
+        # Le verbe se compare sans casse ; le chemin tel qu'il est écrit : `/API` et `/api` sont deux routes.
+        verb, blank, path = unicodedata.normalize('NFC', key).partition(' ')
+        if not blank:
+            verb, path = '', verb
+        route_verb, route_blank, route_path = unicodedata.normalize('NFC', self.text).rpartition(' ')
+        if route_blank:
+            return verb.casefold() == route_verb.casefold() and path == route_path
+        return path == route_path and (not verb or verb.casefold() in _VERB_SET)
 
     @property
     def search(self):
@@ -71,11 +124,22 @@ def candidates(question):
 
     rest = question
     for match in _REFERENCE.finditer(question):
-        keep(Candidate(KEY, match.group(0).rstrip('?!.,;')))
-        rest = rest.replace(match.group(0), ' ')
+        keep(Candidate(KEY, _trimmed(match.group('reference'))))
+        rest = rest.replace(match.group('reference'), ' ')
     for match in _QUOTED.finditer(rest):
-        keep(Candidate(NAME, match.group(1).strip()[:MAX_NAME]))
+        quoted = match.group(1).strip()
+        # Une route entre accents graves garde le sens d'une route : la route entière, jamais une fin de clé.
+        if _WHOLE_ROUTE.fullmatch(quoted):
+            quoted = _BLANKS.sub(' ', quoted)
+        keep(Candidate(NAME, quoted[:MAX_NAME], route=bool(_WHOLE_ROUTE.fullmatch(quoted))))
     rest = _QUOTED.sub(' ', rest)
+    for match in _ROUTE.finditer(rest):
+        # Un seul blanc entre le verbe et le chemin, comme dans la clé.
+        route = _BLANKS.sub(' ', _trimmed(match.group(0)))
+        # Une route trop longue n'est pas cherchée : tronquée, elle en nommerait une autre.
+        if route.rstrip('/') and len(route) <= MAX_NAME:
+            keep(Candidate(NAME, route, route=True))
+    rest = _ROUTE.sub(' ', rest)
     for match in _CODE.finditer(rest):
         token = match.group(0).rstrip('.')
         if _looks_like_code(token):
