@@ -291,6 +291,11 @@ class _Run:
             self._gap(endpoint.reference, scope, f'sécurité de méthode non interprétée (méthode {" ".join(sealed)} : '
                                                  'non interceptée par un proxy Spring)')
             return
+        if 'final' in endpoint.java_type.modifiers:
+            # Spring Boot proxie par sous-classe : une classe final ne peut pas l'etre.
+            self._gap(endpoint.reference, scope, 'sécurité de méthode non interprétée (classe final : non proxiable '
+                                                 'par sous-classe)')
+            return
         enabling = self._enabling(endpoint)
         if enabling is None:
             return

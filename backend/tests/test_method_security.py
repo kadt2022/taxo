@@ -248,6 +248,13 @@ def test_a_method_a_spring_proxy_cannot_intercept_is_never_protected():
         assert any(f'méthode {modifier}' in reason for reason in reasons(output, ENDPOINT))
 
 
+def test_a_final_controller_is_never_assumed_proxied():
+    sealed = controller().replace('public class ItemController', 'public final class ItemController')
+    output = evaluate(shop(web=sealed))
+    assert method_protection(output) == []
+    assert any('classe final' in reason for reason in reasons(output, ENDPOINT))
+
+
 def test_without_a_spring_boot_application_the_enabling_is_never_assumed_to_apply():
     files = shop()
     del files['src/main/java/com/example/shop/ShopApplication.java']
