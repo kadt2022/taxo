@@ -6,6 +6,7 @@ analysis by analysis, from `analysis_references`, which keeps every reference as
 here, copied from the application at the time of writing (a test checks that they still agree): a migration never
 imports the application, which may change after it.
 """
+import time
 import unicodedata
 
 import sqlalchemy as sa
@@ -16,6 +17,9 @@ revision = '010'
 down_revision = '009'
 
 KEY_LENGTH = 256
+# Références lues puis noms écrits par lot : la mémoire reste bornée, même pour une très grosse analyse.
+_BATCH = 2000
+_INSERT_CHUNK = 500
 SEPARATORS = frozenset('./#:$')
 _TABLE = 'analysis_reference_names'
 _INDEX = 'ix_analysis_reference_names_type'
@@ -69,38 +73,80 @@ def _columns():
             sa.Column('type', sa.String, nullable=False)]
 
 
-def _create():
-    """Table et index, s'ils manquent : une migration interrompue puis reprise ne recrée rien."""
+def _create_table():
+    """La table, si elle manque : une migration interrompue puis reprise ne recrée rien."""
     inspector = sa.inspect(op.get_bind())
     if _TABLE in inspector.get_table_names():
         _say(f'Table {_TABLE} déjà présente (reprise).')
-        table = sa.Table(_TABLE, sa.MetaData(), *_columns())
-        present = {index['name'] for index in inspector.get_indexes(_TABLE)}
-    else:
-        table = op.create_table(_TABLE, *_columns())
-        present = set()
-    if _INDEX not in present:
-        op.create_index(_INDEX, _TABLE, ['scan_id', 'type', 'name_key', 'reference_hash'])
-    return table
+        return sa.Table(_TABLE, sa.MetaData(), *_columns())
+    return op.create_table(_TABLE, *_columns())
+
+
+def _create_index():
+    """L'index de recherche, après le remplissage : bâti une fois plutôt que tenu à jour ligne à ligne."""
+    if _INDEX in {index['name'] for index in sa.inspect(op.get_bind()).get_indexes(_TABLE)}:
+        return
+    _say('Création de l\'index de recherche par nom...')
+    begun = time.monotonic()
+    op.create_index(_INDEX, _TABLE, ['scan_id', 'type', 'name_key', 'reference_hash'])
+    _say(f'Index créé en {time.monotonic() - begun:.1f} s.')
+
+
+def _pages(connection, scan_id):
+    """Les références d'une analyse, par pages bornées dans l'ordre de la clé primaire."""
+    after = ''
+    while True:
+        page = connection.execute(
+            sa.select(_references.c.reference_hash, _references.c.type, _references.c.reference)
+            .where(_references.c.scan_id == scan_id, _references.c.reference_hash > after)
+            .order_by(_references.c.reference_hash).limit(_BATCH)).all()
+        if not page:
+            return
+        yield page
+        after = page[-1].reference_hash
+
+
+def _index_analysis(connection, insert, scan_id, number, count):
+    """Une analyse entière dans la transaction de l'appelant ; renvoie (références, noms)."""
+    references = names = 0
+    for page in _pages(connection, scan_id):
+        values = [{'scan_id': scan_id, 'name_key': name, 'reference_hash': reference_hash, 'type': kind}
+                  for reference_hash, kind, reference in page for name in name_keys(reference)]
+        for start in range(0, len(values), _INSERT_CHUNK):
+            connection.execute(insert, values[start:start + _INSERT_CHUNK])
+        references, names = references + len(page), names + len(values)
+        if references % (_BATCH * 50) == 0:
+            _say(f'  analyse {number}/{count} : {references} références lues...')
+    return references, names
+
+
+def _fill(engine, table):
+    dialect = postgresql if engine.dialect.name == 'postgresql' else sqlite
+    insert = dialect.insert(table).on_conflict_do_nothing(index_elements=['scan_id', 'name_key', 'reference_hash'])
+    with engine.connect() as connection:
+        analyses = connection.scalars(sa.select(_references.c.scan_id).distinct().order_by(_references.c.scan_id)).all()
+    _say(f'{len(analyses)} analyses à indexer par nom ; analysis_references reste intacte.')
+    total = 0
+    for number, scan_id in enumerate(analyses, 1):
+        begun = time.monotonic()
+        with engine.begin() as connection:
+            # Une analyse s'écrit dans une seule transaction : une ligne présente veut dire analyse complète.
+            if connection.scalar(sa.select(table.c.scan_id).where(table.c.scan_id == scan_id).limit(1)):
+                _say(f'  analyse {number}/{len(analyses)} : déjà indexée (reprise).')
+                continue
+            references, names = _index_analysis(connection, insert, scan_id, number, len(analyses))
+        total += names
+        _say(f'  analyse {number}/{len(analyses)} : {names} noms pour {references} références '
+             f'en {time.monotonic() - begun:.1f} s.')
+    _say(f'{total} noms indexés pour {len(analyses)} analyses.')
 
 
 def upgrade():
-    table = _create()
-    connection = op.get_bind()
-    dialect = postgresql if connection.dialect.name == 'postgresql' else sqlite
-    insert = dialect.insert(table).on_conflict_do_nothing(index_elements=['scan_id', 'name_key', 'reference_hash'])
-    analyses = connection.scalars(sa.select(_references.c.scan_id).distinct().order_by(_references.c.scan_id)).all()
-    total = 0
-    for scan_id in analyses:
-        values = [{'scan_id': scan_id, 'name_key': name, 'reference_hash': reference_hash, 'type': kind}
-                  for reference_hash, kind, reference in connection.execute(
-                      sa.select(_references.c.reference_hash, _references.c.type, _references.c.reference)
-                      .where(_references.c.scan_id == scan_id))
-                  for name in name_keys(reference)]
-        for start in range(0, len(values), 500):
-            connection.execute(insert, values[start:start + 500])
-        total += len(values)
-    _say(f'{total} noms indexés pour {len(analyses)} analyses.')
+    table = _create_table()
+    # Valider la table, puis une transaction par analyse : une interruption garde ce qui est fait.
+    with op.get_context().autocommit_block():
+        _fill(op.get_bind().engine, table)
+        _create_index()
 
 
 def downgrade():
