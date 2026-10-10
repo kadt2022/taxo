@@ -20,6 +20,7 @@ _METHOD_CONFIGURATION = 'org.springframework.security.config.annotation.method.c
 ENABLE_METHOD_SECURITY = f'{_METHOD_CONFIGURATION}.EnableMethodSecurity'
 ENABLE_GLOBAL_METHOD_SECURITY = f'{_METHOD_CONFIGURATION}.EnableGlobalMethodSecurity'
 PRE_POST = 'prePostEnabled'
+MODE, PROXY = 'mode', 'PROXY'
 CSRF = 'csrf'
 DISABLE = 'disable'
 CSRF_DISABLED = 'csrf.disable()'
@@ -40,6 +41,8 @@ class Enabling:
     qualified: str
     state: str
     written: str | None = None
+    # L'attribut qui laisse l'activation non etablie, tel qu'ecrit (`prePostEnabled = Flags.ON`, `mode = ASPECTJ`).
+    unread: str | None = None
 
     @property
     def symbol(self):
@@ -86,22 +89,28 @@ def enablings(java_file, types=()):
         for annotation in java_type.annotations:
             for qualified in (ENABLE_METHOD_SECURITY, ENABLE_GLOBAL_METHOD_SECURITY):
                 if resolves(annotation, java_file, qualified, types):
-                    state, written = _state(annotation, qualified)
+                    state, written, unread = _state(annotation, qualified)
                     found.append(Enabling(java_file.path, java_type.qualified_name, annotation, qualified, state,
-                                          written))
+                                          written, unread))
     return found
 
 
 def _state(annotation, qualified):
-    """`@EnableMethodSecurity` active `@PreAuthorize` par defaut ; `@EnableGlobalMethodSecurity` seulement avec
-    `prePostEnabled = true`. Un attribut qui n'est pas un litteral booleen laisse l'etat inconnu."""
+    """(etat, `prePostEnabled` ecrit, attribut non lu). `@EnableMethodSecurity` active `@PreAuthorize` par defaut ;
+    `@EnableGlobalMethodSecurity` seulement avec `prePostEnabled = true`. Un attribut qui n'est pas un litteral
+    booleen laisse l'etat inconnu, comme un `mode` autre que le proxy par defaut : le tissage AspectJ qu'il exige
+    n'est pas lu."""
     values = annotation.arguments.get(PRE_POST)
     written = values[0].written.strip() if values and len(values) == 1 else None
     if values and written not in ('true', 'false'):
-        return UNKNOWN, written
+        return UNKNOWN, written, f'{PRE_POST} = {written}'
+    modes = annotation.arguments.get(MODE)
+    mode = modes[0].written.strip() if modes and len(modes) == 1 else None
+    if modes and (mode is None or mode.rsplit('.', 1)[-1] != PROXY):
+        return UNKNOWN, written, f'{MODE} = {mode}'
     if written is None:
-        return (ENABLED if qualified == ENABLE_METHOD_SECURITY else DISABLED), None
-    return (ENABLED if written == 'true' else DISABLED), written
+        return (ENABLED if qualified == ENABLE_METHOD_SECURITY else DISABLED), None, None
+    return (ENABLED if written == 'true' else DISABLED), written, None
 
 
 def guard(java_file, java_type, method, handler, types=()):

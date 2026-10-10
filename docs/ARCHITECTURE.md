@@ -452,8 +452,9 @@ usage. Un manifeste illisible est `NOT_INTERPRETED`.
   `spring-security.method-authorization-applies`), sur `HANDLED_BY`, `AUTHORIZED_BY` et `ANNOTATED_WITH`.
   C'est la seule protection déduite via `HANDLED_BY` : la garde est sur la méthode qui traite la route.
   Conditions : au moins une application Spring Boot est lue, chaque application qui sert la route charge un
-  type qui active `@PreAuthorize` (§ 7.6), la méthode n'est ni `final`, ni `private`, ni `static` (un proxy
-  Spring ne l'intercepterait pas), et l'expression ne peut que restreindre. Cette protection s'ajoute à celle de la règle d'URL, sans la
+  type qui active `@PreAuthorize` (§ 7.6) par le proxy par défaut (un `mode` AspectJ, dont le tissage n'est
+  pas lu, laisse l'activation non établie), la méthode n'est ni `final`, ni `private`, ni `static` (Spring
+  Boot proxie par sous-classe : il ne l'intercepterait pas), et l'expression ne peut que restreindre. Cette protection s'ajoute à celle de la règle d'URL, sans la
   remplacer. Une annotation qui ne se résout pas vers Spring, une expression non résolue ou qui peut tout
   permettre, une activation non établie : `NOT_INTERPRETED`, l'`AUTHORIZED_BY` lu restant un fait. Une garde
   portée par une méta-annotation des sources (`@IsAdmin`) ou par un supertype lu (le type, ou la même

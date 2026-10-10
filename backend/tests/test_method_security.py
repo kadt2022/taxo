@@ -183,6 +183,14 @@ def test_an_enabling_attribute_that_is_not_a_literal_is_declared_not_interpreted
     assert any('prePostEnabled = Flags.ON' in reason for reason in reasons(output, CONFIG))
 
 
+def test_an_aspectj_mode_is_declared_not_interpreted_never_assumed_woven():
+    output = evaluate(shop(security(annotation='@EnableMethodSecurity(mode = AdviceMode.ASPECTJ)')))
+    assert method_protection(output) == []
+    assert any('mode = AdviceMode.ASPECTJ' in reason for reason in reasons(output, CONFIG))
+    proxy = evaluate(shop(security(annotation='@EnableMethodSecurity(mode = AdviceMode.PROXY)')))
+    assert len(method_protection(proxy)) == 1, 'le proxy par défaut, écrit, reste lu'
+
+
 def test_an_expression_that_may_permit_everything_is_observed_never_concluded():
     output = evaluate(shop(web=controller('@PreAuthorize("@guard.check(authentication) or permitAll()")')))
     [guard] = found(output, 'AUTHORIZED_BY', HANDLER)

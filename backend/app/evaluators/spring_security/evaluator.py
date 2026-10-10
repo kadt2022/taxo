@@ -238,7 +238,7 @@ class _Run:
         self._add(_observed(enabling.symbol, 'ANNOTATED_WITH', enabling.reference, [evidence], qualifiers))
         if enabling.state == methods.UNKNOWN:
             self._gap(enabling.symbol, f'file:{enabling.path}',
-                      f'activation de la sécurité de méthode non établie ({methods.PRE_POST} = {enabling.written})')
+                      f'activation de la sécurité de méthode non établie ({enabling.unread})')
 
     def _csrf_facts(self, setting):
         if not setting.disabled:
