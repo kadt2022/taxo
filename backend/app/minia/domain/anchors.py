@@ -28,8 +28,9 @@ _INNER_CAPITAL = re.compile(r'[a-z\d][A-Z]')
 _VERBS = 'GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|ANY'
 # Une référence complète : un type en minuscules, puis sa clé, jusqu'au prochain blanc ; une clé de route garde le
 # blanc entre son verbe et son chemin (`endpoint:GET /api/students`), quelle que soit la casse du verbe.
-# Jamais au milieu d'un chemin : `{id:[0-9]+}` ou `{v:a:b}` est une variable de route, pas une référence.
-_REFERENCE = re.compile(r'(?<![{/:])\b[a-z][a-z-]*:(?:(?i:' + _VERBS + r') /\S*|\S+)')
+# Elle commence un mot (après un blanc, une parenthèse ou un guillemet), jamais au milieu : dans `/api/{id:[a-z:]+}`, rien n'est
+# une référence.
+_REFERENCE = re.compile(r'(?<![^\s("\'«`])[a-z][a-z-]*:(?:(?i:' + _VERBS + r') /\S*|\S+)')
 # Une route HTTP : un chemin qui commence par `/` hors d'un mot (jamais `et/ou` ni `2026/09`), suivi d'autre chose
 # qu'une barre ou un blanc, et peut-être son verbe en majuscules juste avant ; la racine `/` seule, avec son verbe
 # (jamais le début de `//…`). Le chemin va jusqu'au prochain blanc, tel qu'il est écrit (`/api/{id:[0-9]+}`), moins
@@ -134,8 +135,9 @@ def candidates(question):
     rest = _QUOTED.sub(' ', rest)
     for match in _ROUTE.finditer(rest):
         # Un seul blanc entre le verbe et le chemin, comme dans la clé.
-        route = _BLANKS.sub(' ', _trimmed(match.group(0)))[:MAX_NAME]
-        if route.rstrip('/'):
+        route = _BLANKS.sub(' ', _trimmed(match.group(0)))
+        # Une route trop longue n'est pas cherchée : tronquée, elle en nommerait une autre.
+        if route.rstrip('/') and len(route) <= MAX_NAME:
             keep(Candidate(NAME, route, route=True))
     rest = _ROUTE.sub(' ', rest)
     for match in _CODE.finditer(rest):

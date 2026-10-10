@@ -264,6 +264,8 @@ def test_a_search_cut_before_its_end_concludes_nothing():
     ('Que fait GET //admin ?', []),
     ('Et endpoint:get /api/x ?', [('KEY', 'endpoint:get /api/x')]),
     ('Que fait GET /api/{v:foo:bar} ?', [('NAME', 'GET /api/{v:foo:bar}')]),
+    ('Que fait GET /api/{id:[a-z:]+} ?', [('NAME', 'GET /api/{id:[a-z:]+}')]),
+    ('Que fait GET /' + 'a' * 200 + ' ?', []),
     ('Que fait GET /123 ou /-interne ? Et / seul, /? ou //x ?', [('NAME', 'GET /123'), ('NAME', '/-interne')]),
     ('Que fait GET /api/{id:[0-9]+} ?', [('NAME', 'GET /api/{id:[0-9]+}')]),
     ('Que sert ANY /api/ping, (GET /api/x) et « endpoint:ANY /api/y » ?',
