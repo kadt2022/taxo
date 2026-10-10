@@ -257,9 +257,14 @@ class _Run:
         if others:
             self._gap(endpoint.reference, scope,
                       f'sécurité de méthode non interprétée ({", ".join("@" + name for name in others)})')
-        if not endpoint.methods or not any(item.simple_name == PRE_AUTHORIZE for item in annotations):
+        if not endpoint.methods:
             return
         java_file = self.analysis.run.types[endpoint.java_type.qualified_name][0]
+        if not any(item.simple_name == PRE_AUTHORIZE for item in annotations):
+            hidden = methods.hidden(java_file, endpoint.java_type, endpoint.methods[0], self.deployment.types)
+            if hidden:
+                self._gap(endpoint.reference, scope, f'sécurité de méthode non interprétée ({", ".join(hidden)})')
+            return
         guard = methods.guard(java_file, endpoint.java_type, endpoint.methods[0], endpoint.handler)
         if guard is None:
             self._gap(endpoint.reference, scope, 'sécurité de méthode non interprétée (@PreAuthorize non résolue '

@@ -454,9 +454,11 @@ usage. Un manifeste illisible est `NOT_INTERPRETED`.
   Conditions : chaque application qui sert la route charge un type qui active `@PreAuthorize` (§ 7.6),
   et l'expression ne peut que restreindre. Cette protection s'ajoute à celle de la règle d'URL, sans la
   remplacer. Une annotation qui ne se résout pas vers Spring, une expression non résolue ou qui peut tout
-  permettre, une activation non établie : `NOT_INTERPRETED`, l'`AUTHORIZED_BY` lu restant un fait.
+  permettre, une activation non établie : `NOT_INTERPRETED`, l'`AUTHORIZED_BY` lu restant un fait. Une garde
+  portée par une méta-annotation des sources (`@IsAdmin`) ou par un supertype lu (le type, ou la même
+  signature) n'est pas lue : `NOT_INTERPRETED`, avec sa raison.
 - **CSRF** : la méthode de la chaîne qui écrit `csrf().disable()`, `csrf(c -> c.disable())` ou
-  `csrf(AbstractHttpConfigurer::disable)` `CONFIGURES` `policy-rule:csrf.disable()` (`OBSERVED`). Toute
+  `csrf(AbstractHttpConfigurer::disable)` (le type de Spring, par son nom qualifié ou son import) `CONFIGURES` `policy-rule:csrf.disable()` (`OBSERVED`). Toute
   autre configuration CSRF est `NOT_INTERPRETED` ; sans appel `csrf`, rien n'est affirmé.
 - Autres annotations de sécurité de méthode (`@Secured`, `@RolesAllowed`, `@PostAuthorize`…) et
   mécanismes maison (filtres, `AuthorizationManager`) : `NOT_INTERPRETED`, la protection réelle peut s'y

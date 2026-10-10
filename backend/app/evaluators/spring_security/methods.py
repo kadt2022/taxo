@@ -23,6 +23,11 @@ PRE_POST = 'prePostEnabled'
 CSRF = 'csrf'
 DISABLE = 'disable'
 CSRF_DISABLED = 'csrf.disable()'
+CONFIGURER = 'org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer'
+# Annotations de securite de methode, par nom simple : une meta-annotation ou un supertype qui en porte une garde
+# peut-etre la methode, sans que ce module le lise.
+SECURITY_ANNOTATIONS = {'PreAuthorize', 'PostAuthorize', 'PreFilter', 'PostFilter', 'Secured', 'RolesAllowed',
+                        'DenyAll', 'PermitAll'}
 ENABLED, DISABLED, UNKNOWN = 'enabled', 'disabled', 'unknown'
 
 
@@ -70,18 +75,7 @@ class Csrf:
 
 def resolves(annotation, java_file, qualified):
     """Vrai si l'annotation designe `qualified` par le code ecrit : nom qualifie, import explicite ou import du paquetage."""
-    if '.' in annotation.name:
-        return annotation.name == qualified
-    simple = qualified.rsplit('.', 1)[-1]
-    if annotation.name != simple:
-        return False
-    imports = [name for name, static in java_file.imports if not static]
-    explicit = [name for name in imports if name.rsplit('.', 1)[-1] == simple]
-    if explicit:
-        return explicit == [qualified]
-    if any(item.name == simple for item in java_file.types):
-        return False
-    return f'{qualified.rpartition(".")[0]}.*' in imports
+    return _names(java_file, annotation.name, qualified)
 
 
 def enablings(java_file):
@@ -134,14 +128,16 @@ def csrf(java_file):
             if call.name != CSRF:
                 continue
             following = chain.calls[index + 1] if index + 1 < len(chain.calls) else None
-            disabled = _disables(call, following)
+            disabled = _disables(java_file, call, following)
             end = following.line_end if disabled and not call.arguments else call.line_end
             found.append(Csrf(java_file.path, symbol, call.line_start, end, disabled))
     return found
 
 
-def _disables(call, following):
-    """Vrai pour `csrf().disable()`, `csrf(c -> c.disable())` et `csrf(AbstractHttpConfigurer::disable)`."""
+def _disables(java_file, call, following):
+    """Vrai pour `csrf().disable()`, `csrf(c -> c.disable())` et `csrf(AbstractHttpConfigurer::disable)`, ce dernier
+    seulement si `AbstractHttpConfigurer` est celui de Spring : une methode `disable` d'un autre type peut ne rien
+    desactiver."""
     if not call.arguments:
         return following is not None and following.name == DISABLE and not following.arguments
     if len(call.arguments) != 1:
@@ -149,6 +145,53 @@ def _disables(call, following):
     argument = call.arguments[0]
     function = argument.function
     if function is None:
-        return argument.value.written.replace(' ', '').endswith(f'::{DISABLE}')
+        owner, _, name = argument.value.written.replace(' ', '').partition('::')
+        return name == DISABLE and _names(java_file, owner, CONFIGURER)
     return (function.complete and len(function.parameters) == 1 and len(function.chains) == 1
             and function.chains[0].receiver == function.parameters[0] and function.chains[0].names == (DISABLE,))
+
+
+def _names(java_file, written, qualified):
+    """Vrai si le nom de type ecrit designe `qualified` par le code ecrit : nom qualifie ou import."""
+    if '.' in written:
+        return written == qualified
+    simple = qualified.rsplit('.', 1)[-1]
+    if written != simple or any(item.name == simple for item in java_file.types):
+        return False
+    imports = [name for name, static in java_file.imports if not static]
+    explicit = [name for name in imports if name.rsplit('.', 1)[-1] == simple]
+    return explicit == [qualified] if explicit else f'{qualified.rpartition(".")[0]}.*' in imports
+
+
+def hidden(java_file, java_type, method, types):
+    """Ce qui peut garder la methode sans etre lu ici : une meta-annotation de securite declaree dans les sources,
+    une annotation de securite d'un supertype lu (sur le type ou la meme signature). Chaque raison est dite."""
+    reasons = []
+    for annotation in (*method.annotations, *java_type.annotations):
+        declared = types.get(_qualified(java_file, annotation.name))
+        if declared and any(item.simple_name in SECURITY_ANNOTATIONS for item in declared[1].annotations):
+            reasons.append(f'méta-annotation @{annotation.simple_name}')
+    seen, pending = set(), [qualified for _, qualified in java_type.supertypes if qualified]
+    while pending:
+        qualified = pending.pop()
+        if qualified in seen or qualified not in types:
+            continue
+        seen.add(qualified)
+        supertype = types[qualified][1]
+        inherited = [*supertype.annotations, *(item for candidate in supertype.methods
+                                               if candidate.signature == method.signature
+                                               for item in candidate.annotations)]
+        if any(item.simple_name in SECURITY_ANNOTATIONS for item in inherited):
+            reasons.append(f'héritée de {supertype.name}')
+        pending += [item for _, item in supertype.supertypes if item]
+    return reasons
+
+
+def _qualified(java_file, name):
+    """Le nom qualifie qu'un nom de type ecrit designe dans le fichier : qualifie, importe, ou du meme paquetage."""
+    if '.' in name:
+        return name
+    explicit = [item for item, static in java_file.imports if not static and item.rsplit('.', 1)[-1] == name]
+    if explicit:
+        return explicit[0]
+    return f'{java_file.package}.{name}' if java_file.package else name

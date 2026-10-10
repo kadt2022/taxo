@@ -44,7 +44,10 @@ public class ShopApplication {
 """
 
 
-def security(enabling=f'import {ENABLE};', annotation='@EnableMethodSecurity', csrf='.csrf(csrf -> csrf.disable())',
+ENABLING = f'import {ENABLE};'
+
+
+def security(enabling=ENABLING, annotation='@EnableMethodSecurity', csrf='.csrf(csrf -> csrf.disable())',
              rule='authenticated()', package='com.example.shop.config'):
     return f"""package {package};
 
@@ -220,13 +223,47 @@ def test_an_enabling_type_the_application_does_not_load_protects_nothing():
 
 
 def test_csrf_is_read_only_when_it_is_disabled():
-    for written in ('.csrf().disable().and()', '.csrf(AbstractHttpConfigurer::disable)'):
-        [csrf] = found(evaluate(shop(security(csrf=written))), 'CONFIGURES')
+    configurer = 'import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;'
+    for written, enabling in (('.csrf().disable().and()', ENABLING),
+                              ('.csrf(AbstractHttpConfigurer::disable)', f'{ENABLING}\n{configurer}')):
+        [csrf] = found(evaluate(shop(security(enabling, csrf=written))), 'CONFIGURES')
         assert csrf['object'] == 'policy-rule:csrf.disable()'
+    other = evaluate(shop(security(csrf='.csrf(Customizer::disable)')))
+    assert found(other, 'CONFIGURES') == [], 'une méthode disable d’un autre type peut ne rien désactiver'
+    assert reasons(other, CHAIN) == ['configuration CSRF non interprétée (ligne 18)']
     customized = evaluate(shop(security(csrf='.csrf(csrf -> csrf.ignoringRequestMatchers("/hooks/**"))')))
     assert found(customized, 'CONFIGURES') == []
     assert reasons(customized, CHAIN) == ['configuration CSRF non interprétée (ligne 18)']
     assert found(evaluate(shop(security(csrf=''))), 'CONFIGURES') == [], 'CSRF par défaut : rien d’écrit'
+
+
+def test_a_guard_through_a_meta_annotation_or_a_supertype_is_declared_not_read():
+    meta = '''package com.example.shop.web;
+
+import org.springframework.security.access.prepost.PreAuthorize;
+
+@PreAuthorize("hasRole('ADMIN')")
+public @interface IsAdmin {
+}
+'''
+    output = evaluate(shop(web=controller('@IsAdmin', imports=''),
+                           **{'src/main/java/com/example/shop/web/IsAdmin.java': meta}))
+    assert method_protection(output) == []
+    assert reasons(output, ENDPOINT) == ['sécurité de méthode non interprétée (méta-annotation @IsAdmin)']
+    api = '''package com.example.shop.web;
+
+import org.springframework.security.access.prepost.PreAuthorize;
+
+public interface ItemApi {
+    @PreAuthorize("hasRole('ADMIN')")
+    java.util.List<String> items();
+}
+'''
+    inherited = controller('', imports='').replace('public class ItemController {',
+                                                   'public class ItemController implements ItemApi {')
+    output = evaluate(shop(web=inherited, **{'src/main/java/com/example/shop/web/ItemApi.java': api}))
+    assert method_protection(output) == []
+    assert reasons(output, ENDPOINT) == ['sécurité de méthode non interprétée (héritée de ItemApi)']
 
 
 def test_every_method_security_fact_satisfies_the_contract():
