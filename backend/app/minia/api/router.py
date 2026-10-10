@@ -1,7 +1,8 @@
 import json
+from typing import Annotated
 
 import anyio
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -113,7 +114,7 @@ def create_router(minia):
     @router.get('/api/projects/{project_id}/elements', responses={
         404: _ERRORS[404], 422: {'description': 'Question vide ou trop longue.'},
         409: {'description': 'Aucune analyse globale pour ce projet.'}})
-    def elements(project_id: str, q: str):
+    def elements(project_id: str, q: Annotated[str, Query(description='La question, telle que posée.')]):
         """L'élément que la question nomme, retrouvé sans modèle : une ancre unique, ou les candidates."""
         return minia.locate(project_id, q)
 
