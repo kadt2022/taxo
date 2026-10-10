@@ -1,9 +1,12 @@
 # TAXO-MINIA-SEC-01 — Fiabilisation des réponses et protection des informations confidentielles
 
-**Statut :** récit accepté par le responsable du produit le 10 octobre 2026 ; implémentation à venir en PR limitées.  
+**Statut :** récit accepté par le responsable du produit le 10 octobre 2026 ; E3 (#118), E1 (#119) et E2 (#120)
+fusionnées le 10 octobre 2026 ; restent E4 et la mesure.  
 **Priorité :** critique.  
 **Référence :** rapport du banc `student-course-demo`, 18 tests du 10 octobre 2026. Le rapport et ses 18
-questions ne sont pas encore dans le dépôt : ils y seront ajoutés avec la PR de mesure, sans donnée personnelle.  
+questions ne sont pas encore dans le dépôt : E1 à E3 ont donc été vérifiées sur des projets synthétiques à vérité
+établie à la main et sur `student-analysis-java`, pas sur le banc lui-même. Le banc, sans donnée personnelle, et son
+rejeu sont un préalable à la clôture du récit : il ne peut pas être déclaré terminé sans eux.  
 **Source de vérité :** `ARCHITECTURE.md` § 12.4 (verdicts), § 12.5 (transparence) et § 12.6 (sécurité et consentement).  
 **Bloque :** [TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md) (lecture du code des méthodes).
 
