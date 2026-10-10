@@ -52,7 +52,7 @@ def packet_answer(relation='CALLS', subject=REGISTER, text='CourseController#reg
 
 
 @pytest.fixture(name='courses')
-def courses_fixture(make_repo, tmp_path):
+def courses_fixture(make_repo):
     return make_repo(fixture_files())
 
 
@@ -199,9 +199,8 @@ def test_a_commit_selection_still_answers_from_git(courses, tmp_path):
 class Pages:
     """Un échange dont `find_references` rend des pages prévues."""
 
-    snapshot = {'analysis': 'a1'}
-
     def __init__(self, *pages):
+        self.snapshot = {'analysis': 'a1'}
         self.pages, self.asked = list(pages), []
 
     def call(self, request):

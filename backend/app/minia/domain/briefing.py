@@ -173,18 +173,26 @@ def _tile_fact(ref, item):
             'evidence': _evidence(item.get('evidence') or [])}
 
 
+# Une frontière de profondeur dit seulement où la Tuile s'arrête : ce n'est pas une lacune de Taxo.
+_NOT_LIMITS = ('DEPTH', 'NOT_REACHED')
+
+
+def _frontier_limit(entry):
+    """Une entrée de frontière dite en une ligne : où, pourquoi, quel analyseur, et ses catégories comptées."""
+    where = entry.get('node') or entry.get('scope') or 'Tuile'
+    said = f"{where} : {entry.get('reason')}"
+    if entry.get('producer'):
+        said += f" ({entry['producer']})"
+    categories = ', '.join(f"{item['category']} {item['count'].get('value', '?')}"
+                           for item in entry.get('categories') or [])
+    return f'{said} [{categories}]' if categories else said
+
+
 def limits(tiles):
     """Ce que les Tuiles disent ne pas savoir : zones non interprétées, analyse absente, coupes par un budget."""
     found = []
     for tile in tiles:
-        for entry in tile['frontier']:
-            if entry.get('reason') in ('DEPTH', 'NOT_REACHED'):
-                continue
-            categories = ', '.join(f"{item['category']} {item['count'].get('value', '?')}"
-                                   for item in entry.get('categories') or [])
-            where = entry.get('node') or entry.get('scope') or 'Tuile'
-            said = f"{where} : {entry.get('reason')}" + (f" ({entry['producer']})" if entry.get('producer') else '')
-            found.append(said + (f' [{categories}]' if categories else ''))
+        found.extend(_frontier_limit(entry) for entry in tile['frontier'] if entry.get('reason') not in _NOT_LIMITS)
         if tile['truncated']:
             found.append(f"Tuile coupée par un budget ({tile['stop_reason']}) : elle ne dit pas tout.")
     return tuple(dict.fromkeys(found))
