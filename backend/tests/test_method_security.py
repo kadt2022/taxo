@@ -222,6 +222,24 @@ def test_an_enabling_type_the_application_does_not_load_protects_nothing():
     assert any('activation par application:' in reason for reason in reasons(output, ENDPOINT))
 
 
+def test_a_method_a_spring_proxy_cannot_intercept_is_never_protected():
+    for modifier in ('final', 'static'):
+        sealed = controller().replace('public List<String> items()', f'public {modifier} List<String> items()')
+        output = evaluate(shop(web=sealed))
+        assert found(output, 'AUTHORIZED_BY', HANDLER), 'l’annotation reste écrite'
+        assert method_protection(output) == []
+        assert any(f'méthode {modifier}' in reason for reason in reasons(output, ENDPOINT))
+
+
+def test_without_a_spring_boot_application_the_enabling_is_never_assumed_to_apply():
+    files = shop()
+    del files['src/main/java/com/example/shop/ShopApplication.java']
+    output = evaluate(files)
+    assert found(output, 'ANNOTATED_WITH'), 'l’activation reste écrite'
+    assert method_protection(output) == []
+    assert any('aucune application Spring Boot lue' in reason for reason in reasons(output, ENDPOINT))
+
+
 def test_csrf_is_read_only_when_it_is_disabled():
     configurer = 'import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;'
     for written, enabling in (('.csrf().disable().and()', ENABLING),

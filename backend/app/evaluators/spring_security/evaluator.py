@@ -48,6 +48,8 @@ ORDER_METHOD = 'java.spring-security.authorize-http-requests'
 FIRST_MATCH = 'spring-security.first-matching-pattern'
 APPLIES = 'spring-security.route-authorization-applies'
 METHOD_APPLIES = 'spring-security.method-authorization-applies'
+# Modificateurs qui soustraient une methode au proxy de la securite de methode.
+UNADVISABLE = frozenset({'final', 'private', 'static'})
 PRE_AUTHORIZE_METHOD = 'java.spring-security.pre-authorize'
 ENABLING_METHOD = 'java.spring-security.enable-method-security'
 CSRF_METHOD = 'java.spring-security.csrf'
@@ -282,6 +284,12 @@ class _Run:
             self._gap(endpoint.reference, scope,
                       'sécurité de méthode non interprétée (@PreAuthorize : expression non évaluée)')
             return
+        sealed = sorted(UNADVISABLE & _modifiers(endpoint.java_type, endpoint.methods[0]))
+        if sealed:
+            # Un proxy Spring (sous-classe CGLIB ou interface) n'intercepte pas une methode final, private ou static.
+            self._gap(endpoint.reference, scope, f'sécurité de méthode non interprétée (méthode {" ".join(sealed)} : '
+                                                 'non interceptée par un proxy Spring)')
+            return
         enabling = self._enabling(endpoint)
         if enabling is None:
             return
@@ -304,26 +312,29 @@ class _Run:
             self._gap(endpoint.reference, scope, 'sécurité de méthode : activation non établie (aucune '
                                                  '@EnableMethodSecurity lue qui active @PreAuthorize)')
             return None
-        chosen = enabled
-        if self.deployment.applications:
-            outcomes = [(application, self.deployment.loads(application, endpoint.java_type.qualified_name).outcome)
-                        for application in self.deployment.applications]
-            if any(outcome == UNKNOWN for _, outcome in outcomes):
-                self._gap(endpoint.reference, scope, 'sécurité de méthode : application qui sert la route non établie')
+        if not self.deployment.applications:
+            # Sans application Spring Boot lue, rien ne dit qu'une activation lue est chargee avec cette route.
+            self._gap(endpoint.reference, scope, 'sécurité de méthode : application qui sert la route non établie '
+                                                 '(aucune application Spring Boot lue)')
+            return None
+        outcomes = [(application, self.deployment.loads(application, endpoint.java_type.qualified_name).outcome)
+                    for application in self.deployment.applications]
+        if any(outcome == UNKNOWN for _, outcome in outcomes):
+            self._gap(endpoint.reference, scope, 'sécurité de méthode : application qui sert la route non établie')
+            return None
+        serving = [application for application, outcome in outcomes if outcome == YES]
+        chosen = []
+        for application in serving:
+            loaded = [item for item in enabled if self.deployment.loads(application, item.owner).outcome == YES]
+            if not loaded:
+                self._gap(endpoint.reference, scope, f'sécurité de méthode : activation par '
+                                                     f'{application.reference} non établie')
                 return None
-            serving = [application for application, outcome in outcomes if outcome == YES]
-            chosen = []
-            for application in serving:
-                loaded = [item for item in enabled if self.deployment.loads(application, item.owner).outcome == YES]
-                if not loaded:
-                    self._gap(endpoint.reference, scope, f'sécurité de méthode : activation par '
-                                                         f'{application.reference} non établie')
-                    return None
-                chosen += [item for item in loaded if item not in chosen]
-            if not chosen:
-                self._gap(endpoint.reference, scope, 'sécurité de méthode : aucune application établie ne sert '
-                                                     'cette route')
-                return None
+            chosen += [item for item in loaded if item not in chosen]
+        if not chosen:
+            self._gap(endpoint.reference, scope, 'sécurité de méthode : aucune application établie ne sert '
+                                                 'cette route')
+            return None
         premises = [f'ANNOTATED_WITH : {item.symbol} -> {item.reference}' for item in chosen]
         evidence = [self._evidence(item.path, item.annotation.line_start, item.annotation.line_end, ENABLING_METHOD)
                     for item in chosen]
@@ -441,6 +452,12 @@ def _assertion(subject, relation, target, evidence, chain):
     if target is not None:
         fact['object'] = target
     return fact
+
+
+def _modifiers(java_type, method):
+    """Les modificateurs ecrits de la methode, lus sur sa declaration (les methodes annotees n'en portent pas)."""
+    return next((item.modifiers for item in java_type.declarations
+                 if item.signature == method.signature and item.line_start == method.line_start), frozenset())
 
 
 def _observed(subject, relation, target, evidence, qualifiers):
