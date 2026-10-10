@@ -463,6 +463,10 @@ non vérifiée. Les trois colonnes se répartissent ainsi :
 - **jaune** : seulement les limites que Taxo constate lui-même (zones non analysées, fichiers non transmis,
   repli en mode paquet…).
 
+En exploration, Minia peut demander la **Tuile** d'une référence déjà reçue selon un profil déclaré
+(`get_tile` : `method-context/1`, `calls/1`, `structure/1`, `security/1`), sur la même analyse. Une Tuile ne
+contient que des faits ; Minia ne reçoit jamais de code par `get_source`.
+
 La **trajectoire** est visible en direct puis sous la réponse : chaque opération, ses arguments, son issue,
 sa taille et ce qui n'a pas été transmis. Une opération refusée (`NO_CONSENT`, `OUT_OF_SCOPE`…) est rendue
 à Minia comme un résultat, jamais comme une instruction.

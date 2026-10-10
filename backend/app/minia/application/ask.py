@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
-from app.minia.application import anchoring
+from app.minia.application import anchoring, tiles
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
 from app.minia.domain.confidentiality import Disclosure
@@ -208,7 +208,9 @@ def _step(operation, arguments, response):
     entry = {'operation': operation, 'arguments': arguments, 'outcome': response['outcome'],
              'bytes': response['bytes']}
     if response['outcome'] == 'OK':
-        entry.update(items=len(response.get('items', [])), not_sent=response.get('not_sent', []))
+        # Une Tuile MIP porte ses faits dans `facts` ; une réponse du protocole, dans `items`.
+        entry.update(items=len(response.get('items', response.get('facts', []))),
+                     not_sent=response.get('not_sent', []))
         if 'verdict' in response:
             entry.update(verdict=response['verdict'], reason=response['reason'])
     else:
@@ -537,6 +539,9 @@ class AskMinia:
                 return
             if operation == 'describe':
                 operations = [item for item in response.get('items', []) if item.get('kind') == 'operation']
+                if self.mip is not None:
+                    # Les Tuiles adaptatives (TAXO-MIP-ADT-01, PR C) : un profil déclaré, sur la même analyse.
+                    operations.append(tiles.offered())
         opening = len(trajectory)
         try:
             while True:
@@ -556,7 +561,7 @@ class AskMinia:
                     raise MiniaError(INVALID_ANSWER, 'Minia ne progressait plus (opération répétée ou limite atteinte).')
                 seen.add(step.key)
                 check(cancel)
-                response = exchange.call(bounded(step.operation, step.arguments, space))
+                response = self._served(exchange, step, bounded, space)
                 exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
                 trajectory.append(_step(step.operation, step.arguments, response))
                 yield 'minia.operation', trajectory[-1]
@@ -575,6 +580,13 @@ class AskMinia:
         yield COMPLETED, {
             **result, 'status': ANSWERED, 'mode': EXPLORATION, 'statements': statements, 'trajectory': trajectory,
             'budget': {'max_bytes': exchange.budget, 'used': exchange.used}}
+
+    def _served(self, exchange, step, bounded, space):
+        """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, toute autre
+        opération par l'échange (qui refuse ce qu'il ne propose pas)."""
+        if step.operation == tiles.OPERATION and self.mip is not None:
+            return tiles.request(self.mip, exchange, step.arguments, space)
+        return exchange.call(bounded(step.operation, step.arguments, space))
 
     @staticmethod
     def _verified(statements, exchange, trajectory, cancel=None):
