@@ -3,7 +3,8 @@
 **Projet :** Taxo V2  
 **Date :** 10 octobre 2026  
 **Nature :** récit d'implémentation majeur  
-**Statut :** proposition soumise à la validation du responsable du produit ; non commencé.  
+**Statut :** accepté par le responsable du produit le 10 octobre 2026 (fusion avec TAXO-MIP-SOURCE-01, champ `profile`
+et annotations observées acceptés ; classification des Tuiles ajoutée le même jour, § 21 bis). PR A en cours.  
 **Priorité :** haute.  
 **Dépendance préalable :** [TAXO-MINIA-SEC-01](TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md) — fiabilité et
 confidentialité.  
@@ -12,7 +13,7 @@ confidentialité.
 
 ---
 
-## 0. Articulation avec TAXO-MIP-SOURCE-01 (proposition)
+## 0. Articulation avec TAXO-MIP-SOURCE-01 (fusion décidée le 10 octobre 2026)
 
 TAXO-MIP-SOURCE-01, accepté le 10 octobre 2026, porte déjà `get_source` et la lecture progressive des méthodes par
 Minia. Ce récit en reprend tout le contenu (PR B et C) et y ajoute les profils adaptatifs (PR A). Trois
@@ -661,6 +662,39 @@ peut nécessiter une validation technique supplémentaire.
 Une affirmation structurée peut être soumise à `verify_claim`, mais le verdict ne couvre que l'assertion que Taxo
 peut réellement vérifier. Une phrase de portée plus large n'hérite jamais automatiquement d'un verdict favorable.
 
+## 21 bis. Classification des Adaptive Tiles (normatif)
+
+Exigence du responsable du produit du 10 octobre 2026. Chaque Tuile expose des **métadonnées de classification
+versionnées**, et à part ses **restrictions de divulgation**.
+
+| Métadonnée | Contenu |
+|---|---|
+| Nature | ce que désigne l'ancre : `METHOD`, `TYPE`, `MEMBER`, `ENDPOINT`, `COMMIT`, `MODULE`, `FILE`… lue dans la syntaxe de la référence. La Maille ne distingue pas aujourd'hui une classe d'une interface, d'un record ou d'une énumération : la nature d'un type reste `TYPE` tant qu'aucun fait ne le dit |
+| Langage | celui que la référence écrit, ou celui d'un fait `WRITTEN_IN` transmis ; sinon inconnu (`null`) |
+| Profil adaptatif | l'identifiant du profil appliqué, ou aucun |
+| Catégories de contenu présentes | parmi `FACTS`, `RELATIONS`, `EVIDENCE`, `CODE_SOURCE`, `COMMIT_METADATA`, `COVERAGE`, `FRONTIER` |
+| Provenance et instantané | analyse, commit, révision des faits, producteurs des faits transmis |
+| Restrictions de divulgation | séparées de la classification descriptive : protections qui s'appliquent au contenu présent avant un fournisseur de modèle |
+
+Règles :
+
+1. La classification décrit la Tuile ; elle n'est pas la Tuile, ne change pas sa sélection et ne duplique aucun fait.
+2. `CODE_SOURCE` n'est annoncé que lorsque du code a réellement été transmis après autorisation. Une Tuile de faits ne
+   l'annonce jamais ; une pièce source associée (PR B) porte sa propre classification et reste distincte des faits.
+3. `COMMIT_METADATA` correspond aux métadonnées Git effectivement transmises : SHA, dates et autres champs présents,
+   l'auteur seulement s'il est transmis. L'identité de l'auteur est masquée dans toute transmission à un LLM
+   (restriction `PERSON_IDENTITY`, couche de TAXO-MINIA-SEC-01).
+4. La classification est construite à partir des données réellement présentes, sans inventer d'élément manquant.
+5. Elle ne contient aucune interprétation fonctionnelle du code.
+6. Elle réutilise les structures de la Maille et du MIP, sans second stockage ni duplication des faits.
+7. Tests de cohérence obligatoires : catégories annoncées = contenu réellement transmis, y compris en cas de refus
+   (aucune classification), de troncature et d'absence de code.
+8. Champs additifs : les consommateurs MIP existants restent compatibles ; tout changement incompatible est soumis à
+   validation.
+
+Le socle (classification et restrictions de toute Tuile MIP) est livré par la PR A. La PR B l'étend à la pièce source
+(`CODE_SOURCE`), la PR C le transmet à Minia.
+
 ## 22. Compatibilité et non-régression
 
 Le récit ne casse aucune consultation actuellement servie :
@@ -696,6 +730,8 @@ Travaux :
 - tester le même résultat pour les mêmes paramètres, et l'égalité avec la même demande en mode explicite ;
 - maintenir le refus de `PROJECT` ;
 - mettre ARCHITECTURE § 5.6 et § 9.5 en accord avec les producteurs réels.
+- livrer le socle de classification et de restrictions de divulgation de toute Tuile (§ 21 bis) et ses tests de
+  cohérence.
 
 Ne pas construire un nouveau graphe. Le domaine (manifestes, résolution, tests) peut être préparé sans toucher au
 contrat ; le champ `profile` de la requête MIP et les champs ajoutés à la Tuile attendent l'accord du § 6.2,
@@ -725,6 +761,7 @@ Travaux :
 - limitations de taille ;
 - refus en cas d'ambiguïté ou d'indisponibilité ;
 - tests Java, surcharges et instantanés.
+- classification de la pièce source (`CODE_SOURCE` seulement si le code est transmis), distincte des faits.
 
 Ne jamais exposer une opération de lecture arbitraire de fichier. Aucune transmission à un LLM avant la clôture de
 TAXO-MINIA-SEC-01.
@@ -778,6 +815,8 @@ transmission de code à un LLM n'est activée avant validation des protections.
 - **A3.** Chaque élément possède une provenance ou une référence de preuve conforme au contrat.
 - **A4.** Une frontière ne devient jamais une affirmation d'absence.
 - **A5.** Un profil dont les relations ne sont pas disponibles indique son incomplétude.
+- **A6.** Les catégories de contenu annoncées par la classification sont exactement celles du contenu transmis, y
+  compris après troncature, pour une ancre inconnue et en cas de refus (§ 21 bis).
 
 ### B — Sources Java
 
