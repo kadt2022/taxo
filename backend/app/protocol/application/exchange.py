@@ -549,8 +549,14 @@ class Exchange:
         verdict = judge(claim, established, self.knowledge(self.analyzers()), self.needed(subject))
         concerned = {subject, target} - {None}
         response = self.response('verify_claim', self.envelope_coverage(relation, concerned), max_bytes,
-                                 claim=claim, verdict=verdict.verdict, reason=verdict.reason,
-                                 limits=self.limits(relation, concerned, verdict.verdict, subject))
+                                 claim=claim, verdict=verdict.verdict, reason=verdict.reason, limits=[])
+        # Les limites passent avant les faits, dans le budget : une raison longue ne coute jamais le verdict, et
+        # une limite qui ne tient pas est comptee dans `not_sent`.
+        limits = self.limits(relation, concerned, verdict.verdict, subject)
+        for index, limit in enumerate(limits):
+            if not response.add('limits', limit):
+                response.skip('limits', len(limits) - index - 1)
+                break
         self.add_facts(response, list(verdict.facts), evidence=True)
         return response
 

@@ -941,7 +941,9 @@ méthode non interprétée est affichée « Confirmée par Taxo, avec limites »
 garde son sens : la limite d'une relation de sécurité n'accompagne pas un `HANDLED_BY`. Une confirmation
 d'une relation à une seule valeur par sujet (`MATCHED_BY`, `HANDLED_BY`, `AUTHORED_BY`, `TYPED_AS`,
 `WRITTEN_IN`) ne porte que les limites de son objet (une cible ambiguë) : ce qui n'a pas été lu sur le sujet
-ne peut pas lui ajouter une seconde valeur, et ses propres doutes sont dans sa dérivation.
+ne peut pas lui ajouter une seconde valeur, et ses propres doutes sont dans sa dérivation. Les limites
+passent avant les faits dans le budget de la réponse : une limite qui ne tient pas est comptée dans
+`not_sent` (`what: limits`) et ne coûte jamais le verdict ; la confirmation reste affichée « avec limites ».
 
 Ce que Minia rend dépend du mode (§ 12.5) :
 

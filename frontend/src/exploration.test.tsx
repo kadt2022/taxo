@@ -195,8 +195,16 @@ describe('limites jointes au verdict (TAXO-MINIA-SEC-01)', ()=>{
     expect(html).toContain('verdict-limited');
     expect(html).toContain('Taxo n’a pas lu : sécurité de méthode non interprétée (@PreAuthorize)');
   });
-  it('une limite sans raison reste dite', ()=>{
+  it('une limite sans raison reste dite, selon son type', ()=>{
     expect(limitText({...limited.limits![0], reason:null})).toContain('zone non interprétée');
+    expect(limitText({...limited.limits![0], type:'READ_ERROR', reason:null})).toContain('fichier illisible');
+  });
+  it('une limite non transmise faute de place garde la confirmation limitée', ()=>{
+    const unsent={...limited, limits:[], not_sent:[{what:'limits', count:2, reason:'BUDGET'}]};
+    expect(verdictText(unsent)).toBe('Confirmée par Taxo, avec limites');
+    const html=renderToStaticMarkup(<Statements statements={[unsent]}/>);
+    expect(html).toContain('verdict-limited');
+    expect(html).toContain('Taxo connaît 2 autres limites, non transmises faute de place.');
   });
   it('une confirmation sans limite reste une confirmation', ()=>{
     expect(verdictText({...limited, limits:[]})).toBe('Confirmée par Taxo');

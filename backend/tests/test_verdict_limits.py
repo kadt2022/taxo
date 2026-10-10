@@ -21,9 +21,12 @@ def taxo_fixture(make_repo, tmp_path):
         yield client, f'/api/projects/{project["id"]}/taxo-query'
 
 
-def verify(taxo, **claim):
+def verify(taxo, max_bytes=None, **claim):
     client, url = taxo
-    response = client.post(url, json={'requests': [{'operation': 'verify_claim', 'arguments': claim}]})
+    request = {'operation': 'verify_claim', 'arguments': claim}
+    if max_bytes is not None:
+        request['max_bytes'] = max_bytes
+    response = client.post(url, json={'requests': [request]})
     assert response.status_code == 200, response.text
     return response.json()['responses'][0]
 
@@ -104,3 +107,15 @@ def test_facts_that_did_not_fit_are_never_said_unknown(tmp_path, make_repo, monk
     assert model.calls == [] and result['facts_not_sent'] > 0
     assert 'aucun n\'a tenu dans la place du modèle' in result['unknown']
     assert 'ne connaît aucun fait' not in result['unknown']
+
+
+def test_limits_that_do_not_fit_are_counted_never_cost_the_verdict(taxo):
+    claim = {'subject': ENDPOINT, 'relation': 'PROTECTED_BY', 'object': 'policy-rule:authenticated()'}
+    full = verify(taxo, **claim)
+    # Le plus petit budget qui sert encore la reponse : les faits n'y tiennent plus, la limite non plus.
+    served = [response for response in (verify(taxo, max_bytes=budget, **claim)
+                                        for budget in range(full['bytes'], 0, -32)) if response['outcome'] == 'OK']
+    tight = served[-1]
+    assert tight['verdict'] == 'CONFIRMED', 'le verdict reste servi'
+    assert tight['limits'] == []
+    assert {'what': 'limits', 'count': 1, 'reason': 'BUDGET'} in tight['not_sent'], 'la limite tue est comptée'

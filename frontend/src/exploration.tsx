@@ -15,7 +15,8 @@ type Proof = {ref:string; fact:string; location:Location};
 export type Statement =
   | {type:'interpretation'|'unknown'; text:string}
   | {type:'claim'; text:string; claim:Claim; verdict:string|null; reason?:string|null; error?:ProtocolError;
-      facts?:{ref:string; fact:GitFact; evidence_count:number}[]; evidence?:Proof[]; limits?:Limit[]};
+      facts?:{ref:string; fact:GitFact; evidence_count:number}[]; evidence?:Proof[]; limits?:Limit[];
+      not_sent?:{what:string; count:number; reason:string}[]};
 /** Ce que Taxo n'a pas su lire sur le sujet ou l'objet d'une affirmation (TAXO-MINIA-SEC-01) : le verdict n'en dit rien. */
 export type Limit = {subject:string; type:string; producer:string|null; reason:string|null};
 
@@ -33,12 +34,25 @@ export function verdictText(statement:Extract<Statement,{type:'claim'}>){
   // Une confirmation qui repose sur une deduction de Taxo le dit : elle n'a pas la force d'une observation.
   const base=inferred?'Confirmée par Taxo, par déduction':VERDICTS[statement.verdict]??statement.verdict;
   // Une confirmation ne couvre pas ce que Taxo n'a pas su lire : elle le dit, au lieu de paraitre complete.
-  const text=statement.verdict==='CONFIRMED'&&statement.limits?.length?`${base}, avec limites`:base;
+  const text=limited(statement)?`${base}, avec limites`:base;
   return statement.reason?`${text} : ${REASONS[statement.reason]??statement.reason}`:text;
 }
 
-/** Une limite en une phrase : ce qui n'a pas ete lu, et ou. */
-export const limitText=(limit:Limit)=>`${limit.reason??'zone non interprétée'} (${reference(limit.subject)})`;
+/** Les limites qu'une reponse n'a pas pu transmettre faute de place : elles existent, Taxo les compte. */
+const unsentLimits=(statement:Extract<Statement,{type:'claim'}>)=>
+  statement.not_sent?.filter(item=>item.what==='limits').reduce((total,item)=>total+item.count,0)??0;
+
+/** Une confirmation qui ne couvre pas tout : des limites jointes, ou comptees sans place pour les dire. */
+const limited=(statement:Extract<Statement,{type:'claim'}>)=>
+  statement.verdict==='CONFIRMED'&&(Boolean(statement.limits?.length)||unsentLimits(statement)>0);
+
+const unsentText=(count:number)=>count>1?`Taxo connaît ${count} autres limites, non transmises faute de place.`
+  :'Taxo connaît une autre limite, non transmise faute de place.';
+
+const UNREAD:Record<string,string>={NOT_INTERPRETED:'zone non interprétée', READ_ERROR:'fichier illisible'};
+
+/** Une limite en une phrase : ce qui n'a pas ete lu, et ou ; sans raison, son type le dit. */
+export const limitText=(limit:Limit)=>`${limit.reason??UNREAD[limit.type]??limit.type} (${reference(limit.subject)})`;
 
 /** Une deduction de Taxo, premisse par premisse (ARCHITECTURE § 12) : ce qui la fonde, et ce qu'elle ne sait pas. */
 export function DerivationView({derivation}:Readonly<{derivation:Derivation}>){
@@ -82,7 +96,7 @@ export function proofText(location:Location){
   return location.method?`${where} (${location.method})`:where;
 }
 
-const verdictClass=(statement:Extract<Statement,{type:'claim'}>)=>statement.verdict==='CONFIRMED'&&statement.limits?.length
+const verdictClass=(statement:Extract<Statement,{type:'claim'}>)=>limited(statement)
   ?'verdict verdict-limited':`verdict verdict-${(statement.verdict??'none').toLowerCase().replaceAll('_','-')}`;
 
 export function Trajectory({steps}:Readonly<{steps:TrajectoryStep[]}>){
@@ -115,6 +129,7 @@ export function Statements({statements, limits=[]}:Readonly<{statements:Statemen
         <span className={verdictClass(item)}>{verdictText(item)}</span> {claimSentence(item.claim)}
         {item.limits?.length?<ul className="claim-limits">{item.limits.map(limit=><li key={`${limit.subject}:${limit.reason}`}>
           Taxo n’a pas lu : {limitText(limit)}</li>)}</ul>:null}
+        {unsentLimits(item)?<p className="claim-limits">{unsentText(unsentLimits(item))}</p>:null}
         <details className="proof"><summary>Ce que Taxo a vérifié</summary>
           <dl className="verified-claim">
             <div><dt>subject</dt><dd><code>{item.claim.subject}</code></dd></div>
