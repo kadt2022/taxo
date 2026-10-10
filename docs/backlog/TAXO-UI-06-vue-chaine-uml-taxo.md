@@ -237,9 +237,8 @@ est servable. `protocol.ts` reste le seul module de l'explorateur à parler au s
   pastille de coupure développe le nœud.
 - Couleurs : un type connu prend son jeton, un type inconnu la teinte neutre, la légende ne liste que
   les types présents ; contraste vérifié dans les deux thèmes.
-- `get_source` (backend) : extrait d'un symbole à l'instantané de l'analyse ; refus sans consentement de
-  la requête, refus réglage désactivé, refus quand l'empreinte diffère, refus d'un fichier confidentiel,
-  plafond de lignes dit, aucun fichier entier ; la demande ne modifie aucune table.
+- `get_source` (backend) : ses tests appartiennent à la PR A de TAXO-MIP-SOURCE-01 ; ce récit ne les
+  écrit pas et vérifie seulement, avant la PR 3, qu'ils sont présents et verts.
 - Panneau Code (DOM) : lignes de la preuve surlignées, message quand le réglage est désactivé, message
   quand aucune preuve ne localise le nœud.
 - `architecture.test.ts` inchangé et vert : aucune relation ni type nommé dans l'explorateur.
@@ -256,8 +255,8 @@ est servable. `protocol.ts` reste le seul module de l'explorateur à parler au s
 5. Choisir `CourseController#getCourses()` montre son code à droite, lignes de la preuve surlignées, quand
    le réglage serveur l'autorise ; un code qui ne correspond plus à la preuve n'est jamais montré.
 6. La vue Liste est inchangée ; la vue Couches ne change que par la palette des types.
-7. Aucun changement du moteur de voisinage, du contrat des faits, de la Maille, de Minia ni de la MIP. Le
-   protocole ne gagne que l'opération réservée `get_source`, selon § 12.3 et § 12.6.
+7. Aucun changement du moteur de voisinage, du contrat des faits, de la Maille, de Minia, de la MIP ni du
+   protocole : l'opération `get_source` est livrée par TAXO-MIP-SOURCE-01, ce récit ne fait que l'utiliser.
 8. Tests verts : backend `pytest -q`, frontend `npm ci && npm test && npm run build`.
 
 ## Découpage proposé
