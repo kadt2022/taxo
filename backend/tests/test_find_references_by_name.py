@@ -176,7 +176,8 @@ def test_the_frozen_rules_of_the_migration_agree_with_the_application():
         assert migration.name_keys(value) == name_keys(value), value
 
 
-def test_migration_010_indexes_existing_analyses_and_downgrades(tmp_path):
+def at_revision_009(tmp_path, scans):
+    """Une base à la révision 009 avec deux références par analyse ; renvoie (moteur, migrer)."""
     url = f'sqlite:///{tmp_path / "names.db"}'
     env = {**os.environ, 'DATABASE_URL': url}
 
@@ -187,10 +188,17 @@ def test_migration_010_indexes_existing_analyses_and_downgrades(tmp_path):
     engine = create_engine(url)
     with engine.begin() as db:
         db.execute(text("INSERT INTO projects (id, name, path) VALUES ('p', 'p', '/p')"))
-        db.execute(text("INSERT INTO scans (id, project_id, created_at, result) VALUES ('s', 'p', '2026-10-10', '{}')"))
-        db.execute(text("INSERT INTO analysis_references (scan_id, reference_hash, search_key, type, reference) VALUES "
-                        "('s', 'h1', 'java:a.b#c()', 'symbol', 'symbol:java:a.B#c()'), "
-                        "('s', 'h2', 'x', 'module', 'module:x')"))
+        for scan in scans:
+            db.execute(text("INSERT INTO scans (id, project_id, created_at, result) VALUES (:s, 'p', '2026-10-10', '{}')"),
+                       {'s': scan})
+            db.execute(text("INSERT INTO analysis_references (scan_id, reference_hash, search_key, type, reference) "
+                            "VALUES (:s, 'h1', 'java:a.b#c()', 'symbol', 'symbol:java:a.B#c()'), "
+                            "(:s, 'h2', 'x', 'module', 'module:x')"), {'s': scan})
+    return engine, migrate
+
+
+def test_migration_010_indexes_existing_analyses_and_downgrades(tmp_path):
+    engine, migrate = at_revision_009(tmp_path, ['s'])
     assert '9 noms indexés pour 1 analyses' in migrate('upgrade', '010')
     with engine.connect() as db:
         rows = db.execute(text('SELECT name_key, reference_hash FROM analysis_reference_names '
@@ -203,3 +211,53 @@ def test_migration_010_indexes_existing_analyses_and_downgrades(tmp_path):
         assert 'analysis_reference_names' not in {name for (name,) in db.execute(
             text("SELECT name FROM sqlite_master WHERE type = 'table'"))}
     engine.dispose()
+
+
+def names_by_analysis(engine):
+    with engine.connect() as db:
+        return {tuple(row) for row in db.execute(text('SELECT scan_id, COUNT(*) FROM analysis_reference_names '
+                                                       'GROUP BY scan_id'))}
+
+
+def test_migration_010_says_its_progress_analysis_by_analysis(tmp_path):
+    engine, migrate = at_revision_009(tmp_path, ['s1', 's2'])
+    said = migrate('upgrade', '010')
+    assert '2 analyses à indexer par nom' in said
+    assert 'analyse 1/2 : 9 noms pour 2 références' in said
+    assert 'analyse 2/2 : 9 noms pour 2 références' in said
+    assert 'Création de l\'index de recherche par nom' in said
+    engine.dispose()
+
+
+def test_migration_010_resumed_after_an_interruption_keeps_the_analyses_already_indexed(tmp_path):
+    engine, migrate = at_revision_009(tmp_path, ['s1', 's2'])
+    # Une première exécution interrompue : la table existe, s1 est indexée, s2 ne l'est pas, l'index manque.
+    with engine.begin() as db:
+        db.execute(text('CREATE TABLE analysis_reference_names (scan_id VARCHAR NOT NULL REFERENCES scans (id), '
+                        'name_key VARCHAR(256) NOT NULL, reference_hash VARCHAR(64) NOT NULL, type VARCHAR NOT NULL, '
+                        'PRIMARY KEY (scan_id, name_key, reference_hash))'))
+        db.execute(text("INSERT INTO analysis_reference_names VALUES ('s1', 'kept', 'h1', 'symbol')"))
+    said = migrate('upgrade', '010')
+    assert 'déjà présente (reprise)' in said
+    assert 'analyse 1/2 : déjà indexée (reprise)' in said, 'une analyse terminée n\'est pas refaite'
+    assert 'analyse 2/2 : 9 noms pour 2 références' in said
+    assert names_by_analysis(engine) == {('s1', 1), ('s2', 9)}
+    with engine.connect() as db:
+        indexes = {name for (name,) in db.execute(text("SELECT name FROM sqlite_master WHERE type = 'index'"))}
+    assert 'ix_analysis_reference_names_type' in indexes
+    engine.dispose()
+
+
+def test_migration_010_reads_an_analysis_by_bounded_pages(monkeypatch):
+    migration = frozen()
+    monkeypatch.setattr(migration, '_BATCH', 2)
+    engine = create_engine('sqlite://')
+    with engine.begin() as db:
+        db.execute(text('CREATE TABLE analysis_references (scan_id VARCHAR, reference_hash VARCHAR, type VARCHAR, '
+                        'reference TEXT, PRIMARY KEY (scan_id, reference_hash))'))
+        db.execute(text("INSERT INTO analysis_references VALUES ('s', 'h3', 'module', 'module:c'), "
+                        "('s', 'h1', 'module', 'module:a'), ('s', 'h2', 'module', 'module:b'), "
+                        "('s', 'h4', 'module', 'module:d'), ('s', 'h5', 'module', 'module:e'), "
+                        "('t', 'h0', 'module', 'module:z')"))
+        pages = [[row.reference_hash for row in page] for page in migration._pages(db, 's')]
+    assert pages == [['h1', 'h2'], ['h3', 'h4'], ['h5']], 'jamais plus d\'une page en mémoire, rien d\'oublié'
