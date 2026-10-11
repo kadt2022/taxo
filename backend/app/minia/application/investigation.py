@@ -55,6 +55,7 @@ MAX_EXCHANGE_BYTES = 200_000
 MAX_OPERATION_BYTES = 16_000
 _NOT_OFFERED = 'NOT_OFFERED'
 _NO_CALL_LEFT = 'NO_CALL_LEFT'
+TRANSMISSION_UNCERTAIN = 'TRANSMISSION_UNCERTAIN'
 ANSWERED, STOPPED = 'ANSWERED', 'STOPPED'
 MODE = 'investigation'
 _LOGGER = logging.getLogger(__name__)
@@ -207,6 +208,8 @@ class _Run:
         self.shown, self.received, self.notices = [], [], []
         # Les reponses en attente d'envoi : (operation, livraison, octets). Inscrites une fois le message parti.
         self.waiting = []
+        # Vrai pendant l'appel au modele : une coupure a ce moment laisse la transmission incertaine.
+        self.asking = False
         # La memoire vive de la demande : reponse non source et livraison d'origine, par cle de demande.
         self.memory = {}
         self.trajectory, self.delivered = [], []
@@ -242,9 +245,16 @@ class _Run:
             text = conversation.message(self.question, self.operations, self.state, self.shown, calls_left,
                                         self.notices)
             check(self.cancel)
+            self.asking = True
             raw = yield from self.turn.ask(text)
+            self.asking = False
             self._sent()
             step = conversation.restored(conversation.parse_step(raw), self.turn.disclosure)
+            if isinstance(step, conversation.Final) and not step.declaration.answer:
+                # Une reponse vide ne clot pas l'enquete : elle ne serait plus reprenable, sans rien avoir dit.
+                self.notices.append({'notice': 'EMPTY_ANSWER', 'message': 'Ta réponse est vide : réponds, ou '
+                                     'poursuis l’enquête.'})
+                continue
             if isinstance(step, conversation.Final):
                 return step.declaration
             yield from self._act(step, calls_left, space)
@@ -357,7 +367,15 @@ class _Run:
             self.state = self.state.record_action(self.snapshot, delivery.mip_reference, Action.EVIDENCE, at=at)
 
     def _delivery_id(self):
-        return f'D-{len(self.state.logbook.deliveries) + len(self.waiting) + 1}'
+        """Un identifiant jamais donne dans cette enquete : ni livre, ni porte par un recu ou une reponse en
+        attente, meme apres une coupure qui a laisse un recu sans livraison."""
+        logbook = self.state.logbook
+        issued = ([delivery.delivery_id for delivery in logbook.deliveries]
+                  + [receipt.transmission_id for receipt in logbook.receipts]
+                  + [delivery.delivery_id for _, delivery, _ in self.waiting])
+        numbers = [int(value[2:]) for value in issued if isinstance(value, str) and value[:2] == 'D-'
+                   and value[2:].isdigit()]
+        return f'D-{max(numbers, default=0) + 1}'
 
     def _sent(self):
         """Le message est parti et le modele a repondu : ce qu'il portait pour la premiere fois est transmis."""
@@ -377,7 +395,8 @@ class _Run:
         try:
             for record, _, size in self.waiting:
                 if record is not None:
-                    self.state, _ = self.state.record_operation(self.snapshot, _undelivered(record), size)
+                    self.state, _ = self.state.record_operation(self.snapshot, _undelivered(record, self.asking),
+                                                                size)
             self.waiting = []
             if self.state.investigation.status is Status.ACTIVE:
                 self.state = self.state.move_to(Status.PAUSED, self.owner.clock())
@@ -487,10 +506,13 @@ class _Run:
         }
 
 
-def _undelivered(record):
-    """Une operation dont la reponse n'a jamais ete transmise au modele : obtenue, non transmise."""
+def _undelivered(record, asked):
+    """Une operation dont la transmission n'est pas attestee. Coupee avant l'envoi, sa reponse est obtenue, non
+    transmise ; coupee pendant l'appel au modele, elle a pu partir sans que rien ne l'atteste : le carnet le dit,
+    sans l'inscrire comme livree ni comme retenue."""
+    not_sent = record.not_sent + (({'what': 'response', 'reason': TRANSMISSION_UNCERTAIN},) if asked else ())
     return OperationRecord(record.name, record.arguments, record.outcome, record.at, record.response_fingerprint,
-                           (), record.not_sent)
+                           (), not_sent)
 
 
 def exchange_bytes(limits: BudgetLimits) -> int:

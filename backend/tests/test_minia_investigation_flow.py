@@ -406,6 +406,8 @@ def test_an_interrupted_request_keeps_what_was_obtained_but_never_sent(session):
     assert state.investigation.status is Status.PAUSED
     [operation] = state.logbook.operations
     assert operation.outcome.value == 'OK' and operation.delivery_ids == ()
+    assert {'what': 'response', 'reason': 'TRANSMISSION_UNCERTAIN'} in operation.not_sent, \
+        'coupee pendant l’appel au modele, la reponse a pu partir : le carnet le dit'
     assert state.logbook.deliveries == ()
     assert state.logbook.expanded(school.CONTROLLER), 'ce que Taxo a rendu reste au carnet'
 
@@ -422,3 +424,31 @@ def test_an_expired_investigation_is_no_longer_shown(session):
     investigations.clock = lambda: now + timedelta(days=8)
     response = started.client.get(url)
     assert response.status_code == 409 and response.json()['detail'].startswith(INVESTIGATION_EXPIRED)
+
+
+def test_an_empty_answer_does_not_close_the_investigation(session):
+    model = Scripted(final(answer=''), final())
+    result = completed(session(model).investigate(question=QUESTION))
+
+    assert sent(model, 1)['notices'][-1]['notice'] == 'EMPTY_ANSWER'
+    assert result['exploration']['answer'].startswith('Le contrôleur')
+
+
+def test_delivery_ids_are_never_reused_after_an_interrupted_source_read(session):
+    """Un recu de code garde son identifiant de transmission ; la reprise n'attribue jamais ce meme identifiant
+    a une autre reponse."""
+    def unavailable(_message):
+        raise MiniaError(UNAVAILABLE, 'Modèle injoignable.')
+    started = session(Scripted(call('get_source', reference=school.CONTROLLER), unavailable),
+                      source_reading='symbol')
+    events = started.investigate(question=QUESTION, resume_question=CONFIRMED, source=True)
+    investigation_id = next(data for kind, data in events if kind == 'minia.investigation')['id']
+
+    resumed = Scripted(neighborhood(school.CONTROLLER), final())
+    started.app.state.minia.models = {'scripted': resumed}
+    completed(started.investigate(investigation_id=investigation_id))
+    investigations = started.app.state.minia.investigations
+    state = investigations.store.load(investigation_id, investigations.scope(started.project))
+    [receipt] = state.logbook.receipts
+    assert receipt.transmission_id == 'D-1'
+    assert [delivery.delivery_id for delivery in state.logbook.deliveries] == ['D-2']
