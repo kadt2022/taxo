@@ -151,6 +151,13 @@ class References:
         fact = self.facts.pop(ref)
         del self.by_key[self._key(fact)]
 
+    def saved(self):
+        """L'etat des references, pour revenir sur une reponse provisoire jamais transmise."""
+        return dict(self.facts), dict(self.by_key), dict(self.evidence)
+
+    def restore(self, state):
+        self.facts, self.by_key, self.evidence = (dict(part) for part in state)
+
     def proof(self, fact_ref, index):
         key = (fact_ref, index)
         if key not in self.evidence:
@@ -398,6 +405,15 @@ class Exchange:
             result = self._failure(operation, exc)
         self.used += result['bytes']
         return result
+
+    def checkpoint(self):
+        """L'etat de l'echange (operations, octets, references) avant une reponse qui peut etre redemandee."""
+        return self.calls, self.used, self.refs.saved()
+
+    def rollback(self, point):
+        """Revient a `checkpoint()` : une reponse provisoire jamais transmise ne laisse ni cout ni reference."""
+        self.calls, self.used = point[0], point[1]
+        self.refs.restore(point[2])
 
     def accounted(self, serve, requested=None):
         """Une reponse composee sur cet echange (une Tuile MIP, qui peut y faire plusieurs appels) : comptee comme une

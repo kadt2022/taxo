@@ -209,6 +209,20 @@ def test_a_tile_that_the_profile_would_push_over_budget_is_served_by_a_smaller_e
     assert tile['truncated'] and (tile['stop_reason'] == 'BYTES' or tile['not_sent'])
 
 
+def test_a_retried_tile_in_a_consumer_exchange_leaves_only_its_own_references_and_cost(courses):
+    """Dans l'échange d'un consommateur (Minia), la première réponse du moteur, jamais transmise, est effacée avant
+    la seconde : il ne reste que les références `F…` de la Tuile rendue, et le coût de la seule seconde réponse."""
+    from app.mip.application.service import MipService
+    taxo, scan = courses
+    service = taxo.client.app.state.taxo_query
+    project_id = taxo.base.rsplit('/', 1)[-1]
+    exchange = service.open(project_id, analysis_id=scan)
+    tile = MipService(service).query(project_id, profiled(REGISTER, 'method-context/1', analysis=scan), exchange)
+    assert tile['outcome'] == 'OK' and tile['truncated'], 'le chemin de la seconde demande au moteur'
+    assert set(exchange.refs.facts) == {fact['ref'] for fact in tile['facts']}
+    assert exchange.calls == 1 and exchange.used < 8_000
+
+
 def test_a_wrong_annotation_claim_is_corrected_by_the_observed_annotations(courses):
     """B2 et D6 : la Tuile rend l'annotation écrite (`@Service`) ; une affirmation sur une autre (`@Component`) reste
     non prouvée, jamais réfutée : Taxo ne conclut pas une absence, il montre ce qui est écrit."""
