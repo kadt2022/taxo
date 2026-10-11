@@ -8,7 +8,7 @@ questions ne sont pas dans le dépôt : le banc a été reconstitué (#127), ré
 Le 11 octobre, le responsable du produit a décidé que son rejeu contre un vrai modèle ne conditionne pas la
 clôture : il le fera lui-même pour apprécier le travail ; un écart constaté donnera un nouveau récit.  
 **Source de vérité :** `ARCHITECTURE.md` § 12.4 (verdicts), § 12.5 (transparence) et § 12.6 (sécurité et consentement).  
-**Bloquait :** [TAXO-MIP-SOURCE-01](../TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md) (lecture du code des méthodes).
+**Bloquait :** [TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md) (lecture du code des méthodes).
 
 ## 1. Problème
 
@@ -130,5 +130,5 @@ Ce qui est démontré, et par quoi :
   fausses confirmations de sécurité, opérations, appels, octets, temps et fuites dans les charges (#127).
 
 Limite : le rejeu contre un vrai modèle n'a pas été exécuté dans le cadre du récit, par décision du responsable
-du produit (voir le statut). [TAXO-MIP-SOURCE-01](../TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md) n'est
-plus bloqué.
+du produit (voir le statut). [TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md),
+débloqué, a été terminé avec [TAXO-MIP-ADT-01](TAXO-MIP-ADT-01-adaptive-tile.md) le même jour.

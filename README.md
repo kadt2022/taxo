@@ -433,7 +433,7 @@ POST /api/projects/{id}/taxo-query
 - **`get_source`** (TAXO-MIP-ADT-01) rend le code d'un symbole déclaré (type, méthode, constructeur), jamais un
   fichier ni un chemin, au commit de l'analyse (jamais pour l'analyse du dossier de travail). Elle n'est proposée que si `TAXO_SOURCE_READING=symbol` (défaut
   `off`) et que l'échange l'autorise (`"consent": {"source": true}`) ; l'accord du diff ne l'autorise jamais.
-  Minia ne la demande pas.
+  Minia la demande en exploration si la demande l'autorise (voir plus bas).
 - Les autres opérations réservées (`find_endpoint`, `find_callers`…) répondent `NOT_AVAILABLE`
   tant qu'aucun analyseur ne les nourrit.
 
@@ -465,7 +465,11 @@ non vérifiée. Les trois colonnes se répartissent ainsi :
 
 En exploration, Minia peut demander la **Tuile** d'une référence déjà reçue selon un profil déclaré
 (`get_tile` : `method-context/1`, `calls/1`, `structure/1`, `security/1`), sur la même analyse. Une Tuile ne
-contient que des faits ; Minia ne reçoit jamais de code par `get_source`.
+contient que des faits. Si `TAXO_SOURCE_READING=symbol` et que la case « Autoriser Minia à lire le code des classes,
+méthodes et constructeurs qu'elle trouve » est cochée (`"source": true` dans `POST /api/projects/{id}/ask/stream`), Minia peut aussi
+lire le **code** d'un symbole déjà reçu de Taxo (`get_source`) : la pièce est lue au commit de l'analyse (pas
+forcément le dernier qui a modifié la méthode), garde sa propre classification, passe par la protection de la
+demande, et n'est jamais un fait. Avec un fournisseur distant, la case est décochée par défaut.
 
 La **trajectoire** est visible en direct puis sous la réponse : chaque opération, ses arguments, son issue,
 sa taille et ce qui n'a pas été transmis. Une opération refusée (`NO_CONSENT`, `OUT_OF_SCOPE`…) est rendue
@@ -571,6 +575,44 @@ Taxo garde les valeurs d'origine : ce que le modèle rend est restitué localeme
 La réponse compte ce qui a été protégé (`withheld`), sans aucune valeur. « Qui est l'auteur de ce
 commit ? » (ou des derniers commits) reçoit une réponse de Taxo seul, d'après Git, sans appeler de modèle
 (`"mode": "taxo"`).
+
+Le portail dit, dans « Ce que Taxo ne sait pas », chaque opération que Taxo a refusée à Minia et pourquoi.
+Rien n'est conservé, et le journal d'accès de l'API remplace la valeur de chaque paramètre d'adresse
+(`?q=…`) par `******` : la question n'y est jamais écrite.
+
+Le banc de référence (`backend/scripts/minia_bench.py`, questions et vérité établie à la main dans
+`minia_bench_questions.json`) rejoue les 18 questions du récit sur le dépôt de démonstration, à un commit
+figé, avec le fournisseur configuré :
+
+```bash
+cd backend
+MINIA_PROVIDER=claude python scripts/minia_bench.py ../student-course-demo --runs 3 \
+  --out banc-minia.json --payloads charges.jsonl
+```
+
+Le fournisseur rejoué est celui de `--provider`, sinon de `MINIA_PROVIDER`. Le banc capture chaque message
+réellement reçu par le fournisseur, après protection, et y cherche, indépendamment de la protection,
+identités Git, courriels, jetons, clés privées, identifiants dans une adresse et secrets affectés en clair.
+Il mesure l'exactitude (mentions attendues et formulations interdites, dont une réponse de sens contraire),
+les fausses confirmations de sécurité, les affirmations sans vérification, les opérations Taxo, les appels
+au modèle, les octets envoyés (les jetons seulement si le fournisseur les rend) et le temps.
+
+**Mesure D de l'Adaptive Tile (TAXO-MIP-ADT-01).** Chaque réponse dit aussi l'apport des Tuiles (`get_tile`) et
+du code (`get_source`) : pièces servies, refusées, et leurs octets. Trois séries, même modèle, même dépôt figé :
+
+```bash
+cd backend
+git worktree add ../../taxo-avant 3f483b7   # Taxo d'avant les Tuiles
+MINIA_PROVIDER=claude python scripts/minia_bench.py ../student-course-demo --runs 3 \
+  --app ../../taxo-avant/backend --label ancienne --out ancienne.json
+MINIA_PROVIDER=claude python scripts/minia_bench.py ../student-course-demo --runs 3 --out faits.json
+MINIA_PROVIDER=claude python scripts/minia_bench.py ../student-course-demo --runs 3 --source --out code.json
+python scripts/minia_bench.py --compare ancienne.json faits.json code.json
+```
+
+`--source` active la lecture du code (`TAXO_SOURCE_READING=symbol`) et l'accord de chaque question sur le
+projet, comme la case du portail. `--compare` écrit le tableau des séries, dont l'exactitude des réponses qui
+ont reçu une Tuile ou du code, à part de celles qui n'en ont pas reçu.
 
 ### Minia Ollama ou Minia Claude (TAXO-MINIA-05)
 

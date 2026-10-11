@@ -3,7 +3,7 @@
 import type {ReactNode} from 'react';
 import {CHANGE_LABELS, type FactChange} from './diff';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
-import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
+import {refusals, Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
 
 type Evidence = {path:string; line_start?:number; line_end?:number};
 export type CitedFact = FactChange & {ref:string; evaluator_id:string; evidence_before:Evidence[]; evidence_after:Evidence[]};
@@ -19,7 +19,7 @@ export type AnswerModel = {configured?:boolean; provider:string|null; model:stri
 export const modelLabel=(model:AnswerModel)=>model.model
   ?` · ${model.provider} ${model.model}${model.fallback_from?` (repli de ${model.fallback_from})`:''}`:'';
 export type MiniaStatus = {configured:boolean; provider:string|null; model:string|null; source_context:'off'|'diff'; remote:boolean;
-  data_use?:boolean; providers?:MiniaProvider[]};
+  data_use?:boolean; providers?:MiniaProvider[]; source_reading?:'off'|'symbol'};
 export type MiniaAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'; question:string; commit:string; parent:string|null;
   project:{id:string; name:string}; git:GitCommit; files_not_sent:number; source_context?:SourceContext;
   model:AnswerModel; facts:CitedFact[]; answer:string; unknown:string;
@@ -134,13 +134,30 @@ export function sourceConsent(status:MiniaStatus|null){
   return {checked:!status.remote, warning:status.remote?'Le modèle de Minia est sur une autre machine : le diff de ce commit quittera la machine de Taxo.':''};
 }
 
-export function SourceConsent({status, checked, onChange}:Readonly<{status:MiniaStatus|null; checked:boolean; onChange:(value:boolean)=>void}>){
-  const consent=sourceConsent(status);
+type ConsentProps = Readonly<{status:MiniaStatus|null; checked:boolean; onChange:(value:boolean)=>void}>;
+
+function Consent({consent, checked, onChange, children}:Readonly<{consent:{warning:string}|null; checked:boolean;
+  onChange:(value:boolean)=>void; children:string}>){
   if(!consent)return null;
   return <div className="source-consent">
-    <label><input type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)}/> Autoriser Minia à lire le diff de ce commit</label>
+    <label><input type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)}/> {children}</label>
     {consent.warning&&<p className="warning">{consent.warning}</p>}
   </div>;
+}
+
+export function SourceConsent({status, checked, onChange}:ConsentProps){
+  return <Consent consent={sourceConsent(status)} checked={checked} onChange={onChange}>Autoriser Minia à lire le diff de ce commit</Consent>;
+}
+
+/** La case d'accord pour le code d'un symbole (`get_source`, TAXO-MIP-ADT-01) : proposee seulement si le reglage
+ * TAXO_SOURCE_READING le permet ; decochee et signalee si le modele est distant. */
+export function codeConsent(status:MiniaStatus|null){
+  if(!status?.configured||status.source_reading!=='symbol')return null;
+  return {checked:!status.remote, warning:status.remote?'Le modèle de Minia est sur une autre machine : le code lu quittera la machine de Taxo.':''};
+}
+
+export function CodeConsent({status, checked, onChange}:ConsentProps){
+  return <Consent consent={codeConsent(status)} checked={checked} onChange={onChange}>Autoriser Minia à lire le code des classes, méthodes et constructeurs qu’elle trouve</Consent>;
 }
 
 /** Les limites que Taxo constate lui-meme. Ce que Minia dit ne pas savoir n'y figure pas : c'est son texte,
@@ -154,6 +171,7 @@ export function gaps(answer:MiniaAnswer){
   if(answer.files_not_sent)items.push(`${answer.files_not_sent} fichiers du commit n’ont pas été transmis à Minia (limite de taille).`);
   if(answer.facts_not_sent)items.push(`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`);
   if(answer.rejected_citations.length)items.push(`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`);
+  items.push(...refusals(answer.trajectory));
   const protectedNote=withheldNote(answer.withheld);
   if(protectedNote)items.push(protectedNote);
   return items;

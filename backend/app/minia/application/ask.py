@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
-from app.minia.application import anchoring, tiles
+from app.minia.application import anchoring, sources, tiles
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
 from app.minia.domain.confidentiality import Disclosure
@@ -62,6 +62,9 @@ _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
 _DISABLED = {'status': 'DISABLED'}
 # En exploration, le diff n'est pas joint d'avance : Minia le demande fichier par fichier (get_diff).
 _ON_DEMAND = {'status': 'ON_DEMAND'}
+# Le code est autorise, mais rien n'est lisible : analyse sans commit (dossier de travail), ou modele qui ne demande
+# pas d'operations (mode paquet seul).
+_UNAVAILABLE = {'status': 'UNAVAILABLE'}
 _NOTHING = ("Taxo n'a vu changer aucun fait dans ce commit, parmi ceux que ses évaluateurs savent produire. "
             "Minia ne peut rien affirmer au-delà.")
 _SELECT = ("Minia répond sur une sélection de l'historique : précisez un nombre de derniers commits "
@@ -197,6 +200,24 @@ def _guarded(events, cancel):
     return run()
 
 
+def _source_reading(requested, exchange):
+    """Ce que la demande permet du code : non demande, demande mais desactive par le reglage, autorise mais
+    illisible pour cette analyse (sans commit), ou lisible a la demande de Minia (`get_source`), symbole par
+    symbole. `ON_DEMAND` suit ce que l'echange propose reellement, jamais le seul consentement."""
+    if not requested:
+        return _NOT_REQUESTED
+    if not exchange.source_consent:
+        return _DISABLED
+    return _ON_DEMAND if sources.OPERATION in exchange.available() else _UNAVAILABLE
+
+
+def _completed_with(steps, fields):
+    """Les etapes d'une reponse, dont le resultat final porte aussi `fields` (par exemple, en repli paquet, ce que
+    la demande permettait du code)."""
+    for kind, data in steps:
+        yield (kind, {**data, **fields}) if kind == COMPLETED else (kind, data)
+
+
 def _packet(fallback, trajectory):
     """Le mode paquet ; en repli d'une exploration, la raison et le chemin deja parcouru."""
     return {'mode': PACKET, **({'fallback': fallback, 'trajectory': trajectory} if fallback else {})}
@@ -292,11 +313,14 @@ class AskMinia:
         """Etat de Minia : fournisseur par defaut, fournisseurs disponibles ; `remote` dit si ce qu'elle recoit
         quitte la machine de Taxo."""
         providers = [_view(model) for model in self.models.values()]
+        # Le reglage du serveur pour le code d'un symbole (`get_source`) : la case d'accord n'est proposee que s'il
+        # le permet ; l'accord de la demande reste necessaire (double consentement, ARCHITECTURE § 12.6).
+        reading = getattr(self.taxo_query, 'source_reading', source_context.OFF)
         if self.default is None:
             return {'configured': False, 'provider': None, 'model': None, 'source_context': self.source,
-                    'remote': False, 'providers': providers}
+                    'source_reading': reading, 'remote': False, 'providers': providers}
         return {'configured': True, **_view(self.models[self.default]), 'source_context': self.source,
-                'providers': providers}
+                'source_reading': reading, 'providers': providers}
 
     def _protected(self, provider, project_id):
         """Le modele de la demande, derriere sa propre protection : tout message y passe avant le fournisseur.
@@ -472,33 +496,54 @@ class AskMinia:
                                   'facts': [_change(ref, brief.refs[ref]) for ref in answer['cited']],
                                   'rejected_citations': answer['rejected']}
 
-    def about_project(self, project_id, question, provider=None):
-        return _final(self.about_project_events(project_id, question, provider))
+    def about_project(self, project_id, question, provider=None, source=False):
+        return _final(self.about_project_events(project_id, question, provider, source=source))
 
-    def about_project_events(self, project_id, question, provider=None, cancel=None):
+    def about_project_events(self, project_id, question, provider=None, cancel=None, source=False):
         """Question sur le projet. Un fournisseur qui sait explorer interroge Taxo operation par operation
-        (MINIA-09) ; sinon, ou en repli, la requete selectionne et Minia n'explique que la selection."""
-        return _guarded(self._project_events(project_id, question, provider, cancel), cancel)
+        (MINIA-09) ; sinon, ou en repli, la requete selectionne et Minia n'explique que la selection.
 
-    def _project_events(self, project_id, question, provider, cancel):
+        `source` : la demande autorise Minia a lire le code d'un symbole (`get_source`, TAXO-MIP-ADT-01 PR C2) ;
+        il n'est lisible que si le reglage TAXO_SOURCE_READING le permet aussi, et toujours protege avant envoi."""
+        return _guarded(self._project_events(project_id, question, provider, cancel, source), cancel)
+
+    def _project_events(self, project_id, question, provider, cancel, source=False):
         question = self._checked(question)
         projection = self.query(project_id, question)
         if projection['status'] == 'SELECTED' and authorship.asks_author(question):
-            return self._selection_authors(question, projection)
+            # Une réponse directe ne lit jamais de code : elle le dit si l'accord était donné.
+            return self._unread_with(self._selection_authors(question, projection), source)
         model = self._protected(provider, project_id)
-        return _reported(self._project_route(model, question, projection, cancel), model.disclosure)
+        return _reported(self._project_route(model, question, projection, cancel, source), model.disclosure)
 
-    def _project_route(self, model, question, projection, cancel):
+    def _project_route(self, model, question, projection, cancel, source=False):
         project_id = projection['project']['id']
         if self.taxo_query is not None and getattr(model, 'explores', False):
-            exchange = self.taxo_query.open(project_id, max_bytes=self._exchange_bytes(model))
+            # Le code n'est lisible que si le reglage et la demande l'autorisent (double consentement, § 12.6).
+            exchange = self.taxo_query.open(project_id, max_bytes=self._exchange_bytes(model), source_consent=source)
+
+            reading = {'source_reading': _source_reading(source, exchange)}
 
             def packet(reason, trajectory):
-                return self._project_steps(model, question, projection, fallback=reason, trajectory=trajectory,
-                                           cancel=cancel)
-            return self._explore(model, question, exchange, [], None,
-                                 self._project_result(model, question, projection), packet, cancel)
-        return self._project_steps(model, question, projection, cancel=cancel)
+                # Le repli garde ce que la demande permettait du code : une lecture a pu avoir lieu avant.
+                return _completed_with(self._project_steps(model, question, projection, fallback=reason,
+                                                           trajectory=trajectory, cancel=cancel), reading)
+            result = {**self._project_result(model, question, projection), **reading}
+            return self._explore(model, question, exchange, [], None, result, packet, cancel)
+        steps = self._project_steps(model, question, projection, cancel=cancel)
+        # Un modèle qui ne demande pas d'opérations ne lit jamais de code : la réponse le dit si l'accord était donné.
+        return self._unread_with(steps, source)
+
+    def _unread_with(self, steps, requested):
+        """Les étapes d'une réponse sans lecture de code ; si la demande l'autorisait, le résultat dit pourquoi."""
+        return _completed_with(steps, {'source_reading': self._unread(requested)}) if requested else steps
+
+    def _unread(self, requested):
+        """Ce que la demande permettait du code sans exploration : désactivé par le réglage, sinon illisible."""
+        if not requested:
+            return _NOT_REQUESTED
+        enabled = getattr(self.taxo_query, 'source_reading', source_context.OFF) != source_context.OFF
+        return _UNAVAILABLE if enabled else _DISABLED
 
     def _explore(self, model, question, exchange, seeds, context, result, packet, cancel=None):
         """Mode exploration : Taxo ouvre avec `describe` et les operations de depart (`seeds`), Minia demande
@@ -538,7 +583,8 @@ class AskMinia:
                 yield from packet(f'{operation} : {response["error"]["message"]}', trajectory)
                 return
             if operation == 'describe':
-                operations = [item for item in response.get('items', []) if item.get('kind') == 'operation']
+                operations = [sources.noted(item) for item in response.get('items', [])
+                              if item.get('kind') == 'operation']
                 if self.mip is not None:
                     # Les Tuiles adaptatives (TAXO-MIP-ADT-01, PR C) : un profil déclaré, sur la même analyse.
                     operations.append(tiles.offered())
@@ -557,9 +603,10 @@ class AskMinia:
                 step = exploration.restored(exploration.parse_step(raw), model.disclosure)
                 if isinstance(step, exploration.Answer):
                     break
-                if calls_left <= 0 or step.key in seen:
+                key = sources.key(step, exchanged)
+                if calls_left <= 0 or key in seen:
                     raise MiniaError(INVALID_ANSWER, 'Minia ne progressait plus (opération répétée ou limite atteinte).')
-                seen.add(step.key)
+                seen.add(key)
                 check(cancel)
                 response = self._served(exchange, step, bounded, space, exchanged)
                 exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
@@ -583,9 +630,12 @@ class AskMinia:
 
     def _served(self, exchange, step, bounded, space, exchanged):
         """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, comptée dans
-        le budget de l'échange, toute autre opération par l'échange (qui refuse ce qu'il ne propose pas)."""
+        le budget de l'échange ; le code d'un symbole déjà reçu ; toute autre opération par l'échange (qui refuse ce
+        qu'il ne propose pas)."""
         if step.operation == tiles.OPERATION and self.mip is not None:
             return tiles.request(self.mip, exchange, step.arguments, space, exchanged)
+        if step.operation == sources.OPERATION:
+            return sources.request(exchange, step.arguments, space, exchanged)
         return exchange.call(bounded(step.operation, step.arguments, space))
 
     @staticmethod

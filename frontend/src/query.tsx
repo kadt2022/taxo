@@ -4,9 +4,10 @@ import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
 import {ask as askMinia, askButton, createStop, MiniaProgress, type MiniaLive, type MiniaStop} from './minia-live';
-import {DirectAnswer, MiniaChoice, modelLabel, withheldNote, type AnswerModel, type MiniaStatus, type Withheld} from './minia';
+import {CodeConsent, codeConsent, DirectAnswer, MiniaChoice, modelLabel, withProvider, withheldNote, type AnswerModel, type MiniaStatus,
+  type Withheld} from './minia';
 import {openStream, type ServerEvent} from './sse';
-import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
+import {refusals, Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
 import {ElementView, isNamed, type Located} from './element';
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
@@ -26,9 +27,24 @@ export type SelectionAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'|'NEEDS_SEL
   // MINIA-09 : en exploration, la reponse est faite d'enonces types ; en repli, le paquet dit pourquoi.
   mode?:'exploration'|'paquet'|'taxo'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string;
   withheld?:Withheld;
+  // TAXO-MIP-ADT-01 (C2) : ce que la demande permettait du code des symboles (get_source).
+  source_reading?:{status:'NOT_REQUESTED'|'DISABLED'|'UNAVAILABLE'|'ON_DEMAND'};
   // TAXO-01N : en repli paquet sans commits, l'element dont la Tuile a ete interpretee, ou les candidates.
   anchor?:Located};
 type Run = <T>(path:string, init?:RequestInit)=>Promise<T>;
+
+/** Ce que Taxo dit de la lecture du code : rien si elle n'a pas ete demandee. */
+export function readingNote(reading:SelectionAnswer['source_reading']){
+  if(reading?.status==='DISABLED')return 'Lecture du code demandée, mais désactivée sur ce Taxo : Minia n’a lu aucun code.';
+  if(reading?.status==='UNAVAILABLE')return 'Lecture du code demandée, mais impossible pour cette demande (analyse du dossier de travail, sans commit à lire, ou modèle qui ne demande pas d’opérations). Minia n’a lu aucun code.';
+  if(reading?.status==='ON_DEMAND')return 'Minia pouvait lire le code des classes, méthodes et constructeurs trouvés, au commit de l’analyse (pas forcément le dernier qui les a modifiés) : chaque lecture figure dans la trajectoire. Ce code n’est pas un fait vérifié.';
+  return '';
+}
+
+/** Une reponse directe de Taxo ne lit jamais de code : elle le dit si la lecture etait demandee. */
+export function directReadingNote(reading:SelectionAnswer['source_reading']){
+  return reading&&reading.status!=='NOT_REQUESTED'?'Lecture du code demandée : Taxo a répondu seul d’après Git, aucun code n’a été lu.':'';
+}
 
 /** La selection demandee, dite en clair. */
 export function describe(request:Request){
@@ -84,11 +100,12 @@ export function SelectionView({result}:Readonly<{result:Selection}>){
 export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>){
   if(answer.mode==='taxo')return <DirectAnswer question={answer.question} answer={answer.answer}>
     {answer.facts.length>0&&<ul>{answer.facts.map(f=><li key={f.ref}>{factLine(f)}</li>)}</ul>}
+    {directReadingNote(answer.source_reading)&&<p className="muted">{directReadingNote(answer.source_reading)}</p>}
   </DirectAnswer>;
   if(answer.mode==='exploration'&&answer.statements)return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · exploration</p>
     <p className="minia-question">{answer.question}</p>
-    <Statements statements={answer.statements} limits={[withheldNote(answer.withheld)].filter((item):item is string=>!!item)}/>
+    <Statements statements={answer.statements} limits={[readingNote(answer.source_reading), ...refusals(answer.trajectory), withheldNote(answer.withheld)].filter((item):item is string=>!!item)}/>
     <Trajectory steps={answer.trajectory??[]}/>
     <footer>Minia a interrogé Taxo opération par opération ; Taxo a vérifié chacune de ses affirmations. Aucune phrase n’est affichée comme établie sans verdict de Taxo, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
@@ -96,7 +113,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
   const limits=[answer.fallback?`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir d’un paquet de faits.`:'', answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:'',
-    withheldNote(answer.withheld)??''].filter(Boolean);
+    readingNote(answer.source_reading), ...refusals(answer.trajectory), withheldNote(answer.withheld)??''].filter(Boolean);
   return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · {answer.anchor?.anchor?reference(answer.anchor.anchor):describe(answer.request)}</p>
     <p className="minia-question">{answer.question}</p>
@@ -135,8 +152,8 @@ export async function selectWithElement(base:string, text:string, request:Run):P
   const element=await request<Located>(elementsPath(base,text)).catch(()=>undefined);
   return element?{...selected, element}:selected;
 }
-export const askInit=(text:string, provider=''):RequestInit=>({method:'POST', headers:{'Content-Type':'application/json'},
-  body:JSON.stringify(provider?{question:text, provider}:{question:text})});
+export const askInit=(text:string, provider='', source=false):RequestInit=>({method:'POST', headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({question:text, ...(provider?{provider}:{}), ...(source?{source}:{})})});
 
 type Setters<T> = {setBusy:(value:boolean)=>void; setError:(value:string)=>void; setValue:(value:T)=>void};
 
@@ -159,14 +176,14 @@ type PanelSetters = {setBusy:(value:boolean)=>void; setError:(value:string)=>voi
 /** Les deux actions du panneau : selectionner des faits, ou demander a Minia d'expliquer la selection. */
 /** Les deux actions du panneau. `control` garde le moyen d'arreter la demande a Minia en cours (TAXO-UX-03). */
 export function actions(base:string, text:string, request:Run, set:PanelSetters, stream:Stream=openStream, provider='',
-  control:{current:MiniaStop|null}={current:null}){
+  control:{current:MiniaStop|null}={current:null}, source=false){
   const common={setBusy:set.setBusy, setError:set.setError};
   return {
     select:()=>track(()=>selectWithElement(base,text,request), {...common, setValue:(value:Selection)=>{set.setResult(value);set.setLive(()=>null);}}),
     explain:()=>{
       const run=createStop();
       control.current=run;
-      return track(()=>askMinia<SelectionAnswer>(()=>stream(`/api${base}/ask/stream`,{...askInit(text,provider), signal:run.signal}),
+      return track(()=>askMinia<SelectionAnswer>(()=>stream(`/api${base}/ask/stream`,{...askInit(text,provider,source), signal:run.signal}),
         change=>set.setLive(live=>change(live as Live)), run), {...common, setValue:()=>undefined});
     },
   };
@@ -178,13 +195,18 @@ export function AskTaxo({base, request, stream, minia=null}:Readonly<{base:strin
   const control=useRef<MiniaStop|null>(null);
   // Quitter le panneau (changer de projet) arrete la demande a Minia en cours.
   useEffect(()=>()=>control.current?.stop(),[]);
-  const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setLive},stream,provider,control);
+  // L'accord pour le code suit le fournisseur choisi : decoche des qu'il est distant (ARCHITECTURE § 12.6).
+  const chosen=withProvider(minia,provider), [code,setCode]=useState(false);
+  useEffect(()=>{setCode(codeConsent(chosen)?.checked??false);},[chosen?.provider,chosen?.source_reading]);
+  const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setLive},stream,provider,control,
+    code&&codeConsent(chosen)!==null);
   return <section className="results ask-taxo" aria-label="Interroger Taxo">
     <div className="section-heading"><div><h2>Interroger Taxo</h2><p>Taxo répond à partir des faits de la dernière analyse globale. Sur l’historique : « les 3 derniers commits », « le commit 5b9022b », « depuis 2026-09-01 ». Sur le code : « qui appelle OwnerRepository.findById ? », « que contient `VetController` ? ».</p></div></div>
     <form onSubmit={submitWith(select)}>
       <label htmlFor="taxo-query">Votre requête</label>
       <input id="taxo-query" required maxLength={1000} value={text} onChange={typed(setText)} placeholder="les 3 derniers commits"/>
       <MiniaChoice id="taxo-provider" status={minia} value={provider} onChange={setProvider}/>
+      <CodeConsent status={chosen} checked={code} onChange={setCode}/>
       <div className="actions"><button type="submit" className="secondary" disabled={busy}>Sélectionner</button>
         <button type="button" className="secondary" disabled={busy||!text.trim()} onClick={explain}>{askButton(busy&&live!==null&&!live.result,'Demander à Minia')}</button></div>
     </form>

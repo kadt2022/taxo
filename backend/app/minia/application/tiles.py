@@ -6,11 +6,10 @@ compose aucun parcours : le profil le fixe, et sa Tuile porte ses règles, ses c
 classification. La Tuile est comptée dans le budget de l'échange comme toute opération. Un refus (référence non
 reçue, profil inconnu, ancre d'un autre type, budget) est rendu tel quel, sans repli silencieux.
 
-Aucun code n'est transmis : une Tuile ne contient que des faits de la Maille, et `get_source` n'est jamais proposée
-à Minia (elle attend son propre consentement, et la clôture de TAXO-MINIA-SEC-01).
+Aucun code n'est transmis : une Tuile ne contient que des faits de la Maille. Le code d'un symbole est une autre
+opération (`get_source`, module `sources`), sous son propre double consentement, avec sa propre classification.
 """
-import json
-
+from app.minia.application import sources
 from app.mip.domain.profiles import PROFILES
 from app.mip.domain.tile import failure
 from app.protocol.domain.envelope import size
@@ -52,7 +51,7 @@ def _tile(mip, exchange, arguments, max_bytes, exchanged):
     if unknown:
         return failure(_INVALID, f'Argument inconnu : {unknown[0][:100]}.', exchange.snapshot, EXPAND)
     reference = arguments.get('reference')
-    if not _received(reference, exchanged):
+    if not sources.received(reference, exchanged):
         # Une référence devinée pourrait désigner un élément réel sans rapport avec la question.
         return failure(_INVALID, 'reference : une référence reçue de Taxo dans cet échange (find_references, '
                                  'get_neighborhood ou une Tuile).', exchange.snapshot, EXPAND)
@@ -60,14 +59,6 @@ def _tile(mip, exchange, arguments, max_bytes, exchanged):
              'analysis': exchange.snapshot['analysis'], 'bounds': {'max_bytes': max(max_bytes - _SIZE_FIELD, 1)}}
     # Servie dans l'échange de Minia : les références courtes de la Tuile (`F…`) sont les siennes.
     return mip.query(exchange.project_id, query, exchange)
-
-
-def _received(reference, exchanged):
-    """Vrai si `reference` figure, comme valeur, dans une réponse déjà reçue de Taxo."""
-    if not isinstance(reference, str) or not reference:
-        return False
-    responses = json.dumps([item['response'] for item in exchanged], ensure_ascii=False)
-    return json.dumps(reference, ensure_ascii=False) in responses
 
 
 def _sized(tile):
