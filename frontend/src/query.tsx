@@ -7,7 +7,7 @@ import {ask as askMinia, askButton, createStop, MiniaProgress, type MiniaLive, t
 import {CodeConsent, codeConsent, DirectAnswer, MiniaChoice, modelLabel, withProvider, withheldNote, type AnswerModel, type MiniaStatus,
   type Withheld} from './minia';
 import {openStream, type ServerEvent} from './sse';
-import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
+import {refusals, Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
 import {ElementView, isNamed, type Located} from './element';
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
@@ -28,7 +28,7 @@ export type SelectionAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'|'NEEDS_SEL
   mode?:'exploration'|'paquet'|'taxo'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string;
   withheld?:Withheld;
   // TAXO-MIP-ADT-01 (C2) : ce que la demande permettait du code des symboles (get_source).
-  source_reading?:{status:'NOT_REQUESTED'|'DISABLED'|'ON_DEMAND'};
+  source_reading?:{status:'NOT_REQUESTED'|'DISABLED'|'UNAVAILABLE'|'ON_DEMAND'};
   // TAXO-01N : en repli paquet sans commits, l'element dont la Tuile a ete interpretee, ou les candidates.
   anchor?:Located};
 type Run = <T>(path:string, init?:RequestInit)=>Promise<T>;
@@ -36,6 +36,7 @@ type Run = <T>(path:string, init?:RequestInit)=>Promise<T>;
 /** Ce que Taxo dit de la lecture du code : rien si elle n'a pas ete demandee. */
 export function readingNote(reading:SelectionAnswer['source_reading']){
   if(reading?.status==='DISABLED')return 'Lecture du code demandée, mais désactivée sur ce Taxo : Minia n’a lu aucun code.';
+  if(reading?.status==='UNAVAILABLE')return 'Lecture du code demandée, mais impossible : la dernière analyse est celle du dossier de travail, sans commit à lire. Minia n’a lu aucun code.';
   if(reading?.status==='ON_DEMAND')return 'Minia pouvait lire le code des méthodes trouvées, au commit de l’analyse (pas forcément le dernier qui les a modifiées) : chaque lecture figure dans la trajectoire. Ce code n’est pas un fait vérifié.';
   return '';
 }
@@ -98,7 +99,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
   if(answer.mode==='exploration'&&answer.statements)return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · exploration</p>
     <p className="minia-question">{answer.question}</p>
-    <Statements statements={answer.statements} limits={[readingNote(answer.source_reading), withheldNote(answer.withheld)].filter((item):item is string=>!!item)}/>
+    <Statements statements={answer.statements} limits={[readingNote(answer.source_reading), ...refusals(answer.trajectory), withheldNote(answer.withheld)].filter((item):item is string=>!!item)}/>
     <Trajectory steps={answer.trajectory??[]}/>
     <footer>Minia a interrogé Taxo opération par opération ; Taxo a vérifié chacune de ses affirmations. Aucune phrase n’est affichée comme établie sans verdict de Taxo, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
@@ -106,7 +107,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
   const limits=[answer.fallback?`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir d’un paquet de faits.`:'', answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:'',
-    withheldNote(answer.withheld)??''].filter(Boolean);
+    readingNote(answer.source_reading), ...refusals(answer.trajectory), withheldNote(answer.withheld)??''].filter(Boolean);
   return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · {answer.anchor?.anchor?reference(answer.anchor.anchor):describe(answer.request)}</p>
     <p className="minia-question">{answer.question}</p>

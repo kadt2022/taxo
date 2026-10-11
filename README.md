@@ -576,6 +576,10 @@ La réponse compte ce qui a été protégé (`withheld`), sans aucune valeur. «
 commit ? » (ou des derniers commits) reçoit une réponse de Taxo seul, d'après Git, sans appeler de modèle
 (`"mode": "taxo"`).
 
+Le portail dit, dans « Ce que Taxo ne sait pas », chaque opération que Taxo a refusée à Minia et pourquoi.
+Rien n'est conservé, et le journal d'accès de l'API remplace la valeur de chaque paramètre d'adresse
+(`?q=…`) par `******` : la question n'y est jamais écrite.
+
 Le banc de référence (`backend/scripts/minia_bench.py`, questions et vérité établie à la main dans
 `minia_bench_questions.json`) rejoue les 18 questions du récit sur le dépôt de démonstration, à un commit
 figé, avec le fournisseur configuré :

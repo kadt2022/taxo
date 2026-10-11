@@ -3,7 +3,7 @@
 import type {ReactNode} from 'react';
 import {CHANGE_LABELS, type FactChange} from './diff';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
-import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
+import {refusals, Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
 
 type Evidence = {path:string; line_start?:number; line_end?:number};
 export type CitedFact = FactChange & {ref:string; evaluator_id:string; evidence_before:Evidence[]; evidence_after:Evidence[]};
@@ -171,6 +171,7 @@ export function gaps(answer:MiniaAnswer){
   if(answer.files_not_sent)items.push(`${answer.files_not_sent} fichiers du commit n’ont pas été transmis à Minia (limite de taille).`);
   if(answer.facts_not_sent)items.push(`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`);
   if(answer.rejected_citations.length)items.push(`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`);
+  items.push(...refusals(answer.trajectory));
   const protectedNote=withheldNote(answer.withheld);
   if(protectedNote)items.push(protectedNote);
   return items;

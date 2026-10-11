@@ -25,7 +25,7 @@ const REASONS:Record<string,string>={NOT_FOUND_IN_ANALYSED_SCOPE:'Taxo a cherch�
   NOT_INTERPRETED:'Taxo a vu cette zone sans savoir la lire', NOT_ANALYSED:'aucun analyseur de Taxo ne couvre encore cette dimension'};
 const OPERATIONS:Record<string,string>={describe:'Ce que Taxo sait servir', find_facts:'Recherche de faits',
   get_evidence:'Preuves d’un fait', get_coverage:'Couverture', get_commit:'Commit', get_diff:'Diff d’un fichier',
-  verify_claim:'Vérification d’une affirmation'};
+  verify_claim:'Vérification d’une affirmation', get_tile:'Tuile adaptative', get_source:'Code d’un symbole'};
 
 /** Le verdict de Taxo en clair ; une affirmation que Taxo n'a pas pu verifier le dit. */
 export function verdictText(statement:Extract<Statement,{type:'claim'}>){
@@ -76,16 +76,29 @@ export function claimSentence(claim:Claim){
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }
 
+const operationText=(step:TrajectoryStep)=>{
+  const args=Object.entries(step.arguments).map(([key,value])=>`${key} ${value}`).join(', ');
+  return `${OPERATIONS[step.operation]??step.operation}${args?` (${args})`:''}`;
+};
+
+/** Pourquoi Taxo a refuse une operation : son message, ou son code a defaut. */
+const refusalText=(step:TrajectoryStep)=>step.error?.message?`${step.error.message} (${step.error.code})`:step.error?.code??'refus';
+
 /** Une etape de la trajectoire en une ligne : l'operation, ses arguments, l'issue. */
 export function stepText(step:TrajectoryStep){
-  const name=OPERATIONS[step.operation]??step.operation;
-  const args=Object.entries(step.arguments).map(([key,value])=>`${key} ${value}`).join(', ');
-  const outcome=step.outcome==='ERROR'?`refusé (${step.error?.code})`
+  const outcome=step.outcome==='ERROR'?`refusé : ${refusalText(step)}`
     :step.verdict?(VERDICTS[step.verdict]??step.verdict)
     :`${step.items??0} résultat${(step.items??0)>1?'s':''}`;
   const cut=(step.not_sent??[]).reduce((total,item)=>total+(item.count??1),0);
   const ignored=step.ignored?.length?` · ignorés : ${step.ignored.join(', ')}`:'';
-  return `${name}${args?` (${args})`:''} → ${outcome}${cut?`, ${cut} non transmis`:''} · ${step.bytes} octets${ignored}`;
+  return `${operationText(step)} → ${outcome}${cut?`, ${cut} non transmis`:''} · ${step.bytes} octets${ignored}`;
+}
+
+/** Les operations que Taxo a refusees a Minia, dites avec leur raison (TAXO-MINIA-SEC-01, E4) : un refus est une
+ * frontiere de Taxo, jamais une absence dans le code. Une meme demande refusee deux fois n'est dite qu'une fois. */
+export function refusals(steps:TrajectoryStep[]=[]){
+  const said=steps.filter(step=>step.outcome==='ERROR').map(step=>`Taxo a refusé « ${operationText(step)} » : ${refusalText(step)}.`);
+  return [...new Set(said)];
 }
 
 /** Ou se trouve une preuve : fichier et lignes, ou objet Git ; la methode d'extraction entre parentheses. */

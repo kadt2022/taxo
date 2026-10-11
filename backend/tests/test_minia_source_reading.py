@@ -60,13 +60,13 @@ FILES = {
 }
 
 
-def ask(make_repo, tmp_path, model, source=True, reading='symbol'):
+def ask(make_repo, tmp_path, model, source=True, reading='symbol', mode='commit'):
     root = make_repo(FILES)
     app = create_app(f'sqlite:///{tmp_path / "source.db"}', [root], minia=model, source_reading=reading)
     Base.metadata.create_all(app.state.engine)
     with TestClient(app) as client:
         project = client.post('/api/projects', json={'name': 'Cours', 'path': str(root)}).json()
-        client.post(f'/api/projects/{project["id"]}/scans')
+        client.post(f'/api/projects/{project["id"]}/scans', params={'mode': mode})
         assert client.get('/api/minia/status').json()['source_reading'] == reading, 'la case suit le réglage'
         stream = client.post(f'/api/projects/{project["id"]}/ask/stream',
                              json={'question': QUESTION, 'source': source})
@@ -165,5 +165,31 @@ def test_the_same_reading_twice_in_the_same_state_is_a_repetition(make_repo, tmp
                      json.dumps({'cited': [], 'answer': '', 'unknown': 'Repli sur le paquet.'}))
     result = ask(make_repo, tmp_path, model)
     assert result['mode'] == 'paquet' and 'répétée' in result['fallback']
+    assert result['source_reading'] == {'status': 'ON_DEMAND'}, 'le repli garde ce que la demande permettait'
     operations = [step['operation'] for step in result['trajectory']]
     assert operations[:3] == ['describe', 'find_references', 'get_source'] and operations.count('get_source') == 1
+
+
+def test_a_working_tree_analysis_says_the_code_is_unavailable_and_never_offers_it(make_repo, tmp_path):
+    """Les deux accords donnés, mais l'analyse est celle du dossier de travail : aucun commit à lire. La réponse ne
+    prétend pas que Minia pouvait lire le code."""
+    model = Scripted(found, call('get_source', reference=FIND), answer(statement('unknown', 'Pas de code.')))
+    result = ask(make_repo, tmp_path, model, mode='working-tree')
+    assert result['source_reading'] == {'status': 'UNAVAILABLE'}
+    assert 'get_source' not in [item['operation'] for item in sent(model, 0)['operations']]
+    assert result['trajectory'][2]['outcome'] == 'ERROR'
+    assert 'studentRepository.findAll()' not in json.dumps(model.calls)
+
+
+def test_a_symbol_written_in_the_code_read_is_not_a_received_reference():
+    """Un symbole écrit dans le code d'une pièce (ou dans tout texte) n'ouvre pas sa lecture : seule une valeur rendue
+    par Taxo comme référence compte, à l'identique."""
+    from app.minia.application import sources
+    hidden = f'{SERVICE}#secret()'
+    piece = {'operation': 'get_source', 'response': {'reference': FIND, 'items': [
+        {'reference': FIND, 'text': f'String next = "{hidden}";'}], 'message': hidden}}
+    tile = {'operation': 'get_tile', 'response': {'facts': [{'fact': {'subject': FIND, 'object': FIND_ALL,
+                                                                       'derivation': {'premises': [FIND_ALL]}}}]}}
+    assert not sources.received(hidden, [piece, tile])
+    assert sources.received(FIND, [piece]) and sources.received(FIND_ALL, [tile])
+    assert not sources.received(FIND[:-2], [piece]), 'jamais un fragment de référence'
