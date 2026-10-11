@@ -21,6 +21,8 @@ class Trace:
     REFERENCE_MISMATCH = 'REFERENCE_MISMATCH'  # la livraison portait une autre reference
     KIND_MISMATCH = 'KIND_MISMATCH'  # la livraison etait d'une autre nature
     MALFORMED = 'MALFORMED'  # element illisible : rien n'est atteste
+    # livre lors d'une passe precedente de l'enquete, dont le contenu n'a pas ete rejoue au modele de cette passe
+    EARLIER_RUN = 'EARLIER_RUN'
 
 
 @dataclass(frozen=True)
@@ -50,15 +52,15 @@ def parse(data: dict) -> Declaration:
     return Declaration(_text(data.get('answer'), MAX_TEXT), tuple(kept), remaining, malformed)
 
 
-def confronted(declaration: Declaration, logbook: Logbook) -> list:
-    """Chaque element declare et son issue face au journal des livraisons de cette enquete."""
-    traced = []
-    for item in declaration.items:
-        traced.append({**item, 'trace': _trace(item, logbook)})
-    return traced
+def confronted(declaration: Declaration, logbook: Logbook, shown) -> list:
+    """Chaque element declare et son issue face au journal des livraisons de cette enquete. `shown` : les
+    livraisons envoyees au modele pendant cette passe ; une reprise ne rejoue pas les contenus des precedentes,
+    donc citer l'une d'elles n'atteste aucune livraison a ce modele."""
+    shown = frozenset(shown)
+    return [{**item, 'trace': _trace(item, logbook, shown)} for item in declaration.items]
 
 
-def _trace(item, logbook):
+def _trace(item, logbook, shown):
     if not all(item.get(name) for name in ('mip_reference', 'delivery_id', 'kind')):
         return Trace.MALFORMED
     if item['kind'] not in {kind.value for kind in DeliveryKind}:
@@ -70,4 +72,6 @@ def _trace(item, logbook):
         return Trace.REFERENCE_MISMATCH
     if delivery.kind.value != item['kind']:
         return Trace.KIND_MISMATCH
+    if delivery.delivery_id not in shown:
+        return Trace.EARLIER_RUN
     return Trace.DELIVERED

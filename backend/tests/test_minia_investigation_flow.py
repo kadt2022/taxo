@@ -316,6 +316,27 @@ def test_interrupt_then_resume_restores_the_confirmed_question_and_frontier(sess
     assert result['investigation']['status'] == 'COMPLETE'
 
 
+def test_a_resumed_model_citing_an_earlier_delivery_gets_no_attestation(session):
+    """Une reprise ne rejoue pas les contenus des passes precedentes : citer une de leurs livraisons n'atteste
+    rien pour ce modele. Seule une livraison de cette passe est DELIVERED."""
+    started = session(Scripted(neighborhood(school.CONTROLLER), 'pas du JSON'))
+    events = started.investigate(question=QUESTION, resume_question=CONFIRMED)
+    investigation_id = next(data for kind, data in events if kind == 'minia.investigation')['id']
+    [earlier] = started.client.get(f'/api/projects/{started.project}/investigations/{investigation_id}'
+                                   ).json()['deliveries']
+
+    def answer(sent_message):
+        current = sent_message['slice'][0]
+        return final(items=[{'mip_reference': earlier['mip_reference'], 'delivery_id': earlier['delivery_id'],
+                             'kind': earlier['kind']},
+                            {'mip_reference': current['response']['anchor']['reference'],
+                             'delivery_id': current['delivery_id'], 'kind': current['kind']}])
+    started.app.state.minia.models = {'scripted': Scripted(neighborhood(school.SERVICE), answer)}
+    result = completed(started.investigate(investigation_id=investigation_id))
+
+    assert [item['trace'] for item in result['exploration']['declared']] == ['EARLIER_RUN', 'DELIVERED']
+
+
 def test_an_unconfirmed_investigation_cannot_be_resumed(session):
     """AC-20 : sans question confirmee, rien de la question n'est garde et la reprise est refusee."""
     started = session(Scripted(final()))

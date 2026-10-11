@@ -1095,7 +1095,8 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   de la demande.
 - **Réponse.** Une déclaration structurée : `answer`, `used_mip_items` (`mip_reference`, `delivery_id`, `kind`)
   et `remaining_unknowns`. Minia confronte des identifiants au journal B : `DELIVERED`, `UNKNOWN_DELIVERY`,
-  `REFERENCE_MISMATCH`, `KIND_MISMATCH` ou `MALFORMED`. Une correspondance atteste une livraison, jamais une
+  `REFERENCE_MISMATCH`, `KIND_MISMATCH`, `MALFORMED`, ou `EARLIER_RUN` pour une livraison d'une passe précédente,
+  dont le contenu n'a pas été rejoué au modèle de cette passe. Une correspondance atteste une livraison, jamais une
   lecture ni une interprétation juste ; **aucun verdict de Taxo sur la conclusion du modèle**. La restitution a
   trois zones : ce que Taxo a transmis, l'exploration et les notes du modèle, ce qui reste hors périmètre ou non
   exploré.

@@ -436,7 +436,7 @@ class _Run:
         note_id = step.note_id or f'N-{len(self.state.notes) + 1}'
         try:
             if any(note.note_id == note_id for note in self.state.notes):
-                self.state = self.state.revise_note(note_id, step.text, step.nodes, guard, at)
+                self.state = self.state.revise_note(note_id, step.text, step.nodes, guard, at, self.author)
             else:
                 self.state = self.state.write_note(note_id, step.text, step.nodes, self.author, guard, at)
         except MiniaError as exc:
@@ -495,7 +495,8 @@ class _Run:
             self.state = self.state.move_to(Status.PAUSED, now)
         self._save()
         logbook = self.state.logbook
-        traced = declared.confronted(final, logbook) if final is not None else []
+        shown = [delivery.delivery_id for delivery in self.delivered]
+        traced = declared.confronted(final, logbook, shown) if final is not None else []
         refusals = [entry for entry in self.trajectory if entry.get('outcome') not in ('OK', 'REPLAYED')]
         return {
             **base, 'mode': MODE, 'status': ANSWERED if final is not None else STOPPED,

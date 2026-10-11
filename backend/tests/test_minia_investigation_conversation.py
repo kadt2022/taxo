@@ -103,6 +103,16 @@ def test_a_mip_tile_gives_anchor_edges_frontier_and_expanded_nodes():
         (SAVE, FrontierKind.SELECTION, 'c')]
 
 
+def test_each_unanalysed_relation_keeps_its_own_context_frontier():
+    response = {**TILE, 'frontier': [
+        {'nature': 'CONTEXT', 'node': CONTROLLER, 'relation': 'READS', 'reason': 'NO_ANALYZER'},
+        {'nature': 'CONTEXT', 'node': CONTROLLER, 'relation': 'WRITES', 'reason': 'NO_ANALYZER'}]}
+
+    _, _, frontier, _ = responses.tile_parts(response)
+
+    assert [entry.relation for entry in frontier] == ['READS', 'WRITES']
+
+
 def test_a_protocol_neighborhood_is_read_the_same_way():
     neighborhood = {'outcome': 'OK', 'anchor': {'reference': CONTROLLER, 'known': True},
                     'nodes': [CONTROLLER, SERVICE], 'node_details': [{'reference': CONTROLLER, 'expanded': True}],
@@ -153,7 +163,9 @@ def test_delivery_kinds_references_and_fingerprints():
 
 def test_declared_items_are_traced_against_deliveries_only():
     state = opened().record_delivery(SNAPSHOT, Delivery('D-1', SERVICE, DeliveryKind.TILE, at(1)))
+    state = state.record_delivery(SNAPSHOT, Delivery('D-2', SAVE, DeliveryKind.TILE, at(1)))
     declared = declaration.parse({'answer': 'R', 'used_mip_items': [
+        {'mip_reference': SAVE, 'delivery_id': 'D-2', 'kind': 'TILE'},
         {'mip_reference': SERVICE, 'delivery_id': 'D-1', 'kind': 'TILE'},
         {'mip_reference': SAVE, 'delivery_id': 'D-1', 'kind': 'TILE'},
         {'mip_reference': SERVICE, 'delivery_id': 'D-1', 'kind': 'SOURCE'},
@@ -162,8 +174,8 @@ def test_declared_items_are_traced_against_deliveries_only():
         {'mip_reference': '', 'delivery_id': 'D-1', 'kind': 'TILE'}, 'pas un objet'],
         'remaining_unknowns': ['  ', 'x']})
 
-    traces = [item['trace'] for item in declaration.confronted(declared, state.logbook)]
-    assert traces == ['DELIVERED', 'REFERENCE_MISMATCH', 'KIND_MISMATCH', 'UNKNOWN_DELIVERY', 'MALFORMED',
+    traces = [item['trace'] for item in declaration.confronted(declared, state.logbook, ['D-1'])]
+    assert traces == ['EARLIER_RUN', 'DELIVERED', 'REFERENCE_MISMATCH', 'KIND_MISMATCH', 'UNKNOWN_DELIVERY', 'MALFORMED',
                       'MALFORMED', 'MALFORMED']
     assert declared.remaining_unknowns == ('x',) and not declared.malformed
 

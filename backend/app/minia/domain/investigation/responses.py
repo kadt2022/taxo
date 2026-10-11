@@ -71,7 +71,7 @@ def tile_parts(response):
         kind = _NATURES.get(entry.get('nature')) if isinstance(entry, dict) else None
         if kind is not None and isinstance(entry.get('node'), str):
             frontier.append(FrontierEntry(entry['node'], kind, str(entry.get('reason', '')),
-                                          entry.get('continuation')))
+                                          entry.get('continuation'), str(entry.get('relation') or '')))
     expanded = tuple(node['reference'] for node in _details(response)
                      if isinstance(node, dict) and node.get('expanded') and isinstance(node.get('reference'), str)
                      and node['reference'] != root['reference'])
