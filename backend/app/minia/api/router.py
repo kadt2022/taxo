@@ -38,6 +38,22 @@ class ProjectQuestion(BaseModel):
     source: bool = False
 
 
+class InvestigationRequest(BaseModel):
+    # Une enquête nouvelle : la question. Une reprise : l'identifiant de l'enquête, sans question.
+    question: str | None = None
+    investigation_id: str | None = None
+    # La version minimisée de la question que l'utilisateur confirme : seule conservée, et seule reprise.
+    resume_question: str | None = None
+    provider: str | None = None
+    # Accord de cette demande pour lire le code d'un symbole ; jamais hérité d'une demande passée.
+    source: bool = False
+
+
+_INVESTIGATION_ERRORS = {
+    **_ERRORS, 404: {'description': 'Projet ou enquête introuvable.'},
+    409: {'description': 'Aucune analyse, enquête terminée, expirée, non reprenable ou d’une autre génération.'}}
+
+
 def _event(event_type, data):
     return f'event: {event_type}\ndata: {json.dumps(jsonable_encoder(data), ensure_ascii=False)}\n\n'
 
@@ -126,5 +142,20 @@ def create_router(minia):
         **_ERRORS, 409: {'description': 'Aucune analyse globale pour ce projet.'}})
     def ask_project(project_id: str, body: ProjectQuestion):
         return minia.about_project(project_id, body.question, body.provider, source=body.source)
+
+    @router.post('/api/projects/{project_id}/investigations/stream', responses=_INVESTIGATION_ERRORS)
+    def investigate(project_id: str, body: InvestigationRequest):
+        """Enquête navigable de Minia (récit TAXO-MINIA-ENQUETE-01) : le modèle enquête par Tuiles successives,
+        Minia tient le carnet. Restitution sans verdict : ce que Taxo a transmis, l'exploration du modèle, ce qui
+        reste non exploré."""
+        cancel = Cancellation()
+        return _stream(minia, minia.investigate_events(
+            project_id, body.question, body.provider, cancel=cancel, source=body.source,
+            investigation_id=body.investigation_id, resume_question=body.resume_question), cancel)
+
+    @router.get('/api/projects/{project_id}/investigations/{investigation_id}', responses=_INVESTIGATION_ERRORS)
+    def investigation(project_id: str, investigation_id: str):
+        """Le carnet d'une enquête : état compact et livraisons, jamais un contenu de Taxo."""
+        return minia.investigation(project_id, investigation_id)
 
     return router

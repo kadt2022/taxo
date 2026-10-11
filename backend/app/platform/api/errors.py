@@ -3,7 +3,14 @@ from app.projects.domain.project import ProjectError
 from app.scans.domain.scan import ScanError
 from app.history.domain.errors import UNKNOWN_ANALYSIS, UNKNOWN_COMMIT, UNKNOWN_PARENT, UNKNOWN_PATH, HistoryError
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
-from app.minia.domain.errors import CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION, UNKNOWN_PROVIDER, MiniaError
+from app.minia.domain.errors import (CONTEXT_TOO_LARGE, INVALID_ANSWER, INVALID_QUESTION,
+                                     INVESTIGATION_CONFLICT, INVESTIGATION_EXPIRED, INVESTIGATION_INVALID,
+                                     INVESTIGATION_NOT_FOUND, INVESTIGATION_NOT_RESUMABLE, INVESTIGATION_STALE,
+                                     UNKNOWN_PROVIDER, MiniaError)
+
+# Les refus d'une enquete navigable (recit TAXO-MINIA-ENQUETE-01) : introuvable, ou impossible a poursuivre.
+_INVESTIGATION_STATUS = {INVESTIGATION_NOT_FOUND: 404, INVESTIGATION_CONFLICT: 409, INVESTIGATION_EXPIRED: 409,
+                         INVESTIGATION_STALE: 409, INVESTIGATION_NOT_RESUMABLE: 409, INVESTIGATION_INVALID: 409}
 
 def register_errors(api):
     @api.exception_handler(ProjectError)
@@ -23,7 +30,7 @@ def register_errors(api):
     @api.exception_handler(MiniaError)
     async def minia_error(request, exc):
         status = {INVALID_QUESTION: 422, UNKNOWN_PROVIDER: 422, INVALID_ANSWER: 502,
-                  CONTEXT_TOO_LARGE: 413}.get(exc.code, 503)
+                  CONTEXT_TOO_LARGE: 413, **_INVESTIGATION_STATUS}.get(exc.code, 503)
         return JSONResponse(status_code=status, content={'detail': f'{exc.code} : {exc}'})
 
     @api.exception_handler(QueryError)

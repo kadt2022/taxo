@@ -44,3 +44,14 @@ def taxo_source_reading(value=None):
     """Lecture du code d'un symbole par le protocole (`get_source`) : `off` (defaut) ou `symbol`, sur accord de chaque
     echange. Reglage distinct de MINIA_SOURCE_CONTEXT : l'accord du diff n'autorise jamais la lecture du code."""
     return (value or os.getenv('TAXO_SOURCE_READING', 'off')).strip().lower()
+
+
+def minia_investigations(path=None, days=None):
+    """Le carnet des enquêtes navigables de Minia (récit TAXO-MINIA-ENQUETE-01) : un fichier SQLite propre à Minia
+    (`MINIA_INVESTIGATIONS_DB`), créé à la première enquête, et la durée d'inactivité après laquelle une enquête
+    n'est plus restituée (`MINIA_INVESTIGATION_DAYS`, 7 par défaut)."""
+    default = Path.home() / '.cache' / 'taxo' / 'minia' / 'investigations.sqlite3'
+    days = days if days is not None else int(os.getenv('MINIA_INVESTIGATION_DAYS', '7'))
+    if days <= 0:
+        raise ValueError(f'MINIA_INVESTIGATION_DAYS invalide : {days} (un nombre de jours positif).')
+    return {'path': Path(path or os.getenv('MINIA_INVESTIGATIONS_DB') or default), 'days': days}
