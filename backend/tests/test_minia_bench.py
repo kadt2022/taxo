@@ -217,10 +217,12 @@ def test_a_full_replay_measures_each_answer_and_finds_no_leak(make_repo, git, tm
 def test_the_contribution_counts_the_tiles_and_the_code_served_or_refused():
     trajectory = [{'operation': 'describe', 'outcome': 'OK', 'bytes': 900},
                   {'operation': 'get_tile', 'outcome': 'OK', 'bytes': 1200},
-                  {'operation': 'get_source', 'outcome': 'OK', 'bytes': 400},
+                  {'operation': 'get_source', 'outcome': 'OK', 'bytes': 400, 'items': 1},
+                  {'operation': 'get_source', 'outcome': 'OK', 'bytes': 250, 'items': 0, 'not_sent': ['CONFIDENTIAL']},
                   {'operation': 'get_source', 'outcome': 'ERROR', 'bytes': 300}]
+    # Une réponse OK sans aucune pièce n'est pas du code : elle compte comme refusée, sans ses octets.
     assert bench.contribution(trajectory) == {'tiles': {'served': 1, 'refused': 0, 'bytes': 1200},
-                                              'sources': {'served': 1, 'refused': 1, 'bytes': 400}}
+                                              'sources': {'served': 1, 'refused': 2, 'bytes': 400}}
     assert bench.contribution([]) == {'tiles': {'served': 0, 'refused': 0, 'bytes': 0},
                                       'sources': {'served': 0, 'refused': 0, 'bytes': 0}}
 

@@ -202,12 +202,20 @@ def unjustified(result):
                if statement.get('type') == 'claim' and statement.get('verdict') != 'CONFIRMED')
 
 
+def _served(step):
+    """Une Tuile est servie si Taxo l'a rendue ; une pièce source, seulement si du code a été transmis : `get_source`
+    peut répondre `OK` sans aucune pièce (fichier confidentiel, généré, modifié, budget...), ce n'est pas du code."""
+    if step.get('outcome') != 'OK':
+        return False
+    return step['operation'] != SOURCE or bool(step.get('items'))
+
+
 def contribution(trajectory):
     """L'apport des Tuiles et du code dans une réponse : pièces servies, refusées, et leurs octets (mesure D)."""
     measured = {}
     for operation, name in ((TILE, 'tiles'), (SOURCE, 'sources')):
         steps = [step for step in trajectory if step['operation'] == operation]
-        served = [step for step in steps if step.get('outcome') == 'OK']
+        served = [step for step in steps if _served(step)]
         measured[name] = {'served': len(served), 'refused': len(steps) - len(served),
                           'bytes': sum(step.get('bytes') or 0 for step in served)}
     return measured
