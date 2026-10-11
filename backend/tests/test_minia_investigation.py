@@ -1,5 +1,6 @@
 """Le domaine de la memoire de parcours (recit TAXO-MINIA-ENQUETE-01, lot A) : carnet, frontieres, notes,
 budget, reprise et serialisation, sans stockage ni modele."""
+from dataclasses import replace
 from datetime import timedelta
 
 import pytest
@@ -195,7 +196,7 @@ def test_an_announced_operation_survives_a_stop_as_possibly_transmitted():
     avant l'envoi est relue apres un arret du processus, puis inscrite peut-etre transmise, jamais absente."""
     announced = opened().announce(SNAPSHOT, [InFlight(operation(deliveries=('D-1',)), 300)], at(5))
     assert announced.pending[-1].kind == EventKind.IN_FLIGHT
-    assert announced.pending[-1].data == {'operations': ['get_tile'], 'delivery_ids': ['D-1']}
+    assert announced.pending[-1].data == {'operations': ['get_tile'], 'delivery_ids': ['D-1'], 'replays': []}
 
     restored = from_document(to_document(without_pending(announced)))
     assert restored.in_flight == announced.in_flight
@@ -267,6 +268,39 @@ def test_a_revision_is_attributed_to_the_model_that_wrote_it():
     assert revised.notes[-1].author == 'model-y'
     assert revised.pending[-1].data['author'] == 'model-y'
     assert unchanged.notes[-1].author == 'model-x'
+
+
+def test_an_announcement_must_fit_the_budget_whole():
+    """Ce qui a pu partir s'inscrit toujours en entier : un lot qui depasse la tranche est refuse avant l'envoi."""
+    state = opened(limits=BudgetLimits(slice_operations=2, slice_bytes=1_000, total_operations=5,
+                                       total_bytes=5_000, max_renewals=1))
+    with pytest.raises(MiniaError) as error:
+        state.announce(SNAPSHOT, [InFlight(operation(), 600), InFlight(operation(minutes=6), 600)], at(5))
+    assert error.value.code == BUDGET_EXHAUSTED
+    with pytest.raises(MiniaError):
+        state.announce(SNAPSHOT, [InFlight(operation(minutes=m), 10) for m in (5, 6, 7)], at(5))
+
+    assert len(state.announce(SNAPSHOT, [InFlight(operation(), 600)], at(5)).in_flight) == 1
+
+
+def test_an_announcement_never_keeps_an_unreadable_instant():
+    naive = replace(operation(), at=at(5).replace(tzinfo=None))
+    with pytest.raises(MiniaError) as error:
+        opened().announce(SNAPSHOT, [InFlight(naive, 10)], at(5))
+    assert error.value.code == INVESTIGATION_INVALID
+
+
+def test_a_replay_in_flight_is_written_to_the_journal():
+    """Une nouvelle transmission d'une livraison deja inscrite part aussi au modele : le journal l'annonce."""
+    state = opened().record_delivery(SNAPSHOT, Delivery('D-1', SERVICE, DeliveryKind.TILE, at(1)))
+    replay = Delivery('D-2', SERVICE, DeliveryKind.TILE, at(5), replay_of='D-1')
+
+    announced = state.announce(SNAPSHOT, [], at(5), replays=[replay])
+
+    assert announced.pending[-1].data['replays'] == [{'delivery_id': 'D-2', 'replay_of': 'D-1'}]
+    assert announced.in_flight == ()
+    with pytest.raises(MiniaError):
+        state.announce(SNAPSHOT, [], at(5), replays=[Delivery('D-3', SERVICE, DeliveryKind.TILE, at(5))])
 
 
 def test_delivery_ids_are_unique_and_replays_cite_their_origin():
@@ -517,6 +551,29 @@ def test_renewal_is_refused_before_the_slice_is_spent():
     _, decision = explored_two_of_three(opened(limits=SMALL)).request_renewal(RenewalRequest((SAVE,), 'Pourquoi'),
                                                                                at(5))
     assert decision.refusal == Refusal.SLICE_NOT_EXHAUSTED
+
+
+def test_a_slice_without_room_for_the_smallest_response_can_be_renewed():
+    """Il reste des operations, mais moins d'octets que la plus petite reponse : la tranche est epuisee pour le
+    renouvellement, sinon le modele ne pourrait ni appeler ni continuer."""
+    state, _ = explored_two_of_three(opened(limits=SMALL)).record_operation(SNAPSHOT, operation(), 9_800)
+    request = RenewalRequest((SAVE,), 'Lire save.')
+
+    _, refused = state.request_renewal(request, at(8))
+    _, granted = state.request_renewal(request, at(8), min_bytes=512)
+
+    assert refused.refusal == Refusal.SLICE_NOT_EXHAUSTED
+    assert granted.granted
+
+
+def test_an_investigation_without_room_for_the_smallest_response_is_not_renewed():
+    limits = BudgetLimits(slice_operations=2, slice_bytes=10_000, total_operations=5, total_bytes=10_100,
+                          max_renewals=3)
+    state, _ = explored_two_of_three(opened(limits=limits)).record_operation(SNAPSHOT, operation(), 9_800)
+
+    _, decision = state.request_renewal(RenewalRequest((SAVE,), 'Lire save.'), at(8), min_bytes=512)
+
+    assert decision.refusal == Refusal.TOTAL_EXHAUSTED
 
 
 def test_renewal_without_progress_is_refused():

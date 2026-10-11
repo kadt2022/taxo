@@ -114,10 +114,12 @@ class Budget:
                        slice_bytes=self.slice_bytes + response_bytes,
                        total_operations=self.total_operations + 1, total_bytes=self.total_bytes + response_bytes)
 
-    def renew(self, request: RenewalRequest, open_branches, progress: int) -> tuple['Budget', RenewalDecision]:
+    def renew(self, request: RenewalRequest, open_branches, progress: int,
+              min_bytes: int = 0) -> tuple['Budget', RenewalDecision]:
         """Une nouvelle tranche, si la demande passe les controles mecaniques ; sinon le budget compte un refus et
-        la decision dit pourquoi. Aucune extension au-dela des plafonds de l'enquete."""
-        refusal = self._refusal(request, set(open_branches), progress)
+        la decision dit pourquoi. Aucune extension au-dela des plafonds de l'enquete. `min_bytes` : la plus petite
+        reponse utile ; une tranche qui n'en a plus la place est epuisee, une enquete aussi."""
+        refusal = self._refusal(request, set(open_branches), progress, min_bytes)
         if refusal is not None:
             return replace(self, refusals=self.refusals + 1), RenewalDecision(False, refusal=refusal)
         wanted = request.operations if request.operations > 0 else self.limits.slice_operations
@@ -126,14 +128,14 @@ class Budget:
                           renewals=self.renewals + 1, last_renewal=(tuple(sorted(request.branches)), progress))
         return renewed, RenewalDecision(True, granted)
 
-    def _refusal(self, request, open_branches, progress):
+    def _refusal(self, request, open_branches, progress, min_bytes):
         branches = tuple(item for item in request.branches if isinstance(item, str) and item)
         justification = request.justification.strip() if isinstance(request.justification, str) else ''
         if type(request.operations) is not int or request.operations < 0:
             return Refusal.INVALID_SIZE
-        if not self.slice_exhausted:
+        if not self.slice_exhausted and self.remaining_bytes >= min_bytes:
             return Refusal.SLICE_NOT_EXHAUSTED
-        if self.total_exhausted:
+        if self.total_exhausted or self.limits.total_bytes - self.total_bytes < min_bytes:
             return Refusal.TOTAL_EXHAUSTED
         if self.renewals >= self.limits.max_renewals:
             return Refusal.TOO_MANY_RENEWALS

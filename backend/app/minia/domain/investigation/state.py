@@ -117,19 +117,30 @@ class InvestigationState:
         self._writable_on(snapshot)
         return self._operation(record, response_bytes)
 
-    def announce(self, snapshot: Snapshot, items, at: datetime) -> 'InvestigationState':
+    def announce(self, snapshot: Snapshot, items, at: datetime, replays=()) -> 'InvestigationState':
         """Les operations dont la reponse va partir au modele, inscrites avant l'envoi. L'envoi et l'ecriture du
         carnet ne tiennent pas dans une meme transaction : si le processus s'arrete entre les deux, la reprise les
-        inscrit comme peut-etre transmises (`settle_in_flight`), jamais comme absentes."""
+        inscrit comme peut-etre transmises (`settle_in_flight`), jamais comme absentes. Le lot entier doit tenir
+        dans le budget : ce qui a pu partir s'inscrit toujours en entier. `replays` : les nouvelles transmissions
+        d'une livraison deja inscrite, que le journal annonce aussi."""
         self._writable_on(snapshot)
-        items = tuple(items)
+        aware(at)
+        items, replays = tuple(items), tuple(replays)
         if self.in_flight:
             raise MiniaError(INVESTIGATION_INVALID, 'Un envoi précédent n’est pas encore inscrit.')
         if not all(isinstance(item, InFlight) for item in items):
             raise MiniaError(INVESTIGATION_INVALID, 'Seule une opération en partance s’annonce.')
+        if not all(isinstance(item, Delivery) and item.replay_of for item in replays):
+            raise MiniaError(INVESTIGATION_INVALID, 'Seule une nouvelle transmission s’annonce comme telle.')
+        budget = self.budget
+        for item in items:
+            aware(item.record.at)
+            budget = budget.spend(item.response_bytes)
         event = Event(EventKind.IN_FLIGHT, at, {'operations': [item.record.name for item in items],
                                                 'delivery_ids': [delivery_id for item in items
-                                                                 for delivery_id in item.record.delivery_ids]})
+                                                                 for delivery_id in item.record.delivery_ids],
+                                                'replays': [{'delivery_id': item.delivery_id,
+                                                             'replay_of': item.replay_of} for item in replays]})
         return self._changed(event, at, in_flight=items)
 
     def landed(self) -> 'InvestigationState':
@@ -183,11 +194,12 @@ class InvestigationState:
 
     # Budget -----------------------------------------------------------------------------------------------
 
-    def request_renewal(self, request: RenewalRequest,
-                        at: datetime) -> tuple['InvestigationState', RenewalDecision]:
+    def request_renewal(self, request: RenewalRequest, at: datetime,
+                        min_bytes: int = 0) -> tuple['InvestigationState', RenewalDecision]:
+        """`min_bytes` : la plus petite reponse utile ; une tranche qui n'en a plus la place est epuisee."""
         self.investigation.ensure_writable()
         open_branches = self.logbook.open_branches()
-        budget, decision = self.budget.renew(request, open_branches, self.logbook.progress)
+        budget, decision = self.budget.renew(request, open_branches, self.logbook.progress, min_bytes)
         data = {'granted': decision.granted, 'operations': decision.operations, 'refusal': decision.refusal,
                 'branches': list(request.branches)}
         return self._changed(Event(EventKind.RENEWAL, at, data), at, budget=budget), decision
