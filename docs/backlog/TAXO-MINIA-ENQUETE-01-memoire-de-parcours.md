@@ -108,6 +108,8 @@ Chaque enquête possède :
 
 L'identifiant de commit **seul** ne remplace pas `analysis_id` et `generation_id` : deux générations de faits sur le même commit ne sont pas librement interchangeables.
 
+**Source de la génération.** Minia s'exécute dans le serveur de Taxo : elle lit `generation_id` sur l'échange du protocole qu'elle ouvre pour l'enquête, c'est-à-dire la révision des faits que lisent les opérations de cet échange. Elle ne le lit ni dans une réponse MIP ni dans le stockage de la Maille, et n'interprète jamais un jeton opaque. Ce récit n'ajoute donc aucun champ public à MIP ; un client externe qui voudrait la même garantie demanderait un marqueur de génération dans les réponses, à arbitrer comme évolution additive du protocole.
+
 **Règle de reprise de la question.** Une version minimisée peut être fournie par l'utilisateur ou proposée à sa confirmation, mais **Minia ne décide jamais qu'elle est équivalente à la question initiale**. Seule la version explicitement confirmée par l'utilisateur, après contrôle de confidentialité, peut être persistée pour la reprise. Sans confirmation ou si le texte confirmé ne peut être conservé de façon autorisée, **ne pas déclarer l'enquête reprenable** : l'utilisateur devra fournir une nouvelle question. Le scénario `save → interrupt → restore` et INV-04 s'appliquent seulement aux enquêtes déclarées reprenables ; aucune reprise silencieuse.
 
 ### 6.2 Carnet de navigation
@@ -164,8 +166,8 @@ Minia → MIP → Taxo : opération strictement autorisée
        ↓
 Taxo → Minia : faits/source/limites + journal de réponse
        ↓
-Minia : enregistrer le résultat reçu et l’état, transmettre au LLM
-       puis journaliser les éléments effectivement livrés et l’issue de transmission
+Minia : enregistrer le résultat reçu et l’état, annoncer les éléments en partance,
+       transmettre au LLM, puis journaliser les éléments effectivement livrés
        ↺
 LLM : explorer / noter / demander un renouvellement / répondre
 ```
@@ -312,7 +314,7 @@ Aucun effacement de `verify_claim`, ni migration destructive, n'est autorisé im
 
 **INV-06 — Confidentialité.** Aucune source non autorisée ou donnée interdite ne quitte Taxo via Minia ; une demande antérieure ne vaut pas consentement permanent.
 
-**INV-07 — Journal fidèle.** « Transmis au LLM » n'est enregistré que pour le contenu réellement envoyé ; « utilisé selon le LLM » est une **déclaration finale structurée** (`mip_reference`, `delivery_id`, `kind`), mécaniquement confrontable au registre des transmissions, sans verdict sur le fond.
+**INV-07 — Journal fidèle.** « Transmis au LLM » n'est enregistré que pour le contenu réellement envoyé. L'envoi au LLM et l'écriture du carnet ne tiennent pas dans une même transaction : les opérations dont la réponse part sont donc **annoncées et enregistrées avant l'envoi**. Après un arrêt du processus pendant l'appel, la reprise inscrit chaque annonce restée sans livraison comme **peut-être transmise** (`TRANSMISSION_UNCERTAIN`), ni livrée ni retenue, jamais absente ; « utilisé selon le LLM » est une **déclaration finale structurée** (`mip_reference`, `delivery_id`, `kind`), mécaniquement confrontable au registre des transmissions, sans verdict sur le fond.
 
 **INV-08 — Budget.** Pas de renouvellement sans justification minimale valide, ni dépassement des plafonds fixés par le système ; répétitions sans progrès signalées sans juger les intentions.
 
@@ -329,7 +331,7 @@ Aucun effacement de `verify_claim`, ni migration destructive, n'est autorisé im
 | **AC-03** | Graphe avec convergence et cycle `A→B→A` | Arêtes/revisites conservées ; pas de développement automatique infini |
 | **AC-04** | `get_source` autorisé puis refusé (consentement retiré) | Lecture seulement dans la demande autorisée ; refus tracé sans texte source persistant |
 | **AC-05** | L'utilisateur confirme explicitement la version minimisée, sauvegarde l'enquête reprenable, interrompt la session et recharge | Même **question confirmée**, même frontière, mêmes notes, statuts, reçus et budget ; aucun texte source restauré |
-| **AC-06** | Crash entre requête MIP, réception et sauvegarde | Aucun résultat non transmis déclaré comme transmis ; état restauré cohérent |
+| **AC-06** | Crash entre requête MIP, réception et sauvegarde, ou pendant l'appel au LLM | Aucun résultat non transmis déclaré comme transmis ; un résultat peut-être parti reste tracé comme tel ; état restauré cohérent |
 | **AC-07** | Deux enquêtes concurrentes sur des projets/utilisateurs distincts | Aucun mélange de références ou de notes ; accès croisé refusé |
 | **AC-08** | Génération de Maille modifiée | Ancienne enquête marquée historique/`STALE` ; aucune reprise ancienne sur nouvelle génération |
 | **AC-09** | Note LLM liée à des nœuds, puis restauration | `HYPOTHESIS_LLM` reste distincte des faits, liée à la bonne génération |
