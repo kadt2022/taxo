@@ -25,7 +25,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from app.minia.domain.cancellation import check
-from app.minia.domain.errors import CONFIDENTIALITY_REFUSED, INVESTIGATION_STALE, NOTE_REFUSED, MiniaError
+from app.minia.domain.errors import (CONFIDENTIALITY_REFUSED, INVESTIGATION_EXPIRED, INVESTIGATION_STALE, NOTE_REFUSED,
+                                     MiniaError)
 from app.minia.domain.exploration import Call
 from app.minia.domain.investigation import conversation
 from app.minia.domain.investigation import declaration as declared
@@ -170,6 +171,8 @@ class Investigations:
     def view(self, project_id, investigation_id):
         """L'etat d'une enquete pour l'affichage : son carnet compact et ses livraisons, jamais un contenu."""
         state = self.store.load(investigation_id, self.scope(project_id))
+        if state.investigation.expired(self.clock()):
+            raise MiniaError(INVESTIGATION_EXPIRED, 'Cette enquête a expiré : elle n’est plus restituée.')
         return _summary(state)
 
     # Jouer ------------------------------------------------------------------------------------------------

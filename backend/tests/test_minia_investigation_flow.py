@@ -3,6 +3,7 @@ scenarise conduit l'enquete, Taxo cartographie, Minia tient le carnet. Lot C : o
 declaration finale, memoire vive, renouvellement et reprise."""
 import json
 from dataclasses import replace
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -391,3 +392,17 @@ def test_an_interrupted_request_keeps_what_was_obtained_but_never_sent(session):
     assert operation.outcome.value == 'OK' and operation.delivery_ids == ()
     assert state.logbook.deliveries == ()
     assert state.logbook.expanded(school.CONTROLLER), 'ce que Taxo a rendu reste au carnet'
+
+
+def test_an_expired_investigation_is_no_longer_shown(session):
+    """Passe son expiration, une enquete n'est plus restituee, meme avant le menage du stockage."""
+    started = session(Scripted(final()))
+    result = completed(started.investigate(question=QUESTION, resume_question=CONFIRMED))
+    url = f'/api/projects/{started.project}/investigations/{result["investigation"]["id"]}'
+    assert started.client.get(url).status_code == 200
+
+    investigations = started.app.state.minia.investigations
+    now = investigations.clock()
+    investigations.clock = lambda: now + timedelta(days=8)
+    response = started.client.get(url)
+    assert response.status_code == 409 and response.json()['detail'].startswith('INVESTIGATION_EXPIRED')
