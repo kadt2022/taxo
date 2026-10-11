@@ -186,14 +186,19 @@ def test_a_symbol_written_in_the_code_read_is_not_a_received_reference():
     par Taxo comme référence compte, à l'identique."""
     from app.minia.application import sources
     hidden = f'{SERVICE}#secret()'
-    piece = {'operation': 'get_source', 'response': {'reference': FIND, 'items': [
+    piece = {'operation': 'get_source', 'arguments': {'reference': 'symbol:java:Ailleurs'}, 'response': {'reference': FIND, 'items': [
         {'reference': FIND, 'text': f'String next = "{hidden}";'}], 'message': hidden}}
     tile = {'operation': 'get_tile', 'response': {'facts': [{'fact': {'subject': FIND, 'object': FIND_ALL,
                                                                        'derivation': {'premises': [FIND_ALL]}}}]}}
     assert not sources.received(hidden, [piece, tile])
     assert sources.received(FIND, [piece]) and sources.received(FIND_ALL, [tile])
     assert not sources.received(FIND[:-2], [piece]), 'jamais un fragment de référence'
-    echoed = {'operation': 'verify_claim', 'response': {
+    echoed = {'operation': 'verify_claim', 'arguments': {'subject': hidden, 'relation': 'CALLS', 'object': FIND},
+              'response': {
         'claim': {'subject': hidden, 'relation': 'CALLS', 'object': FIND}, 'verdict': 'NOT_PROVEN',
         'coverage': {'subject': hidden}, 'items': []}}
     assert not sources.received(hidden, [echoed]), 'une affirmation répétée par Taxo n’est pas une découverte'
+    unknown = {'operation': 'get_neighborhood', 'arguments': {'root': hidden},
+               'response': {'anchor': {'reference': hidden, 'known': False},
+                            'boundaries': [{'nature': 'SELECTION', 'node': hidden}], 'items': []}}
+    assert not sources.received(hidden, [unknown]), 'l’ancre d’un voisinage, même inconnue, est la demande répétée'
