@@ -32,13 +32,17 @@ def noted(item):
 # un texte libre : le code d'une pièce ou un message de commit peut écrire n'importe quel symbole.
 _REFERENCE_FIELDS = frozenset({'reference', 'subject', 'object', 'symbol', 'premises', 'from', 'node', 'root',
                                'subjects'})
+# Ce qu'une réponse répète de la demande, jamais découvert par Taxo : l'affirmation soumise à `verify_claim`, et la
+# couverture, qui dit sur quoi portait la demande (un symbole deviné y figure tel que Minia l'a écrit).
+_ECHOES = frozenset({'claim', 'coverage'})
 
 
 def _references(value, field=None):
     """Les valeurs rendues par Taxo comme références, en parcourant la réponse champ par champ."""
     if isinstance(value, dict):
         for name, item in value.items():
-            yield from _references(item, name)
+            if name not in _ECHOES:
+                yield from _references(item, name)
     elif isinstance(value, list):
         for item in value:
             yield from _references(item, field)

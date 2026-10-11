@@ -193,3 +193,7 @@ def test_a_symbol_written_in_the_code_read_is_not_a_received_reference():
     assert not sources.received(hidden, [piece, tile])
     assert sources.received(FIND, [piece]) and sources.received(FIND_ALL, [tile])
     assert not sources.received(FIND[:-2], [piece]), 'jamais un fragment de référence'
+    echoed = {'operation': 'verify_claim', 'response': {
+        'claim': {'subject': hidden, 'relation': 'CALLS', 'object': FIND}, 'verdict': 'NOT_PROVEN',
+        'coverage': {'subject': hidden}, 'items': []}}
+    assert not sources.received(hidden, [echoed]), 'une affirmation répétée par Taxo n’est pas une découverte'
