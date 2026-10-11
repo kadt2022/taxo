@@ -96,19 +96,26 @@ def test_stop_during_a_taxo_operation(repo, tmp_path, monkeypatch):
 
 def test_stop_while_waiting_for_the_model_cuts_the_provider_call(repo, tmp_path):
     repo, sha = repo
-    cut = threading.Event()
+    cut, waiting = threading.Event(), threading.Event()
 
     class Waiting(ScriptedModel):
         def complete(self, system, user, schema=None, cancel=None):
             self.calls.append((system, user, schema))
             cancel.on_cancel(cut.set)  # comme un vrai fournisseur : l'arret ferme sa connexion
+            waiting.set()
             cut.wait(timeout=10)
             raise MiniaError(CANCELLED, STOPPED)
+
+    def stop_once_waiting(stop_over_http):
+        # L'arret part quand le fournisseur attend vraiment, jamais sur une horloge : une machine lente reste juste.
+        if waiting.wait(timeout=10):
+            stop_over_http()
 
     model = Waiting()
     started = time.monotonic()
     events, _, _ = ask(repo, sha, tmp_path, model,
-                       prepare=lambda _, stop_over_http: threading.Timer(0.5, stop_over_http).start())
+                       prepare=lambda _, stop_over_http: threading.Thread(target=stop_once_waiting,
+                                                                          args=(stop_over_http,)).start())
     assert_stopped(events)
     assert cut.is_set(), 'l appel au fournisseur est coupe, pas seulement masque'
     assert time.monotonic() - started < 8, 'l arret n attend pas la fin du tour'
