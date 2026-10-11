@@ -2,6 +2,7 @@
 scenarise conduit l'enquete, Taxo cartographie, Minia tient le carnet. Lot C : orchestration, etat compact,
 declaration finale, memoire vive, renouvellement et reprise."""
 import json
+import sqlite3
 from dataclasses import replace
 from datetime import timedelta
 
@@ -410,6 +411,38 @@ def test_an_interrupted_request_keeps_what_was_obtained_but_never_sent(session):
         'coupee pendant l’appel au modele, la reponse a pu partir : le carnet le dit'
     assert state.logbook.deliveries == ()
     assert state.logbook.expanded(school.CONTROLLER), 'ce que Taxo a rendu reste au carnet'
+
+
+def test_a_process_stopped_during_the_model_call_leaves_a_trace_of_what_may_have_left(session, tmp_path):
+    """AC-06 et INV-07 : l'envoi au modele et l'ecriture du carnet ne tiennent pas dans une transaction. Le carnet
+    tel qu'un arret du processus le laisse pendant l'appel annonce l'operation en partance ; la reprise l'inscrit
+    peut-etre transmise, jamais absente."""
+    path = tmp_path / 'investigations.sqlite3'
+    left = sqlite3.connect(':memory:')
+
+    def stopped(_message):
+        with sqlite3.connect(path) as store:
+            store.backup(left)
+        raise MiniaError(UNAVAILABLE, 'Processus arrêté.')
+    started = session(Scripted(neighborhood(school.CONTROLLER), stopped, final()))
+    events = started.investigate(question=QUESTION, resume_question=CONFIRMED)
+    investigation_id = next(data for kind, data in events if kind == 'minia.investigation')['id']
+    with sqlite3.connect(path) as store:
+        left.backup(store)
+
+    url = f'/api/projects/{started.project}/investigations/{investigation_id}'
+    shown = started.client.get(url).json()
+    assert shown['in_flight'] == [{'operation': 'get_neighborhood', 'delivery_ids': ['D-1']}]
+    assert shown['deliveries'] == []
+
+    completed(started.investigate(investigation_id=investigation_id))
+    investigations = started.app.state.minia.investigations
+    state = investigations.store.load(investigation_id, investigations.scope(started.project))
+    assert state.in_flight == ()
+    operation = state.logbook.operations[0]
+    assert operation.name == 'get_neighborhood' and operation.delivery_ids == ()
+    assert {'what': 'response', 'reason': 'TRANSMISSION_UNCERTAIN'} in operation.not_sent
+    assert started.client.get(url).json()['in_flight'] == []
 
 
 def test_an_expired_investigation_is_no_longer_shown(session):

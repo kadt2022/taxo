@@ -34,7 +34,7 @@ from app.minia.domain.investigation import responses
 from app.minia.domain.investigation.budget import BudgetLimits
 from app.minia.domain.investigation.identity import (ExpiryPolicy, OwnerScope, Snapshot, Status,
                                                      ensure_resumable)
-from app.minia.domain.investigation.logbook import (Action, Delivery, OperationOutcome, OperationRecord,
+from app.minia.domain.investigation.logbook import (Action, Delivery, InFlight, OperationOutcome, OperationRecord,
                                                     request_key)
 from app.minia.domain.investigation.state import InvestigationState
 from app.protocol.domain.envelope import MAX_ERROR_BYTES
@@ -55,7 +55,6 @@ MAX_EXCHANGE_BYTES = 200_000
 MAX_OPERATION_BYTES = 16_000
 _NOT_OFFERED = 'NOT_OFFERED'
 _NO_CALL_LEFT = 'NO_CALL_LEFT'
-TRANSMISSION_UNCERTAIN = 'TRANSMISSION_UNCERTAIN'
 ANSWERED, STOPPED = 'ANSWERED', 'STOPPED'
 MODE = 'investigation'
 _LOGGER = logging.getLogger(__name__)
@@ -153,6 +152,9 @@ class Investigations:
         """L'enquete enregistree, si elle se reprend sur cet instantane (`exchange` None : son analyse n'existe
         plus). Une generation changee la rend historique (STALE) : elle ne se poursuit jamais sur une autre Maille."""
         investigation_id = state.investigation_id
+        if state.in_flight:
+            # Un envoi annonce sans livraison inscrite : le processus s'est arrete pendant l'appel au modele.
+            state = self.store.commit(investigation_id, state.revision, state.settle_in_flight())
         current = (None if exchange is None else
                    Snapshot(exchange.snapshot['analysis'], generation, exchange.snapshot.get('commit')))
         try:
@@ -194,7 +196,10 @@ def _summary(state):
             'state': conversation.compact(state),
             'deliveries': [{'delivery_id': item.delivery_id, 'mip_reference': item.mip_reference,
                             'kind': item.kind.value, 'replay_of': item.replay_of}
-                           for item in state.logbook.deliveries]}
+                           for item in state.logbook.deliveries],
+            # Ce qui est parti, ou partait, au modele sans livraison inscrite : la transmission n'est pas attestee.
+            'in_flight': [{'operation': item.record.name, 'delivery_ids': list(item.record.delivery_ids)}
+                          for item in state.in_flight]}
 
 
 class _Run:
@@ -245,6 +250,7 @@ class _Run:
             text = conversation.message(self.question, self.operations, self.state, self.shown, calls_left,
                                         self.notices)
             check(self.cancel)
+            self._announce()
             self.asking = True
             raw = yield from self.turn.ask(text)
             self.asking = False
@@ -388,15 +394,28 @@ class _Run:
                     self.notices.append({'notice': 'REPEATED', 'count': repetition.count,
                                          'open_branches': list(repetition.open_branches)})
         self.waiting = []
+        self.state = self.state.landed()
+
+    def _announce(self):
+        """Les operations dont la reponse part avec ce message, inscrites avant l'envoi : un arret du processus
+        pendant l'appel au modele laisse leur trace (INV-07, AC-06)."""
+        items = [InFlight(record, size) for record, _, size in self.waiting if record is not None]
+        if items:
+            self.state = self.state.announce(self.snapshot, items, self.owner.clock())
+            self._save()
 
     def _interrupted(self):
         """Une demande coupee : ce que Taxo a rendu sans etre transmis reste « obtenu, non transmis », et
         l'enquete passe en pause. L'enregistrement est tente ; s'il echoue, le dernier etat enregistre fait foi."""
         try:
-            for record, _, size in self.waiting:
-                if record is not None:
-                    self.state, _ = self.state.record_operation(self.snapshot, _undelivered(record, self.asking),
-                                                                size)
+            if self.asking:
+                # Coupee pendant l'appel au modele : ce qui etait annonce a pu partir, sans que rien ne l'atteste.
+                self.state = self.state.settle_in_flight()
+            else:
+                self.state = self.state.landed()
+                for record, _, size in self.waiting:
+                    if record is not None:
+                        self.state, _ = self.state.record_operation(self.snapshot, _undelivered(record), size)
             self.waiting = []
             if self.state.investigation.status is Status.ACTIVE:
                 self.state = self.state.move_to(Status.PAUSED, self.owner.clock())
@@ -506,13 +525,10 @@ class _Run:
         }
 
 
-def _undelivered(record, asked):
-    """Une operation dont la transmission n'est pas attestee. Coupee avant l'envoi, sa reponse est obtenue, non
-    transmise ; coupee pendant l'appel au modele, elle a pu partir sans que rien ne l'atteste : le carnet le dit,
-    sans l'inscrire comme livree ni comme retenue."""
-    not_sent = record.not_sent + (({'what': 'response', 'reason': TRANSMISSION_UNCERTAIN},) if asked else ())
+def _undelivered(record):
+    """Une operation coupee avant l'envoi : sa reponse est obtenue, non transmise."""
     return OperationRecord(record.name, record.arguments, record.outcome, record.at, record.response_fingerprint,
-                           (), not_sent)
+                           (), record.not_sent)
 
 
 def exchange_bytes(limits: BudgetLimits) -> int:
