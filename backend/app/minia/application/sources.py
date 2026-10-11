@@ -35,7 +35,7 @@ _REFERENCE_FIELDS = frozenset({'reference', 'subject', 'object', 'symbol', 'prem
 
 
 def _references(value, field=None):
-    """Les valeurs rendues par Taxo comme références, en parcourant la réponse champ par champ."""
+    """Les valeurs des champs de référence d'une réponse, parcourue champ par champ."""
     if isinstance(value, dict):
         for name, item in value.items():
             yield from _references(item, name)
@@ -46,12 +46,32 @@ def _references(value, field=None):
         yield value
 
 
+def _strings(value):
+    """Toutes les chaînes d'une demande : ce que le modèle a écrit, à quelque profondeur que ce soit."""
+    if isinstance(value, dict):
+        value = list(value.values())
+    if isinstance(value, list):
+        for item in value:
+            yield from _strings(item)
+    elif isinstance(value, str):
+        yield value
+
+
+def _discovered(item):
+    """Les références qu'une réponse apporte : celles de ses champs de référence, moins ce que la demande portait
+    déjà. Une réponse peut répéter sa demande (l'affirmation de `verify_claim`, l'ancre d'un voisinage même inconnue,
+    la couverture) : un symbole deviné par le modèle n'en devient pas une découverte de Taxo."""
+    asked = set(_strings(item.get('arguments', {})))
+    return {value for value in _references(item['response']) if value not in asked}
+
+
 def received(reference, exchanged):
-    """Vrai si `reference` a été rendue par Taxo comme une référence dans cet échange : égale à la valeur d'un champ
-    de référence, jamais trouvée dans un texte (un symbole écrit dans le code lu n'est pas une référence reçue)."""
+    """Vrai si `reference` a été découverte par Taxo dans cet échange : égale à la valeur d'un champ de référence d'une
+    réponse, jamais trouvée dans un texte (un symbole écrit dans le code lu n'est pas reçu) ni simplement répétée
+    de la demande."""
     if not isinstance(reference, str) or not reference:
         return False
-    return any(reference == value for item in exchanged for value in _references(item['response']))
+    return any(reference in _discovered(item) for item in exchanged)
 
 
 def key(step, exchanged):

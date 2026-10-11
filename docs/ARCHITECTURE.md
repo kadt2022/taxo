@@ -1010,7 +1010,9 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   les faits. Son texte passe par la protection de la demande (secrets et identités masqués) avant le
   fournisseur. Taxo ne lui donne aucune signification : le modèle lit le code de la méthode appelée plutôt que
   de déduire un cadre ou une base de données d'un `CALLS`. La réponse dit ce que la demande permettait
-  (`source_reading` : `NOT_REQUESTED`, `DISABLED`, `ON_DEMAND`).
+  (`source_reading` : `NOT_REQUESTED` sans l'accord de la demande, `DISABLED` si le réglage du serveur l'interdit,
+  `UNAVAILABLE` si l'analyse n'est pas celle d'un commit (dossier de travail : rien à lire), `ON_DEMAND` si
+  `get_source` est réellement proposée) ; le repli paquet garde ce statut.
 - Garde-fous fixés par Taxo : nombre d'opérations, octets, délai. À l'épuisement, Minia conclut avec ce
   qu'elle a et dit ce qui manque.
 - La trajectoire (opérations, arguments, tailles, non-transmis, verdicts) est visible en direct ; comme la
