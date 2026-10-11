@@ -99,6 +99,15 @@ passent toujours par `_explore` et `_verified`. Le récit ne peut pas se clore s
 
     Un `NOT_ANALYSED` ou un `NOT_INTERPRETED` ne se présente jamais comme une recherche faite dans un périmètre
     analysé ;
+  - la même transition couvre les autres endroits où l'écran parle encore de verdict ou de vérification :
+    - le détail « Ce que Taxo a vérifié » (`frontend/src/exploration.tsx`), qui affiche la valeur brute `verdict` :
+      il devient « Ce que Taxo a comparé » et montre le libellé descriptif ci-dessus avec la raison, jamais
+      `CONFIRMED` ou `REFUTED` ;
+    - le libellé de l'opération `verify_claim` dans la trajectoire (« Vérification d'une affirmation ») devient
+      « Comparaison d'une affirmation à la Maille » ;
+    - les pieds de réponse de `frontend/src/minia.tsx` et `frontend/src/query.tsx` (« Taxo a vérifié chacune de ses
+      affirmations », « sans verdict de Taxo ») disent à la place que chaque affirmation a été comparée aux faits
+      de la Maille, et que cette comparaison ne juge pas la conclusion de Minia ;
   - le banc remplace ses deux métriques fondées sur le verdict : « `CONFIRMED` faux » devient « référence citée
     absente des livraisons » (discordance de la déclaration), et `unjustified()` devient « affirmation sans élément
     MIP déclaré » ; l'une et l'autre se lisent sur la déclaration finale, jamais sur un verdict.
