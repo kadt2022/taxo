@@ -174,6 +174,18 @@ def test_a_masked_password_still_shows_that_a_password_is_hardcoded():
     assert f'.password("{MASK}")' in sent and f'password: {MASK}' in sent
 
 
+def test_stacked_annotations_at_column_zero_are_not_taken_for_an_address():
+    """Un type Spring ecrit ses annotations en colonne 0 : le saut de ligne JSON (`\\n`) ne fait pas d'elles un courriel,
+    et la lecture de ce type n'est pas refusee."""
+    code = '@RestController\n@RequestMapping("/api/students")\npublic class StudentController {\n}'
+    assert protect({'source': code})['source'] == code
+
+
+def test_a_real_address_after_a_line_break_is_still_masked():
+    sent = protect({'source': 'class A {\nbob@example.org\n}'})['source']
+    assert 'bob@example.org' not in sent
+
+
 def test_placeholders_variables_and_calls_are_not_secrets():
     code = ('password=${DB_PASSWORD}\nString hash = encoder.encode(password);\nuser.password(encoded)\n'
             'token: null\npassword = encoder.encode(raw)\n')
