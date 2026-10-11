@@ -245,6 +245,21 @@ def test_a_writer_waiting_beyond_the_busy_timeout_fails_explicitly(path):
         holder.close()
 
 
+def test_opening_a_file_held_by_a_writer_beyond_the_busy_timeout_fails_explicitly(path):
+    """Un service qui demarre pendant une longue ecriture : la migration attend le verrou, puis rend un conflit
+    stable, jamais l'erreur brute de SQLite."""
+    SqliteParcoursMemoryStore(path).create(opened())
+    holder = sqlite3.connect(path, isolation_level=None)
+    holder.execute('BEGIN IMMEDIATE')
+    try:
+        with pytest.raises(MiniaError) as error:
+            SqliteParcoursMemoryStore(path, busy_timeout_ms=50)
+        assert error.value.code == INVESTIGATION_CONFLICT
+    finally:
+        holder.execute('ROLLBACK')
+        holder.close()
+
+
 def test_two_investigations_of_different_scopes_never_mix(path):
     """AC-07 : enquetes concurrentes de perimetres distincts, aucun melange de references ou de notes."""
     store = SqliteParcoursMemoryStore(path)

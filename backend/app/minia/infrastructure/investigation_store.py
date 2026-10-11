@@ -191,11 +191,7 @@ class SqliteParcoursMemoryStore:
     def _transaction(self):
         """Une transaction d'ecriture : le verrou d'ecrivain est pris des le debut, tout est annule sur erreur."""
         with self._connection() as connection:
-            try:
-                connection.execute('BEGIN IMMEDIATE')
-            except sqlite3.OperationalError as exc:
-                raise MiniaError(INVESTIGATION_CONFLICT, 'Le carnet est occupé par une autre écriture : '
-                                 'réessayez.') from exc
+            _begin(connection)
             try:
                 yield connection
             except BaseException:
@@ -207,7 +203,7 @@ class SqliteParcoursMemoryStore:
         """Chaque etape sous le verrou d'ecrivain, la version relue une fois le verrou pris : deux processus qui
         ouvrent ensemble un carnet neuf n'appliquent jamais deux fois la meme migration."""
         while True:
-            connection.execute('BEGIN IMMEDIATE')
+            _begin(connection)
             try:
                 version = connection.execute('PRAGMA user_version').fetchone()[0]
                 if version > SCHEMA_VERSION:
@@ -254,3 +250,12 @@ class SqliteParcoursMemoryStore:
         except ValueError as exc:
             raise MiniaError(INVESTIGATION_INVALID, 'Le carnet enregistré est illisible.') from exc
         return from_document(document)
+
+
+def _begin(connection):
+    """Le verrou d'ecrivain, attendu jusqu'au delai d'occupation : au-dela, un conflit stable, jamais l'erreur brute
+    de SQLite."""
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+    except sqlite3.OperationalError as exc:
+        raise MiniaError(INVESTIGATION_CONFLICT, 'Le carnet est occupé par une autre écriture : réessayez.') from exc
