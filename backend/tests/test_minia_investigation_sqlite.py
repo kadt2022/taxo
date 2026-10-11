@@ -193,6 +193,43 @@ def test_two_processes_opening_a_new_file_together_migrate_it_once(path):
     assert opened_stores[0].load('inv-1', ALICE).revision == 1
 
 
+def test_switching_a_new_file_to_wal_waits_for_the_other_opener(path, monkeypatch):
+    """Deux processus ouvrent ensemble un carnet neuf : le passage en WAL de l'un trouve le fichier verrouille par
+    l'autre ; il reessaie dans la limite du delai au lieu d'echouer."""
+    connect, locked = sqlite3.connect, []
+
+    class Busy:
+        def __init__(self, connection):
+            self._connection = connection
+
+        def execute(self, statement, *arguments):
+            if statement == 'PRAGMA journal_mode=WAL' and len(locked) < 2:
+                locked.append(statement)
+                raise sqlite3.OperationalError('database is locked')
+            return self._connection.execute(statement, *arguments)
+
+        def __getattr__(self, name):
+            return getattr(self._connection, name)
+
+    monkeypatch.setattr(investigation_store.sqlite3, 'connect', lambda *args, **kwargs: Busy(connect(*args, **kwargs)))
+    store = SqliteParcoursMemoryStore(path)
+
+    assert len(locked) == 2
+    store.create(opened())
+    assert store.load('inv-1', ALICE).revision == 1
+
+
+def test_a_state_from_another_revision_is_never_written(path):
+    """Un etat garde a la revision 1 n'ecrase pas la revision 2, meme si l'on annonce la revision 2."""
+    store = SqliteParcoursMemoryStore(path)
+    first = store.create(opened())
+    second = store.commit('inv-1', 1, first.record_tile(SNAPSHOT, SERVICE, (), at=at(1)))
+    with pytest.raises(MiniaError) as error:
+        store.commit('inv-1', 2, first.record_tile(SNAPSHOT, SAVE, (), at=at(2)))
+    assert error.value.code == INVESTIGATION_CONFLICT
+    assert store.load('inv-1', ALICE) == second
+
+
 def test_a_writer_waiting_beyond_the_busy_timeout_fails_explicitly(path):
     store = SqliteParcoursMemoryStore(path, busy_timeout_ms=50)
     created = store.create(opened())

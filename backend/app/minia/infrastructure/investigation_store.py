@@ -17,6 +17,7 @@ aucun message complet du modele).
 import hashlib
 import json
 import sqlite3
+import time
 from contextlib import contextmanager, closing
 from datetime import datetime, timezone
 
@@ -27,6 +28,7 @@ from app.minia.domain.investigation.identity import Status
 
 SCHEMA_VERSION = 1
 BUSY_TIMEOUT_MS = 5000
+WAL_RETRY_SECONDS = 0.01
 _NOT_FOUND = 'Enquête introuvable.'
 
 # Chaque migration amene le fichier de la version d'indice a la suivante ; elles ne se modifient jamais apres
@@ -73,10 +75,22 @@ class SqliteParcoursMemoryStore:
         self._path = str(path)
         self._busy_timeout_ms = busy_timeout_ms
         with self._connection() as connection:
-            mode = connection.execute('PRAGMA journal_mode=WAL').fetchone()[0]
+            mode = self._wal(connection)
             if str(mode).lower() != 'wal':
                 raise MiniaError(INVESTIGATION_INVALID, 'Le carnet des enquêtes exige le mode WAL de SQLite.')
             self._migrate(connection)
+
+    def _wal(self, connection):
+        """Le passage en WAL d'un fichier neuf prend un verrou que le delai d'attente ne couvre pas : deux processus
+        qui ouvrent ensemble le meme carnet reessaient jusqu'a ce delai, puis echouent explicitement."""
+        deadline = time.monotonic() + self._busy_timeout_ms / 1000
+        while True:
+            try:
+                return connection.execute('PRAGMA journal_mode=WAL').fetchone()[0]
+            except sqlite3.OperationalError as exc:
+                if 'locked' not in str(exc) or time.monotonic() >= deadline:
+                    raise MiniaError(INVESTIGATION_CONFLICT, 'Le carnet des enquêtes est occupé : réessayez.') from exc
+                time.sleep(WAL_RETRY_SECONDS)
 
     # Port --------------------------------------------------------------------------------------------------
 
@@ -109,6 +123,10 @@ class SqliteParcoursMemoryStore:
     def commit(self, investigation_id, expected_revision, new_state):
         if new_state.investigation_id != investigation_id:
             raise MiniaError(INVESTIGATION_INVALID, 'L’état écrit n’est pas celui de cette enquête.')
+        if new_state.revision != expected_revision:
+            # Un etat tire d'une autre revision ecraserait les ecritures intermediaires.
+            raise MiniaError(INVESTIGATION_CONFLICT, 'Cet état ne part pas de la révision attendue : rechargez '
+                             'l’enquête.')
         revision = expected_revision + 1
         written = new_state.committed(revision)
         text, digest = _written(written)
