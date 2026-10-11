@@ -186,17 +186,23 @@ class SqliteParcoursMemoryStore:
             connection.execute('COMMIT')
 
     def _migrate(self, connection):
-        version = connection.execute('PRAGMA user_version').fetchone()[0]
-        if version > SCHEMA_VERSION:
-            raise MiniaError(INVESTIGATION_INVALID, f'Le carnet des enquêtes est au schéma {version}, plus récent '
-                             f'que celui de cette version de Taxo ({SCHEMA_VERSION}) : il n’est pas ouvert.')
-        for target in range(version, SCHEMA_VERSION):
+        """Chaque etape sous le verrou d'ecrivain, la version relue une fois le verrou pris : deux processus qui
+        ouvrent ensemble un carnet neuf n'appliquent jamais deux fois la meme migration."""
+        while True:
             connection.execute('BEGIN IMMEDIATE')
             try:
-                for statement in _MIGRATIONS[target].split(';'):
+                version = connection.execute('PRAGMA user_version').fetchone()[0]
+                if version > SCHEMA_VERSION:
+                    raise MiniaError(INVESTIGATION_INVALID, f'Le carnet des enquêtes est au schéma {version}, plus '
+                                     f'récent que celui de cette version de Taxo ({SCHEMA_VERSION}) : il n’est pas '
+                                     'ouvert.')
+                if version == SCHEMA_VERSION:
+                    connection.execute('COMMIT')
+                    return
+                for statement in _MIGRATIONS[version].split(';'):
                     if statement.strip():
                         connection.execute(statement)
-                connection.execute(f'PRAGMA user_version = {target + 1}')
+                connection.execute(f'PRAGMA user_version = {version + 1}')
             except BaseException:
                 connection.execute('ROLLBACK')
                 raise

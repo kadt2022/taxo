@@ -163,6 +163,36 @@ def test_concurrent_writers_from_the_same_revision_only_one_wins(path):
     assert set(loaded.logbook.visited) == {winner} and loaded.revision == 2
 
 
+def test_two_processes_opening_a_new_file_together_migrate_it_once(path):
+    """Le second ouvreur a lu la version avant que le premier ne migre : il relit la version une fois le verrou
+    pris, et ne rejoue pas la migration."""
+    first = sqlite3.connect(path, isolation_level=None)
+    first.execute('PRAGMA journal_mode=WAL')
+    first.execute('BEGIN IMMEDIATE')
+    opened_stores, failures = [], []
+
+    def open_store():
+        try:
+            opened_stores.append(SqliteParcoursMemoryStore(path))
+        except Exception as error:  # noqa: BLE001 - le test rapporte l'echec tel quel
+            failures.append(error)
+
+    second = threading.Thread(target=open_store)
+    second.start()
+    second.join(0.3)
+    for statement in investigation_store._MIGRATIONS[0].split(';'):
+        if statement.strip():
+            first.execute(statement)
+    first.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
+    first.execute('COMMIT')
+    first.close()
+    second.join()
+
+    assert failures == [] and len(opened_stores) == 1
+    opened_stores[0].create(opened())
+    assert opened_stores[0].load('inv-1', ALICE).revision == 1
+
+
 def test_a_writer_waiting_beyond_the_busy_timeout_fails_explicitly(path):
     store = SqliteParcoursMemoryStore(path, busy_timeout_ms=50)
     created = store.create(opened())
