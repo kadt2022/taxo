@@ -60,22 +60,36 @@ def tile_parts(response):
     root = _root(response)
     if root is None or not root.get('known'):
         return None
+    return root['reference'], _edges(response), _frontier(response), _expanded(response, root['reference'])
+
+
+def _edges(response) -> tuple:
+    """Les aretes completes d'une Tuile, avec leur occurrence ; un fait incomplet n'en donne aucune."""
     edges = []
     for item in response.get('facts', response.get('items', [])):
         fact = item.get('fact', item) if isinstance(item, dict) else {}
         source, relation, target = fact.get('subject'), fact.get('relation'), fact.get('object')
         if all(isinstance(value, str) and value for value in (source, relation, target)):
             edges.append(Edge(source, relation, target, item.get('occurrence')))
+    return tuple(edges)
+
+
+def _frontier(response) -> tuple:
+    """La frontiere localisee sur un noeud, dans une nature connue ; une frontiere sans noeud n'est pas une branche."""
     frontier = []
     for entry in response.get('frontier', []):
         kind = _NATURES.get(entry.get('nature')) if isinstance(entry, dict) else None
         if kind is not None and isinstance(entry.get('node'), str):
             frontier.append(FrontierEntry(entry['node'], kind, str(entry.get('reason', '')),
                                           entry.get('continuation'), str(entry.get('relation') or '')))
-    expanded = tuple(node['reference'] for node in _details(response)
-                     if isinstance(node, dict) and node.get('expanded') and isinstance(node.get('reference'), str)
-                     and node['reference'] != root['reference'])
-    return root['reference'], tuple(edges), tuple(frontier), expanded
+    return tuple(frontier)
+
+
+def _expanded(response, anchor) -> tuple:
+    """Les noeuds que la Tuile a developpes, hors son ancre."""
+    return tuple(node['reference'] for node in _details(response)
+                 if isinstance(node, dict) and node.get('expanded') and isinstance(node.get('reference'), str)
+                 and node['reference'] != anchor)
 
 
 def _root(response):
