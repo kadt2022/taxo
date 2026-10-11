@@ -202,3 +202,11 @@ def test_a_symbol_written_in_the_code_read_is_not_a_received_reference():
                'response': {'anchor': {'reference': hidden, 'known': False},
                             'boundaries': [{'nature': 'SELECTION', 'node': hidden}], 'items': []}}
     assert not sources.received(hidden, [unknown]), 'l’ancre d’un voisinage, même inconnue, est la demande répétée'
+
+
+def test_a_model_that_does_not_explore_says_the_code_was_not_read(make_repo, tmp_path):
+    """L'accord donné à un modèle en mode paquet seul : aucun code n'est lu, et la réponse le dit."""
+    model = Scripted(json.dumps({'cited': [], 'answer': 'Rien.', 'unknown': ''}), explores=False)
+    result = ask(make_repo, tmp_path, model)
+    assert result['source_reading'] == {'status': 'UNAVAILABLE'}
+    assert 'studentRepository.findAll()' not in json.dumps(model.calls)
