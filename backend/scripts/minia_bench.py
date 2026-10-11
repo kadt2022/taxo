@@ -3,8 +3,10 @@
 Analyse un dépôt Git à un commit figé, puis pose chaque question du banc `--runs` fois à Minia, par l'API et dans le
 même processus, avec le fournisseur configuré comme pour Taxo (MINIA_PROVIDER, MINIA_OLLAMA_MODEL,
 MINIA_CLAUDE_MODEL...). Chaque message réellement reçu par le fournisseur est capturé, après la représentation
-contrôlée, et vérifié : aucune identité Git, aucun courriel, aucun mot de passe en clair. Le diff d'un commit n'est
-joint qu'aux questions du banc qui le demandent (accord de la demande) : MINIA_SOURCE_CONTEXT vaut `diff` ici.
+contrôlée, et vérifié : aucune identité Git, aucun courriel, aucun secret en clair (mot de passe, jeton, clé
+privée, identifiants dans une adresse). Le diff d'un commit n'est joint qu'aux questions du banc qui le demandent
+(accord de la demande) : MINIA_SOURCE_CONTEXT vaut `diff` ici. Le fournisseur rejoué est celui de `--provider`,
+sinon de MINIA_PROVIDER ; il doit être configuré.
 
 Mesures par réponse : exactitude (mentions attendues, formulations interdites), fausses confirmations de sécurité
 (verdict `CONFIRMED` d'une affirmation absente de la vérité établie à la main), opérations Taxo, appels au modèle,
@@ -34,9 +36,27 @@ MASK = '******'
 EXPLORATION, DIRECT = 'exploration', 'taxo'
 # Un courriel qui aurait passe la protection ; un pseudonyme ne l'est pas.
 _EMAIL = re.compile(r'[\w.!#$%&+?^`{|}~-]+@[\w-]+(?:\.[\w-]+)+')
-# Un mot de passe passe a `.password("…")` en clair : la valeur n'est pas le masque. Les guillemets peuvent etre
-# echappes dans un message JSON.
-_CLEAR_PASSWORD = re.compile(r'password\(\s*\\?"(?!\*{6}\\?")[^"\\]+\\?"', re.IGNORECASE)
+# Les secrets qu'une charge ne doit jamais porter en clair, reconnus ici independamment de la protection
+# (`minia/domain/confidentiality.py`) pour qu'une regression de celle-ci ne soit pas certifiee par le banc. Les
+# guillemets peuvent etre echappes dans un message JSON ; une valeur masquee, vide, litterale ou renvoyant a une
+# variable d'environnement n'est pas un secret ; un nombre seul non plus (un compte `"secrets": 2`).
+_SECRET_NAME = (r'[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key'
+                r'|credentials?)[\w.-]*')
+_TOKENS = (
+    r'\b(?:AKIA|ASIA)[0-9A-Z]{16}\b', r'\bgh[pousr]_[A-Za-z0-9]{20,}', r'\bgithub_pat_[A-Za-z0-9_]{20,}',
+    r'\bxox[abposr]-[A-Za-z0-9-]{10,}', r'\bsk-[A-Za-z0-9_-]{16,}', r'\bAIza[0-9A-Za-z_-]{35}',
+    r'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}',
+)
+_SECRET_SHAPES = (
+    ('clé privée', re.compile(r'-----BEGIN[A-Z ]*PRIVATE KEY-----')),
+    ('jeton', re.compile('|'.join(_TOKENS))),
+    ('identifiants dans une adresse', re.compile(r'\b[a-z][a-z0-9+.-]*://[^\s/:@]+:(?!\*{6}@)[^\s/@]+@',
+                                                 re.IGNORECASE)),
+    ('secret en clair', re.compile(
+        rf'\b{_SECRET_NAME}(?:\\?["\'])?[ \t]*(?::=|=>|[:=]|\()[ \t]*(?:\\?["\'])?'
+        r'(?!\*{6})(?!(?:null|none|true|false|\d+)\b)(?!\$\{)(?![|>][-+]?(?:\s|\\n|$))[^\s"\'\\,;(){}\[\]]+',
+        re.IGNORECASE)),
+)
 _MASKED_PASSWORD = re.compile(r'password\(\s*\\?"\*{6}\\?"', re.IGNORECASE)
 
 
@@ -105,11 +125,12 @@ def identities(repository):
 
 
 def leaks(payload, known):
-    """Ce qu'une charge laisse passer : identite connue, courriel, mot de passe en clair. Jamais la valeur d'un secret
-    dans le rapport : seulement sa nature."""
+    """Ce qu'une charge laisse passer : identite connue, courriel, cle privee, jeton, identifiants dans une adresse,
+    secret affecte en clair. Jamais la valeur d'un secret dans le rapport : seulement sa nature."""
     found = [f'identité : {value[:2]}…' for value in known if value and value in payload]
     found += ['courriel'] * len(_EMAIL.findall(payload))
-    found += ['mot de passe en clair'] * len(_CLEAR_PASSWORD.findall(payload))
+    for nature, shape in _SECRET_SHAPES:
+        found += [nature] * len(shape.findall(payload))
     return found
 
 
@@ -282,13 +303,16 @@ def summary(measured, model):
 
 
 def recorded_models(recorder, provider):
-    """Les fournisseurs configures comme pour Taxo, chacun enregistre."""
+    """Le fournisseur rejoue, choisi comme pour Taxo (`--provider`, sinon MINIA_PROVIDER), et les fournisseurs
+    configures, chacun enregistre. Le fournisseur choisi doit etre configure : sinon le banc mesurerait un autre."""
     from app.bootstrap import settings
     from app.bootstrap.application import minia_models
-    models = minia_models(settings.minia(provider=provider))
-    if not models:
-        raise SystemExit('Aucun fournisseur de Minia configuré (MINIA_OLLAMA_MODEL, MINIA_CLAUDE_MODEL...).')
-    return {name: Recording(model, recorder) for name, model in models.items()}
+    options = settings.minia(provider=provider)
+    models = minia_models(options)
+    if options['provider'] not in models:
+        raise SystemExit(f"Fournisseur de Minia non configuré : {options['provider']} "
+                         '(MINIA_OLLAMA_MODEL, MINIA_CLAUDE_MODEL...).')
+    return options['provider'], {name: Recording(model, recorder) for name, model in models.items()}
 
 
 def run(database, repository, options, bench, models, recorder):
@@ -325,8 +349,8 @@ def main():
     repository = options.repository.resolve()
     bench = json.loads(options.questions.read_text(encoding='utf-8'))
     recorder = Recorder()
-    models = recorded_models(recorder, options.provider)
-    model = next(iter(models.values()))
+    options.provider, models = recorded_models(recorder, options.provider)
+    model = models[options.provider]
     label = f'{model.provider} {model.model_name} · {repository.name} @ {bench["commit"][:7]}'
     if options.database:
         measured = run(options.database, repository, options, bench, models, recorder)

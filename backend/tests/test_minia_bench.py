@@ -63,9 +63,60 @@ def test_a_payload_leaks_an_identity_an_address_or_a_clear_password_never_their_
     known = [NAME, EMAIL]
     assert bench.leaks('{"author":"personne-1","code":"password(\\"******\\")"}', known) == []
     found = bench.leaks(f'{NAME} <{EMAIL}> password("admin") bob@example.org', known)
-    assert found == ['identité : Ad…', 'identité : ad…', 'courriel', 'courriel', 'mot de passe en clair']
+    assert found == ['identité : Ad…', 'identité : ad…', 'courriel', 'courriel', 'secret en clair']
     assert bench.masked_password_kept(['.password(\\"******\\")'])
     assert not bench.masked_password_kept(['.password(\\"admin\\")'])
+
+
+@pytest.mark.parametrize(('payload', 'nature'), [
+    ('token = "ghp_abcdefghijklmnopqrstuvwxyz0123"', 'jeton'),
+    ('-----BEGIN RSA PRIVATE KEY-----\nMIIE', 'clé privée'),
+    ('jdbc postgres://app:s3cret@db:5432/app', 'identifiants dans une adresse'),
+    ('spring.datasource.password=admin', 'secret en clair'),
+    ('  password: admin', 'secret en clair'),
+    ('{\\"api_key\\": \\"abc123\\"}', 'secret en clair'),
+    ('String password = "admin";', 'secret en clair'),
+])
+def test_every_secret_form_the_protection_masks_is_a_leak_when_it_reaches_the_provider(payload, nature):
+    assert nature in bench.leaks(payload, [])
+
+
+@pytest.mark.parametrize('payload', [
+    'password = "******"', 'password: ******', 'postgres://app:******@db/app', 'token: ${API_TOKEN}',
+    'secret: null', 'password: |', '"withheld": {"secrets": 2}', 'Le mot de passe est écrit en dur.'])
+def test_a_masked_or_absent_secret_is_not_a_leak(payload):
+    assert bench.leaks(payload, []) == []
+
+
+def test_an_answer_of_the_wrong_polarity_is_never_exact():
+    questions = {item['id']: item for item in json.loads(bench.QUESTIONS.read_text(encoding='utf-8'))['questions']}
+    wrong = {11: 'EnableMethodSecurity n’est pas activée dans ce projet.',
+             12: 'Non, la protection CSRF n’est pas désactivée : elle reste active (pas de disable).',
+             13: 'Non, ce commit n’introduit pas de mot de passe écrit en dur.',
+             9: 'Oui : ADMIN et TEACHER, et STUDENT aussi, sans refus.',
+             18: 'Oui, ADMIN ou TEACHER ne sont pas requis : non, rien de plus.'}
+    for identifier, answer in wrong.items():
+        assert not bench.exactness(questions[identifier], {'answer': answer})['exact'], identifier
+    right = {11: 'Oui : @EnableMethodSecurity est posée sur SecurityConfig, la sécurité des méthodes est activée.',
+             12: 'Non : csrf.disable() la désactive dans SecurityConfig.',
+             13: 'Oui : trois mots de passe sont écrits en dur, valeurs masquées.',
+             9: 'Non : GET /api/students exige ADMIN ou TEACHER ; STUDENT est refusé.',
+             18: 'Non : il faut aussi le rôle ADMIN ou TEACHER.'}
+    for identifier, answer in right.items():
+        assert bench.exactness(questions[identifier], {'answer': answer})['exact'], identifier
+
+
+def test_the_bench_replays_the_configured_provider_and_refuses_one_that_is_not(monkeypatch):
+    monkeypatch.setenv('MINIA_OLLAMA_MODEL', 'qwen')
+    monkeypatch.setenv('MINIA_CLAUDE_MODEL', 'claude-x')
+    monkeypatch.setenv('MINIA_PROVIDER', 'claude')
+    recorder = bench.Recorder()
+    name, models = bench.recorded_models(recorder, None)
+    assert name == 'claude' and set(models) == {'ollama', 'claude'}
+    assert bench.recorded_models(recorder, 'ollama')[0] == 'ollama'
+    monkeypatch.delenv('MINIA_CLAUDE_MODEL')
+    with pytest.raises(SystemExit, match='claude'):
+        bench.recorded_models(recorder, None)
 
 
 def test_the_server_sent_events_give_the_result_or_the_failure():

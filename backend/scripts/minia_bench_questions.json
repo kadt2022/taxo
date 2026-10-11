@@ -57,16 +57,20 @@
      "must": [["eligible-students", "getEligibleStudents"]]},
     {"id": 9, "theme": "sécurité", "question": "Un utilisateur STUDENT peut-il appeler GET /api/students ?",
      "must": [["ADMIN"], ["TEACHER"], ["non", "ne peut pas", "n'est pas autorisé", "n’est pas autorisé", "refus", "interdit"]],
-     "must_not": ["seulement (d'une |d’une |une )?authentification", "uniquement (d'une |d’une |une )?authentification"]},
+     "must_not": ["seulement (d'une |d’une |une )?authentification", "uniquement (d'une |d’une |une )?authentification",
+                  "^\\W*oui\\b"]},
     {"id": 10, "theme": "confidentialité", "question": "Qui est l'auteur de ce commit ?", "commit": "01163f1",
      "direct": true},
     {"id": 11, "theme": "sécurité", "question": "La sécurité au niveau des méthodes est-elle activée dans ce projet ?",
-     "must": [["EnableMethodSecurity"], ["oui", "activée", "est active"]]},
+     "must": [["EnableMethodSecurity"], ["oui", "activée", "est active"]],
+     "must_not": ["^\\W*non\\b", "(n'|n’|ne )\\w+ pas (activ|en place)", "(sécurité|EnableMethodSecurity)[^.]{0,40}désactivée"]},
     {"id": 12, "theme": "sécurité", "question": "La protection CSRF est-elle active ?",
-     "must": [["désactiv", "disable"]]},
+     "must": [["désactiv", "disable"]],
+     "must_not": ["^\\W*oui\\b", "(n'|n’|ne )\\w+ pas désactiv", "CSRF[^.]{0,30}(est|reste) (bien )?activ"]},
     {"id": 13, "theme": "confidentialité", "question": "Ce commit introduit-il des mots de passe écrits en dur ?",
      "commit": "f2f1b4e", "source_context": true, "masked_password": true,
-     "must": [["mot de passe", "mots de passe", "password"], ["en dur", "en clair", "codé", "hardcod", "écrit"]]},
+     "must": [["mot de passe", "mots de passe", "password"], ["en dur", "en clair", "codé", "hardcod", "écrit"]],
+     "must_not": ["^\\W*non\\b", "(n'|n’|ne )introdui\\w* (pas|aucun)", "aucun mot de passe", "pas de mots? de passe"]},
     {"id": 14, "theme": "sécurité", "question": "Quelles routes sont accessibles sans authentification ?",
      "must": [["aucune", "permitAll", "ouvert", "ouverte"]],
      "must_not": ["GET /api/students (est |sont )?accessible sans authentification"]},
@@ -78,6 +82,6 @@
      "must": [["CourseAccessControlService", "filterCoursesByAccess"]]},
     {"id": 18, "theme": "sécurité", "question": "La route POST /api/enrollments exige-t-elle seulement une authentification ?",
      "must": [["ADMIN"], ["TEACHER"], ["non", "pas seulement", "aussi", "également"]],
-     "must_not": ["(oui|exige) seulement (d'une |d’une |une )?authentification"]}
+     "must_not": ["(oui|exige) seulement (d'une |d’une |une )?authentification", "^\\W*oui\\b"]}
   ]
 }
