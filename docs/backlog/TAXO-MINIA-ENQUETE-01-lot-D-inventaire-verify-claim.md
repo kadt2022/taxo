@@ -86,8 +86,19 @@ passent toujours par `_explore` et `_verified`. Le récit ne peut pas se clore s
 - Minia cesse de présenter des verdicts sur les conclusions du modèle dans **tous** ses parcours, par une évolution
   interne à Minia et à l'écran, sans changement de protocole :
   - les questions sur un commit et sur le projet passent au parcours d'enquête (un récit d'écran suit) ;
-  - en attendant, l'écran remplace « Affirmations vérifiées par Taxo » / « Confirmée par Taxo » par une formulation
-    descriptive (« Correspond à un fait de la Maille », « Aucun fait correspondant dans le périmètre analysé ») ;
+  - en attendant, l'écran remplace « Affirmations vérifiées par Taxo » et chaque libellé de verdict par une
+    formulation descriptive, qui garde la raison rendue par Taxo :
+
+    | Réponse de `verify_claim` | Libellé actuel | Libellé descriptif proposé |
+    | --- | --- | --- |
+    | `CONFIRMED` | Confirmée par Taxo (par déduction si `INFERRED`) | Correspond à un fait de la Maille (déduit, si `INFERRED`) |
+    | `REFUTED` | Contredite par Taxo | Un fait de la Maille porte une autre valeur sur cette relation exclusive |
+    | `NOT_PROVEN` + `NOT_FOUND_IN_ANALYSED_SCOPE` | Non prouvée | Aucun fait correspondant là où Taxo analyse |
+    | `NOT_PROVEN` + `NOT_INTERPRETED` | Non prouvée | Zone vue par Taxo sans savoir la lire : rien n'est établi |
+    | `NOT_PROVEN` + `NOT_ANALYSED` | Non prouvée | Aucun analyseur de Taxo ne couvre cette dimension : rien n'est établi |
+
+    Un `NOT_ANALYSED` ou un `NOT_INTERPRETED` ne se présente jamais comme une recherche faite dans un périmètre
+    analysé ;
   - le banc remplace ses deux métriques fondées sur le verdict : « `CONFIRMED` faux » devient « référence citée
     absente des livraisons » (discordance de la déclaration), et `unjustified()` devient « affirmation sans élément
     MIP déclaré » ; l'une et l'autre se lisent sur la déclaration finale, jamais sur un verdict.
