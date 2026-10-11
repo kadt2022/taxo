@@ -71,10 +71,13 @@ def write_note(notes: tuple, note_id: str, text: str, nodes, known_nodes, genera
 
 
 def revise_note(notes: tuple, note_id: str, text: str, nodes, known_nodes, at: datetime,
-                guard: TextGuard) -> tuple[tuple, Hypothesis]:
+                guard: TextGuard, author: str | None = None) -> tuple[tuple, Hypothesis]:
+    """Une nouvelle version de la note, attribuee au modele qui l'a ecrite : apres une reprise par un autre
+    modele, la revision n'est jamais pretee au premier."""
     current = _current(notes, note_id)
     note = replace(current, version=current.version + 1, text=_checked_text(text, guard),
-                   nodes=_checked_nodes(nodes, known_nodes), status=NoteStatus.REVISED, at=at)
+                   nodes=_checked_nodes(nodes, known_nodes), status=NoteStatus.REVISED, at=at,
+                   author=author or current.author)
     return _replaced(notes, note), note
 
 

@@ -256,6 +256,19 @@ def test_a_late_result_never_moves_activity_backwards():
     assert late.investigation.expires_at == state.investigation.expires_at
 
 
+def test_a_revision_is_attributed_to_the_model_that_wrote_it():
+    """Une enquete reprise avec un autre modele : la revision porte son auteur, la version d'origine garde le
+    sien dans le journal."""
+    state = explored_two_of_three().write_note('n1', 'Hypothèse', [SERVICE], 'model-x', allow, at(8))
+
+    revised = state.revise_note('n1', 'Hypothèse revue', [SERVICE], allow, at(9), author='model-y')
+    unchanged = state.revise_note('n1', 'Hypothèse revue', [SERVICE], allow, at(9))
+
+    assert revised.notes[-1].author == 'model-y'
+    assert revised.pending[-1].data['author'] == 'model-y'
+    assert unchanged.notes[-1].author == 'model-x'
+
+
 def test_delivery_ids_are_unique_and_replays_cite_their_origin():
     state = opened().record_delivery(SNAPSHOT, Delivery('D-1', SERVICE, DeliveryKind.TILE, at(1)))
     with pytest.raises(MiniaError):

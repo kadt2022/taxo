@@ -169,9 +169,11 @@ class InvestigationState:
                                             self.investigation.snapshot.generation_id, author, at, guard)
         return self._changed(Event(EventKind.NOTE, at, _plain(note)), at, notes=notes)
 
-    def revise_note(self, note_id: str, text: str, nodes, guard: TextGuard, at: datetime) -> 'InvestigationState':
+    def revise_note(self, note_id: str, text: str, nodes, guard: TextGuard, at: datetime,
+                    author: str | None = None) -> 'InvestigationState':
         self.investigation.ensure_writable()
-        notes, note = hypotheses.revise_note(self.notes, note_id, text, nodes, self.logbook.known_nodes(), at, guard)
+        notes, note = hypotheses.revise_note(self.notes, note_id, text, nodes, self.logbook.known_nodes(), at, guard,
+                                             author)
         return self._changed(Event(EventKind.NOTE, at, _plain(note)), at, notes=notes)
 
     def close_note(self, note_id: str, at: datetime) -> 'InvestigationState':
