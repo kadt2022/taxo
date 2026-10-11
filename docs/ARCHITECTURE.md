@@ -1047,6 +1047,12 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
    reconnus masqués (`******`, la valeur seule), trailers de commit retirés ; un message de forme
    inattendue ou qui fuirait encore est refusé. Taxo garde les valeurs d'origine et restitue localement
    ce que le modèle rend. L'auteur d'un commit est donné par Taxo seul, sans modèle.
+9. **Transparence** (TAXO-MINIA-SEC-01, E4) : le portail sépare toujours ce que Taxo a vérifié, ce que
+   Minia en déduit et ce que Taxo ne sait pas. Ce dernier bloc dit chaque opération refusée à Minia, avec
+   sa raison (un refus est une frontière de Taxo, jamais une absence dans le code), et compte ce qui a été
+   protégé, sans aucune valeur. Rien n'est conservé : ni la question, ni la réponse, ni la trajectoire, qui
+   ne porte que les opérations, leurs arguments et leurs issues. Le journal d'accès de l'API ne garde que
+   le nom des paramètres d'adresse, jamais leur valeur : la question passée dans l'adresse n'y est pas écrite.
 
 ## 13. Hypothèses statistiques (Proposé, capacité non branchée)
 
