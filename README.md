@@ -597,6 +597,23 @@ Il mesure l'exactitude (mentions attendues et formulations interdites, dont une 
 les fausses confirmations de sécurité, les affirmations sans vérification, les opérations Taxo, les appels
 au modèle, les octets envoyés (les jetons seulement si le fournisseur les rend) et le temps.
 
+**Mesure D de l'Adaptive Tile (TAXO-MIP-ADT-01).** Chaque réponse dit aussi l'apport des Tuiles (`get_tile`) et
+du code (`get_source`) : pièces servies, refusées, et leurs octets. Trois séries, même modèle, même dépôt figé :
+
+```bash
+cd backend
+git worktree add ../../taxo-avant 3f483b7   # Taxo d'avant les Tuiles
+MINIA_PROVIDER=claude python scripts/minia_bench.py ../student-course-demo --runs 3 \
+  --app ../../taxo-avant/backend --label ancienne --out ancienne.json
+MINIA_PROVIDER=claude python scripts/minia_bench.py ../student-course-demo --runs 3 --out faits.json
+MINIA_PROVIDER=claude python scripts/minia_bench.py ../student-course-demo --runs 3 --source --out code.json
+python scripts/minia_bench.py --compare ancienne.json faits.json code.json
+```
+
+`--source` active la lecture du code (`TAXO_SOURCE_READING=symbol`) et l'accord de chaque question sur le
+projet, comme la case du portail. `--compare` écrit le tableau des séries, dont l'exactitude des réponses qui
+ont reçu une Tuile ou du code, à part de celles qui n'en ont pas reçu.
+
 ### Minia Ollama ou Minia Claude (TAXO-MINIA-05)
 
 Minia peut être servie par plusieurs fournisseurs. Elle fait le même travail quel que soit celui choisi :

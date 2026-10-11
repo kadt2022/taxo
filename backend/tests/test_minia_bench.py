@@ -210,3 +210,77 @@ def test_a_full_replay_measures_each_answer_and_finds_no_leak(make_repo, git, tm
         assert NAME not in line['payload'] and EMAIL not in line['payload'] and 'admin123' not in line['payload']
     report = bench.summary(measured, 'scripted')
     assert 'Réponses : 6 ; exactes : 6 (100%)' in report and 'Fuites dans les charges envoyées : 0' in report
+
+
+# --- Mesure D de l'Adaptive Tile (TAXO-MIP-ADT-01) : l'apport des Tuiles et du code, et les séries comparées ---
+
+def test_the_contribution_counts_the_tiles_and_the_code_served_or_refused():
+    trajectory = [{'operation': 'describe', 'outcome': 'OK', 'bytes': 900},
+                  {'operation': 'get_tile', 'outcome': 'OK', 'bytes': 1200},
+                  {'operation': 'get_source', 'outcome': 'OK', 'bytes': 400, 'items': 1},
+                  {'operation': 'get_source', 'outcome': 'OK', 'bytes': 250, 'items': 0, 'not_sent': ['CONFIDENTIAL']},
+                  {'operation': 'get_source', 'outcome': 'ERROR', 'bytes': 300}]
+    # Une réponse OK sans aucune pièce n'est pas du code : elle compte comme refusée, sans ses octets.
+    assert bench.contribution(trajectory) == {'tiles': {'served': 1, 'refused': 0, 'bytes': 1200},
+                                              'sources': {'served': 1, 'refused': 2, 'bytes': 400}}
+    assert bench.contribution([]) == {'tiles': {'served': 0, 'refused': 0, 'bytes': 0},
+                                      'sources': {'served': 0, 'refused': 0, 'bytes': 0}}
+
+
+def answer_row(exact, tiles=0, sources=0, tokens=None):
+    return {'exact': exact, 'false_confirmations': [], 'unjustified': 0, 'leaks': [], 'taxo_operations': 3,
+            'llm_calls': 2, 'bytes_sent': 1000, 'tokens_sent': tokens, 'seconds': 1.5,
+            'tiles': {'served': tiles, 'refused': 0, 'bytes': 800 * tiles},
+            'sources': {'served': sources, 'refused': 0, 'bytes': 300 * sources}}
+
+
+def test_the_series_are_compared_side_by_side_without_imagined_tokens():
+    reports = [{'series': 'ancienne', 'model': 'm', 'taxo': 'a' * 40, 'answers': [answer_row(False), answer_row(True)]},
+               {'series': 'faits', 'model': 'm', 'taxo': 'b' * 40, 'answers': [answer_row(True, tiles=1)]},
+               {'series': 'faits+code', 'model': 'm', 'answers': [answer_row(True, 1, 2, tokens=40)]}]
+    table = bench.compared(reports).splitlines()
+    assert table[2] == '| Mesure | ancienne | faits | faits+code |'
+    assert '| Taxo | aaaaaaa | bbbbbbb | ? |' in table
+    assert '| Réponses exactes | 1/2 | 1/1 | 1/1 |' in table
+    assert '| Jetons envoyés | non rendus | non rendus | 40 |' in table
+    assert '| Pièces sources servies (refusées) | 0 (0) | 0 (0) | 2 (0) |' in table
+    assert '| Exactes avec du code | — | — | 1/1 |' in table
+    assert '| Exactes sans Tuile ni code | 1/2 | — | — |' in table
+
+
+def test_the_series_with_code_reads_the_method_and_the_series_without_never_does(make_repo, tmp_path):
+    """Le banc rejoue la question de la démonstration : avec `--source`, la Tuile puis le code ; sans, le même
+    parcours, et `get_source` refusée sans rien lire."""
+    from test_minia_explore import answer, call, statement
+    from test_minia_general import Scripted as Exploring
+    from test_minia_general import analysis_of
+    from test_minia_source_reading import BODY, FILES, FIND
+
+    repository = make_repo(FILES)
+    reference = {**TRUTH, 'commit': bench.full_sha(repository, 'HEAD'), 'questions': [
+        {'id': 5, 'theme': 'appels', 'question': 'Que fait StudentService.findStudents ?',
+         'must': [['findStudents']]}]}
+    for source, served, refused in ((True, 1, 0), (False, 0, 1)):
+        model = Exploring(
+            lambda sent: call('find_references', analysis=analysis_of(sent), prefix='StudentService.findStudents',
+                              match='NAME'),
+            call('get_tile', reference=FIND, profile='method-context/1'), call('get_source', reference=FIND),
+            answer(statement('interpretation', 'findStudents rendrait tous les étudiants.')))
+        recorder = bench.Recorder()
+        options = Namespace(runs=1, provider=None, payloads=None, source=source)
+        (tmp_path / str(source)).mkdir()
+        measured, = bench.run(f'sqlite:///{tmp_path / str(source) / "banc.db"}', repository, options, reference,
+                              {'scripted': bench.Recording(model, recorder)}, recorder)
+        assert measured['exact'] and measured['tiles']['served'] == 1
+        assert (measured['sources']['served'], measured['sources']['refused']) == (served, refused)
+        assert (BODY.split('\n')[1].strip() in json.dumps([item.payload for item in recorder.calls])) == source
+
+
+def test_a_failed_answer_still_counts_the_tiles_and_code_already_streamed():
+    """Une demande qui échoue après une Tuile et une pièce : leur apport est compté, rien n'est perdu."""
+    streamed = [{'operation': 'get_tile', 'outcome': 'OK', 'bytes': 900, 'items': 3},
+                {'operation': 'get_source', 'outcome': 'OK', 'bytes': 300, 'items': 1}]
+    question = {'id': 5, 'theme': 'appels', 'question': 'Que fait X ?', 'must': [['X']]}
+    entry = bench.score(question, None, 'MINIA_PROVIDER_ERROR : coupé', [], 1.0, TRUTH, [], streamed)
+    assert not entry['exact'] and entry['taxo_operations'] == 2
+    assert entry['tiles']['served'] == 1 and entry['sources'] == {'served': 1, 'refused': 0, 'bytes': 300}

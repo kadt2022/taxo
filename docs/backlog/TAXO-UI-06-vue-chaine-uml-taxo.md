@@ -199,7 +199,7 @@ surlignées. Choisir une flèche ouvre son panneau de preuves, où chaque locali
 code » : pour un `CALLS`, la ligne du site d'appel est surlignée dans la méthode appelante.
 
 Le code est lu par l'opération réservée `get_source` de `taxo-query/1` (ARCHITECTURE § 12.3). **Depuis le
-2026-10-10, cette opération appartient au récit [TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md)**
+2026-10-10, cette opération appartient au récit [TAXO-MIP-SOURCE-01](termines/TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md)**
 (PR A), qui ne commence qu'après TAXO-MINIA-SEC-01 : un seul propriétaire et une seule porte de sécurité pour
 l'opération partagée. Ce récit n'en garde que le panneau Code de l'explorateur, construit sur elle. Les règles
 ci-dessous restent des exigences de l'opération, reprises par TAXO-MIP-SOURCE-01 :

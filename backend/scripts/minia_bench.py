@@ -12,11 +12,23 @@ Mesures par réponse : exactitude (mentions attendues, formulations interdites),
 (verdict `CONFIRMED` d'une affirmation absente de la vérité établie à la main), opérations Taxo, appels au modèle,
 octets envoyés, temps, fuites. Les jetons ne sont comptés que si le fournisseur les rend : sinon `null`.
 
+Mesure D de l'Adaptive Tile (TAXO-MIP-ADT-01) : chaque réponse dit aussi l'apport des Tuiles (`get_tile`) et de la
+lecture du code (`get_source`) : combien de pièces servies, refusées, et leurs octets. Trois séries se comparent :
+
+- l'ancienne série : le même banc sur Taxo d'avant les Tuiles, désigné par `--app` (le dossier `backend` d'une
+  copie de Taxo à ce commit, par exemple `git worktree add ../taxo-avant 3f483b7`), avec `--label ancienne` ;
+- les Tuiles de faits sans code : sans `--source` ;
+- les Tuiles avec pièces sources : `--source` (réglage `TAXO_SOURCE_READING=symbol` et accord de chaque question
+  sur le projet, comme la case du portail).
+
 Usage (depuis `backend`) :
-    python scripts/minia_bench.py <dépôt> [--runs 3] [--provider ollama] [--out banc.json] [--payloads charges.jsonl]
+    python scripts/minia_bench.py <dépôt> [--runs 3] [--provider ollama] [--source] [--app <backend>]
+                                  [--out banc.json] [--payloads charges.jsonl]
+    python scripts/minia_bench.py --compare ancienne.json faits.json code.json
 
 Sans `--database`, une base SQLite temporaire. Le rapport JSON garde chaque réponse ; `--payloads` garde chaque
-charge envoyée (déjà protégée). Un résumé Markdown est écrit sur la sortie standard.
+charge envoyée (déjà protégée). Un résumé Markdown est écrit sur la sortie standard ; `--compare` écrit le tableau
+des séries.
 """
 import argparse
 import contextlib
@@ -29,11 +41,13 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+BACKEND = Path(__file__).resolve().parents[1]
 
 QUESTIONS = Path(__file__).with_name('minia_bench_questions.json')
 MASK = '******'
 EXPLORATION, DIRECT = 'exploration', 'taxo'
+TILE, SOURCE = 'get_tile', 'get_source'
+FACTS, CODE = 'faits', 'faits+code'
 # Un courriel qui aurait passe la protection ; un pseudonyme ne l'est pas.
 _EMAIL = re.compile(r'[\w.!#$%&+?^`{|}~-]+@[\w-]+(?:\.[\w-]+)+')
 # Les secrets qu'une charge ne doit jamais porter en clair, reconnus ici independamment de la protection
@@ -188,11 +202,31 @@ def unjustified(result):
                if statement.get('type') == 'claim' and statement.get('verdict') != 'CONFIRMED')
 
 
-def score(question, result, failure, calls, seconds, bench, known):
-    """Une reponse du banc, mesuree."""
+def _served(step):
+    """Une Tuile est servie si Taxo l'a rendue ; une pièce source, seulement si du code a été transmis : `get_source`
+    peut répondre `OK` sans aucune pièce (fichier confidentiel, généré, modifié, budget...), ce n'est pas du code."""
+    if step.get('outcome') != 'OK':
+        return False
+    return step['operation'] != SOURCE or bool(step.get('items'))
+
+
+def contribution(trajectory):
+    """L'apport des Tuiles et du code dans une réponse : pièces servies, refusées, et leurs octets (mesure D)."""
+    measured = {}
+    for operation, name in ((TILE, 'tiles'), (SOURCE, 'sources')):
+        steps = [step for step in trajectory if step['operation'] == operation]
+        served = [step for step in steps if _served(step)]
+        measured[name] = {'served': len(served), 'refused': len(steps) - len(served),
+                          'bytes': sum(step.get('bytes') or 0 for step in served)}
+    return measured
+
+
+def score(question, result, failure, calls, seconds, bench, known, streamed=()):
+    """Une reponse du banc, mesuree. Sans resultat (demande en echec ou arretee), les operations deja diffusees
+    (`streamed`) comptent quand meme : une Tuile ou du code a pu partir chez le fournisseur avant l'echec."""
     payloads = [call.payload for call in calls]
     found = [leak for payload in payloads for leak in leaks(payload, known)]
-    trajectory = (result or {}).get('trajectory') or []
+    trajectory = (result or {}).get('trajectory') or list(streamed)
     entry = {'id': question['id'], 'theme': question['theme'], 'question': question['question'],
              'failure': failure, 'mode': (result or {}).get('mode'), 'status': (result or {}).get('status'),
              'llm_calls': len(calls), 'bytes_sent': sum(len(payload.encode('utf-8')) for payload in payloads),
@@ -201,7 +235,7 @@ def score(question, result, failure, calls, seconds, bench, known):
              'taxo_operations': len(trajectory),
              'operations': [step['operation'] for step in trajectory],
              'refused_operations': sum(1 for step in trajectory if step.get('outcome') == 'ERROR'),
-             'seconds': round(seconds, 3), 'leaks': found}
+             'seconds': round(seconds, 3), 'leaks': found, **contribution(trajectory)}
     if result is None:
         return {**entry, 'exact': False, 'missing': [], 'forbidden': [], 'false_confirmations': [],
                 'unjustified': 0, 'displayed': ''}
@@ -244,16 +278,17 @@ def full_sha(repository, short):
                           capture_output=True, text=True, check=True).stdout.strip()
 
 
-def ask(client, project, question, repository, provider):
+def ask(client, project, question, repository, provider, source=False):
     body = {'question': question['question'], **({'provider': provider} if provider else {})}
     if 'commit' in question:
         sha = full_sha(repository, question['commit'])
         body['source_context'] = bool(question.get('source_context'))
         return client.post(f'/api/projects/{project}/history/commits/{sha}/ask/stream', json=body)
-    return client.post(f'/api/projects/{project}/ask/stream', json=body)
+    # L'accord pour le code (case du portail) ; sans `--source`, la demande reste celle d'avant.
+    return client.post(f'/api/projects/{project}/ask/stream', json={**body, **({'source': True} if source else {})})
 
 
-def replay(client, project, bench, repository, recorder, runs, provider, sink=None):
+def replay(client, project, bench, repository, recorder, runs, provider, sink=None, source=False):
     """Chaque question, `runs` fois ; une ligne de mesure par reponse."""
     known = identities(repository)
     measured = []
@@ -261,13 +296,16 @@ def replay(client, project, bench, repository, recorder, runs, provider, sink=No
         for question in bench['questions']:
             recorder.reset()
             start = time.perf_counter()
-            response = ask(client, project, question, repository, provider)
+            response = ask(client, project, question, repository, provider, source)
             seconds = time.perf_counter() - start
+            streamed = []
             if response.status_code != 200:
                 result, failure = None, f'HTTP {response.status_code} : {response.text[:200]}'
             else:
-                result, failure = outcome(events(response.text))
-            entry = {'run': run, **score(question, result, failure, recorder.calls, seconds, bench, known)}
+                found = events(response.text)
+                result, failure = outcome(found)
+                streamed = [data for kind, data in found if kind == 'minia.operation']
+            entry = {'run': run, **score(question, result, failure, recorder.calls, seconds, bench, known, streamed)}
             measured.append(entry)
             if sink is not None:
                 for call in recorder.calls:
@@ -302,6 +340,56 @@ def summary(measured, model):
     return '\n'.join(lines)
 
 
+def _sum(rows, key):
+    return sum(item[key] for item in rows)
+
+
+def _part(rows, name, key):
+    return sum(item.get(name, {}).get(key, 0) for item in rows)
+
+
+def _rate(rows):
+    return f"{_sum(rows, 'exact')}/{len(rows)}" if rows else '—'
+
+
+def _tokens(rows):
+    counted = [item['tokens_sent'] for item in rows if item['llm_calls']]
+    return sum(counted) if counted and all(value is not None for value in counted) else None
+
+
+def compared(reports):
+    """Le tableau des séries (mesure D) : une colonne par rapport, dans l'ordre donné. L'exactitude des réponses
+    qui ont reçu une Tuile ou du code est dite à part : c'est l'apport mesuré, jamais supposé."""
+    lines = ['# Banc de Minia — séries comparées', '',
+             '| Mesure | ' + ' | '.join(report.get('series', '?') for report in reports) + ' |',
+             '| --- |' + ' --- |' * len(reports),
+             '| Modèle | ' + ' | '.join(report.get('model', '?') for report in reports) + ' |',
+             '| Taxo | ' + ' | '.join((report.get('taxo') or '?')[:7] for report in reports) + ' |']
+
+    def row(label, value):
+        lines.append(f'| {label} | ' + ' | '.join(str(value(report['answers'])) for report in reports) + ' |')
+
+    row('Réponses exactes', _rate)
+    row('Fausses confirmations de sécurité', lambda rows: sum(len(item['false_confirmations']) for item in rows))
+    row('Affirmations non confirmées par Taxo', lambda rows: _sum(rows, 'unjustified'))
+    row('Fuites', lambda rows: sum(len(item['leaks']) for item in rows))
+    row('Opérations Taxo', lambda rows: _sum(rows, 'taxo_operations'))
+    row('Appels au modèle', lambda rows: _sum(rows, 'llm_calls'))
+    row('Octets envoyés', lambda rows: _sum(rows, 'bytes_sent'))
+    row('Jetons envoyés', lambda rows: _tokens(rows) if _tokens(rows) is not None else 'non rendus')
+    row('Temps total (s)', lambda rows: f"{_sum(rows, 'seconds'):.1f}")
+    row('Tuiles servies (refusées)', lambda rows: f"{_part(rows, 'tiles', 'served')} ({_part(rows, 'tiles', 'refused')})")
+    row('Octets des Tuiles', lambda rows: _part(rows, 'tiles', 'bytes'))
+    row('Pièces sources servies (refusées)',
+        lambda rows: f"{_part(rows, 'sources', 'served')} ({_part(rows, 'sources', 'refused')})")
+    row('Octets du code', lambda rows: _part(rows, 'sources', 'bytes'))
+    row('Exactes avec une Tuile', lambda rows: _rate([item for item in rows if _part([item], 'tiles', 'served')]))
+    row('Exactes avec du code', lambda rows: _rate([item for item in rows if _part([item], 'sources', 'served')]))
+    row('Exactes sans Tuile ni code', lambda rows: _rate(
+        [item for item in rows if not _part([item], 'tiles', 'served') and not _part([item], 'sources', 'served')]))
+    return '\n'.join(lines)
+
+
 def recorded_models(recorder, provider):
     """Le fournisseur rejoue, choisi comme pour Taxo (`--provider`, sinon MINIA_PROVIDER), et les fournisseurs
     configures, chacun enregistre. Le fournisseur choisi doit etre configure : sinon le banc mesurerait un autre."""
@@ -320,7 +408,9 @@ def run(database, repository, options, bench, models, recorder):
 
     from app.main import create_app
     from app.platform.database.base import Base
-    app = create_app(database, [repository], minia=models, source_context='diff')
+    # Le réglage du code n'est passé qu'avec `--source` : l'ancienne série (`--app`) garde la signature d'avant.
+    reading = {'source_reading': 'symbol'} if getattr(options, 'source', False) else {}
+    app = create_app(database, [repository], minia=models, source_context='diff', **reading)
     Base.metadata.create_all(app.state.engine)
     try:
         with TestClient(app) as client:
@@ -331,14 +421,26 @@ def run(database, repository, options, bench, models, recorder):
             scanned.raise_for_status()
             with contextlib.ExitStack() as stack:
                 sink = stack.enter_context(open(options.payloads, 'w', encoding='utf-8')) if options.payloads else None
-                return replay(client, project, bench, repository, recorder, options.runs, options.provider, sink)
+                return replay(client, project, bench, repository, recorder, options.runs, options.provider, sink,
+                              getattr(options, 'source', False))
     finally:
         app.state.engine.dispose()
 
 
+def taxo_commit(backend):
+    """Le commit de Taxo mesuré, pour que chaque série dise sur quel code elle a tourné ; `None` hors Git."""
+    found = subprocess.run(['git', '-C', str(backend), 'rev-parse', 'HEAD'], check=False, capture_output=True,
+                           text=True)
+    return found.stdout.strip() or None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('repository', type=Path)
+    parser.add_argument('repository', type=Path, nargs='?')
+    parser.add_argument('--source', action='store_true', help='Tuiles avec pièces sources (get_source)')
+    parser.add_argument('--app', type=Path, default=BACKEND, help='dossier backend de Taxo mesuré')
+    parser.add_argument('--label', help='nom de la série dans le rapport (par défaut faits ou faits+code)')
+    parser.add_argument('--compare', type=Path, nargs='+', help='rapports à comparer, dans l’ordre')
     parser.add_argument('--runs', type=int, default=3)
     parser.add_argument('--provider')
     parser.add_argument('--questions', type=Path, default=QUESTIONS)
@@ -346,6 +448,12 @@ def main():
     parser.add_argument('--out', type=Path, default=Path('banc-minia.json'))
     parser.add_argument('--payloads', type=Path)
     options = parser.parse_args()
+    if options.compare:
+        print(compared([json.loads(path.read_text(encoding='utf-8')) for path in options.compare]))
+        return
+    if options.repository is None:
+        parser.error('le dépôt à analyser est requis (ou --compare)')
+    sys.path.insert(0, str(options.app.resolve()))
     repository = options.repository.resolve()
     bench = json.loads(options.questions.read_text(encoding='utf-8'))
     recorder = Recorder()
@@ -357,7 +465,9 @@ def main():
     else:
         with tempfile.TemporaryDirectory(prefix='taxo-banc-') as folder:
             measured = run(f'sqlite:///{folder}/taxo.db', repository, options, bench, models, recorder)
+    series = options.label or (CODE if options.source else FACTS)
     options.out.write_text(json.dumps({'model': label, 'commit': bench['commit'], 'runs': options.runs,
+                                       'series': series, 'taxo': taxo_commit(options.app),
                                        'answers': measured}, ensure_ascii=False, indent=2), encoding='utf-8')
     print(summary(measured, label))
 

@@ -1,9 +1,9 @@
 # TAXO-MIP-SOURCE-01 — Lecture progressive du code Java à travers la Maille
 
 **Statut :** récit accepté par le responsable du produit le 10 octobre 2026 ; à implémenter après
-[TAXO-MINIA-SEC-01](TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md). **Fusionné** le 10 octobre 2026 dans
+[TAXO-MINIA-SEC-01](../TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md). **Fusionné** le 10 octobre 2026 dans
 [TAXO-MIP-ADT-01](TAXO-MIP-ADT-01-adaptive-tile.md) (§ 0) : ses PR B, C et D reprendraient
-les PR A, B et C ci-dessous, et ses exigences E1 à E6 sans changement.  
+les PR A, B et C ci-dessous, et ses exigences E1 à E6 sans changement. **Terminé** avec lui le 11 octobre 2026.  
 **Priorité :** haute.  
 **Dépendance :** confidentialité et fiabilisation de Minia (TAXO-MINIA-SEC-01), qui doit être terminé avant.  
 **Référence :** architecture MIP (`ARCHITECTURE.md` § 12, où `get_source` est réservée) et rapport du banc
@@ -141,7 +141,7 @@ elle-même les bonnes méthodes depuis la Maille.
 Procéder par PR cohérentes :
 
 - **PR A** : extraction Java ciblée et contrat de `get_source`. Ce récit est le seul propriétaire de
-  l'opération : la PR 3 de [TAXO-UI-06](TAXO-UI-06-vue-chaine-uml-taxo.md) n'en garde que le panneau Code de
+  l'opération : la PR 3 de [TAXO-UI-06](../TAXO-UI-06-vue-chaine-uml-taxo.md) n'en garde que le panneau Code de
   l'explorateur et reprend ses règles déjà écrites (code d'un symbole localisé par une preuve, plafonds,
   instantané de l'analyse, empreinte égale au `content_hash`, double consentement, fichiers jamais lus) comme
   exigences de cette PR.
