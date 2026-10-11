@@ -8,7 +8,7 @@ questions ne sont pas encore dans le dépôt : E1 à E3 ont donc été vérifié
 établie à la main et sur `student-analysis-java`, pas sur le banc lui-même. Le banc, sans donnée personnelle, et son
 rejeu sont un préalable à la clôture du récit : il ne peut pas être déclaré terminé sans eux.  
 **Source de vérité :** `ARCHITECTURE.md` § 12.4 (verdicts), § 12.5 (transparence) et § 12.6 (sécurité et consentement).  
-**Bloque :** [TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md) (lecture du code des méthodes).
+**Bloque :** [TAXO-MIP-SOURCE-01](termines/TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md) (lecture du code des méthodes).
 
 ## 1. Problème
 

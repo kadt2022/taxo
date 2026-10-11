@@ -3,13 +3,14 @@
 **Projet :** Taxo V2  
 **Date :** 10 octobre 2026  
 **Nature :** récit d'implémentation majeur  
-**Statut :** accepté par le responsable du produit le 10 octobre 2026 (fusion avec TAXO-MIP-SOURCE-01, champ `profile`
-et annotations observées acceptés ; classification des Tuiles ajoutée le même jour, § 21 bis). PR A en cours.  
+**Statut :** **terminé** le 11 octobre 2026 (PR #121 à #125, #128 et #130 ; bilan en fin de récit). Accepté par le
+responsable du produit le 10 octobre 2026 (fusion avec TAXO-MIP-SOURCE-01, champ `profile` et annotations observées
+acceptés ; classification des Tuiles ajoutée le même jour, § 21 bis).  
 **Priorité :** haute.  
-**Dépendance préalable :** [TAXO-MINIA-SEC-01](TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md) — fiabilité et
+**Dépendance préalable :** [TAXO-MINIA-SEC-01](../TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md) — fiabilité et
 confidentialité.  
 **Rattachement :** [TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md), qu'il absorbe (§ 0), et
-[TAXO-01N / MIP-01](TAXO-01N-ask-taxo-general.md).
+[TAXO-01N / MIP-01](../TAXO-01N-ask-taxo-general.md).
 
 ---
 
@@ -30,7 +31,7 @@ Avec la fusion :
 - le fichier de TAXO-MIP-SOURCE-01 reste dans le backlog, jamais supprimé, avec un renvoi vers ce récit ; il sera
   rangé dans `termines/` avec celui-ci ;
 - la PR B de ce récit est la PR A de SOURCE-01 : elle reprend les règles de `get_source` écrites dans
-  [TAXO-UI-06](TAXO-UI-06-vue-chaine-uml-taxo.md) (code d'un symbole localisé par une preuve, plafonds, instantané de
+  [TAXO-UI-06](../TAXO-UI-06-vue-chaine-uml-taxo.md) (code d'un symbole localisé par une preuve, plafonds, instantané de
   l'analyse, empreinte égale au `content_hash`, double consentement, fichiers jamais lus). Les renvois de TAXO-UI-06
   à SOURCE-01 désignent désormais cette PR ;
 - la dépendance envers TAXO-MINIA-SEC-01 est inchangée : aucune transmission de code à un LLM avant sa clôture.
@@ -102,7 +103,7 @@ progressivement, à travers la Maille. L'Adaptive Tile a précisément été con
 
 ## 3. Ne pas réinventer l'Adaptive Tile
 
-La définition existante dans [`ARCHITECTURE.md`](../ARCHITECTURE.md), § 9.5, reste la référence.
+La définition existante dans [`ARCHITECTURE.md`](../../ARCHITECTURE.md), § 9.5, reste la référence.
 
 Une Tuile adaptative est une projection de la Maille choisie pour un consommateur à partir :
 
@@ -1004,3 +1005,19 @@ Nous ne cherchons pas à rendre Taxo intelligent. Nous cherchons à rendre son c
 structuré et traçable pour que les intelligences artificielles puissent l'exploiter correctement.
 
 **La force de Taxo est sa fidélité aux sources, non sa capacité à interpréter ce qu'elles signifient.**
+
+## Bilan de clôture (11 octobre 2026)
+
+| PR | Contenu |
+| --- | --- |
+| #121 | Le récit. |
+| #122 (A) | Profils déclarés et versionnés (§ 9.5), règle et chemin de chaque fait, classification des Tuiles. |
+| #123 (A2) | Annotations écrites des types et des méthodes en observations (`ANNOTATED_WITH` générique). |
+| #124 (B) | `get_source` dans `taxo-query/1`, sous son propre double consentement, jamais sur le dossier de travail. |
+| #125 (C1) | Minia demande des Tuiles (`get_tile`) dans son échange, sans code. |
+| #128 (C2) | Minia lit le code d'un symbole reçu de Taxo (`get_source`), case d'accord du portail, pièce jamais un fait. |
+| #130 (D) | Banc à trois séries (ancienne, Tuiles de faits, Tuiles avec code), apport des Tuiles et du code, comparaison. |
+
+Les mesures réelles (18 questions ×3 sur `student-course-demo`, même modèle) sont faites par le responsable du
+produit avec `backend/scripts/minia_bench.py` ; la clôture n'en dépend pas, à sa demande du 11 octobre 2026. Un écart
+constaté donnera un nouveau récit.

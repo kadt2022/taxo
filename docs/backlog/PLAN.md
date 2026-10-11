@@ -37,12 +37,10 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
    - → **Fiabilité et confidentialité de Minia** ([TAXO-MINIA-SEC-01](TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md)),
      priorité critique, acceptée le 2026-10-10 après le banc `student-course-demo` : verdicts `CONFIRMED` exacts,
      faits de sécurité Spring, masquage centralisé avant tout fournisseur, transparence des refus et limites.
-   - **Lecture du code à travers la Maille** ([TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md)) :
-     `get_source` et lecture progressive des méthodes par Minia. Commence seulement quand TAXO-MINIA-SEC-01 est terminé.
-   - **Adaptive Tile** ([TAXO-MIP-ADT-01](TAXO-MIP-ADT-01-adaptive-tile.md)), accepté le 2026-10-10 :
+   - ✅ **Adaptive Tile** ([TAXO-MIP-ADT-01](termines/TAXO-MIP-ADT-01-adaptive-tile.md)), terminé le 2026-10-11 :
      profils déclarés et versionnés (§ 9.5) sur le moteur existant, classification des Tuiles, annotations observées,
-     puis la lecture du code. TAXO-MIP-SOURCE-01 y est fusionné (PR B à D). Seules les PR A et A2, sans transmission
-     de code, avancent avant la fin de TAXO-MINIA-SEC-01.
+     Tuiles et lecture du code par Minia (`get_source`, double consentement), banc à trois séries. Il absorbe
+     [TAXO-MIP-SOURCE-01](termines/TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md), terminé avec lui.
 7. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 8. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
 9. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
