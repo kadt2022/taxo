@@ -9,11 +9,12 @@ Deux statuts restent independants : un noeud peut etre developpe (Tuile) sans qu
 inversement. « Visite » ne veut pas dire « entierement connu ».
 """
 import json
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
 from ..errors import INVESTIGATION_INVALID, MiniaError
+from .values import changed
 
 
 class Action(StrEnum):
@@ -144,7 +145,7 @@ class InFlight:
 
 def uncertain(record: OperationRecord) -> OperationRecord:
     """L'operation dont la transmission n'est pas attestee : ni livree, ni retenue, mais peut-etre partie."""
-    return replace(record, delivery_ids=(),
+    return changed(record, delivery_ids=(),
                    not_sent=record.not_sent + ({'what': 'response', 'reason': TRANSMISSION_UNCERTAIN},))
 
 
@@ -240,15 +241,15 @@ class Logbook:
                 if Action.TILE not in visited.get(node, ()) and discovered.key not in keys:
                     keys.add(discovered.key)
                     kept.append(discovered)
-        return replace(self, visited=visited, edges=self.edges + tuple(added), frontier=tuple(kept))
+        return changed(self, visited=visited, edges=self.edges + tuple(added), frontier=tuple(kept))
 
     def with_action(self, node: str, action: Action) -> 'Logbook':
-        return replace(self, visited=_visit(self.visited, node, action))
+        return changed(self, visited=_visit(self.visited, node, action))
 
     def with_receipt(self, receipt: SourceReceipt) -> 'Logbook':
         """Une lecture de code tracee. Le noeud n'est « lu » que si du code a ete livre ; un refus reste trace,
         sans texte (AC-04)."""
-        logbook = replace(self, receipts=self.receipts + (receipt,))
+        logbook = changed(self, receipts=self.receipts + (receipt,))
         if receipt.status is ReceiptStatus.REFUSED:
             return logbook
         return logbook.with_action(receipt.reference, Action.SOURCE)
@@ -260,7 +261,7 @@ class Logbook:
         if unknown:
             raise MiniaError(INVESTIGATION_INVALID, 'Une opération cite une livraison absente du journal.')
         # Les arguments et les retenues sont gardes en valeurs JSON : relus, ils sont identiques (INV-04).
-        record = replace(record, arguments=_json_copy(record.arguments),
+        record = changed(record, arguments=_json_copy(record.arguments),
                          not_sent=tuple(_json_copy(list(record.not_sent))), progress=self.progress)
         key = request_key(analysis_id, generation_id, record.name, record.arguments)
         # Sans empreinte, rien ne dit que la reponse est la meme : pas de repetition. Une autre issue non plus.
@@ -269,7 +270,7 @@ class Logbook:
                    if previous.outcome is record.outcome and previous.progress == record.progress
                    and previous.response_fingerprint == record.response_fingerprint
                    and request_key(analysis_id, generation_id, previous.name, previous.arguments) == key)
-        logbook = replace(self, operations=self.operations + (record,))
+        logbook = changed(self, operations=self.operations + (record,))
         if comparable and same:
             return logbook, Repetition(same + 1, logbook.open_branches())
         return logbook, None
@@ -279,7 +280,7 @@ class Logbook:
             raise MiniaError(INVESTIGATION_INVALID, 'Un identifiant de livraison ne sert qu’une fois.')
         if delivery.replay_of is not None and self.delivery(delivery.replay_of) is None:
             raise MiniaError(INVESTIGATION_INVALID, 'Une nouvelle transmission doit citer une livraison connue.')
-        return replace(self, deliveries=self.deliveries + (delivery,))
+        return changed(self, deliveries=self.deliveries + (delivery,))
 
 
 def _visit(visited, node, action):

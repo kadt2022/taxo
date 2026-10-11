@@ -5,7 +5,7 @@ evenements qui le decrivent a `pending` : le port de stockage ecrit l'etat et ce
 transaction, sous controle de revision, puis rend un etat sans evenement en attente. Rien ici ne lit Taxo ni ne
 juge un resultat : l'application inscrit ce que Taxo a rendu et ce qui a ete transmis.
 """
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from ..errors import INVESTIGATION_INVALID, INVESTIGATION_STALE, MiniaError
@@ -15,7 +15,7 @@ from .identity import (WRITABLE, ExpiryPolicy, Investigation, OwnerScope, Snapsh
                        confirm_question, open_investigation)
 from .logbook import (Action, Delivery, InFlight, Logbook, OperationOutcome, OperationRecord, Repetition, SourceReceipt,
                       uncertain)
-from .values import plain as _plain
+from .values import changed, plain as _plain
 
 DIRECT_ACTIONS = frozenset({Action.EVIDENCE, Action.REFERENCES})
 
@@ -145,7 +145,7 @@ class InvestigationState:
 
     def landed(self) -> 'InvestigationState':
         """L'envoi est atteste et ses operations inscrites avec leurs livraisons : l'annonce est levee."""
-        return replace(self, in_flight=())
+        return changed(self, in_flight=())
 
     def settle_in_flight(self) -> 'InvestigationState':
         """Les operations annoncees dont l'envoi n'a jamais ete atteste : chacune s'inscrit peut-etre transmise.
@@ -153,7 +153,7 @@ class InvestigationState:
         state = self
         for item in self.in_flight:
             state, _ = state._operation(uncertain(item.record), item.response_bytes)
-        return replace(state, in_flight=())
+        return changed(state, in_flight=())
 
     def _operation(self, record: OperationRecord, response_bytes: int):
         if record.outcome is OperationOutcome.INTERRUPTED and record.delivery_ids:
@@ -166,9 +166,9 @@ class InvestigationState:
         if repetition is not None:
             events.append(Event(EventKind.REPETITION, record.at, {'count': repetition.count,
                                                                     'open_branches': list(repetition.open_branches)}))
-        state = replace(self, logbook=logbook, budget=budget, pending=self.pending + tuple(events))
+        state = changed(self, logbook=logbook, budget=budget, pending=self.pending + tuple(events))
         if self.investigation.status in WRITABLE:
-            state = replace(state, investigation=self.investigation.touched(record.at, self.policy))
+            state = changed(state, investigation=self.investigation.touched(record.at, self.policy))
         return state, repetition
 
     # Notes ------------------------------------------------------------------------------------------------
@@ -211,11 +211,11 @@ class InvestigationState:
         investigation = self.investigation.moved_to(status)
         notes = hypotheses.stale_notes(self.notes) if status is Status.STALE else self.notes
         event = Event(EventKind.STATUS, at, {'from': str(self.investigation.status), 'to': str(status)})
-        return replace(self, investigation=investigation, notes=notes, pending=self.pending + (event,))
+        return changed(self, investigation=investigation, notes=notes, pending=self.pending + (event,))
 
     def committed(self, revision: int) -> 'InvestigationState':
         """L'etat tel que le stockage l'a ecrit : sa nouvelle revision, sans evenement en attente."""
-        return replace(self, investigation=replace(self.investigation, revision=revision), pending=())
+        return changed(self, investigation=changed(self.investigation, revision=revision), pending=())
 
     def _writable_on(self, snapshot: Snapshot):
         self.investigation.ensure_writable()
@@ -226,4 +226,4 @@ class InvestigationState:
 
     def _changed(self, event: Event, at: datetime, **fields) -> 'InvestigationState':
         investigation = fields.pop('investigation', self.investigation).touched(at, self.policy)
-        return replace(self, investigation=investigation, pending=self.pending + (event,), **fields)
+        return changed(self, investigation=investigation, pending=self.pending + (event,), **fields)

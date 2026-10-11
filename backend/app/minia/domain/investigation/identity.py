@@ -6,13 +6,14 @@ sont pas interchangeables (INV-05). Elle n'est reprenable que si l'utilisateur a
 sa question, et seule cette version est conservee : Minia ne juge jamais qu'une reformulation garde le sens de la
 question d'origine (INV-04, AC-20).
 """
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Callable
 
 from ..errors import (INVESTIGATION_EXPIRED, INVESTIGATION_INVALID, INVESTIGATION_NOT_FOUND,
                       INVESTIGATION_NOT_RESUMABLE, INVESTIGATION_STALE, MiniaError)
+from .values import changed
 
 # Une question minimisee est courte : elle sert a reprendre, pas a archiver un echange.
 MAX_QUESTION_CHARS = 500
@@ -106,12 +107,12 @@ class Investigation:
     def touched(self, at: datetime, policy: ExpiryPolicy) -> 'Investigation':
         # Un resultat inscrit en retard ne ramene jamais l'activite en arriere : l'expiration suit la plus recente.
         latest = max(aware(at), self.last_activity_at)
-        return replace(self, last_activity_at=latest, expires_at=policy.expires_at(latest))
+        return changed(self, last_activity_at=latest, expires_at=policy.expires_at(latest))
 
     def moved_to(self, status: Status) -> 'Investigation':
         if status is not self.status and status not in _TRANSITIONS[self.status]:
             raise MiniaError(INVESTIGATION_INVALID, f'Une enquête {self.status} ne peut pas passer à {status}.')
-        return replace(self, status=status)
+        return changed(self, status=status)
 
     def ensure_writable(self):
         if self.status not in WRITABLE:
@@ -145,7 +146,7 @@ def confirm_question(investigation: Investigation, text: str, confirmed_by_user:
     if not text or len(text) > MAX_QUESTION_CHARS:
         raise MiniaError(INVESTIGATION_NOT_RESUMABLE,
                          f'La question à conserver doit faire de 1 à {MAX_QUESTION_CHARS} caractères.')
-    return replace(investigation, confirmed_question=guard(text))
+    return changed(investigation, confirmed_question=guard(text))
 
 
 def ensure_resumable(investigation: Investigation, scope: OwnerScope, current: Snapshot, now: datetime):

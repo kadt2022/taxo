@@ -1,8 +1,17 @@
 """Les enregistrements du carnet en valeurs simples (chaines, nombres, listes, objets) : pour le journal et pour
 l'etat serialise. Une date devient sa forme ISO, une enumeration sa valeur."""
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, is_dataclass, replace
 from datetime import datetime
 from enum import Enum
+from typing import TypeVar, cast
+
+Record = TypeVar('Record')
+
+
+def changed(record: Record, **fields) -> Record:
+    """Une copie de l'enregistrement avec ces champs changes, du meme type que lui (`dataclasses.replace` est
+    annote d'un type generique de dataclass, qui effacerait le type de l'enregistrement)."""
+    return cast(Record, replace(record, **fields))
 
 
 def plain(record) -> dict:

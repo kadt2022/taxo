@@ -8,12 +8,13 @@ Avant d'etre conservee, une note passe par la protection de confidentialite exis
 conserve. On ne promet pas de reconnaitre tout code copie dans une note : sa taille est bornee, et la meme
 protection s'applique a sa restitution et a sa transmission.
 """
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
 from ..errors import NOTE_REFUSED, MiniaError
 from .identity import TextGuard
+from .values import changed
 
 KIND = 'HYPOTHESIS_LLM'
 MAX_NOTE_CHARS = 1000
@@ -75,7 +76,7 @@ def revise_note(notes: tuple, note_id: str, text: str, nodes, known_nodes, at: d
     """Une nouvelle version de la note, attribuee au modele qui l'a ecrite : apres une reprise par un autre
     modele, la revision n'est jamais pretee au premier."""
     current = _current(notes, note_id)
-    note = replace(current, version=current.version + 1, text=_checked_text(text, guard),
+    note = changed(current, version=current.version + 1, text=_checked_text(text, guard),
                    nodes=_checked_nodes(nodes, known_nodes), status=NoteStatus.REVISED, at=at,
                    author=author or current.author)
     return _replaced(notes, note), note
@@ -83,13 +84,13 @@ def revise_note(notes: tuple, note_id: str, text: str, nodes, known_nodes, at: d
 
 def close_note(notes: tuple, note_id: str, at: datetime) -> tuple[tuple, Hypothesis]:
     current = _current(notes, note_id)
-    note = replace(current, version=current.version + 1, status=NoteStatus.CLOSED, at=at)
+    note = changed(current, version=current.version + 1, status=NoteStatus.CLOSED, at=at)
     return _replaced(notes, note), note
 
 
 def stale_notes(notes: tuple) -> tuple:
     """Les notes d'une generation remplacee : consultables comme historique, jamais transferables."""
-    return tuple(replace(note, status=NoteStatus.STALE) for note in notes)
+    return tuple(changed(note, status=NoteStatus.STALE) for note in notes)
 
 
 def open_notes(notes: tuple) -> tuple:

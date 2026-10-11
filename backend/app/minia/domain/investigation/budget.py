@@ -6,9 +6,10 @@ une action interne a Minia, pas une operation de la Maille. Minia controle **mec
 deja decouvertes, justification presente, progres depuis le dernier renouvellement, plafonds. Elle n'evalue jamais
 la qualite d'une justification (INV-08).
 """
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from ..errors import BUDGET_EXHAUSTED, INVESTIGATION_INVALID, MiniaError
+from .values import changed
 
 MAX_JUSTIFICATION_CHARS = 500
 
@@ -110,7 +111,7 @@ class Budget:
         if response_bytes > self.remaining_bytes:
             raise MiniaError(BUDGET_EXHAUSTED, 'Cette réponse dépasse les octets qui restent au budget : elle n’est '
                              'pas comptée comme transmise.')
-        return replace(self, slice_operations=self.slice_operations + 1,
+        return changed(self, slice_operations=self.slice_operations + 1,
                        slice_bytes=self.slice_bytes + response_bytes,
                        total_operations=self.total_operations + 1, total_bytes=self.total_bytes + response_bytes)
 
@@ -121,10 +122,10 @@ class Budget:
         reponse utile ; une tranche qui n'en a plus la place est epuisee, une enquete aussi."""
         refusal = self._refusal(request, set(open_branches), progress, min_bytes)
         if refusal is not None:
-            return replace(self, refusals=self.refusals + 1), RenewalDecision(False, refusal=refusal)
+            return changed(self, refusals=self.refusals + 1), RenewalDecision(False, refusal=refusal)
         wanted = request.operations if request.operations > 0 else self.limits.slice_operations
         granted = min(wanted, self.limits.slice_operations, self.limits.total_operations - self.total_operations)
-        renewed = replace(self, slice_operations=0, slice_bytes=0, granted_operations=granted,
+        renewed = changed(self, slice_operations=0, slice_bytes=0, granted_operations=granted,
                           renewals=self.renewals + 1, last_renewal=(tuple(sorted(request.branches)), progress))
         return renewed, RenewalDecision(True, granted)
 
