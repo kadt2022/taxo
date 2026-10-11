@@ -311,7 +311,7 @@ class _Run:
         self._learn(step, response, delivery)
         self.received.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
         self.shown.append({'operation': step.operation, 'arguments': step.arguments,
-                           'delivery_id': delivery.delivery_id, 'response': response})
+                           'delivery_id': delivery.delivery_id, 'kind': delivery.kind.value, 'response': response})
         if step.operation in responses.REPLAYABLE and response.get('outcome') == 'OK':
             self.memory[key] = (response, delivery.delivery_id)
         entry = {'operation': step.operation, 'arguments': step.arguments, 'outcome': response.get('outcome'),
@@ -328,7 +328,8 @@ class _Run:
                             responses.delivery_kind(step.operation), self.owner.clock(), replay_of=origin)
         self.waiting.append((None, delivery, 0))
         self.shown.append({'operation': step.operation, 'arguments': step.arguments,
-                           'delivery_id': delivery.delivery_id, 'replay_of': origin, 'response': response})
+                           'delivery_id': delivery.delivery_id, 'kind': delivery.kind.value, 'replay_of': origin,
+                           'response': response})
         self.notices.append({'notice': 'REPEATED', 'operation': step.operation, 'replay_of': origin,
                              'message': 'Même demande, même réponse : rejouée sans nouvel appel à Taxo.',
                              'open_branches': list(self.state.logbook.open_branches())})

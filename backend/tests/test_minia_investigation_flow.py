@@ -185,7 +185,7 @@ def test_deliveries_are_recorded_only_once_sent(session):
     result = completed(started.investigate(question=QUESTION))
 
     assert [item['delivery_id'] for item in result['transmitted']] == ['D-1']
-    assert sent(model, 1)['slice'][0]['delivery_id'] == 'D-1'
+    assert (sent(model, 1)['slice'][0]['delivery_id'], sent(model, 1)['slice'][0]['kind']) == ('D-1', 'FACT')
     view = started.client.get(f'/api/projects/{started.project}/investigations/{result["investigation"]["id"]}').json()
     assert view['deliveries'] == [{'delivery_id': 'D-1', 'mip_reference': 'EnrollmentController.enroll',
                                    'kind': 'FACT', 'replay_of': None}]

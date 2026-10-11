@@ -64,7 +64,8 @@ Le message JSON contient :
 - "operations" : les operations que Taxo sait servir, avec leurs arguments ;
 - "state" : l'etat compact du carnet (noeuds developpes, branches ouvertes, codes lus, notes, budget). Les branches
   ouvertes sont dans l'ordre d'arrivee : aucun ordre de visite n'est impose ;
-- "slice" : les operations de la tranche en cours et les reponses de Taxo, chacune avec son "delivery_id" ;
+- "slice" : les operations de la tranche en cours et les reponses de Taxo, chacune avec son "delivery_id" et la
+  nature "kind" de ce qui t'a ete livre ;
 - "notices" (s'il y en a) : ce que Minia signale (repetition, refus, budget) ;
 - "calls_left" : les operations que tu peux encore demander dans cette tranche.
 
@@ -76,7 +77,7 @@ A chaque tour, rends un seul objet JSON avec tous ses champs (chaine vide ou lis
 - "renew" : quand "calls_left" vaut 0 et que des branches ouvertes meritent d'etre suivies : "branches" (parmi les
   branches ouvertes de "state") et "justification" courte ;
 - "answer" : "answer" (ta reponse), "used_mip_items" (pour chaque element de Taxo que tu as utilise : sa reference
-  exacte "mip_reference", son "delivery_id" et sa nature "kind" : TILE, FACT, EVIDENCE ou SOURCE) et
+  exacte "mip_reference", son "delivery_id" et sa nature "kind", celle que "slice" indique) et
   "remaining_unknowns" (ce que tu n'as pas pu etablir, les branches non explorees).
 
 Regles :
