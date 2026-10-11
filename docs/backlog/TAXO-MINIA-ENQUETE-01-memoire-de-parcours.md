@@ -66,7 +66,7 @@ Ce récit **réutilise** le moteur de la Maille et les opérations en place. Il 
 | **MIP** | Imposer validation des arguments, autorisations, quotas, versionnement, provenance et frontières | Porter des conclusions métier ou décider d'un chemin d'enquête à la place du LLM |
 | **Utilisateur** | Poser la question, accorder ou refuser les consentements, décider d'une poursuite soumise à autorisation | Être supposé avoir autorisé du code source par défaut |
 
-**Invariant de séparation :** le journal Taxo décrit un événement de transmission ; la déclaration du LLM décrit son utilisation alléguée ; la réponse du LLM est une interprétation. Ce sont trois registres distincts. La concordance des deux premiers assure une **traçabilité de consultation**, jamais la justesse automatique de la conclusion.
+**Invariant de séparation :** le journal Taxo décrit un événement de transmission ; la déclaration du LLM décrit son utilisation alléguée ; la réponse du LLM est une interprétation. Ce sont trois registres distincts. La concordance des deux premiers assure une **traçabilité de livraison et d'utilisation déclarée**, jamais une lecture cognitive ni la justesse automatique de la conclusion.
 
 ## 5. Scénario de référence : arbre à quatre niveaux, branches multiples
 
@@ -120,7 +120,7 @@ La représentation logique contient :
 | `edges_seen` | Identité des occurrences et des arêtes, direction et provenance ; conservation des convergences |
 | `frontier` | Nœuds découverts non développés, raisons d'arrêt et jetons de reprise **liés à leur génération** |
 | `source_receipts` | Référence de symbole MIP, analyse/génération, identifiant de transmission, classification, empreinte si présente, statut, troncature/refus ; **métadonnées seulement**, jamais le texte source |
-| `operations` | Nom/arguments normalisés, résultat, statut, empreinte de réponse, horodatage, éléments réellement transmis (`delivery_id` lié aux identifiants MIP) et `not_sent` ; sans contenu source ni message modèle intégral |
+| `operations` | Nom/arguments normalisés, issue (`OK`, `ERROR`, `REFUSED`, `INTERRUPTED`), références et compteurs, empreinte de réponse, horodatage, éléments réellement transmis (`delivery_id` lié aux identifiants MIP) et `not_sent` ; jamais la réponse elle-même : une Tuile ou un autre résultat complet reste en mémoire vive (§ 8.3, INV-10) et se redemande après redémarrage ; sans contenu source ni message modèle intégral |
 | `hypotheses` | Notes `HYPOTHESIS_LLM`, texte non autoritatif, nœuds liés, génération, auteur LLM, statut (`OPEN`, `REVISED`, `CLOSED`, `STALE`) |
 | `budget` | Consommation par tranche et cumul par enquête, renouvellements et refus |
 
@@ -251,7 +251,7 @@ La sortie structurée finale exige `answer`, `used_mip_items` (liste, éventuell
 
 - `mip_reference` : **référence MIP exactement reçue**, symbole ou occurrence/poignée fournie par Taxo, sans référence inventée ;
 - `delivery_id` : identifiant opaque attribué à **l'élément effectivement envoyé au LLM** dans le journal B ; il permet d'éviter l'ambiguïté si la même référence est livrée plusieurs fois ;
-- `kind` : `TILE`, `FACT`, `EVIDENCE` ou `SOURCE` selon la nature réellement transmise.
+- `kind` : `TILE`, `FACT`, `EVIDENCE` ou `SOURCE` selon la nature réellement transmise. Une Tuile (`get_tile`, `get_neighborhood`) est une `TILE`, une preuve une `EVIDENCE`, un code une `SOURCE` ; toute autre livraison (références trouvées par `find_references`, description, faits) est un `FACT`, tel que le journal B l'a inscrite.
 
 L'analyse et la génération sont liées à l'enquête et à chaque `delivery_id`. Minia vérifie **structure, appartenance à l'enquête et à la génération, correspondance stricte à la référence MIP livrée, type et présence dans le journal des transmissions**. Une réponse absente ou mal formée est signalée comme telle, sans attestation de consultation ni verdict sur le fond. Les identifiants courts de l'ancien échange (`F1`, `E1`) ne sont jamais traités comme durables : le journal préserve leur association au bon échange/à la bonne génération.
 
