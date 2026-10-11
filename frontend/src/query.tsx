@@ -41,6 +41,11 @@ export function readingNote(reading:SelectionAnswer['source_reading']){
   return '';
 }
 
+/** Une reponse directe de Taxo ne lit jamais de code : elle le dit si la lecture etait demandee. */
+export function directReadingNote(reading:SelectionAnswer['source_reading']){
+  return reading&&reading.status!=='NOT_REQUESTED'?'Lecture du code demandée : Taxo a répondu seul d’après Git, aucun code n’a été lu.':'';
+}
+
 /** La selection demandee, dite en clair. */
 export function describe(request:Request){
   const period=request.since&&request.until?` du ${request.since} au ${request.until}`
@@ -95,6 +100,7 @@ export function SelectionView({result}:Readonly<{result:Selection}>){
 export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>){
   if(answer.mode==='taxo')return <DirectAnswer question={answer.question} answer={answer.answer}>
     {answer.facts.length>0&&<ul>{answer.facts.map(f=><li key={f.ref}>{factLine(f)}</li>)}</ul>}
+    {directReadingNote(answer.source_reading)&&<p className="muted">{directReadingNote(answer.source_reading)}</p>}
   </DirectAnswer>;
   if(answer.mode==='exploration'&&answer.statements)return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · exploration</p>
