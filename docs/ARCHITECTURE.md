@@ -998,6 +998,11 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   conversion en tokens exige un tokenizer déclaré.
 - Deux modes : **exploration** (Minia appelle les opérations une à une) et **paquet** (Taxo prépare le
   contexte ; petits modèles, ou repli si l'exploration échoue).
+- En exploration, Minia peut aussi demander une **Tuile adaptative** (`get_tile`, TAXO-MIP-ADT-01, PR C) : une
+  référence déjà reçue et un profil déclaré (§ 9.5), servis par MIP `EXPAND` sur l'analyse de l'échange, avec
+  leurs règles, chemins, frontières, classification et provenance. Minia ne compose aucun parcours ; un refus du
+  profil lui est rendu tel quel. `get_source` ne lui est jamais proposée : elle n'ouvre pas d'échange qui
+  l'autorise (attente de la clôture de TAXO-MINIA-SEC-01).
 - Garde-fous fixés par Taxo : nombre d'opérations, octets, délai. À l'épuisement, Minia conclut avec ce
   qu'elle a et dit ce qui manque.
 - La trajectoire (opérations, arguments, tailles, non-transmis, verdicts) est visible en direct ; comme la
