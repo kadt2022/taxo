@@ -36,6 +36,7 @@ from app.minia.domain.investigation.identity import (ExpiryPolicy, OwnerScope, S
 from app.minia.domain.investigation.logbook import (Action, Delivery, OperationOutcome, OperationRecord,
                                                     request_key)
 from app.minia.domain.investigation.state import InvestigationState
+from app.protocol.domain.envelope import MAX_ERROR_BYTES
 
 # Taxo n'authentifie pas encore ses utilisateurs : le perimetre d'une enquete est le projet, pour ce poste.
 LOCAL_OWNER = 'local'
@@ -231,7 +232,7 @@ class _Run:
         for _ in range(limits.total_operations + EXTRA_TURNS):
             calls_left = self._calls_left()
             space = self._room(calls_left)
-            if space is not None and space < ROOM_TO_CONTINUE:
+            if space < min(ROOM_TO_CONTINUE, self._bytes_left()):
                 calls_left = 0
                 self.notices.append({'notice': 'CONTEXT_FULL', 'message': 'La fenêtre du modèle est presque pleine : '
                                      'réponds, ou demande une nouvelle tranche (renew).'})
@@ -249,15 +250,20 @@ class _Run:
 
     def _calls_left(self):
         """Les operations encore permises a la tranche, celles qui attendent d'etre inscrites comprises."""
+        if self._bytes_left() < MAX_ERROR_BYTES:
+            # Plus la place d'une reponse, fut-ce un refus : la tranche est epuisee en octets.
+            return 0
         waiting = sum(1 for record, _, _ in self.waiting if record is not None)
         return max(0, self.state.budget.remaining_operations - waiting)
+
+    def _bytes_left(self):
+        """Les octets que la tranche et l'enquete peuvent encore recevoir, reponses en attente deduites."""
+        return self.state.budget.remaining_bytes - sum(size for _, _, size in self.waiting)
 
     def _room(self, calls_left):
         """La place d'une reponse de Taxo : ce qui reste a la tranche, borne par operation et, si le fournisseur la
         connait, par la fenetre du modele au tour suivant."""
-        budget = self.state.budget
-        waiting = sum(size for _, _, size in self.waiting)
-        room = min(MAX_OPERATION_BYTES, budget.limits.slice_bytes - budget.slice_bytes - waiting)
+        room = min(MAX_OPERATION_BYTES, self._bytes_left())
         if self.turn.capacity is None:
             return room
         text = conversation.message(self.question, self.operations, self.state, self.shown, calls_left,

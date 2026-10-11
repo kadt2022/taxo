@@ -258,6 +258,18 @@ def test_a_call_beyond_the_slice_is_refused_and_said(session):
     assert sent(model, 2)['notices'][0]['reason'] == 'NO_CALL_LEFT'
 
 
+def test_responses_never_exceed_the_bytes_left_to_the_investigation(session):
+    """Chaque reponse demandee tient dans les octets qui restent ; sans la place d'un refus, plus d'appel."""
+    limits = BudgetLimits(slice_operations=6, slice_bytes=6_000, total_operations=6, total_bytes=30_000,
+                          max_renewals=0)
+    model = Scripted(*(neighborhood(node) for node in (school.CONTROLLER, school.SERVICE, school.FIND_STUDENT,
+                                                       school.FIND_COURSE, school.SAVE)), final())
+    result = completed(session(model, limits=limits).investigate(question=QUESTION))
+
+    assert 0 < result['budget']['bytes'] <= 6_000
+    assert any(sent(model, turn)['calls_left'] == 0 for turn in range(len(model.calls)))
+
+
 def test_interrupt_then_resume_restores_the_confirmed_question_and_frontier(session):
     """AC-05 : la demande s'arrete sans reponse ; l'enquete reprend avec la question confirmee, la meme frontiere,
     les memes notes et le meme budget, sans aucun code restitue. Le modele redemande ce qu'il lui faut."""
