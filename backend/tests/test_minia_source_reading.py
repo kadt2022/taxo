@@ -208,6 +208,10 @@ def test_a_symbol_written_in_the_code_read_is_not_a_received_reference():
     searched = {'operation': 'find_references', 'arguments': {'prefix': FIND},
                 'response': {'prefix': FIND, 'items': [{'reference': FIND, 'type': 'method'}]}}
     assert sources.received(FIND, [searched]), 'un résultat de recherche égal au préfixe demandé est reçu'
+    fact = {'operation': 'find_facts', 'arguments': {'subject': FIND},
+            'response': {'items': [{'ref': 'F1', 'fact': {'subject': FIND, 'relation': 'CALLS', 'object': FIND_ALL}}],
+                         'evidence': [{'ref': 'P1', 'fact': 'F1'}]}}
+    assert sources.received(FIND, [fact]), 'le sujet demandé d’un fait rendu par Taxo est reçu'
 
 
 def test_a_model_that_does_not_explore_says_the_code_was_not_read(make_repo, tmp_path):
