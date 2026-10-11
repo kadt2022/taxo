@@ -64,6 +64,10 @@ group('vues', ()=>{
     expect(html).toContain('TAXO · réponse directe, sans modèle');
     expect(html).toContain('Selon Git : bbbb : Ada.');
     expect(html).not.toContain('non vérifié');
+    expect(html).not.toContain('Lecture du code');
+    const consented=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, mode:'taxo', answer:'Selon Git : bbbb : Ada.',
+      facts:[], source_reading:{status:'UNAVAILABLE'}}}/>);
+    expect(consented).toContain('Taxo a répondu seul d’après Git, aucun code n’a été lu');
   });
   it('signale ce que Taxo a protégé avant l’envoi, sans valeur', ()=>{
     const html=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, withheld:{identities:1, secrets:0, trailers:0}}}/>);
