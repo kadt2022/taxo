@@ -57,11 +57,30 @@ def _strings(value):
         yield value
 
 
+def _confirmed(item):
+    """Les références que Taxo atteste connaître dans une réponse : une ancre ou un nœud marqué connu, un résultat
+    de recherche (lu dans l'index des noms de l'analyse)."""
+    response = item['response']
+    found = response.get('items', []) if item.get('operation') == 'find_references' else []
+    return {*_known(response), *(row['reference'] for row in found if isinstance(row.get('reference'), str))}
+
+
+def _known(value):
+    if isinstance(value, dict):
+        if value.get('known') is True and isinstance(value.get('reference'), str):
+            yield value['reference']
+        value = list(value.values())
+    if isinstance(value, list):
+        for item in value:
+            yield from _known(item)
+
+
 def _discovered(item):
     """Les références qu'une réponse apporte : celles de ses champs de référence, moins ce que la demande portait
-    déjà. Une réponse peut répéter sa demande (l'affirmation de `verify_claim`, l'ancre d'un voisinage même inconnue,
-    la couverture) : un symbole deviné par le modèle n'en devient pas une découverte de Taxo."""
-    asked = set(_strings(item.get('arguments', {})))
+    déjà sans que Taxo l'atteste. Une réponse peut répéter sa demande (l'affirmation de `verify_claim`, l'ancre d'un
+    voisinage inconnue, la couverture) : un symbole deviné par le modèle n'en devient pas une découverte de Taxo ;
+    un symbole demandé que Taxo reconnaît (ancre connue, résultat de recherche) l'est."""
+    asked = set(_strings(item.get('arguments', {}))) - _confirmed(item)
     return {value for value in _references(item['response']) if value not in asked}
 
 

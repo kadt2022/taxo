@@ -60,7 +60,7 @@ FILES = {
 }
 
 
-def ask(make_repo, tmp_path, model, source=True, reading='symbol', mode='commit'):
+def ask(make_repo, tmp_path, model, source=True, reading='symbol', mode='commit', question=QUESTION):
     root = make_repo(FILES)
     app = create_app(f'sqlite:///{tmp_path / "source.db"}', [root], minia=model, source_reading=reading)
     Base.metadata.create_all(app.state.engine)
@@ -69,7 +69,7 @@ def ask(make_repo, tmp_path, model, source=True, reading='symbol', mode='commit'
         client.post(f'/api/projects/{project["id"]}/scans', params={'mode': mode})
         assert client.get('/api/minia/status').json()['source_reading'] == reading, 'la case suit le réglage'
         stream = client.post(f'/api/projects/{project["id"]}/ask/stream',
-                             json={'question': QUESTION, 'source': source})
+                             json={'question': question, 'source': source})
         events = [(block.split('\n')[0][len('event: '):], json.loads(block.split('\n')[1][len('data: '):]))
                   for block in stream.text.strip().split('\n\n') if not block.startswith(':')]
     return completed(events)
@@ -202,6 +202,12 @@ def test_a_symbol_written_in_the_code_read_is_not_a_received_reference():
                'response': {'anchor': {'reference': hidden, 'known': False},
                             'boundaries': [{'nature': 'SELECTION', 'node': hidden}], 'items': []}}
     assert not sources.received(hidden, [unknown]), 'l’ancre d’un voisinage, même inconnue, est la demande répétée'
+    known = {'operation': 'get_neighborhood', 'arguments': {'root': FIND},
+             'response': {'anchor': {'reference': FIND, 'known': True}, 'items': []}}
+    assert sources.received(FIND, [known]), 'une ancre demandée que Taxo reconnaît est reçue'
+    searched = {'operation': 'find_references', 'arguments': {'prefix': FIND},
+                'response': {'prefix': FIND, 'items': [{'reference': FIND, 'type': 'method'}]}}
+    assert sources.received(FIND, [searched]), 'un résultat de recherche égal au préfixe demandé est reçu'
 
 
 def test_a_model_that_does_not_explore_says_the_code_was_not_read(make_repo, tmp_path):
@@ -210,3 +216,11 @@ def test_a_model_that_does_not_explore_says_the_code_was_not_read(make_repo, tmp
     result = ask(make_repo, tmp_path, model)
     assert result['source_reading'] == {'status': 'UNAVAILABLE'}
     assert 'studentRepository.findAll()' not in json.dumps(model.calls)
+
+
+def test_a_direct_answer_on_authors_says_the_code_was_not_read(make_repo, tmp_path):
+    """Les auteurs d'une sélection de commits sont dits par Taxo sans modèle : l'accord donné n'y lit aucun code."""
+    model = Scripted(json.dumps({'cited': [], 'answer': 'Rien.', 'unknown': ''}))
+    result = ask(make_repo, tmp_path, model, question='Qui a écrit les 2 derniers commits ?')
+    assert result['mode'] == 'taxo' and result['source_reading'] == {'status': 'UNAVAILABLE'}
+    assert model.calls == []
