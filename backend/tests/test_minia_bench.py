@@ -274,3 +274,13 @@ def test_the_series_with_code_reads_the_method_and_the_series_without_never_does
         assert measured['exact'] and measured['tiles']['served'] == 1
         assert (measured['sources']['served'], measured['sources']['refused']) == (served, refused)
         assert (BODY.split('\n')[1].strip() in json.dumps([item.payload for item in recorder.calls])) == source
+
+
+def test_a_failed_answer_still_counts_the_tiles_and_code_already_streamed():
+    """Une demande qui échoue après une Tuile et une pièce : leur apport est compté, rien n'est perdu."""
+    streamed = [{'operation': 'get_tile', 'outcome': 'OK', 'bytes': 900, 'items': 3},
+                {'operation': 'get_source', 'outcome': 'OK', 'bytes': 300, 'items': 1}]
+    question = {'id': 5, 'theme': 'appels', 'question': 'Que fait X ?', 'must': [['X']]}
+    entry = bench.score(question, None, 'MINIA_PROVIDER_ERROR : coupé', [], 1.0, TRUTH, [], streamed)
+    assert not entry['exact'] and entry['taxo_operations'] == 2
+    assert entry['tiles']['served'] == 1 and entry['sources'] == {'served': 1, 'refused': 0, 'bytes': 300}

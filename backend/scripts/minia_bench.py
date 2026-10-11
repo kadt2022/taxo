@@ -221,11 +221,12 @@ def contribution(trajectory):
     return measured
 
 
-def score(question, result, failure, calls, seconds, bench, known):
-    """Une reponse du banc, mesuree."""
+def score(question, result, failure, calls, seconds, bench, known, streamed=()):
+    """Une reponse du banc, mesuree. Sans resultat (demande en echec ou arretee), les operations deja diffusees
+    (`streamed`) comptent quand meme : une Tuile ou du code a pu partir chez le fournisseur avant l'echec."""
     payloads = [call.payload for call in calls]
     found = [leak for payload in payloads for leak in leaks(payload, known)]
-    trajectory = (result or {}).get('trajectory') or []
+    trajectory = (result or {}).get('trajectory') or list(streamed)
     entry = {'id': question['id'], 'theme': question['theme'], 'question': question['question'],
              'failure': failure, 'mode': (result or {}).get('mode'), 'status': (result or {}).get('status'),
              'llm_calls': len(calls), 'bytes_sent': sum(len(payload.encode('utf-8')) for payload in payloads),
@@ -297,11 +298,14 @@ def replay(client, project, bench, repository, recorder, runs, provider, sink=No
             start = time.perf_counter()
             response = ask(client, project, question, repository, provider, source)
             seconds = time.perf_counter() - start
+            streamed = []
             if response.status_code != 200:
                 result, failure = None, f'HTTP {response.status_code} : {response.text[:200]}'
             else:
-                result, failure = outcome(events(response.text))
-            entry = {'run': run, **score(question, result, failure, recorder.calls, seconds, bench, known)}
+                found = events(response.text)
+                result, failure = outcome(found)
+                streamed = [data for kind, data in found if kind == 'minia.operation']
+            entry = {'run': run, **score(question, result, failure, recorder.calls, seconds, bench, known, streamed)}
             measured.append(entry)
             if sink is not None:
                 for call in recorder.calls:
