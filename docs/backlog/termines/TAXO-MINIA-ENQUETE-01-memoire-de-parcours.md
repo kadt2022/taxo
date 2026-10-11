@@ -1,6 +1,6 @@
 # TAXO-MINIA-ENQUETE-01 — Enquête navigable dans la Maille et mémoire de parcours de Minia
 
-> **État : ACCEPTÉ le 11 octobre 2026** — récit, arbitrages 1 à 5 (§ 15) et découpage en lots A à D validés par le responsable du produit. Réalisation en cours, une PR par lot ; aucune fusion sans son accord explicite.  
+> **État : TERMINÉ le 11 octobre 2026** (PR #131 à #135 ; bilan en fin de récit). Accepté le même jour par le responsable du produit : récit, arbitrages 1 à 5 (§ 15) et découpage en lots A à D ; `verify_claim` arbitré en coexistence (lot D).  
 > **Date : 11 octobre 2026**  
 > **Décideur : responsable du produit**  
 > **Nature : récit d'architecture et critères d'acceptation**  
@@ -401,3 +401,16 @@ Les cinq arbitrages ci-dessous ont été validés tels quels par le responsable 
 - [Dépôt d'exercice — Student Course Demo](https://github.com/kadt2022/student-analysis-java)
 
 **Note de traçabilité :** ces références décrivent le dépôt GitHub consulté lors de la rédaction ; elles ne constituent pas un test d'exécution de l'instance Taxo locale ni une preuve que toutes les fonctions sont activées sur la machine de développement.
+
+## Bilan de clôture (11 octobre 2026)
+
+| PR | Contenu |
+| --- | --- |
+| #131 | Le récit. |
+| #132 (A) | Carnet de navigation pur : enquête, budget par tranches, notes `HYPOTHESIS_LLM`, journal des opérations et des livraisons, état versionné. |
+| #133 (B) | Mémoire SQLite WAL du carnet, reprise, expiration, migrations et conflits d'écriture. |
+| #134 (C) | Orchestration par Minia : enquête navigable par l'API (SSE), annonce avant l'envoi, déclaration confrontée aux livraisons, `verify_claim` absent de l'enquête. |
+| #135 (D) | Inventaire de `verify_claim` ; coexistence retenue, `taxo-query/1` inchangé. |
+
+Le rejeu contre un vrai modèle est fait par le responsable du produit hors du récit ; la clôture n'en dépend pas.
+Un écart constaté donnera un nouveau récit.
