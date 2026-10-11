@@ -109,6 +109,8 @@ class OperationRecord:
     response_fingerprint: str | None = None
     delivery_ids: tuple = ()
     not_sent: tuple = ()
+    # Le progres du carnet quand l'operation s'inscrit : une meme reponse apres un progres n'est pas une boucle.
+    progress: int | None = None
 
 
 @dataclass(frozen=True)
@@ -236,12 +238,12 @@ class Logbook:
             raise MiniaError(INVESTIGATION_INVALID, 'Une opération cite une livraison absente du journal.')
         # Les arguments et les retenues sont gardes en valeurs JSON : relus, ils sont identiques (INV-04).
         record = replace(record, arguments=_json_copy(record.arguments),
-                         not_sent=tuple(_json_copy(list(record.not_sent))))
+                         not_sent=tuple(_json_copy(list(record.not_sent))), progress=self.progress)
         key = request_key(analysis_id, generation_id, record.name, record.arguments)
         # Sans empreinte, rien ne dit que la reponse est la meme : pas de repetition. Une autre issue non plus.
         comparable = record.outcome is not OperationOutcome.INTERRUPTED and record.response_fingerprint is not None
         same = sum(1 for previous in self.operations
-                   if previous.outcome is record.outcome
+                   if previous.outcome is record.outcome and previous.progress == record.progress
                    and previous.response_fingerprint == record.response_fingerprint
                    and request_key(analysis_id, generation_id, previous.name, previous.arguments) == key)
         logbook = replace(self, operations=self.operations + (record,))

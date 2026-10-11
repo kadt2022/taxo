@@ -610,3 +610,34 @@ def test_a_timezone_less_instant_is_refused_at_once():
     assert error.value.code == INVESTIGATION_INVALID
     with pytest.raises(MiniaError):
         opened().record_tile(SNAPSHOT, CONTROLLER, (), at=naive)
+
+
+# Revue du lot A, seconde passe -----------------------------------------------------------------------------------
+
+def test_the_same_answer_after_progress_is_not_a_repetition():
+    state, _ = opened().record_operation(SNAPSHOT, operation(minutes=1), 100)
+    state = state.record_tile(SNAPSHOT, CONTROLLER, calls(CONTROLLER, SERVICE), at=at(2))
+    state, after_progress = state.record_operation(SNAPSHOT, operation(minutes=3), 100)
+    state, without_progress = state.record_operation(SNAPSHOT, operation(minutes=4), 100)
+
+    assert after_progress is None and without_progress.count == 2
+    restored = from_document(to_document(state))
+    assert [record.progress for record in restored.logbook.operations] == [0, 2, 2]
+
+
+@pytest.mark.parametrize('size', [-1, 1.5])
+def test_a_renewal_of_a_malformed_size_is_refused(size):
+    _, decision = exhausted_slice().request_renewal(RenewalRequest((SAVE,), 'Lire save.', size), at(8))
+    assert decision.refusal == Refusal.INVALID_SIZE
+
+
+def test_a_status_change_without_timezone_is_refused():
+    with pytest.raises(MiniaError) as error:
+        opened().move_to(Status.PAUSED, T0.replace(tzinfo=None))
+    assert error.value.code == INVESTIGATION_INVALID
+
+
+def test_an_inactivity_with_a_fraction_of_second_is_refused():
+    with pytest.raises(MiniaError) as error:
+        ExpiryPolicy(timedelta(seconds=1, milliseconds=500))
+    assert error.value.code == INVESTIGATION_INVALID

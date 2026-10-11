@@ -99,7 +99,7 @@ def _logbook(data):
                        for item in data['receipts']),
         operations=tuple(OperationRecord(item['name'], item['arguments'], OperationOutcome(item['outcome']),
                                          _at(item['at']), item['response_fingerprint'], tuple(item['delivery_ids']),
-                                         tuple(item['not_sent']))
+                                         tuple(item['not_sent']), item['progress'])
                          for item in data['operations']),
         deliveries=tuple(Delivery(item['delivery_id'], item['mip_reference'], DeliveryKind(item['kind']),
                                   _at(item['at']), item['replay_of'])

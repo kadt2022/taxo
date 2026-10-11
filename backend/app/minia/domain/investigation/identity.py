@@ -74,6 +74,10 @@ class ExpiryPolicy:
     def __post_init__(self):
         if self.inactivity <= timedelta(0):
             raise MiniaError(INVESTIGATION_INVALID, 'La durée d’inactivité d’une enquête doit être positive.')
+        if self.inactivity.microseconds:
+            # Conservee en secondes entieres : une fraction serait perdue a la relecture.
+            raise MiniaError(INVESTIGATION_INVALID, 'La durée d’inactivité d’une enquête se compte en secondes '
+                             'entières.')
 
     def expires_at(self, last_activity: datetime) -> datetime:
         return last_activity + self.inactivity

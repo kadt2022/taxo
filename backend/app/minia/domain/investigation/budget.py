@@ -22,6 +22,7 @@ class Refusal:
     NO_PROGRESS = 'NO_PROGRESS'
     TOTAL_EXHAUSTED = 'TOTAL_EXHAUSTED'
     TOO_MANY_RENEWALS = 'TOO_MANY_RENEWALS'
+    INVALID_SIZE = 'INVALID_SIZE'
 
 
 @dataclass(frozen=True)
@@ -127,6 +128,8 @@ class Budget:
     def _refusal(self, request, open_branches, progress):
         branches = tuple(item for item in request.branches if isinstance(item, str) and item)
         justification = request.justification.strip() if isinstance(request.justification, str) else ''
+        if type(request.operations) is not int or request.operations < 0:
+            return Refusal.INVALID_SIZE
         if not self.slice_exhausted:
             return Refusal.SLICE_NOT_EXHAUSTED
         if self.total_exhausted:

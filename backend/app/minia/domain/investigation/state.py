@@ -11,7 +11,7 @@ from datetime import datetime
 from ..errors import INVESTIGATION_INVALID, INVESTIGATION_STALE, MiniaError
 from . import notes as hypotheses
 from .budget import Budget, BudgetLimits, RenewalDecision, RenewalRequest
-from .identity import (ExpiryPolicy, Investigation, OwnerScope, Snapshot, Status, TextGuard, confirm_question,
+from .identity import (ExpiryPolicy, Investigation, OwnerScope, Snapshot, Status, TextGuard, aware, confirm_question,
                        open_investigation)
 from .logbook import Action, Delivery, Logbook, OperationOutcome, OperationRecord, Repetition, SourceReceipt
 from .values import plain as _plain
@@ -155,6 +155,7 @@ class InvestigationState:
     # Etat -------------------------------------------------------------------------------------------------
 
     def move_to(self, status: Status, at: datetime) -> 'InvestigationState':
+        aware(at)
         investigation = self.investigation.moved_to(status)
         notes = hypotheses.stale_notes(self.notes) if status is Status.STALE else self.notes
         event = Event(EventKind.STATUS, at, {'from': str(self.investigation.status), 'to': str(status)})
