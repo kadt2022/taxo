@@ -34,9 +34,10 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
    protocole `taxo-query/1` en est la première version filaire. Tranches : A (contrat MIP 0.1, `EXPAND` sans
    LLM), A2 (recherche par nom), B (Minia et repli paquet ; base proposée en #108, non fusionnée), C (portail), D (mesures).
    Accepté le 2026-10-09 ; passe avant l'Arbre. Autorisations par consommateur et capsule de Tuile : tranche suivante.
-   - → **Fiabilité et confidentialité de Minia** ([TAXO-MINIA-SEC-01](TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md)),
-     priorité critique, acceptée le 2026-10-10 après le banc `student-course-demo` : verdicts `CONFIRMED` exacts,
-     faits de sécurité Spring, masquage centralisé avant tout fournisseur, transparence des refus et limites.
+   - ✅ **Fiabilité et confidentialité de Minia** ([TAXO-MINIA-SEC-01](termines/TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md)),
+     terminé le 2026-10-11 (#118 à #120, #126, #127) : verdicts `CONFIRMED` exacts, faits de sécurité Spring,
+     masquage centralisé avant tout fournisseur, transparence des refus et limites, banc rejouable. Le rejeu
+     contre un vrai modèle est fait par le responsable du produit hors du récit ; un écart donnera un nouveau récit.
    - ✅ **Adaptive Tile** ([TAXO-MIP-ADT-01](termines/TAXO-MIP-ADT-01-adaptive-tile.md)), terminé le 2026-10-11 :
      profils déclarés et versionnés (§ 9.5) sur le moteur existant, classification des Tuiles, annotations observées,
      Tuiles et lecture du code par Minia (`get_source`, double consentement), banc à trois séries. Il absorbe
