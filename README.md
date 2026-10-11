@@ -572,6 +572,10 @@ La réponse compte ce qui a été protégé (`withheld`), sans aucune valeur. «
 commit ? » (ou des derniers commits) reçoit une réponse de Taxo seul, d'après Git, sans appeler de modèle
 (`"mode": "taxo"`).
 
+Le portail dit, dans « Ce que Taxo ne sait pas », chaque opération que Taxo a refusée à Minia et pourquoi.
+Rien n'est conservé, et le journal d'accès de l'API remplace la valeur de chaque paramètre d'adresse
+(`?q=…`) par `******` : la question n'y est jamais écrite.
+
 ### Minia Ollama ou Minia Claude (TAXO-MINIA-05)
 
 Minia peut être servie par plusieurs fournisseurs. Elle fait le même travail quel que soit celui choisi :
