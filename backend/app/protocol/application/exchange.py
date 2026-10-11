@@ -17,6 +17,7 @@ from app.facts.domain.fact import RELATIONS
 from app.history.domain.errors import UNKNOWN_COMMIT, UNKNOWN_PATH, HistoryError
 from app.projects.application.queries import require_project
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
+from app.snapshots.domain.mode import COMMIT
 from app.protocol.domain.envelope import (BUDGET_EXHAUSTED, INTERNAL, INVALID_ARGUMENT, MAX_ERROR_BYTES,
                                           NO_CONSENT, NOT_AVAILABLE, OUT_OF_SCOPE, PROTOCOL, OperationError,
                                           Response, error)
@@ -208,6 +209,8 @@ class Exchange:
         evaluations = scan.result.get('evaluations', [])
         reference = next((item['snapshot'] for item in evaluations if item.get('snapshot')), {})
         self.snapshot = {'analysis': scan.id, 'commit': reference.get('commit')}
+        # Seule une analyse d'un commit lit le code qu'elle a analyse : celle du dossier de travail ne le peut pas.
+        self.committed = reference.get('mode') == COMMIT
         self.repository = f'repository:{reference["repository"]}' if reference.get('repository') else None
         self.evaluations = evaluations
         self._coverage = None
@@ -344,7 +347,7 @@ class Exchange:
             if self.diff_allowed:
                 operations.append('get_diff')
         # Le code d'un symbole n'est propose qu'a un echange qui l'a autorise : Minia ne le voit pas (TAXO-MIP-ADT-01).
-        if self.source_consent and self.snapshot['commit'] is not None:
+        if self.source_consent and self.committed and self.snapshot['commit'] is not None:
             operations.append('get_source')
         return [name for name in OPERATIONS if name in operations]
 
@@ -409,14 +412,18 @@ class Exchange:
         if operation is None:
             raise OperationError(INVALID_ARGUMENT, f'Opération inconnue : {str(request.get("operation"))[:100]}.')
         if operation not in self.available():
-            if operation == 'get_diff' and self._history_available():
-                raise OperationError(NO_CONSENT, 'La lecture du diff est désactivée pour ce Taxo.')
-            if operation == 'get_source' and self.service.source_reading != _source.SYMBOL:
-                raise OperationError(NO_CONSENT, 'La lecture du code est désactivée pour ce Taxo.')
-            if operation == 'get_source' and not self.source_consent:
-                raise OperationError(NO_CONSENT, 'La lecture du code n’a pas été autorisée pour cet échange.')
-            raise OperationError(NOT_AVAILABLE, f'{operation} : aucun analyseur ne le nourrit pour ce projet.')
+            raise self._unavailable(operation)
         return arguments, max_bytes
+
+    def _unavailable(self, operation):
+        """Le refus d'une operation connue que cet echange ne sert pas : un consentement manquant, sinon l'absence."""
+        if operation == 'get_diff' and self._history_available():
+            return OperationError(NO_CONSENT, 'La lecture du diff est désactivée pour ce Taxo.')
+        if operation == 'get_source' and self.service.source_reading != _source.SYMBOL:
+            return OperationError(NO_CONSENT, 'La lecture du code est désactivée pour ce Taxo.')
+        if operation == 'get_source' and not self.source_consent:
+            return OperationError(NO_CONSENT, 'La lecture du code n’a pas été autorisée pour cet échange.')
+        return OperationError(NOT_AVAILABLE, f'{operation} : aucun analyseur ne le nourrit pour ce projet.')
 
     def _failure(self, operation, exc):
         """Un echec devient un resultat de l'enveloppe ; une panne de Taxo reste un resultat, jamais une

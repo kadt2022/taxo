@@ -5,7 +5,7 @@ La demande nomme une référence de symbole, jamais un chemin : le fichier et le
 déclaration dans la Maille, au commit de l'analyse. Le code n'est transmis que si tout concorde :
 
 1. une seule déclaration écrite (`CONTAINS` observé) du symbole, par un analyseur qui sait en lire la plage ;
-2. sa preuve vient du commit de l'analyse de l'échange ;
+2. l'analyse de l'échange porte sur un commit (jamais sur le dossier de travail), et la preuve vient de ce commit ;
 3. le fichier se lit à ce commit sans refus (confidentiel, généré, binaire, lien, trop gros) ;
 4. les lignes de la preuve ont toujours la même empreinte ;
 5. l'analyseur retrouve la déclaration, à la ligne de la preuve, une seule fois (une surcharge par sa signature).
@@ -42,6 +42,10 @@ class SourceOperation:
             raise OperationError(INVALID_ARGUMENT, 'reference : un type, une méthode ou un constructeur ; un champ '
                                                    'n’a pas de code propre.')
         self.exchange.own(reference)
+        if not self.exchange.committed:
+            # Le commit n'est pas ce que l'analyse du dossier de travail a lu : son code serait celui d'un autre état.
+            raise OperationError(NOT_AVAILABLE, 'Le code n’est lu que pour l’analyse d’un commit, jamais pour celle '
+                                                'du dossier de travail.')
         proof, producer = self._declaration(reference)
         commit = self.exchange.snapshot['commit']
         path = proof['path']

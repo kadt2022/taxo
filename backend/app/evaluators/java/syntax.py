@@ -508,8 +508,6 @@ class _Reader:
 
     def _type(self, written, owner, on_demand=True):
         """Nom qualifie du type ecrit `written`, s'il est connu sans ambiguite ; sinon None."""
-        if written in self.known:
-            return written
         head, _, rest = written.partition('.')
         plain = [name for name, static in self.imports if not static]
         candidates = [f'{scope}.{head}' for scope in self._scopes(owner)]
@@ -521,7 +519,11 @@ class _Reader:
             candidates.append(f'{self.package}.{head}' if self.package else head)
         if on_demand and not imported:
             candidates += [f'{name[:-2]}.{head}' for name in plain if name.endswith('.*')]
-        full = (f'{candidate}.{rest}' if rest else candidate for candidate in candidates)
+        full = [f'{candidate}.{rest}' if rest else candidate for candidate in candidates]
+        # Un nom qualifie tel qu'ecrit ne passe qu'apres les types en portee, et jamais quand un import explicite masque
+        # son premier segment ; un type du paquetage sans nom n'est vu que depuis ce paquetage (candidat ci-dessus).
+        if rest and not imported:
+            full.append(written)
         return next((name for name in full if name in self.known), None)
 
 

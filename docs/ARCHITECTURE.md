@@ -1026,7 +1026,8 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
      `off`) **et** accord de l'échange (`"consent": {"source": true}`) ; l'accord et le réglage du diff ne
      l'autorisent jamais, et `describe` ne la propose qu'à un échange qui l'a autorisée. La référence est un
      symbole, jamais un chemin : le fichier et la ligne viennent de la preuve de sa déclaration (`CONTAINS`
-     observé, une seule), au commit de l'analyse ; le code n'est rendu que si les lignes de cette preuve ont la
+     observé, une seule), au commit de l'analyse, qui doit être l'analyse d'un commit (jamais celle du
+     dossier de travail, dont le code lu ne serait pas celui du commit) ; le code n'est rendu que si les lignes de cette preuve ont la
      même empreinte, et que l'analyseur qui l'a déclarée retrouve la déclaration à cette ligne (la plage est la
      sienne : le protocole ne lit aucun langage). Une pièce : 200 lignes, 16 Ko, coupée sur une ligne entière et
      dite `truncated`. Sinon, `not_sent` dit pourquoi (`CONFIDENTIAL`, `GENERATED`, `BINARY`, `TOO_LARGE`,
