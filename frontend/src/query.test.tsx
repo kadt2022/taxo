@@ -86,6 +86,8 @@ group('vues', ()=>{
     expect(nothing).toContain('Minia ne propose aucune interprétation.');
     expect(nothing).toContain('2 faits n’ont pas été transmis');
     expect(nothing).toContain('écartées : F9.');
+    expect(renderToStaticMarkup(<SelectionAnswerView answer={{...answer, fallback:'opération répétée', source_reading:{status:'ON_DEMAND'}}}/>))
+      .toContain('Minia pouvait lire le code');
   });
   it('présente le panneau sans rien interroger d’avance', ()=>{
     const run=vi.fn();
@@ -107,6 +109,7 @@ group('vues', ()=>{
     expect(readingNote({status:'NOT_REQUESTED'})).toBe('');
     expect(readingNote({status:'DISABLED'})).toContain('Minia n’a lu aucun code');
     expect(readingNote({status:'ON_DEMAND'})).toContain('pas forcément le dernier');
+    expect(readingNote({status:'UNAVAILABLE'})).toContain('dossier de travail');
   });
 });
 

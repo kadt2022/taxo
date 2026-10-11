@@ -62,6 +62,8 @@ _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
 _DISABLED = {'status': 'DISABLED'}
 # En exploration, le diff n'est pas joint d'avance : Minia le demande fichier par fichier (get_diff).
 _ON_DEMAND = {'status': 'ON_DEMAND'}
+# Le code est autorise, mais l'analyse n'est pas celle d'un commit (dossier de travail) : rien n'est lisible.
+_UNAVAILABLE = {'status': 'UNAVAILABLE'}
 _NOTHING = ("Taxo n'a vu changer aucun fait dans ce commit, parmi ceux que ses évaluateurs savent produire. "
             "Minia ne peut rien affirmer au-delà.")
 _SELECT = ("Minia répond sur une sélection de l'historique : précisez un nombre de derniers commits "
@@ -198,11 +200,21 @@ def _guarded(events, cancel):
 
 
 def _source_reading(requested, exchange):
-    """Ce que la demande permet du code : non demande, demande mais desactive par le reglage, ou lisible a la
-    demande de Minia (`get_source`), symbole par symbole."""
+    """Ce que la demande permet du code : non demande, demande mais desactive par le reglage, autorise mais
+    illisible pour cette analyse (sans commit), ou lisible a la demande de Minia (`get_source`), symbole par
+    symbole. `ON_DEMAND` suit ce que l'echange propose reellement, jamais le seul consentement."""
     if not requested:
         return _NOT_REQUESTED
-    return _ON_DEMAND if exchange.source_consent else _DISABLED
+    if not exchange.source_consent:
+        return _DISABLED
+    return _ON_DEMAND if sources.OPERATION in exchange.available() else _UNAVAILABLE
+
+
+def _completed_with(steps, fields):
+    """Les etapes d'une reponse, dont le resultat final porte aussi `fields` (par exemple, en repli paquet, ce que
+    la demande permettait du code)."""
+    for kind, data in steps:
+        yield (kind, {**data, **fields}) if kind == COMPLETED else (kind, data)
 
 
 def _packet(fallback, trajectory):
@@ -508,11 +520,13 @@ class AskMinia:
             # Le code n'est lisible que si le reglage et la demande l'autorisent (double consentement, § 12.6).
             exchange = self.taxo_query.open(project_id, max_bytes=self._exchange_bytes(model), source_consent=source)
 
+            reading = {'source_reading': _source_reading(source, exchange)}
+
             def packet(reason, trajectory):
-                return self._project_steps(model, question, projection, fallback=reason, trajectory=trajectory,
-                                           cancel=cancel)
-            result = {**self._project_result(model, question, projection),
-                      'source_reading': _source_reading(source, exchange)}
+                # Le repli garde ce que la demande permettait du code : une lecture a pu avoir lieu avant.
+                return _completed_with(self._project_steps(model, question, projection, fallback=reason,
+                                                           trajectory=trajectory, cancel=cancel), reading)
+            result = {**self._project_result(model, question, projection), **reading}
             return self._explore(model, question, exchange, [], None, result, packet, cancel)
         return self._project_steps(model, question, projection, cancel=cancel)
 
