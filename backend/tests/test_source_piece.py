@@ -66,6 +66,7 @@ class _Exchange:
 
     def __init__(self, path=PATH, line=6):
         self.snapshot, self.project_id, self.source_consent = {'analysis': 'a', 'commit': 'c1'}, 'p', True
+        self.committed = True
         proof = {'path': path, 'line_start': line, 'line_end': line, 'symbol': METHOD, 'commit': 'c1',
                  'content_hash': content_hash(JAVA.encode(), line, line)}
         self.fact = {'kind': 'ASSERTION', 'status': 'OBSERVED', 'relation': 'CONTAINS', 'subject': 'x',
@@ -119,6 +120,15 @@ def test_an_inferred_declaration_or_another_commit_is_not_read():
     exchange.fact['evidence'][0]['commit'] = 'c0'
     with pytest.raises(OperationError, match='commit de l’analyse'):
         _read(exchange, _History(JAVA.encode()))
+
+
+def test_a_working_tree_analysis_is_refused_before_any_read():
+    """Le commit n'est pas ce que l'analyse du dossier de travail a lu : aucun fichier n'est ouvert."""
+    exchange, history = _Exchange(), _History(JAVA.encode())
+    exchange.committed = False
+    with pytest.raises(OperationError, match='dossier de travail') as refused:
+        _read(exchange, history)
+    assert refused.value.code == 'NOT_AVAILABLE' and history.reads == []
 
 
 def test_the_consent_is_checked_again_by_the_operation():

@@ -3,6 +3,8 @@
 La vérité est écrite à la main dans les sources ci-dessous : `get(Long)` et `get(String)` sont deux surcharges,
 `twice(int)` une signature ambiguë, `@Toto` une annotation inconnue de toute bibliothèque.
 """
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -147,20 +149,22 @@ def test_the_code_is_the_one_of_the_analysis_commit(java_repo, tmp_path):
     assert response['commit'] == first and 'return prefix + id;' in response['items'][0]['text']
 
 
-def test_a_working_tree_analysis_whose_lines_differ_from_the_commit_sends_nothing(java_repo, tmp_path):
-    """Les lignes de la preuve n'ont plus la même empreinte au commit : rien n'est transmis, et la raison est dite."""
+def test_a_working_tree_analysis_never_reads_the_committed_code(java_repo, tmp_path):
+    """Le corps modifié dans le dossier de travail, la ligne de déclaration intacte : le commit n'est pas ce que
+    l'analyse a lu, donc rien n'est lu ni proposé, même avec l'accord de l'échange."""
     from conftest import run_git
     root, _ = java_repo
     copy = tmp_path / 'dirty'
     run_git(tmp_path, 'clone', '-q', str(root), str(copy))
-    (copy / f'{ROOT}StudentService.java').write_text(SERVICE_SOURCE.replace('public String get(Long id)',
-                                                                            'public String get(Long key)'))
+    (copy / f'{ROOT}StudentService.java').write_text(SERVICE_SOURCE.replace('return prefix + id;',
+                                                                            'return prefix + id + "!";'))
     client, url = client_for(copy, tmp_path / 'db', mode='working-tree')
     with client:
         response = read(client, url, GET_LONG)
-    assert response['outcome'] == 'OK' and response['items'] == []
-    assert response['not_sent'] == [{'what': 'source', 'reason': 'CHANGED'}]
-    assert_consistent(response)
+        described = exchange(client, url, ('describe', {}), consent={'source': True})['responses'][0]
+    assert response['error']['code'] == 'NOT_AVAILABLE'
+    assert 'prefix' not in json.dumps(response)
+    assert 'get_source' not in [item.get('operation') for item in described['items']]
 
 
 def test_without_the_exchange_consent_nothing_is_read_or_offered(taxo):
