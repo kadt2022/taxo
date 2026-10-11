@@ -26,6 +26,7 @@ from app.evaluations.domain.capability import CatalogContracts
 from app.evaluations.application.run_evaluator import RunEvaluator
 from app.platform.api.health import router as health_router
 from app.platform.api.errors import register_errors
+from app.platform.api.access_log import redact_access_log
 from app.hypotheses.infrastructure.model_store import ModelStore
 from app.history.application.queries import ProjectHistory
 from app.history.application.recorded import RecordedImpact
@@ -98,6 +99,8 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
         store.ensure(name)
     api = FastAPI(title='Taxo', version='0.1.0')
     api.state.engine = engine
+    # La question passe parfois dans l'adresse : le journal d'acces n'en garde jamais la valeur (TAXO-MINIA-SEC-01, E4).
+    redact_access_log()
     register_errors(api)
     api.include_router(health_router)
     api.include_router(projects_router(projects, paths))

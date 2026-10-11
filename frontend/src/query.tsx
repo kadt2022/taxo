@@ -7,7 +7,7 @@ import {ask as askMinia, askButton, createStop, MiniaProgress, type MiniaLive, t
 import {CodeConsent, codeConsent, DirectAnswer, MiniaChoice, modelLabel, withProvider, withheldNote, type AnswerModel, type MiniaStatus,
   type Withheld} from './minia';
 import {openStream, type ServerEvent} from './sse';
-import {Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
+import {refusals, Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
 import {ElementView, isNamed, type Located} from './element';
 
 type Request = {kind:'GLOBAL'|'LATEST'|'COMMIT'|'PERIOD'; text:string; count:number|null; commit:string|null; since:string|null; until:string|null};
@@ -98,7 +98,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
   if(answer.mode==='exploration'&&answer.statements)return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · exploration</p>
     <p className="minia-question">{answer.question}</p>
-    <Statements statements={answer.statements} limits={[readingNote(answer.source_reading), withheldNote(answer.withheld)].filter((item):item is string=>!!item)}/>
+    <Statements statements={answer.statements} limits={[readingNote(answer.source_reading), ...refusals(answer.trajectory), withheldNote(answer.withheld)].filter((item):item is string=>!!item)}/>
     <Trajectory steps={answer.trajectory??[]}/>
     <footer>Minia a interrogé Taxo opération par opération ; Taxo a vérifié chacune de ses affirmations. Aucune phrase n’est affichée comme établie sans verdict de Taxo, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
@@ -106,7 +106,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
   const limits=[answer.fallback?`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir d’un paquet de faits.`:'', answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:'',
-    withheldNote(answer.withheld)??''].filter(Boolean);
+    ...refusals(answer.trajectory), withheldNote(answer.withheld)??''].filter(Boolean);
   return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · {answer.anchor?.anchor?reference(answer.anchor.anchor):describe(answer.request)}</p>
     <p className="minia-question">{answer.question}</p>

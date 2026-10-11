@@ -226,6 +226,11 @@ describe('question sur un commit en exploration (MINIA-09b)', ()=>{
     expect(html).toContain('Chemin de Minia');
     expect(html).toContain('L’équipe aurait restreint l’accès.');
   });
+  it('dit chaque opération refusée par Taxo parmi ses limites', ()=>{
+    const refused={...answer, mode:'paquet' as const, trajectory:[{operation:'get_diff', arguments:{path:'a'}, outcome:'ERROR' as const,
+      bytes:120, error:{code:'NO_CONSENT', message:'La lecture du diff n’est pas autorisée'}}]};
+    expect(gaps(refused)).toContain('Taxo a refusé « Diff d’un fichier (path a) » : La lecture du diff n’est pas autorisée (NO_CONSENT).');
+  });
 });
 
 describe('confidentialité (TAXO-MINIA-SEC-01)', ()=>{
