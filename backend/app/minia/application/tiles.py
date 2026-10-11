@@ -58,7 +58,8 @@ def _tile(mip, exchange, arguments, max_bytes, exchanged):
                                  'get_neighborhood ou une Tuile).', exchange.snapshot, EXPAND)
     query = {'expression': EXPAND, 'target': {'reference': reference}, 'profile': arguments.get('profile'),
              'analysis': exchange.snapshot['analysis'], 'bounds': {'max_bytes': max(max_bytes - _SIZE_FIELD, 1)}}
-    return mip.query(exchange.project_id, query)
+    # Servie dans l'échange de Minia : les références courtes de la Tuile (`F…`) sont les siennes.
+    return mip.query(exchange.project_id, query, exchange)
 
 
 def _received(reference, exchanged):

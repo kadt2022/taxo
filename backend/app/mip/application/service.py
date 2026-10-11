@@ -42,33 +42,37 @@ class MipService:
     def __init__(self, taxo_query):
         self.taxo_query = taxo_query
 
-    def query(self, project_id, payload):
+    def query(self, project_id, payload, exchange=None):
         """La Tuile demandée, ou le refus qui dit quoi corriger. Un projet inconnu ou sans analyse est refusé par
-        l'ouverture de l'échange, avant toute lecture de la Maille."""
+        l'ouverture de l'échange, avant toute lecture de la Maille.
+
+        `exchange` : un échange déjà ouvert par le consommateur sur l'analyse demandée (Minia). La Tuile y est servie,
+        et ses références courtes (`F…`) sont celles de cet échange : une opération suivante peut les citer."""
         try:
             query = read_query(payload)
         except MipError as exc:
             expression = payload.get('expression') if isinstance(payload, dict) else None
             return failure(exc.code, str(exc), expression=expression if isinstance(expression, str) else None)
-        envelope = self._call(project_id, query, query.analysis, query.bounds.get('max_bytes'))
+        envelope = self._call(project_id, query, query.analysis, query.bounds.get('max_bytes'), exchange)
         if envelope['outcome'] != 'OK':
             return tile(query, envelope)
-        return self._fitted(project_id, query, envelope)
+        return self._fitted(project_id, query, envelope, exchange)
 
-    def _call(self, project_id, query, analysis, max_bytes):
-        exchange = self.taxo_query.open(project_id, analysis_id=analysis)
+    def _call(self, project_id, query, analysis, max_bytes, exchange=None):
+        if exchange is None or exchange.snapshot['analysis'] != analysis:
+            exchange = self.taxo_query.open(project_id, analysis_id=analysis)
         arguments = _arguments(query, exchange.snapshot['analysis'])
         return exchange.call({'operation': WIRE_OPERATION, 'arguments': arguments, 'max_bytes': max_bytes})
 
-    def _fitted(self, project_id, query, envelope):
+    def _fitted(self, project_id, query, envelope, exchange=None):
         """La Tuile tient dans le budget du consommateur, classification, règles et chemins compris. Le moteur, qui
         mesure ses octets, ne connaît pas ce que l'adaptateur ajoute : si la Tuile dépasse, elle est redemandée une
-        fois, dans un nouvel échange sur la même analyse, avec un budget moteur réduit de ce surplus. Déterministe :
-        mêmes entrées, mêmes deux appels ; si elle dépasse encore, le refus `BUDGET_EXHAUSTED` est rendu."""
+        fois, sur la même analyse et dans l'échange fourni (sinon un nouveau), avec un budget moteur réduit de ce
+        surplus. Déterministe : mêmes entrées, mêmes deux appels ; si elle dépasse encore, le refus `BUDGET_EXHAUSTED` est rendu."""
         budget = engine_budget(envelope)
         rendered = size(render(query, envelope, budget))
         surplus = rendered - size(envelope)
         if rendered <= budget or surplus >= budget:
             return tile(query, envelope, budget)
-        retried = self._call(project_id, query, envelope['snapshot']['analysis'], budget - surplus)
+        retried = self._call(project_id, query, envelope['snapshot']['analysis'], budget - surplus, exchange)
         return tile(query, retried, budget)

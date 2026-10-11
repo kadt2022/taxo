@@ -61,6 +61,30 @@ def test_minia_reads_a_method_through_its_declared_profile_on_the_same_analysis(
     assert result['statements'][0]['verdict'] == 'CONFIRMED'
 
 
+def test_a_fact_handle_of_the_tile_is_one_of_the_exchange(make_repo, tmp_path):
+    """Les références courtes (`F…`) d'une Tuile sont celles de l'échange de Minia : `get_evidence` sur l'une d'elles
+    rend la preuve de ce fait-là, jamais celle d'un autre."""
+    def evidence_of_the_call(message):
+        tile = message['trajectory'][2]['response']
+        handle = next(item['ref'] for item in tile['facts'] if item['fact']['relation'] == 'CALLS')
+        return call('get_evidence', fact=handle)
+
+    model = Scripted(
+        lambda message: call('find_references', analysis=analysis_of(message), prefix='CourseController.register',
+                             match='NAME'),
+        call('get_tile', reference=REGISTER, profile='method-context/1'),
+        evidence_of_the_call,
+        answer(statement('unknown', 'Preuve lue.')))
+    result = ask(make_repo, tmp_path, model)
+    evidence = sent(model, 3)['trajectory'][3]['response']
+    assert evidence['outcome'] == 'OK', evidence
+    assert result['trajectory'][3]['operation'] == 'get_evidence'
+    tile = sent(model, 2)['trajectory'][2]['response']
+    called = next(item for item in tile['facts'] if item['fact']['relation'] == 'CALLS')
+    assert evidence['fact'] == called['ref'] and evidence['evidence']
+    assert {proof['location']['symbol'] for proof in evidence['evidence']} == {REGISTER}
+
+
 def test_the_tile_is_offered_and_the_source_never_is_even_when_the_server_allows_it(make_repo, tmp_path):
     """Seules les capacités activées pour cet échange sont proposées : Minia n'ouvre jamais un échange qui autorise
     le code, et une demande de `get_source` est refusée sans rien lire."""
