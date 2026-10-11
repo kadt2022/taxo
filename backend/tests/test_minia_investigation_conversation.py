@@ -245,3 +245,15 @@ def test_settings_of_the_investigation_log(monkeypatch, tmp_path):
     assert settings.minia_investigations() == {'path': tmp_path / 'carnet.sqlite3', 'days': 3}
     with pytest.raises(ValueError):
         settings.minia_investigations(days=0)
+
+
+def test_source_lines_keep_only_lines_long_enough_to_sign_a_copy():
+    response = {'outcome': 'OK', 'items': [{'text': '{\n    return   service.enroll(student, course);\n}'}]}
+    assert responses.source_lines(response) == ('return service.enroll(student, course);',)
+    assert responses.source_lines({'outcome': 'ERROR'}) == ()
+
+
+def test_a_copied_line_is_found_whatever_its_spacing():
+    lines = ('return service.enroll(student, course);',)
+    assert responses.copies_source('Il fait   return service.enroll(student,\n course); puis rend.', lines)
+    assert not responses.copies_source('Le contrôleur délègue au service.', lines)

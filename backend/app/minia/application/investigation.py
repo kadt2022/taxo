@@ -394,7 +394,7 @@ class _Run:
     # Notes et budget --------------------------------------------------------------------------------------
 
     def _note(self, step):
-        at, guard = self.owner.clock(), guard_with(self.turn.disclosure)
+        at, guard = self.owner.clock(), self._note_guard()
         note_id = step.note_id or f'N-{len(self.state.notes) + 1}'
         try:
             if any(note.note_id == note_id for note in self.state.notes):
@@ -409,6 +409,19 @@ class _Run:
         note = next(item for item in self.state.notes if item.note_id == note_id)
         yield 'minia.note', {'note_id': note.note_id, 'version': note.version, 'status': note.status.value,
                              'nodes': list(note.nodes)}
+
+    def _note_guard(self):
+        """La protection d'une note : elle ne recopie aucune ligne du code lu dans cette demande (le code n'est jamais
+        conserve, INV-10), puis la protection existante des textes."""
+        disclosure, protect = self.turn.disclosure, guard_with(self.turn.disclosure)
+        lines = tuple(line for item in self.received if item['operation'] == responses.SOURCE_OPERATION
+                      for line in responses.source_lines(item['response']))
+
+        def guard(text):
+            if responses.copies_source(text, lines) or responses.copies_source(disclosure.restore(text), lines):
+                raise MiniaError(NOTE_REFUSED, 'Une note ne recopie pas le code lu : citez le symbole.')
+            return protect(text)
+        return guard
 
     def _close(self, step):
         try:

@@ -228,6 +228,22 @@ def test_source_is_read_only_under_this_request_consent_and_never_replayed(sessi
     assert sent(refused, 1)['notices'][0] == {'notice': 'REFUSED', 'reason': 'NOT_OFFERED', 'operation': 'get_source'}
 
 
+def test_a_note_never_copies_the_code_it_was_shown(session):
+    """INV-10 et § 11 : une note qui reprend une ligne du code lu est refusee ; citer le symbole suffit."""
+    def copying(message):
+        piece = next(item for item in message['slice'] if item['operation'] == 'get_source')['response']['items'][0]
+        line = next(line for line in piece['text'].splitlines() if len(line.strip()) >= 20)
+        return step('note', note_id='n1', text=f'Le contrôleur fait : {line}', nodes=[school.CONTROLLER])
+    model = Scripted(neighborhood(school.CONTROLLER), call('get_source', reference=school.CONTROLLER), copying,
+                     step('note', note_id='n2', text='Le contrôleur délègue au service.', nodes=[school.CONTROLLER]),
+                     final())
+    started = session(model, source_reading='symbol')
+    result = completed(started.investigate(question=QUESTION, source=True))
+
+    assert sent(model, 3)['notices'][-1]['notice'] == 'NOTE_REFUSED'
+    assert [note['note_id'] for note in result['exploration']['notes']] == ['n2']
+
+
 def test_justified_renewal_opens_a_new_slice_under_the_total_cap(session):
     """AC-10 : tranche epuisee, renouvellement justifie sur des branches ouvertes, puis nouvelle tranche ; les
     reponses de la tranche precedente ne sont pas rejouees."""

@@ -17,6 +17,8 @@ EVIDENCE_OPERATION = 'get_evidence'
 REPLAYABLE = frozenset({'get_tile', 'get_neighborhood', 'find_references', 'get_evidence', 'describe'})
 _NATURES = {kind.value: kind for kind in (FrontierKind.SELECTION, FrontierKind.KNOWLEDGE, FrontierKind.CONTEXT)}
 OK = 'OK'
+# Une ligne de code plus courte (accolade, `return x;`) est trop commune pour signer une recopie.
+MIN_COPIED_CHARS = 20
 
 
 def fingerprint(response) -> str:
@@ -112,3 +114,22 @@ def not_sent(response) -> tuple:
         return ()
     return tuple({key: item[key] for key in ('what', 'reason', 'count') if key in item}
                  for item in response.get('not_sent', []) if isinstance(item, dict))
+
+
+def _flat(text):
+    return ' '.join(text.split())
+
+
+def source_lines(response) -> tuple:
+    """Les lignes du code qu'une lecture a livre, espaces normalises, assez longues pour signer une recopie."""
+    if not isinstance(response, dict) or response.get('outcome') != OK:
+        return ()
+    lines = (_flat(line) for item in response.get('items', []) if isinstance(item, dict)
+             and isinstance(item.get('text'), str) for line in item['text'].splitlines())
+    return tuple(line for line in lines if len(line) >= MIN_COPIED_CHARS)
+
+
+def copies_source(text, lines) -> bool:
+    """Le texte reprend-il une ligne du code livre ? Une note cite un symbole, elle ne recopie pas son code (§ 11)."""
+    flat = _flat(text) if isinstance(text, str) else ''
+    return any(line in flat for line in lines)
