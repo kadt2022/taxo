@@ -157,7 +157,7 @@ export function codeConsent(status:MiniaStatus|null){
 }
 
 export function CodeConsent({status, checked, onChange}:ConsentProps){
-  return <Consent consent={codeConsent(status)} checked={checked} onChange={onChange}>Autoriser Minia à lire le code des méthodes qu’elle trouve</Consent>;
+  return <Consent consent={codeConsent(status)} checked={checked} onChange={onChange}>Autoriser Minia à lire le code des classes, méthodes et constructeurs qu’elle trouve</Consent>;
 }
 
 /** Les limites que Taxo constate lui-meme. Ce que Minia dit ne pas savoir n'y figure pas : c'est son texte,

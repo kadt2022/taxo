@@ -37,7 +37,7 @@ type Run = <T>(path:string, init?:RequestInit)=>Promise<T>;
 export function readingNote(reading:SelectionAnswer['source_reading']){
   if(reading?.status==='DISABLED')return 'Lecture du code demandée, mais désactivée sur ce Taxo : Minia n’a lu aucun code.';
   if(reading?.status==='UNAVAILABLE')return 'Lecture du code demandée, mais impossible : la dernière analyse est celle du dossier de travail, sans commit à lire. Minia n’a lu aucun code.';
-  if(reading?.status==='ON_DEMAND')return 'Minia pouvait lire le code des méthodes trouvées, au commit de l’analyse (pas forcément le dernier qui les a modifiées) : chaque lecture figure dans la trajectoire. Ce code n’est pas un fait vérifié.';
+  if(reading?.status==='ON_DEMAND')return 'Minia pouvait lire le code des classes, méthodes et constructeurs trouvés, au commit de l’analyse (pas forcément le dernier qui les a modifiés) : chaque lecture figure dans la trajectoire. Ce code n’est pas un fait vérifié.';
   return '';
 }
 

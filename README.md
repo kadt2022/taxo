@@ -465,8 +465,8 @@ non vérifiée. Les trois colonnes se répartissent ainsi :
 
 En exploration, Minia peut demander la **Tuile** d'une référence déjà reçue selon un profil déclaré
 (`get_tile` : `method-context/1`, `calls/1`, `structure/1`, `security/1`), sur la même analyse. Une Tuile ne
-contient que des faits. Si `TAXO_SOURCE_READING=symbol` et que la case « Autoriser Minia à lire le code des
-méthodes qu'elle trouve » est cochée (`"source": true` dans `POST /api/projects/{id}/ask/stream`), Minia peut aussi
+contient que des faits. Si `TAXO_SOURCE_READING=symbol` et que la case « Autoriser Minia à lire le code des classes,
+méthodes et constructeurs qu'elle trouve » est cochée (`"source": true` dans `POST /api/projects/{id}/ask/stream`), Minia peut aussi
 lire le **code** d'un symbole déjà reçu de Taxo (`get_source`) : la pièce est lue au commit de l'analyse (pas
 forcément le dernier qui a modifié la méthode), garde sa propre classification, passe par la protection de la
 demande, et n'est jamais un fait. Avec un fournisseur distant, la case est décochée par défaut.
