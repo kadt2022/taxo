@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
-from app.minia.application import anchoring, tiles
+from app.minia.application import anchoring, sources, tiles
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
 from app.minia.domain.confidentiality import Disclosure
@@ -197,6 +197,14 @@ def _guarded(events, cancel):
     return run()
 
 
+def _source_reading(requested, exchange):
+    """Ce que la demande permet du code : non demande, demande mais desactive par le reglage, ou lisible a la
+    demande de Minia (`get_source`), symbole par symbole."""
+    if not requested:
+        return _NOT_REQUESTED
+    return _ON_DEMAND if exchange.source_consent else _DISABLED
+
+
 def _packet(fallback, trajectory):
     """Le mode paquet ; en repli d'une exploration, la raison et le chemin deja parcouru."""
     return {'mode': PACKET, **({'fallback': fallback, 'trajectory': trajectory} if fallback else {})}
@@ -292,11 +300,14 @@ class AskMinia:
         """Etat de Minia : fournisseur par defaut, fournisseurs disponibles ; `remote` dit si ce qu'elle recoit
         quitte la machine de Taxo."""
         providers = [_view(model) for model in self.models.values()]
+        # Le reglage du serveur pour le code d'un symbole (`get_source`) : la case d'accord n'est proposee que s'il
+        # le permet ; l'accord de la demande reste necessaire (double consentement, ARCHITECTURE § 12.6).
+        reading = getattr(self.taxo_query, 'source_reading', source_context.OFF)
         if self.default is None:
             return {'configured': False, 'provider': None, 'model': None, 'source_context': self.source,
-                    'remote': False, 'providers': providers}
+                    'source_reading': reading, 'remote': False, 'providers': providers}
         return {'configured': True, **_view(self.models[self.default]), 'source_context': self.source,
-                'providers': providers}
+                'source_reading': reading, 'providers': providers}
 
     def _protected(self, provider, project_id):
         """Le modele de la demande, derriere sa propre protection : tout message y passe avant le fournisseur.
@@ -472,32 +483,37 @@ class AskMinia:
                                   'facts': [_change(ref, brief.refs[ref]) for ref in answer['cited']],
                                   'rejected_citations': answer['rejected']}
 
-    def about_project(self, project_id, question, provider=None):
-        return _final(self.about_project_events(project_id, question, provider))
+    def about_project(self, project_id, question, provider=None, source=False):
+        return _final(self.about_project_events(project_id, question, provider, source=source))
 
-    def about_project_events(self, project_id, question, provider=None, cancel=None):
+    def about_project_events(self, project_id, question, provider=None, cancel=None, source=False):
         """Question sur le projet. Un fournisseur qui sait explorer interroge Taxo operation par operation
-        (MINIA-09) ; sinon, ou en repli, la requete selectionne et Minia n'explique que la selection."""
-        return _guarded(self._project_events(project_id, question, provider, cancel), cancel)
+        (MINIA-09) ; sinon, ou en repli, la requete selectionne et Minia n'explique que la selection.
 
-    def _project_events(self, project_id, question, provider, cancel):
+        `source` : la demande autorise Minia a lire le code d'un symbole (`get_source`, TAXO-MIP-ADT-01 PR C2) ;
+        il n'est lisible que si le reglage TAXO_SOURCE_READING le permet aussi, et toujours protege avant envoi."""
+        return _guarded(self._project_events(project_id, question, provider, cancel, source), cancel)
+
+    def _project_events(self, project_id, question, provider, cancel, source=False):
         question = self._checked(question)
         projection = self.query(project_id, question)
         if projection['status'] == 'SELECTED' and authorship.asks_author(question):
             return self._selection_authors(question, projection)
         model = self._protected(provider, project_id)
-        return _reported(self._project_route(model, question, projection, cancel), model.disclosure)
+        return _reported(self._project_route(model, question, projection, cancel, source), model.disclosure)
 
-    def _project_route(self, model, question, projection, cancel):
+    def _project_route(self, model, question, projection, cancel, source=False):
         project_id = projection['project']['id']
         if self.taxo_query is not None and getattr(model, 'explores', False):
-            exchange = self.taxo_query.open(project_id, max_bytes=self._exchange_bytes(model))
+            # Le code n'est lisible que si le reglage et la demande l'autorisent (double consentement, § 12.6).
+            exchange = self.taxo_query.open(project_id, max_bytes=self._exchange_bytes(model), source_consent=source)
 
             def packet(reason, trajectory):
                 return self._project_steps(model, question, projection, fallback=reason, trajectory=trajectory,
                                            cancel=cancel)
-            return self._explore(model, question, exchange, [], None,
-                                 self._project_result(model, question, projection), packet, cancel)
+            result = {**self._project_result(model, question, projection),
+                      'source_reading': _source_reading(source, exchange)}
+            return self._explore(model, question, exchange, [], None, result, packet, cancel)
         return self._project_steps(model, question, projection, cancel=cancel)
 
     def _explore(self, model, question, exchange, seeds, context, result, packet, cancel=None):
@@ -538,7 +554,8 @@ class AskMinia:
                 yield from packet(f'{operation} : {response["error"]["message"]}', trajectory)
                 return
             if operation == 'describe':
-                operations = [item for item in response.get('items', []) if item.get('kind') == 'operation']
+                operations = [sources.noted(item) for item in response.get('items', [])
+                              if item.get('kind') == 'operation']
                 if self.mip is not None:
                     # Les Tuiles adaptatives (TAXO-MIP-ADT-01, PR C) : un profil déclaré, sur la même analyse.
                     operations.append(tiles.offered())
@@ -557,9 +574,10 @@ class AskMinia:
                 step = exploration.restored(exploration.parse_step(raw), model.disclosure)
                 if isinstance(step, exploration.Answer):
                     break
-                if calls_left <= 0 or step.key in seen:
+                key = sources.key(step, exchanged)
+                if calls_left <= 0 or key in seen:
                     raise MiniaError(INVALID_ANSWER, 'Minia ne progressait plus (opération répétée ou limite atteinte).')
-                seen.add(step.key)
+                seen.add(key)
                 check(cancel)
                 response = self._served(exchange, step, bounded, space, exchanged)
                 exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
@@ -583,9 +601,12 @@ class AskMinia:
 
     def _served(self, exchange, step, bounded, space, exchanged):
         """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, comptée dans
-        le budget de l'échange, toute autre opération par l'échange (qui refuse ce qu'il ne propose pas)."""
+        le budget de l'échange ; le code d'un symbole déjà reçu ; toute autre opération par l'échange (qui refuse ce
+        qu'il ne propose pas)."""
         if step.operation == tiles.OPERATION and self.mip is not None:
             return tiles.request(self.mip, exchange, step.arguments, space, exchanged)
+        if step.operation == sources.OPERATION:
+            return sources.request(exchange, step.arguments, space, exchanged)
         return exchange.call(bounded(step.operation, step.arguments, space))
 
     @staticmethod

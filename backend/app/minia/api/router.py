@@ -33,6 +33,9 @@ class Question(BaseModel):
 class ProjectQuestion(BaseModel):
     question: str
     provider: str | None = None
+    # Accord de la demande pour que Minia lise le code d'un symbole (get_source) ; sans effet si
+    # TAXO_SOURCE_READING vaut off.
+    source: bool = False
 
 
 def _event(event_type, data):
@@ -108,7 +111,8 @@ def create_router(minia):
         **_ERRORS, 409: {'description': 'Aucune analyse globale pour ce projet.'}})
     def ask_project_stream(project_id: str, body: ProjectQuestion):
         cancel = Cancellation()
-        return _stream(minia, minia.about_project_events(project_id, body.question, body.provider, cancel=cancel),
+        return _stream(minia, minia.about_project_events(project_id, body.question, body.provider, cancel=cancel,
+                                                                  source=body.source),
                        cancel)
 
     @router.get('/api/projects/{project_id}/elements', responses={
@@ -121,6 +125,6 @@ def create_router(minia):
     @router.post('/api/projects/{project_id}/ask', responses={
         **_ERRORS, 409: {'description': 'Aucune analyse globale pour ce projet.'}})
     def ask_project(project_id: str, body: ProjectQuestion):
-        return minia.about_project(project_id, body.question, body.provider)
+        return minia.about_project(project_id, body.question, body.provider, source=body.source)
 
     return router
