@@ -62,7 +62,8 @@ _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
 _DISABLED = {'status': 'DISABLED'}
 # En exploration, le diff n'est pas joint d'avance : Minia le demande fichier par fichier (get_diff).
 _ON_DEMAND = {'status': 'ON_DEMAND'}
-# Le code est autorise, mais l'analyse n'est pas celle d'un commit (dossier de travail) : rien n'est lisible.
+# Le code est autorise, mais rien n'est lisible : analyse sans commit (dossier de travail), ou modele qui ne demande
+# pas d'operations (mode paquet seul).
 _UNAVAILABLE = {'status': 'UNAVAILABLE'}
 _NOTHING = ("Taxo n'a vu changer aucun fait dans ce commit, parmi ceux que ses évaluateurs savent produire. "
             "Minia ne peut rien affirmer au-delà.")
@@ -528,7 +529,16 @@ class AskMinia:
                                                            trajectory=trajectory, cancel=cancel), reading)
             result = {**self._project_result(model, question, projection), **reading}
             return self._explore(model, question, exchange, [], None, result, packet, cancel)
-        return self._project_steps(model, question, projection, cancel=cancel)
+        steps = self._project_steps(model, question, projection, cancel=cancel)
+        # Un modèle qui ne demande pas d'opérations ne lit jamais de code : la réponse le dit si l'accord était donné.
+        return _completed_with(steps, {'source_reading': self._unread(source)}) if source else steps
+
+    def _unread(self, requested):
+        """Ce que la demande permettait du code sans exploration : désactivé par le réglage, sinon illisible."""
+        if not requested:
+            return _NOT_REQUESTED
+        enabled = getattr(self.taxo_query, 'source_reading', source_context.OFF) != source_context.OFF
+        return _UNAVAILABLE if enabled else _DISABLED
 
     def _explore(self, model, question, exchange, seeds, context, result, packet, cancel=None):
         """Mode exploration : Taxo ouvre avec `describe` et les operations de depart (`seeds`), Minia demande
