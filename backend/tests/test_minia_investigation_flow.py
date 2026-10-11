@@ -12,7 +12,7 @@ from app.bootstrap.database import Base
 from app.main import create_app
 from app.minia.domain.investigation.budget import BudgetLimits
 from app.minia.domain.investigation.conversation import STEP_SCHEMA, SYSTEM
-from app.minia.domain.errors import UNAVAILABLE, MiniaError
+from app.minia.domain.errors import INVESTIGATION_EXPIRED, UNAVAILABLE, MiniaError
 from app.minia.domain.investigation.identity import Status
 
 import school_sources as school
@@ -405,4 +405,4 @@ def test_an_expired_investigation_is_no_longer_shown(session):
     now = investigations.clock()
     investigations.clock = lambda: now + timedelta(days=8)
     response = started.client.get(url)
-    assert response.status_code == 409 and response.json()['detail'].startswith('INVESTIGATION_EXPIRED')
+    assert response.status_code == 409 and response.json()['detail'].startswith(INVESTIGATION_EXPIRED)
