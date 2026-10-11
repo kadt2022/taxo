@@ -108,9 +108,22 @@ passent toujours par `_explore` et `_verified`. Le récit ne peut pas se clore s
     - les pieds de réponse de `frontend/src/minia.tsx` et `frontend/src/query.tsx` (« Taxo a vérifié chacune de ses
       affirmations », « sans verdict de Taxo ») disent à la place que chaque affirmation a été comparée aux faits
       de la Maille, et que cette comparaison ne juge pas la conclusion de Minia ;
-  - le banc remplace ses deux métriques fondées sur le verdict : « `CONFIRMED` faux » devient « référence citée
-    absente des livraisons » (discordance de la déclaration), et `unjustified()` devient « affirmation sans élément
-    MIP déclaré » ; l'une et l'autre se lisent sur la déclaration finale, jamais sur un verdict.
+    - les autres phrases de `frontend/src/exploration.tsx` : « Minia n'a fait aucune affirmation à vérifier »
+      devient « Minia n'a fait aucune affirmation à comparer », « Taxo n'a vérifié que : … » devient « Taxo n'a
+      comparé que : … », et « Non vérifiable : Taxo n'a pas pu la vérifier » devient « Non comparée : Taxo n'a pas
+      pu la comparer à la Maille » ;
+    - l'étape de progression émise par `backend/app/minia/application/ask.py` (« Taxo vérifie les affirmations de
+      Minia ») devient « Taxo compare les affirmations de Minia à la Maille », et le refus au-delà du plafond
+      (« Taxo ne vérifie plus ») devient « Taxo ne compare plus » ;
+    - le badge « non vérifié » sur ce que Minia déduit reste : il dit vrai, et ne prête aucun verdict à Taxo ;
+  - le banc garde sa mesure de justesse et change seulement ce qu'elle lit :
+    - « `CONFIRMED` faux » compare aujourd'hui une affirmation confirmée par Taxo à la vérité établie à la main
+      (`security_truth`). Elle devient « affirmation fausse au regard de la vérité établie » : chaque affirmation
+      de la réponse est comparée directement à `security_truth`, sans passer par un verdict de Taxo. Une
+      conclusion fausse qui cite pourtant un élément réellement livré reste donc comptée comme fausse ;
+    - s'y ajoute une mesure de traçabilité, « référence citée absente des livraisons » (discordance de la
+      déclaration), qui ne remplace pas la précédente : une citation exacte n'atteste pas une conclusion juste ;
+    - `unjustified()` devient « affirmation sans élément MIP déclaré », lue sur la déclaration finale.
 - Coût : écran et tests Minia ; zéro risque pour les clients du protocole.
 
 ### Option 2 — Dépréciation annoncée
