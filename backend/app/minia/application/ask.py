@@ -21,9 +21,10 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
-from app.minia.application import anchoring, sources, tiles
+from app.minia.application import anchoring, investigation, sources, tiles
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
+from app.minia.domain.investigation import conversation
 from app.minia.domain.confidentiality import Disclosure
 from app.minia.domain.cancellation import STOPPED, check
 from app.minia.domain.answer import SYSTEM, SYSTEM_SELECTION, SYSTEM_TILE, AnswerStream, parse, with_diff
@@ -239,6 +240,11 @@ def _step(operation, arguments, response):
     return entry
 
 
+def _generation(exchange):
+    """La generation des faits de l'analyse de l'echange : une enquete n'est jamais poursuivie sur une autre."""
+    return None if exchange is None else exchange.facts.revision(exchange.scan.id)
+
+
 def _models(models):
     """Modeles par fournisseur ; un modele seul (ou None) est accepte pour garder l'ancien usage."""
     if models is None:
@@ -274,7 +280,7 @@ class AskMinia:
     """
 
     def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None,
-                 taxo_query=None, mip=None):
+                 taxo_query=None, mip=None, investigations=None):
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
         self.history, self.projects, self.query = history, projects, query
@@ -282,6 +288,8 @@ class AskMinia:
         self.taxo_query = taxo_query
         # Service MIP (récit TAXO-01N / MIP-01) : la Tuile d'un élément nommé, en repli paquet hors Git.
         self.mip = mip
+        # Enquêtes navigables et leur carnet (récit TAXO-MINIA-ENQUETE-01) : sans elles, le parcours n'est pas servi.
+        self.investigations = investigations
         self.models, self.source = _models(models), source
         if default is not None and default not in self.models:
             raise ValueError(f'MINIA_PROVIDER : « {default} » n’est pas configuré ({", ".join(self.models) or "aucun"}).')
@@ -544,6 +552,63 @@ class AskMinia:
             return _NOT_REQUESTED
         enabled = getattr(self.taxo_query, 'source_reading', source_context.OFF) != source_context.OFF
         return _UNAVAILABLE if enabled else _DISABLED
+
+    def investigate_events(self, project_id, question=None, provider=None, cancel=None, source=False,
+                           investigation_id=None, resume_question=None):
+        """Enquête navigable (récit TAXO-MINIA-ENQUETE-01) : une enquête nouvelle sur `question`, ou la reprise de
+        `investigation_id` avec sa question confirmée. La demande est validée tout de suite (projet, fournisseur,
+        enquête, instantané), puis ses étapes sont rendues. `resume_question` : la version minimisée de la question,
+        confirmée par l'utilisateur, seule conservée pour une reprise. `source` : l'accord de cette demande pour lire
+        le code (double consentement, jamais hérité d'une demande passée)."""
+        if self.investigations is None or self.taxo_query is None:
+            raise MiniaError(NOT_CONFIGURED, 'L’enquête navigable n’est pas configurée sur ce serveur.')
+        project = require_project(self.projects, project_id)
+        model = self._protected(provider, project_id)
+        if not getattr(model, 'explores', False):
+            raise MiniaError(NOT_CONFIGURED, 'Ce fournisseur ne demande pas d’opérations à Taxo : l’enquête '
+                             'navigable exige un modèle qui explore.')
+        max_bytes = investigation.exchange_bytes(self.investigations.settings.limits)
+        if investigation_id:
+            if question:
+                raise MiniaError(INVALID_QUESTION, 'Une reprise utilise la question confirmée de l’enquête.')
+            stored = self.investigations.load(project_id, investigation_id)
+            exchange = self._investigation_exchange(project_id, max_bytes, source,
+                                                    stored.investigation.snapshot.analysis_id)
+            state, question = self.investigations.resume(stored, exchange, _generation(exchange))
+            not_resumable = None
+        else:
+            question = self._checked(question)
+            exchange = self.taxo_query.open(project_id, max_bytes=max_bytes, source_consent=source)
+            state, question, not_resumable = self.investigations.open(
+                project_id, question, exchange, _generation(exchange), investigation.guard_with(model.disclosure),
+                resume_question)
+        turn = investigation.Turn(
+            ask=lambda text: _waiting(lambda: _complete(model, conversation.SYSTEM, text, conversation.STEP_SCHEMA,
+                                                        cancel), cancel),
+            serve=self._served, disclosure=model.disclosure, capacity=self._capacity(model, conversation.SYSTEM),
+            author=model.model_name)
+        base = {'model': self._model_view(model), 'project': {'id': project.id, 'name': project.name},
+                'source_reading': _source_reading(source, exchange)}
+        steps = self.investigations.run(state, question, exchange, tiles.offered() if self.mip else None, turn,
+                                        cancel, not_resumable, base)
+        return _guarded(_reported(steps, model.disclosure), cancel)
+
+    def investigation(self, project_id, investigation_id):
+        """Le carnet d'une enquête, pour l'affichage : état compact et livraisons, jamais un contenu."""
+        if self.investigations is None:
+            raise MiniaError(NOT_CONFIGURED, 'L’enquête navigable n’est pas configurée sur ce serveur.')
+        require_project(self.projects, project_id)
+        return self.investigations.view(project_id, investigation_id)
+
+    def _investigation_exchange(self, project_id, max_bytes, source, analysis_id):
+        """L'échange sur l'analyse de l'enquête ; None si elle n'existe plus (l'enquête devient historique)."""
+        try:
+            return self.taxo_query.open(project_id, max_bytes=max_bytes, analysis_id=analysis_id,
+                                        source_consent=source)
+        except QueryError as exc:
+            if exc.code != NO_ANALYSIS:
+                raise
+            return None
 
     def _explore(self, model, question, exchange, seeds, context, result, packet, cancel=None):
         """Mode exploration : Taxo ouvre avec `describe` et les operations de depart (`seeds`), Minia demande

@@ -1064,6 +1064,52 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
    protégé, sans aucune valeur. Rien n'est conservé : ni la question, ni la réponse, ni la trajectoire, qui
    ne porte que les opérations, leurs arguments et leurs issues. Le journal d'accès de l'API ne garde que
    le nom des paramètres d'adresse, jamais leur valeur : la question passée dans l'adresse n'y est pas écrite.
+   Seule exception, l'enquête navigable (§ 12.7) : son carnet minimisé est conservé, jamais la question brute,
+   le code, ni les messages du modèle.
+
+### 12.7 Enquête navigable et mémoire de parcours (TAXO-MINIA-ENQUETE-01, lots A à C)
+
+**Taxo est le cartographe, Minia la commissionnaire, le modèle l'enquêteur.** Un second parcours de Minia,
+`POST /api/projects/{id}/investigations/stream`, coexiste avec l'exploration (§ 12.5), qui ne change pas :
+
+- **Enquête.** Liée à un périmètre (pour ce poste : le projet, Taxo n'authentifiant pas ses utilisateurs), à une
+  analyse **et** à la génération de ses faits. Une enquête d'une génération ne se poursuit jamais sur une autre :
+  elle devient historique (`STALE`). États `ACTIVE`, `PAUSED`, `COMPLETE`, `EXPIRED`, `STALE`.
+- **Carnet** (`app/minia/domain/investigation`) : nœuds développés et actions, arêtes distinctes par occurrence
+  (convergences et cycles conservés), frontières par nature (sélection, connaissance, contexte, jamais
+  confondues ; plus les nœuds découverts non développés), reçus de code **sans texte**, opérations (journal A),
+  livraisons au modèle (journal B), notes `HYPOTHESIS_LLM` et budget. Développer un nœud et lire son code sont
+  deux statuts indépendants.
+- **Tours.** Le modèle reçoit la question, les opérations proposées (sans `verify_claim`), un **état compact**
+  borné dérivé du carnet et les réponses de la tranche, chacune avec son `delivery_id`. Il demande une opération,
+  écrit ou révise une note, demande une nouvelle tranche, ou répond. Une Tuile s'arrête à une profondeur ; la
+  suivante part d'un nœud de sa frontière : aucune profondeur globale n'est fixée.
+- **Livraison.** Une réponse de Taxo n'est inscrite comme transmise qu'après l'envoi effectif du message ; ce qui
+  a été obtenu sans être transmis le reste au journal. Le carnet est enregistré à chaque tour.
+- **Budget.** Par tranche (8 opérations, 64 Ko au départ), plafond total (18 opérations, 160 Ko, 2
+  renouvellements), à calibrer par mesure. Un renouvellement est contrôlé mécaniquement : tranche épuisée,
+  justification, branches ouvertes connues du carnet, progrès depuis le précédent, plafonds. Une même demande sans
+  progrès est signalée avec les branches ouvertes.
+- **Mémoire vive.** Dans une même demande, une Tuile, une recherche ou une preuve déjà servie peut être rejouée
+  sans nouvel appel à Taxo, comme livraison distincte liée à l'origine. Jamais le code ni un diff, jamais au-delà
+  de la demande.
+- **Réponse.** Une déclaration structurée : `answer`, `used_mip_items` (`mip_reference`, `delivery_id`, `kind`)
+  et `remaining_unknowns`. Minia confronte des identifiants au journal B : `DELIVERED`, `UNKNOWN_DELIVERY`,
+  `REFERENCE_MISMATCH`, `KIND_MISMATCH`, `MALFORMED`, ou `EARLIER_RUN` pour une livraison d'une passe précédente,
+  dont le contenu n'a pas été rejoué au modèle de cette passe. Une correspondance atteste une livraison, jamais une
+  lecture ni une interprétation juste ; **aucun verdict de Taxo sur la conclusion du modèle**. La restitution a
+  trois zones : ce que Taxo a transmis, l'exploration et les notes du modèle, ce qui reste hors périmètre ou non
+  exploré.
+- **Reprise.** Seule la version minimisée de la question **confirmée par l'utilisateur** (`resume_question`),
+  protégée, est conservée ; sans elle, l'enquête n'est pas reprenable. Une reprise réévalue droits et
+  consentements de la demande ; aucun code n'est restitué, les références sont revalidées par le protocole.
+- **Stockage.** Un port `ParcoursMemoryStore`, un adaptateur SQLite en mode WAL (`MINIA_INVESTIGATIONS_DB`,
+  créé à la première enquête) : état et journal dans la même transaction, révision contrôlée, schéma versionné,
+  empreinte vérifiée. Une enquête inactive expire (`MINIA_INVESTIGATION_DAYS`, 7 jours) ; la suppression est
+  logique. Lecture du carnet : `GET /api/projects/{id}/investigations/{investigation}`.
+
+`verify_claim` et ses verdicts restent inchangés pour l'exploration et le protocole `taxo-query/1` ; leur avenir est
+l'objet du lot D, soumis à arbitrage.
 
 ## 13. Hypothèses statistiques (Proposé, capacité non branchée)
 
@@ -1386,3 +1432,10 @@ transport ni d'un langage (§ 12.0). Décisions : `taxo-query/1` en est la premi
 Minia et l'Explorer en sont des consommateurs ; ce qui existe, ce qui est à construire et ce qui est proposé est
 tenu au § 12.0. Aucune opération, aucune sémantique ne change. Première réalisation : MIP 0.1, adaptateur sur
 `taxo-query/1` qui sert `EXPAND` et refuse `PROJECT` ; l'opération `run_plan` un temps envisagée est abandonnée.
+
+**2026-10-11** — Enquête navigable et mémoire de parcours (TAXO-MINIA-ENQUETE-01, lots A à C). Minia tient le
+carnet d'une enquête conduite par le modèle : nœuds développés, branches ouvertes, reçus de code sans texte, journal
+des opérations et des livraisons, notes `HYPOTHESIS_LLM`, budget renouvelable par tranche ; le carnet persiste en
+SQLite (WAL, révision attendue) et se reprend tant que la génération de l'analyse n'a pas changé (§ 12.7). Aucun
+verdict sur les conclusions du modèle : `verify_claim` n'est pas proposé dans l'enquête. Ni `taxo-query/1` ni la
+sémantique de `verify_claim` ne changent.

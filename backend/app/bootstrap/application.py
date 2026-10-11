@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from fastapi import FastAPI
 from app.platform.database.engine import database_engine
 from app.platform.database.schema import require_current_schema
@@ -33,6 +35,9 @@ from app.history.application.recorded import RecordedImpact
 from app.history.infrastructure.git_history import GitHistoryReader
 from app.history.api.router import create_router as history_router
 from app.minia.application.ask import AskMinia
+from app.minia.application.investigation import Investigations, InvestigationSettings
+from app.minia.domain.investigation.identity import ExpiryPolicy
+from app.minia.infrastructure.investigation_store import SqliteParcoursMemoryStore
 from app.projection.application.query import ProjectQuery
 from app.projection.api.router import create_router as query_router
 from app.protocol.application.exchange import TaxoQuery
@@ -50,6 +55,16 @@ _FROM_SETTINGS = object()
 
 
 PROVIDERS = ('ollama', 'claude', 'gemini', 'mistral')
+
+
+def minia_investigations(path=None):
+    options = settings.minia_investigations(path)
+
+    def opened():
+        options['path'].parent.mkdir(parents=True, exist_ok=True)
+        return SqliteParcoursMemoryStore(options['path'])
+    return Investigations(settings=InvestigationSettings(policy=ExpiryPolicy(timedelta(days=options['days']))),
+                          store_factory=opened)
 
 
 def minia_models(options):
@@ -77,7 +92,7 @@ def minia_model(options):
 
 
 def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_store=None, minia=_FROM_SETTINGS,
-               source_context=None, source_reading=None):
+               source_context=None, source_reading=None, investigations_path=None):
     engine = database_engine(settings.database_url(database_url))
     # Une base en retard sur le code ferait echouer chaque page qui lit une colonne recente : l'API ne demarre pas.
     require_current_schema(engine)
@@ -137,7 +152,8 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     models = minia_models(options) if minia is _FROM_SETTINGS else minia
     default = options['provider'] if minia is _FROM_SETTINGS and options['provider'] in models else None
     # Le diff d'un commit ne lui est joint que si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise (ARCHITECTURE § 12.6).
+    # Le carnet des enquêtes navigables (récit TAXO-MINIA-ENQUETE-01) : un fichier SQLite WAL ouvert à la première.
     api.state.minia = AskMinia(history, models, projects, query, source, default, taxo_query=api.state.taxo_query,
-                               mip=mip)
+                               mip=mip, investigations=minia_investigations(investigations_path))
     api.include_router(minia_router(api.state.minia))
     return api
