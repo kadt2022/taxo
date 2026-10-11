@@ -11,9 +11,10 @@ from datetime import datetime
 from ..errors import INVESTIGATION_INVALID, INVESTIGATION_STALE, MiniaError
 from . import notes as hypotheses
 from .budget import Budget, BudgetLimits, RenewalDecision, RenewalRequest
-from .identity import (ExpiryPolicy, Investigation, OwnerScope, Snapshot, Status, TextGuard, aware, confirm_question,
-                       open_investigation)
-from .logbook import Action, Delivery, Logbook, OperationOutcome, OperationRecord, Repetition, SourceReceipt
+from .identity import (WRITABLE, ExpiryPolicy, Investigation, OwnerScope, Snapshot, Status, TextGuard, aware,
+                       confirm_question, open_investigation)
+from .logbook import (Action, Delivery, InFlight, Logbook, OperationOutcome, OperationRecord, Repetition, SourceReceipt,
+                      uncertain)
 from .values import plain as _plain
 
 DIRECT_ACTIONS = frozenset({Action.EVIDENCE, Action.REFERENCES})
@@ -27,6 +28,7 @@ class EventKind:
     RECEIPT = 'RECEIPT'
     DELIVERY = 'DELIVERY'
     OPERATION = 'OPERATION'
+    IN_FLIGHT = 'IN_FLIGHT'
     REPETITION = 'REPETITION'
     NOTE = 'NOTE'
     RENEWAL = 'RENEWAL'
@@ -48,6 +50,8 @@ class InvestigationState:
     budget: Budget
     logbook: Logbook = field(default_factory=Logbook)
     notes: tuple = ()
+    # Les operations dont la reponse part au modele, inscrites avant l'envoi (journal B ecrit a l'avance).
+    in_flight: tuple = ()
     pending: tuple = ()
 
     @classmethod
@@ -111,16 +115,49 @@ class InvestigationState:
         """Une operation demandee a Taxo, comptee dans le budget, et le signal de repetition s'il y a lieu. Une
         operation interrompue compte : elle est partie, meme si rien de son resultat n'est inscrit."""
         self._writable_on(snapshot)
+        return self._operation(record, response_bytes)
+
+    def announce(self, snapshot: Snapshot, items, at: datetime) -> 'InvestigationState':
+        """Les operations dont la reponse va partir au modele, inscrites avant l'envoi. L'envoi et l'ecriture du
+        carnet ne tiennent pas dans une meme transaction : si le processus s'arrete entre les deux, la reprise les
+        inscrit comme peut-etre transmises (`settle_in_flight`), jamais comme absentes."""
+        self._writable_on(snapshot)
+        items = tuple(items)
+        if self.in_flight:
+            raise MiniaError(INVESTIGATION_INVALID, 'Un envoi précédent n’est pas encore inscrit.')
+        if not all(isinstance(item, InFlight) for item in items):
+            raise MiniaError(INVESTIGATION_INVALID, 'Seule une opération en partance s’annonce.')
+        event = Event(EventKind.IN_FLIGHT, at, {'operations': [item.record.name for item in items],
+                                                'delivery_ids': [delivery_id for item in items
+                                                                 for delivery_id in item.record.delivery_ids]})
+        return self._changed(event, at, in_flight=items)
+
+    def landed(self) -> 'InvestigationState':
+        """L'envoi est atteste et ses operations inscrites avec leurs livraisons : l'annonce est levee."""
+        return replace(self, in_flight=())
+
+    def settle_in_flight(self) -> 'InvestigationState':
+        """Les operations annoncees dont l'envoi n'a jamais ete atteste : chacune s'inscrit peut-etre transmise.
+        C'est un fait passe de l'enquete, inscrit meme si elle ne recoit plus d'operation (pause, expiration)."""
+        state = self
+        for item in self.in_flight:
+            state, _ = state._operation(uncertain(item.record), item.response_bytes)
+        return replace(state, in_flight=())
+
+    def _operation(self, record: OperationRecord, response_bytes: int):
         if record.outcome is OperationOutcome.INTERRUPTED and record.delivery_ids:
             raise MiniaError(INVESTIGATION_INVALID, 'Une opération interrompue n’a rien transmis.')
         budget = self.budget.spend(response_bytes)
+        snapshot = self.investigation.snapshot
         logbook, repetition = self.logbook.with_operation(record, snapshot.analysis_id, snapshot.generation_id)
         events = [Event(EventKind.OPERATION, record.at, {**_plain(record), 'bytes': response_bytes})]
         if repetition is not None:
             events.append(Event(EventKind.REPETITION, record.at, {'count': repetition.count,
                                                                     'open_branches': list(repetition.open_branches)}))
-        state = self._changed(events[0], record.at, logbook=logbook, budget=budget)
-        return replace(state, pending=state.pending + tuple(events[1:])), repetition
+        state = replace(self, logbook=logbook, budget=budget, pending=self.pending + tuple(events))
+        if self.investigation.status in WRITABLE:
+            state = replace(state, investigation=self.investigation.touched(record.at, self.policy))
+        return state, repetition
 
     # Notes ------------------------------------------------------------------------------------------------
 

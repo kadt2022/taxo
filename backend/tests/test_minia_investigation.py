@@ -12,8 +12,9 @@ from app.minia.domain.investigation.codec import (SCHEMA_VERSION, event_from_doc
                                                   from_document, to_document)
 from app.minia.domain.investigation.identity import ExpiryPolicy, OwnerScope, Snapshot, Status, ensure_resumable
 from app.minia.domain.investigation.logbook import (Action, Delivery, DeliveryKind, Edge, FrontierEntry,
-                                                    FrontierKind, OperationOutcome, OperationRecord, ReceiptStatus,
-                                                    SourceReceipt, request_key)
+                                                    FrontierKind, InFlight, OperationOutcome, OperationRecord,
+                                                    ReceiptStatus, SourceReceipt, TRANSMISSION_UNCERTAIN,
+                                                    request_key)
 from app.minia.domain.investigation.notes import KIND, MAX_NOTE_CHARS, MAX_NOTE_NODES, NoteStatus, open_notes
 from app.minia.domain.investigation.state import EventKind, InvestigationState
 
@@ -174,6 +175,54 @@ def test_an_interrupted_operation_delivers_nothing_but_counts():
     assert repetition is None
     assert state.budget.total_operations == 1
     assert state.logbook.deliveries == ()
+
+
+def test_an_announced_operation_survives_a_stop_as_possibly_transmitted():
+    """AC-06 : l'envoi au modele et l'ecriture du carnet ne tiennent pas dans une transaction. L'operation annoncee
+    avant l'envoi est relue apres un arret du processus, puis inscrite peut-etre transmise, jamais absente."""
+    announced = opened().announce(SNAPSHOT, [InFlight(operation(deliveries=('D-1',)), 300)], at(5))
+    assert announced.pending[-1].kind == EventKind.IN_FLIGHT
+    assert announced.pending[-1].data == {'operations': ['get_tile'], 'delivery_ids': ['D-1']}
+
+    restored = from_document(to_document(without_pending(announced)))
+    assert restored.in_flight == announced.in_flight
+
+    settled = restored.settle_in_flight()
+    record = settled.logbook.operations[-1]
+    assert settled.in_flight == ()
+    assert record.delivery_ids == ()
+    assert record.not_sent == ({'what': 'response', 'reason': TRANSMISSION_UNCERTAIN},)
+    assert settled.logbook.deliveries == ()
+    assert settled.budget.total_operations == 1 and settled.budget.total_bytes == 300
+
+
+def test_a_paused_investigation_still_settles_what_it_announced():
+    """Le carnet d'une enquete en pause recoit le fait passe ; il ne recoit aucune nouvelle operation."""
+    announced = opened().announce(SNAPSHOT, [InFlight(operation(), 10)], at(5))
+    paused = announced.move_to(Status.PAUSED, at(6))
+    with pytest.raises(MiniaError):
+        paused.record_operation(SNAPSHOT, operation(), 10)
+
+    settled = paused.settle_in_flight()
+
+    assert len(settled.logbook.operations) == 1
+    assert settled.investigation.status is Status.PAUSED
+    assert settled.investigation.last_activity_at == announced.investigation.last_activity_at
+
+
+def test_an_attested_send_lifts_the_announcement_and_only_one_waits_at_a_time():
+    announced = opened().announce(SNAPSHOT, [InFlight(operation(), 10)], at(5))
+    with pytest.raises(MiniaError) as error:
+        announced.announce(SNAPSHOT, [InFlight(operation(minutes=6), 10)], at(6))
+    assert error.value.code == INVESTIGATION_INVALID
+    with pytest.raises(MiniaError):
+        opened().announce(SNAPSHOT, [operation()], at(5))
+    with pytest.raises(MiniaError) as error:
+        opened().announce(OTHER_GENERATION, [InFlight(operation(), 10)], at(5))
+    assert error.value.code == INVESTIGATION_STALE
+
+    assert announced.landed().in_flight == ()
+    assert announced.landed().settle_in_flight().logbook.operations == ()
 
 
 def test_delivery_ids_are_unique_and_replays_cite_their_origin():

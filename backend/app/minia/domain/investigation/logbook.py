@@ -52,6 +52,11 @@ class OperationOutcome(StrEnum):
     INTERRUPTED = 'INTERRUPTED'
 
 
+# La raison inscrite quand une reponse a peut-etre ete transmise au modele, sans que rien ne l'atteste : appel au
+# modele coupe, ou processus arrete entre l'envoi et l'ecriture du journal B.
+TRANSMISSION_UNCERTAIN = 'TRANSMISSION_UNCERTAIN'
+
+
 class DeliveryKind(StrEnum):
     TILE = 'TILE'
     FACT = 'FACT'
@@ -123,6 +128,21 @@ class Delivery:
     at: datetime
     # La livraison anterieure dont celle-ci est une nouvelle transmission, sans nouvel appel a Taxo (AC-18).
     replay_of: str | None = None
+
+
+@dataclass(frozen=True)
+class InFlight:
+    """Une operation dont la reponse part au modele : inscrite avant l'envoi, pour qu'un arret du processus pendant
+    l'appel laisse une trace de l'exposition possible. Elle porte la taille de la reponse, comptee au budget quand
+    l'operation s'inscrit."""
+    record: OperationRecord
+    response_bytes: int
+
+
+def uncertain(record: OperationRecord) -> OperationRecord:
+    """L'operation dont la transmission n'est pas attestee : ni livree, ni retenue, mais peut-etre partie."""
+    return replace(record, delivery_ids=(),
+                   not_sent=record.not_sent + ({'what': 'response', 'reason': TRANSMISSION_UNCERTAIN},))
 
 
 def request_key(analysis_id, generation_id, name, arguments):

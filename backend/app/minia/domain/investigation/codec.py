@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 from ..errors import INVESTIGATION_INVALID, MiniaError
 from .budget import Budget, BudgetLimits
 from .identity import ExpiryPolicy, Investigation, OwnerScope, Snapshot, Status
-from .logbook import (Action, Delivery, DeliveryKind, Edge, FrontierEntry, FrontierKind, Logbook, OperationOutcome,
-                      OperationRecord, ReceiptStatus, SourceReceipt)
+from .logbook import (Action, Delivery, DeliveryKind, Edge, FrontierEntry, FrontierKind, InFlight, Logbook,
+                      OperationOutcome, OperationRecord, ReceiptStatus, SourceReceipt)
 from .notes import Hypothesis, NoteStatus
 from .state import Event, InvestigationState
 from .values import plain, simple
@@ -39,6 +39,8 @@ def to_document(state: InvestigationState) -> dict:
             'deliveries': [plain(delivery) for delivery in state.logbook.deliveries],
         },
         'notes': [plain(note) for note in state.notes],
+        'in_flight': [{'record': plain(item.record), 'response_bytes': item.response_bytes}
+                      for item in state.in_flight],
     }
 
 
@@ -50,7 +52,9 @@ def from_document(document: dict) -> InvestigationState:
         return InvestigationState(_investigation(document['investigation']),
                                   ExpiryPolicy(timedelta(seconds=document['inactivity_seconds'])),
                                   _budget(document['budget']), _logbook(document['logbook']),
-                                  tuple(_note(item) for item in document['notes']))
+                                  tuple(_note(item) for item in document['notes']),
+                                  tuple(InFlight(_operation(item['record']), int(item['response_bytes']))
+                                        for item in document['in_flight']))
     except MiniaError:
         raise
     except (KeyError, TypeError, ValueError) as exc:
@@ -97,14 +101,17 @@ def _logbook(data):
         receipts=tuple(SourceReceipt(item['reference'], item['transmission_id'], ReceiptStatus(item['status']),
                                      item['classification'], item['fingerprint'], item['reason'])
                        for item in data['receipts']),
-        operations=tuple(OperationRecord(item['name'], item['arguments'], OperationOutcome(item['outcome']),
-                                         _at(item['at']), item['response_fingerprint'], tuple(item['delivery_ids']),
-                                         tuple(item['not_sent']), item['progress'])
-                         for item in data['operations']),
+        operations=tuple(_operation(item) for item in data['operations']),
         deliveries=tuple(Delivery(item['delivery_id'], item['mip_reference'], DeliveryKind(item['kind']),
                                   _at(item['at']), item['replay_of'])
                          for item in data['deliveries']),
     )
+
+
+def _operation(item):
+    return OperationRecord(item['name'], item['arguments'], OperationOutcome(item['outcome']), _at(item['at']),
+                           item['response_fingerprint'], tuple(item['delivery_ids']), tuple(item['not_sent']),
+                           item['progress'])
 
 
 def _note(item):
