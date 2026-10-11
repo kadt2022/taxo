@@ -38,3 +38,9 @@ def minia_source_context(value=None):
     """Code source que Minia peut recevoir : `off` (defaut, aucun) ou `diff` (le diff d'un commit, sur
     accord de chaque demande). Avec un Ollama distant, `diff` fait sortir du code de la machine."""
     return (value or os.getenv('MINIA_SOURCE_CONTEXT', 'off')).strip().lower()
+
+
+def taxo_source_reading(value=None):
+    """Lecture du code d'un symbole par le protocole (`get_source`) : `off` (defaut) ou `symbol`, sur accord de chaque
+    echange. Reglage distinct de MINIA_SOURCE_CONTEXT : l'accord du diff n'autorise jamais la lecture du code."""
+    return (value or os.getenv('TAXO_SOURCE_READING', 'off')).strip().lower()

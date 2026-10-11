@@ -430,7 +430,11 @@ POST /api/projects/{id}/taxo-query
 - `diff_facts` (réservée par le protocole, activée par TAXO-MINIA-09b) rend les faits qu'un commit introduit, modifie
   ou retire, d'après l'impact (comparaison avec le premier parent). Ce sont des changements, sans référence
   `F…`, avec la localisation de leurs preuves.
-- Les autres opérations réservées (`find_endpoint`, `find_callers`, `get_source`…) répondent `NOT_AVAILABLE`
+- **`get_source`** (TAXO-MIP-ADT-01) rend le code d'un symbole déclaré (type, méthode, constructeur), jamais un
+  fichier ni un chemin, au commit de l'analyse (jamais pour l'analyse du dossier de travail). Elle n'est proposée que si `TAXO_SOURCE_READING=symbol` (défaut
+  `off`) et que l'échange l'autorise (`"consent": {"source": true}`) ; l'accord du diff ne l'autorise jamais.
+  Minia ne la demande pas.
+- Les autres opérations réservées (`find_endpoint`, `find_callers`…) répondent `NOT_AVAILABLE`
   tant qu'aucun analyseur ne les nourrit.
 
 ### Minia interroge Taxo (TAXO-MINIA-09, ARCHITECTURE § 12)

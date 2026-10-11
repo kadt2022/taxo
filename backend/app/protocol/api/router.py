@@ -17,6 +17,8 @@ _ERRORS = {404: {'description': 'Projet introuvable.'},
 
 class Consent(BaseModel):
     diff: bool = Field(False, description='Autoriser la lecture des blocs modifiés d’un commit (ARCHITECTURE § 12.6).')
+    source: bool = Field(False, description='Autoriser la lecture du code d’un symbole (get_source) ; l’accord du diff '
+                                            'ne l’autorise jamais (ARCHITECTURE § 12.6).')
 
 
 class Operation(BaseModel):
@@ -40,7 +42,7 @@ def create_router(taxo_query):
     @router.post('/api/projects/{project_id}/taxo-query', responses=_ERRORS)
     def exchange(project_id: str, body: ExchangeRequest):
         opened = taxo_query.open(project_id, diff_consent=body.consent.diff, max_bytes=body.max_bytes,
-                                analysis_id=body.analysis)
+                                analysis_id=body.analysis, source_consent=body.consent.source)
         responses = [opened.call(item.model_dump()) for item in body.requests]
         return {'protocol': PROTOCOL, 'snapshot': opened.snapshot,
                 'budget': {'max_bytes': opened.budget, 'used': opened.used}, 'responses': responses}

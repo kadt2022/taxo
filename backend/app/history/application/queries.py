@@ -83,6 +83,21 @@ class ProjectHistory:
         commit, base = self._commit_and_parent(root, sha, parent)
         return self.reader.files(root, commit.sha, base), lambda changed: self._file_diff(root, commit, base, changed)
 
+    def source(self, project_id, revision, path):
+        """Le contenu de `path` dans `revision`, avec les refus du diff : `(octets, None)`, ou `(None, raison)` pour un
+        fichier confidentiel, un lien, un sous-module, un fichier trop gros ou binaire. Rien n'est conservé."""
+        if is_confidential(path):
+            return None, CONFIDENTIAL
+        _, root = self._root(project_id)
+        blob = self.reader.blob(root, revision, path)
+        if blob is None:
+            raise HistoryError(UNKNOWN_PATH, "Ce fichier n'existe pas dans ce commit.")
+        reason = refusal([blob])
+        if reason:
+            return None, reason
+        content = self.reader.content(root, blob.oid)
+        return (content, None) if as_text(content) is not None else (None, BINARY)
+
     def _file_diff(self, root, commit, base, changed):
         before_path = changed.old_path or changed.path
         result = {'path': changed.path, 'old_path': changed.old_path, 'status': changed.status,

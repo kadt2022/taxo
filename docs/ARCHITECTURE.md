@@ -937,7 +937,7 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 | `get_neighborhood` | voisinage explicite, à un saut (`neighborhood/1`) ou sur plusieurs niveaux (`neighborhood/2`), avec reprises, frontière localisée et preuves accessibles | Existant ; profils servis par MIP `EXPAND` (§ 9.5, TAXO-MIP-ADT-01) |
 | `find_references` | références de l'analyse qui commencent par un préfixe, page bornée avec reprise ; avec `match: NAME`, celles qui se retrouvent sous un nom simple ou qualifié (une fin de clé prise à un début de segment, séparateurs `. / # : $` confondus, un séparateur en tête du nom ignoré pour qu'un chemin `/api/students` se retrouve, liste de paramètres lue sur les seuls symboles appelables), chacune une fois, sans descendants | Existant (TAXO-01J) ; `match: NAME` (TAXO-01N, PR A2) |
 | `find_callers`, `find_callees`, `find_dependencies`, `find_configuration`, `trace_access_control`, `find_endpoint` | questions génériques | réservées, activées par les analyseurs |
-| `get_source` | code d'un **symbole**, jamais un fichier entier, sous son propre consentement | réservée |
+| `get_source` | code d'un **symbole** déclaré (type, méthode, constructeur ; une surcharge par sa signature), jamais un fichier entier ni un chemin, lu au commit de l'analyse, sous son propre double consentement ; une pièce source avec sa classification, jamais un fait | Existant (TAXO-MIP-ADT-01, PR B) ; non transmis à Minia |
 
 `describe` ne propose que les opérations servables pour le projet. Correspondance avec les opérations
 d'une Tuile adaptative : CAPABILITIES = `describe`, TILE et EXPAND = `get_neighborhood`, VERIFY =
@@ -1017,7 +1017,18 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
      (`"consent": {"diff": true}`). Seuls les blocs modifiés sont transmis (20 fichiers, 1 500 lignes,
      32 Ko, après les faits), jamais un fichier entier ; un fichier qui dépasse est nommé et non
      transmis ;
-   - `get_source` : son **propre** double consentement ; l'accord du diff ne l'autorise jamais ;
+   - `get_source` : son **propre** double consentement, réglage serveur `TAXO_SOURCE_READING=symbol` (défaut
+     `off`) **et** accord de l'échange (`"consent": {"source": true}`) ; l'accord et le réglage du diff ne
+     l'autorisent jamais, et `describe` ne la propose qu'à un échange qui l'a autorisée. La référence est un
+     symbole, jamais un chemin : le fichier et la ligne viennent de la preuve de sa déclaration (`CONTAINS`
+     observé, une seule), au commit de l'analyse, qui doit être l'analyse d'un commit (jamais celle du
+     dossier de travail, dont le code lu ne serait pas celui du commit) ; le code n'est rendu que si les lignes de cette preuve ont la
+     même empreinte, et que l'analyseur qui l'a déclarée retrouve la déclaration à cette ligne (la plage est la
+     sienne : le protocole ne lit aucun langage). Une pièce : 200 lignes, 16 Ko, coupée sur une ligne entière et
+     dite `truncated`. Sinon, `not_sent` dit pourquoi (`CONFIDENTIAL`, `GENERATED`, `BINARY`, `TOO_LARGE`,
+     `NOT_A_REGULAR_FILE`, `CHANGED`, `NOT_DECLARED`, `LIMIT`). Sa classification (`source-classification/1`)
+     n'annonce `CODE_SOURCE` que si du code est transmis ; ses restrictions (`source-disclosure/1`) sont à part.
+     Rien de ce qui est lu n'est conservé. Minia ne la demande pas avant la clôture de TAXO-MINIA-SEC-01 ;
    - avec un fournisseur distant, le portail avertit que le contenu quittera la machine, et la case n'est
      pas cochée par défaut.
 5. Cloisonnement : un échange ne voit qu'un projet et un instantané.

@@ -86,7 +86,7 @@ class Twin:
             store.add(scan, 'fixture', copy.deepcopy(facts))
 
     def exchange(self, name):
-        service = SimpleNamespace(facts=self.stores[name], source_context='off',
+        service = SimpleNamespace(facts=self.stores[name], source_context='off', source_reading='off', readers={},
                                   catalogs={'fixture': frozenset({'CONTAINS', 'DEPENDS_ON'})})
         scan = SimpleNamespace(id='analysis-1', result={'evaluations': [self.evaluation]})
         return Exchange(service, 'project', scan, False, 200_000)
