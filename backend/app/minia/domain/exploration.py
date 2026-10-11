@@ -131,7 +131,7 @@ def _statement(item):
     return statement
 
 
-def _arguments(raw):
+def parse_arguments(raw):
     """L'objet des arguments, decode de sa chaine. Une chaine vide vaut aucun argument, comme une valeur
     textuelle vide ; un texte est rogne. Un objet deja decode est accepte tel quel : un fournisseur peut le
     rendre ainsi. Toute autre forme, ou un objet trop grand, est refusee, jamais devinee. Chaque argument est
@@ -168,7 +168,7 @@ def parse_step(raw):
         operation = _text(data.get('operation'))
         if not operation:
             raise MiniaError(INVALID_ANSWER, 'Minia a demandé une opération sans la nommer.')
-        return Call(operation, _arguments(data.get(ARGUMENTS)))
+        return Call(operation, parse_arguments(data.get(ARGUMENTS)))
     statements = data.get('statements')
     if not isinstance(statements, list) or not statements:
         raise MiniaError(INVALID_ANSWER, 'Minia a conclu sans aucun énoncé.')

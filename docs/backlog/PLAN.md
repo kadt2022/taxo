@@ -1,6 +1,6 @@
 # Plan Taxo
 
-Mise à jour : 2026-10-10. Référence : [ARCHITECTURE.md](../ARCHITECTURE.md).
+Mise à jour : 2026-10-11. Référence : [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Priorité active
 
@@ -42,6 +42,11 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
      profils déclarés et versionnés (§ 9.5) sur le moteur existant, classification des Tuiles, annotations observées,
      Tuiles et lecture du code par Minia (`get_source`, double consentement), banc à trois séries. Il absorbe
      [TAXO-MIP-SOURCE-01](termines/TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md), terminé avec lui.
+   - ✅ **Enquête navigable et mémoire de parcours de Minia** ([TAXO-MINIA-ENQUETE-01](termines/TAXO-MINIA-ENQUETE-01-memoire-de-parcours.md)),
+     terminé le 2026-10-11 (#131 à #135) : le LLM enquête par Tuiles successives, Minia tient un carnet de navigation
+     persistant (SQLite WAL, reçus sans contenu source) et Taxo ne porte plus de verdict sur les conclusions du LLM dans
+     ce parcours. `verify_claim` reste en coexistence, `taxo-query/1` inchangé
+     ([inventaire du lot D](termines/TAXO-MINIA-ENQUETE-01-lot-D-inventaire-verify-claim.md)).
 7. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 8. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
 9. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.
