@@ -150,7 +150,8 @@ class InvestigationState:
         budget = self.budget.spend(response_bytes)
         snapshot = self.investigation.snapshot
         logbook, repetition = self.logbook.with_operation(record, snapshot.analysis_id, snapshot.generation_id)
-        events = [Event(EventKind.OPERATION, record.at, {**_plain(record), 'bytes': response_bytes})]
+        # Le journal porte l'operation telle que le carnet l'a inscrite, avec son progres.
+        events = [Event(EventKind.OPERATION, record.at, {**_plain(logbook.operations[-1]), 'bytes': response_bytes})]
         if repetition is not None:
             events.append(Event(EventKind.REPETITION, record.at, {'count': repetition.count,
                                                                     'open_branches': list(repetition.open_branches)}))

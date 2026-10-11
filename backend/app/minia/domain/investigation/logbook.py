@@ -86,10 +86,13 @@ class FrontierEntry:
     kind: FrontierKind
     reason: str = ''
     continuation: str | None = None
+    # La relation que la frontiere concerne, quand Taxo la nomme : un meme noeud peut porter une frontiere de
+    # contexte par relation non analysee, et aucune n'efface l'autre.
+    relation: str = ''
 
     @property
     def key(self):
-        return self.node, self.kind
+        return self.node, self.kind, self.relation, self.reason
 
 
 @dataclass(frozen=True)
@@ -233,10 +236,10 @@ class Logbook:
                 kept.append(entry)
         for edge in (*self.edges, *added):
             for node in (edge.source, edge.target):
-                key = (node, FrontierKind.DISCOVERED)
-                if Action.TILE not in visited.get(node, ()) and key not in keys:
-                    keys.add(key)
-                    kept.append(FrontierEntry(node, FrontierKind.DISCOVERED))
+                discovered = FrontierEntry(node, FrontierKind.DISCOVERED)
+                if Action.TILE not in visited.get(node, ()) and discovered.key not in keys:
+                    keys.add(discovered.key)
+                    kept.append(discovered)
         return replace(self, visited=visited, edges=self.edges + tuple(added), frontier=tuple(kept))
 
     def with_action(self, node: str, action: Action) -> 'Logbook':

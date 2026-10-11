@@ -118,6 +118,19 @@ def test_knowledge_and_context_frontiers_stay_distinct_and_survive_expansion():
     assert SERVICE not in state.logbook.open_branches()
 
 
+def test_one_context_frontier_per_unanalysed_relation_is_kept():
+    """Taxo rend une frontiere de contexte par relation sans analyseur, sur le meme noeud : aucune n'efface
+    l'autre, et la relation se relit a l'identique."""
+    frontier = (FrontierEntry(SERVICE, FrontierKind.CONTEXT, 'NO_ANALYZER', relation='READS'),
+                FrontierEntry(SERVICE, FrontierKind.CONTEXT, 'NO_ANALYZER', relation='WRITES'),
+                FrontierEntry(SERVICE, FrontierKind.CONTEXT, 'NO_ANALYZER', relation='WRITES'))
+    state = opened().record_tile(SNAPSHOT, CONTROLLER, calls(CONTROLLER, SERVICE), frontier, at=at(1))
+
+    context = [entry.relation for entry in state.logbook.frontier if entry.kind is FrontierKind.CONTEXT]
+    assert context == ['READS', 'WRITES']
+    assert from_document(to_document(without_pending(state))) == without_pending(state)
+
+
 def test_tile_without_anchor_is_refused():
     with pytest.raises(MiniaError) as error:
         opened().record_tile(SNAPSHOT, '', (), at=at(1))
@@ -223,6 +236,24 @@ def test_an_attested_send_lifts_the_announcement_and_only_one_waits_at_a_time():
 
     assert announced.landed().in_flight == ()
     assert announced.landed().settle_in_flight().logbook.operations == ()
+
+
+def test_the_operation_event_carries_the_record_the_logbook_kept():
+    """Le journal append-only et le carnet disent la meme operation, progres compris."""
+    state, _ = explored_two_of_three().record_operation(SNAPSHOT, operation(minutes=9), 10)
+
+    event = [item for item in state.pending if item.kind == EventKind.OPERATION][-1]
+    assert event.data['progress'] == state.logbook.operations[-1].progress is not None
+
+
+def test_a_late_result_never_moves_activity_backwards():
+    """Un resultat inscrit apres une activite plus recente, mais date d'avant, ne raccourcit pas l'expiration."""
+    state = opened().record_action(SNAPSHOT, SERVICE, Action.EVIDENCE, at=at(30))
+
+    late, _ = state.record_operation(SNAPSHOT, operation(minutes=5), 10)
+
+    assert late.investigation.last_activity_at == at(30)
+    assert late.investigation.expires_at == state.investigation.expires_at
 
 
 def test_delivery_ids_are_unique_and_replays_cite_their_origin():
@@ -511,7 +542,8 @@ def test_renewals_are_capped():
     assert decision.refusal == Refusal.TOO_MANY_RENEWALS
 
 
-@pytest.mark.parametrize('values', [(0, 1, 1, 1, 0), (2, 1, 1, 1, 0), (1, 2, 1, 1, 0), (1, 1, 1, 1, -1)])
+@pytest.mark.parametrize('values', [(0, 1, 1, 1, 0), (2, 1, 1, 1, 0), (1, 2, 1, 1, 0), (1, 1, 1, 1, -1),
+                                    (1, 1, 1, 1, 1.5), (1, 1, 1, 1, '2')])
 def test_budget_limits_are_validated(values):
     with pytest.raises(MiniaError):
         BudgetLimits(*values)

@@ -96,7 +96,8 @@ def _logbook(data):
     return Logbook(
         visited={node: tuple(Action(action) for action in actions) for node, actions in data['visited'].items()},
         edges=tuple(Edge(**item) for item in data['edges']),
-        frontier=tuple(FrontierEntry(item['node'], FrontierKind(item['kind']), item['reason'], item['continuation'])
+        frontier=tuple(FrontierEntry(item['node'], FrontierKind(item['kind']), item['reason'], item['continuation'],
+                                     item['relation'])
                        for item in data['frontier']),
         receipts=tuple(SourceReceipt(item['reference'], item['transmission_id'], ReceiptStatus(item['status']),
                                      item['classification'], item['fingerprint'], item['reason'])

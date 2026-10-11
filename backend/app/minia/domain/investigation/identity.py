@@ -104,8 +104,9 @@ class Investigation:
         return self.status is Status.EXPIRED or self.expires_at <= now
 
     def touched(self, at: datetime, policy: ExpiryPolicy) -> 'Investigation':
-        aware(at)
-        return replace(self, last_activity_at=at, expires_at=policy.expires_at(at))
+        # Un resultat inscrit en retard ne ramene jamais l'activite en arriere : l'expiration suit la plus recente.
+        latest = max(aware(at), self.last_activity_at)
+        return replace(self, last_activity_at=latest, expires_at=policy.expires_at(latest))
 
     def moved_to(self, status: Status) -> 'Investigation':
         if status is not self.status and status not in _TRANSITIONS[self.status]:

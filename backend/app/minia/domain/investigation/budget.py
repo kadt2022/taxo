@@ -37,7 +37,8 @@ class BudgetLimits:
 
     def __post_init__(self):
         values = (self.slice_operations, self.slice_bytes, self.total_operations, self.total_bytes)
-        if any(not isinstance(value, int) or value <= 0 for value in values) or self.max_renewals < 0:
+        if (any(not isinstance(value, int) or value <= 0 for value in values)
+                or not isinstance(self.max_renewals, int) or self.max_renewals < 0):
             raise MiniaError(INVESTIGATION_INVALID, 'Les plafonds d’une enquête doivent être des entiers positifs.')
         if self.slice_operations > self.total_operations or self.slice_bytes > self.total_bytes:
             raise MiniaError(INVESTIGATION_INVALID, 'Une tranche ne peut pas dépasser le plafond de l’enquête.')
