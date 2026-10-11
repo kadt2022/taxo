@@ -576,6 +576,23 @@ Le portail dit, dans « Ce que Taxo ne sait pas », chaque opération que Taxo a
 Rien n'est conservé, et le journal d'accès de l'API remplace la valeur de chaque paramètre d'adresse
 (`?q=…`) par `******` : la question n'y est jamais écrite.
 
+Le banc de référence (`backend/scripts/minia_bench.py`, questions et vérité établie à la main dans
+`minia_bench_questions.json`) rejoue les 18 questions du récit sur le dépôt de démonstration, à un commit
+figé, avec le fournisseur configuré :
+
+```bash
+cd backend
+MINIA_PROVIDER=claude python scripts/minia_bench.py ../student-course-demo --runs 3 \
+  --out banc-minia.json --payloads charges.jsonl
+```
+
+Le fournisseur rejoué est celui de `--provider`, sinon de `MINIA_PROVIDER`. Le banc capture chaque message
+réellement reçu par le fournisseur, après protection, et y cherche, indépendamment de la protection,
+identités Git, courriels, jetons, clés privées, identifiants dans une adresse et secrets affectés en clair.
+Il mesure l'exactitude (mentions attendues et formulations interdites, dont une réponse de sens contraire),
+les fausses confirmations de sécurité, les affirmations sans vérification, les opérations Taxo, les appels
+au modèle, les octets envoyés (les jetons seulement si le fournisseur les rend) et le temps.
+
 ### Minia Ollama ou Minia Claude (TAXO-MINIA-05)
 
 Minia peut être servie par plusieurs fournisseurs. Elle fait le même travail quel que soit celui choisi :
