@@ -572,6 +572,21 @@ La réponse compte ce qui a été protégé (`withheld`), sans aucune valeur. «
 commit ? » (ou des derniers commits) reçoit une réponse de Taxo seul, d'après Git, sans appeler de modèle
 (`"mode": "taxo"`).
 
+Le banc de référence (`backend/scripts/minia_bench.py`, questions et vérité établie à la main dans
+`minia_bench_questions.json`) rejoue les 18 questions du récit sur le dépôt de démonstration, à un commit
+figé, avec le fournisseur configuré :
+
+```bash
+cd backend
+MINIA_PROVIDER=claude python scripts/minia_bench.py ../student-course-demo --runs 3 \
+  --out banc-minia.json --payloads charges.jsonl
+```
+
+Il capture chaque message réellement reçu par le fournisseur, après protection, et y cherche identités
+Git, courriels et mots de passe en clair. Il mesure l'exactitude, les fausses confirmations de sécurité,
+les affirmations sans vérification, les opérations Taxo, les appels au modèle, les octets envoyés (les
+jetons seulement si le fournisseur les rend) et le temps.
+
 ### Minia Ollama ou Minia Claude (TAXO-MINIA-05)
 
 Minia peut être servie par plusieurs fournisseurs. Elle fait le même travail quel que soit celui choisi :
