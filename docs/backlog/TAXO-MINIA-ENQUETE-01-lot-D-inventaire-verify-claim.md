@@ -1,6 +1,6 @@
 # TAXO-MINIA-ENQUETE-01 — Lot D : inventaire de `verify_claim` et proposition de compatibilité
 
-**Statut :** PROPOSITION, en attente d'arbitrage du responsable du produit (ROUGE protocole).
+**Statut :** ARBITRÉ le 11 octobre 2026 : option 1, coexistence, protocole inchangé (voir § 6).
 **Date :** 11 octobre 2026.
 **Récit :** [TAXO-MINIA-ENQUETE-01](TAXO-MINIA-ENQUETE-01-memoire-de-parcours.md), § 10 « Transition avec `verify_claim`
 et `taxo-query/1` », AC-17, et choix de mise en œuvre retenus à l'acceptation.
@@ -145,3 +145,14 @@ Option 1. Elle respecte INV-01 dans tout Minia, ne change pas silencieusement le
 l'option 2 ouverte si un client externe du protocole apparaît. Le récit TAXO-MINIA-ENQUETE-01 se clôt alors, après fusion des
 lots A à C, sur cet inventaire et la décision ; l'écran d'enquête et le retrait des verdicts dans Minia forment un récit
 suivant.
+
+## 6. Décision
+
+Le responsable du produit a retenu l'**option 1, coexistence** (11 octobre 2026, carte de décision du fil du
+récit).
+
+- `verify_claim` reste dans `taxo-query/1`, sémantique et version inchangées ; aucun champ `deprecated`.
+- Le parcours d'enquête (lots A à C) ne propose pas `verify_claim` et ne rend aucun verdict.
+- La transition des anciens parcours de Minia (libellés descriptifs, détail comparé, pieds de réponse, étape de
+  progression, mesures du banc) et l'écran d'enquête forment un récit suivant ; ce document en est l'entrée.
+- Le récit TAXO-MINIA-ENQUETE-01 se clôt après la fusion des lots A à C.
