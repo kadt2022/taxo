@@ -561,7 +561,7 @@ class AskMinia:
                     raise MiniaError(INVALID_ANSWER, 'Minia ne progressait plus (opération répétée ou limite atteinte).')
                 seen.add(step.key)
                 check(cancel)
-                response = self._served(exchange, step, bounded, space)
+                response = self._served(exchange, step, bounded, space, exchanged)
                 exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
                 trajectory.append(_step(step.operation, step.arguments, response))
                 yield 'minia.operation', trajectory[-1]
@@ -581,11 +581,11 @@ class AskMinia:
             **result, 'status': ANSWERED, 'mode': EXPLORATION, 'statements': statements, 'trajectory': trajectory,
             'budget': {'max_bytes': exchange.budget, 'used': exchange.used}}
 
-    def _served(self, exchange, step, bounded, space):
-        """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, toute autre
-        opération par l'échange (qui refuse ce qu'il ne propose pas)."""
+    def _served(self, exchange, step, bounded, space, exchanged):
+        """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, comptée dans
+        le budget de l'échange, toute autre opération par l'échange (qui refuse ce qu'il ne propose pas)."""
         if step.operation == tiles.OPERATION and self.mip is not None:
-            return tiles.request(self.mip, exchange, step.arguments, space)
+            return tiles.request(self.mip, exchange, step.arguments, space, exchanged)
         return exchange.call(bounded(step.operation, step.arguments, space))
 
     @staticmethod

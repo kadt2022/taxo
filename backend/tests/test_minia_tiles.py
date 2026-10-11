@@ -46,6 +46,10 @@ def test_minia_reads_a_method_through_its_declared_profile_on_the_same_analysis(
     assert [step['operation'] for step in result['trajectory']] == [
         'describe', 'find_references', 'get_tile', 'verify_claim']
     tile = sent(model, 2)['trajectory'][2]['response']
+    assert tile['bytes'] == len(json.dumps(tile, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+    assert result['budget']['used'] == sum(step['bytes'] for step in result['trajectory']), \
+        'la Tuile est comptée dans le budget de l’échange'
+
     assert tile['outcome'] == 'OK' and tile['profile']['id'] == 'method-context/1'
     assert tile['snapshot']['analysis'] == analysis_of(sent(model, 0)), 'la même analyse que l’échange'
     assert (REGISTER, 'CALLS', SERVICE, 'callees') in [
@@ -71,13 +75,18 @@ def test_the_tile_is_offered_and_the_source_never_is_even_when_the_server_allows
 
 
 def test_a_refused_tile_is_said_and_the_exploration_goes_on(make_repo, tmp_path):
-    """D5 : un profil dont l'ancre n'a pas le type de la référence, ou un argument inconnu, est refusé tel quel."""
+    """D5 : une référence jamais reçue de Taxo, un profil dont l'ancre n'a pas le type de la référence, ou un argument
+    inconnu, sont refusés tels quels ; l'exploration continue."""
     model = Scripted(
+        call('get_tile', reference=REGISTER, profile='method-context/1'),
+        lambda message: call('find_references', analysis=analysis_of(message), prefix='CourseController.register',
+                             match='NAME'),
         call('get_tile', reference=REGISTER, profile='security/1'),
         call('get_tile', reference=REGISTER, profile='method-context/1', depth=3),
         answer(statement('unknown', 'Aucune Tuile servie.')))
     result = ask(make_repo, tmp_path, model)
-    wrong_anchor, unknown_argument = result['trajectory'][1:3]
+    guessed, _, wrong_anchor, unknown_argument = result['trajectory'][1:5]
+    assert guessed['error']['code'] == 'INVALID_ARGUMENT' and 'reçue de Taxo' in guessed['error']['message']
     assert wrong_anchor['error']['code'] == 'INVALID_ARGUMENT' and 'endpoint' in wrong_anchor['error']['message']
     assert unknown_argument['error'] == {'code': 'INVALID_ARGUMENT', 'message': 'Argument inconnu : depth.'}
     assert result['mode'] == 'exploration' and result['statements'][0]['type'] == 'unknown'

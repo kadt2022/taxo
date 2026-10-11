@@ -399,6 +399,16 @@ class Exchange:
         self.used += result['bytes']
         return result
 
+    def accounted(self, serve, requested=None):
+        """Une reponse servie hors du protocole sur l'analyse de cet echange (une Tuile MIP) : comptee comme une
+        operation, dans la place qui reste a son budget. `serve(max_bytes)` rend une reponse qui porte `bytes`."""
+        if self.calls >= MAX_OPERATIONS:
+            raise RuntimeError(f'Échange clos : au plus {MAX_OPERATIONS} opérations.')
+        self.calls += 1
+        result = serve(self._max_bytes(requested))
+        self.used += result['bytes']
+        return result
+
     def _admitted(self, request, operation):
         """Les arguments et la taille permise d'une requete recevable ; sinon le refus du protocole."""
         if not isinstance(request, dict) or request.get('protocol', PROTOCOL) != PROTOCOL:
