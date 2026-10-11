@@ -233,7 +233,7 @@ Règles :
 2. Peut être modifiée ou abandonnée par le LLM ; les versions de notes restent distinguables dans le journal.
 3. Si la Maille change, la note reste éventuellement consultable comme **historique d'une ancienne génération** (`STALE`), pas comme une conclusion transférable.
 4. Une note qui cite un nœud inconnu ou une génération incompatible ne devient pas valide par simple texte : Minia signale que la référence n'est pas retrouvée dans le carnet.
-5. **Taille maximale et filtre de confidentialité existant** avant persistance, avec refus si la protection requise n'est pas assurée. Les notes sont destinées à des hypothèses courtes, pas à archiver le code ou les messages modèles complets. On **ne promet pas** une détection fiable de tout code brut éventuellement copié dans une note ; documenter ce risque résiduel, le limiter par taille et appliquer la même protection à la restauration et à la transmission.
+5. **Taille maximale et filtre de confidentialité existant** avant persistance, avec refus si la protection requise n'est pas assurée. Les notes sont destinées à des hypothèses courtes, pas à archiver le code ou les messages modèles complets. Une note qui **reprend une ligne du code livré** dans la demande en cours (espaces normalisés, lignes assez longues pour signer une recopie) est **refusée avant persistance** : elle cite le symbole, jamais son code (§ 11, INV-10). Ce contrôle déterministe est testé ; au-delà (code réécrit, code jamais livré), on **ne promet pas** de détection : le risque résiduel est documenté, limité par la taille, et la même protection s'applique à la restauration et à la transmission.
 
 ## 10. Traçabilité sans pouvoir de verdict
 
