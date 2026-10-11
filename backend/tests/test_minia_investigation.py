@@ -15,7 +15,7 @@ from app.minia.domain.investigation.logbook import (Action, Delivery, DeliveryKi
                                                     FrontierKind, OperationOutcome, OperationRecord, ReceiptStatus,
                                                     SourceReceipt, request_key)
 from app.minia.domain.investigation.notes import KIND, MAX_NOTE_CHARS, MAX_NOTE_NODES, NoteStatus, open_notes
-from app.minia.domain.investigation.state import EventKind
+from app.minia.domain.investigation.state import EventKind, InvestigationState
 
 from investigation_scenarios import (ALICE, BOB, CONTROLLER, COURSE_BY_ID, FIND_COURSE, FIND_STUDENT, LIMITS,
                                      OTHER_GENERATION, SAVE, SERVICE, SNAPSHOT, STUDENT_BY_ID, T0, allow, at, calls,
@@ -540,3 +540,73 @@ def test_opened_investigation_starts_active_and_logs_its_snapshot():
     assert state.investigation.created_at == T0
     assert state.pending[0].data == {'analysis_id': 'analysis-1', 'generation_id': 7}
     assert state.budget.limits == LIMITS
+
+
+# Revue du lot A : plafonds, provenance, reprise, repetition, fuseaux ---------------------------------------------
+
+def test_a_response_beyond_the_remaining_bytes_is_refused():
+    """Une reponse ne depasse jamais les octets qui restent a la tranche ni au total."""
+    limits = BudgetLimits(slice_operations=4, slice_bytes=10, total_operations=8, total_bytes=50, max_renewals=1)
+    state = opened(limits=limits)
+    with pytest.raises(MiniaError) as error:
+        state.record_operation(SNAPSHOT, operation(), 11)
+    assert error.value.code == BUDGET_EXHAUSTED
+    state, _ = state.record_operation(SNAPSHOT, operation(), 10)
+    assert state.budget.slice_bytes == 10 and state.budget.remaining_bytes == 0
+
+
+def test_the_total_bytes_bound_a_response_too():
+    limits = BudgetLimits(slice_operations=4, slice_bytes=100, total_operations=8, total_bytes=100, max_renewals=1)
+    state, _ = opened(limits=limits).record_operation(SNAPSHOT, operation(fingerprint='a'), 60)
+    assert state.budget.remaining_bytes == 40
+    with pytest.raises(MiniaError) as error:
+        state.record_operation(SNAPSHOT, operation(fingerprint='b'), 41)
+    assert error.value.code == BUDGET_EXHAUSTED
+
+
+def test_naming_another_branch_is_not_progress():
+    state, _ = exhausted_slice().request_renewal(RenewalRequest((SAVE,), 'Lire save.'), at(8))
+    state, _ = state.record_operation(SNAPSHOT, operation(minutes=9, fingerprint='c'), 100)
+    state, _ = state.record_operation(SNAPSHOT, operation(minutes=10, fingerprint='d'), 100)
+
+    _, decision = state.request_renewal(RenewalRequest((STUDENT_BY_ID,), 'Une autre branche.'), at(11))
+    assert decision.refusal == Refusal.NO_PROGRESS
+
+
+@pytest.mark.parametrize('action', [Action.TILE, Action.SOURCE])
+def test_a_tile_or_a_source_read_is_never_recorded_without_what_establishes_it(action):
+    with pytest.raises(MiniaError) as error:
+        opened().record_action(SNAPSHOT, SERVICE, action, at=at(1))
+    assert error.value.code == INVESTIGATION_INVALID
+
+
+def test_evidence_and_references_are_recorded_directly():
+    state = opened().record_action(SNAPSHOT, SERVICE, Action.EVIDENCE, at=at(1))
+    state = state.record_action(SNAPSHOT, SERVICE, Action.REFERENCES, at=at(2))
+    assert not state.logbook.expanded(SERVICE) and not state.logbook.source_read(SERVICE)
+
+
+def test_a_completed_investigation_is_not_resumable():
+    state = opened().confirm_question('Une question', True, allow, at(1)).move_to(Status.COMPLETE, at(2))
+    with pytest.raises(MiniaError) as error:
+        ensure_resumable(state.investigation, ALICE, SNAPSHOT, at(3))
+    assert error.value.code == INVESTIGATION_NOT_RESUMABLE
+
+
+def test_responses_without_fingerprint_or_with_another_outcome_are_not_repetitions():
+    state, _ = opened().record_operation(SNAPSHOT, operation(fingerprint=None), 100)
+    state, without = state.record_operation(SNAPSHOT, operation(fingerprint=None), 100)
+    state, _ = state.record_operation(SNAPSHOT, operation(fingerprint='e', outcome=OperationOutcome.ERROR), 100)
+    state, other_outcome = state.record_operation(SNAPSHOT, operation(fingerprint='e',
+                                                                      outcome=OperationOutcome.REFUSED), 100)
+
+    assert without is None and other_outcome is None
+
+
+def test_a_timezone_less_instant_is_refused_at_once():
+    naive = T0.replace(tzinfo=None)
+    with pytest.raises(MiniaError) as error:
+        InvestigationState.opened('inv-naive', ALICE, SNAPSHOT, LIMITS, ExpiryPolicy(timedelta(days=7)), naive)
+    assert error.value.code == INVESTIGATION_INVALID
+    with pytest.raises(MiniaError):
+        opened().record_tile(SNAPSHOT, CONTROLLER, (), at=naive)

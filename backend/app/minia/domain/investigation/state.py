@@ -16,6 +16,8 @@ from .identity import (ExpiryPolicy, Investigation, OwnerScope, Snapshot, Status
 from .logbook import Action, Delivery, Logbook, OperationOutcome, OperationRecord, Repetition, SourceReceipt
 from .values import plain as _plain
 
+DIRECT_ACTIONS = frozenset({Action.EVIDENCE, Action.REFERENCES})
+
 
 class EventKind:
     OPENED = 'OPENED'
@@ -84,6 +86,10 @@ class InvestigationState:
         return self._changed(event, at, logbook=logbook)
 
     def record_action(self, snapshot: Snapshot, node: str, action: Action, *, at: datetime) -> 'InvestigationState':
+        """Une visite sans trace propre (preuve, references). Une Tuile et une lecture de code s'inscrivent par
+        `record_tile` et `record_receipt`, qui gardent ce qui les etablit."""
+        if action not in DIRECT_ACTIONS:
+            raise MiniaError(INVESTIGATION_INVALID, f'Une visite {action} s’inscrit avec ce qui l’établit.')
         self._writable_on(snapshot)
         logbook = self.logbook.with_action(node, action)
         return self._changed(Event(EventKind.ACTION, at, {'node': node, 'action': str(action)}), at, logbook=logbook)

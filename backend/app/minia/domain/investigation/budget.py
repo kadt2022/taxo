@@ -84,6 +84,11 @@ class Budget:
                           self.limits.total_operations - self.total_operations))
 
     @property
+    def remaining_bytes(self) -> int:
+        """Les octets qu'une reponse peut encore porter : ce qui reste a la tranche et au total, le plus petit."""
+        return max(0, min(self.limits.slice_bytes - self.slice_bytes, self.limits.total_bytes - self.total_bytes))
+
+    @property
     def slice_exhausted(self) -> bool:
         return self.remaining_operations == 0
 
@@ -100,6 +105,9 @@ class Budget:
         if self.slice_exhausted:
             raise MiniaError(BUDGET_EXHAUSTED, 'Le budget de cette tranche est épuisé : demandez un renouvellement '
                              'justifié ou concluez.')
+        if response_bytes > self.remaining_bytes:
+            raise MiniaError(BUDGET_EXHAUSTED, 'Cette réponse dépasse les octets qui restent au budget : elle n’est '
+                             'pas comptée comme transmise.')
         return replace(self, slice_operations=self.slice_operations + 1,
                        slice_bytes=self.slice_bytes + response_bytes,
                        total_operations=self.total_operations + 1, total_bytes=self.total_bytes + response_bytes)
@@ -131,6 +139,7 @@ class Budget:
             return Refusal.NO_BRANCH
         if any(branch not in open_branches for branch in branches):
             return Refusal.UNKNOWN_BRANCH
-        if self.last_renewal is not None and self.last_renewal == (tuple(sorted(branches)), progress):
+        # Le progres se juge sur le carnet seul : nommer une autre branche ne vaut pas progres.
+        if self.last_renewal is not None and self.last_renewal[1] == progress:
             return Refusal.NO_PROGRESS
         return None

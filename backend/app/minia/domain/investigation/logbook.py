@@ -238,12 +238,14 @@ class Logbook:
         record = replace(record, arguments=_json_copy(record.arguments),
                          not_sent=tuple(_json_copy(list(record.not_sent))))
         key = request_key(analysis_id, generation_id, record.name, record.arguments)
+        # Sans empreinte, rien ne dit que la reponse est la meme : pas de repetition. Une autre issue non plus.
+        comparable = record.outcome is not OperationOutcome.INTERRUPTED and record.response_fingerprint is not None
         same = sum(1 for previous in self.operations
-                   if previous.outcome is not OperationOutcome.INTERRUPTED
+                   if previous.outcome is record.outcome
                    and previous.response_fingerprint == record.response_fingerprint
                    and request_key(analysis_id, generation_id, previous.name, previous.arguments) == key)
         logbook = replace(self, operations=self.operations + (record,))
-        if same and record.outcome is not OperationOutcome.INTERRUPTED:
+        if comparable and same:
             return logbook, Repetition(same + 1, logbook.open_branches())
         return logbook, None
 

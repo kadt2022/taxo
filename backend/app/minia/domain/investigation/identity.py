@@ -100,6 +100,7 @@ class Investigation:
         return self.status is Status.EXPIRED or self.expires_at <= now
 
     def touched(self, at: datetime, policy: ExpiryPolicy) -> 'Investigation':
+        aware(at)
         return replace(self, last_activity_at=at, expires_at=policy.expires_at(at))
 
     def moved_to(self, status: Status) -> 'Investigation':
@@ -112,10 +113,18 @@ class Investigation:
             raise MiniaError(INVESTIGATION_INVALID, f'Une enquête {self.status} ne reçoit plus d’opération.')
 
 
+def aware(at: datetime) -> datetime:
+    """Un instant avec son fuseau : sans fuseau, il serait ecrit puis illisible a la reprise."""
+    if not isinstance(at, datetime) or at.tzinfo is None or at.utcoffset() is None:
+        raise MiniaError(INVESTIGATION_INVALID, 'Un instant d’enquête porte son fuseau horaire.')
+    return at
+
+
 def open_investigation(investigation_id: str, scope: OwnerScope, snapshot: Snapshot, at: datetime,
                        policy: ExpiryPolicy) -> Investigation:
     if not investigation_id:
         raise MiniaError(INVESTIGATION_INVALID, 'Une enquête exige un identifiant.')
+    aware(at)
     return Investigation(investigation_id, scope, snapshot, Status.ACTIVE, 0, at, at, policy.expires_at(at))
 
 
@@ -144,6 +153,8 @@ def ensure_resumable(investigation: Investigation, scope: OwnerScope, current: S
     if investigation.status is Status.STALE or investigation.snapshot != current:
         raise MiniaError(INVESTIGATION_STALE, 'La Maille a changé depuis cette enquête : elle ne se poursuit pas '
                          'sur une autre génération. Ouvrez une nouvelle enquête.')
+    if investigation.status is Status.COMPLETE:
+        raise MiniaError(INVESTIGATION_NOT_RESUMABLE, 'Cette enquête est terminée : posez une nouvelle question.')
     if not investigation.resumable:
         raise MiniaError(INVESTIGATION_NOT_RESUMABLE,
                          'Cette enquête n’a pas de question confirmée : posez une nouvelle question.')
