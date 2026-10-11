@@ -37,8 +37,8 @@ juge la conclusion du modèle.
 | Minia, question sur un commit (`about_commit_events` → `_explore` → `_verified`) | chaque `claim` du modèle passe par `verify_claim` avant affichage, au plus `MAX_CLAIMS` | oui : verdict sur une conclusion du modèle |
 | Minia, question sur le projet (`about_project_events` → `_explore` → `_verified`) | idem | oui |
 | Minia, exploration (`exploration.SYSTEM`) | le modèle peut appeler `verify_claim` comme toute opération proposée ; le prompt lui demande des `claim` vérifiables | oui |
-| Minia, enquête (lot C, #134) | `verify_claim` retiré des opérations proposées ; aucune vérification des conclusions | déjà conforme |
-| `backend/scripts/minia_bench.py` | mesure les verdicts `CONFIRMED` faux (affirmation confirmée absente de la vérité établie à la main) | oui, si les verdicts disparaissent de Minia |
+| Minia, enquête (lot C, PR #134, **non fusionnée**) | `verify_claim` retiré des opérations proposées ; aucune vérification des conclusions | conforme une fois #132 à #134 fusionnées ; absent de `main` à ce jour |
+| `backend/scripts/minia_bench.py` | deux métriques lisent `statement.verdict` : les `CONFIRMED` faux (affirmation confirmée absente de la vérité établie à la main) et `unjustified()` (affirmations non confirmées) | oui : sans verdict, la première rendrait zéro et la seconde compterait chaque affirmation |
 | Client HTTP direct de `taxo-query/1` | documenté dans le README (exemple de requête `verify_claim`) | non, s'il reste inchangé |
 
 ### 2.3 Écrans
@@ -58,7 +58,7 @@ juge la conclusion du modèle.
 | `test_coverage_bounds.py` | 19 | `NOT_ANALYSED` / `NOT_FOUND_IN_ANALYSED_SCOPE` selon la couverture |
 | `test_knowledge_divergences.py`, `test_knowledge_coherence.py`, `test_behaviour_snapshot.py`, `test_mip_profiles.py`, `test_multi_executions.py`, `test_analysis_knowledge.py` | 27 au total | cohérence verdict / voisinage / couverture, instantané de comportement |
 | `test_minia_explore.py`, `test_minia_general.py`, `test_minia_tiles.py`, `test_minia_source_reading.py`, `test_minia_confidentiality.py`, `method_security_sources.py` | 26 au total | Minia appelle `verify_claim` et affiche le verdict |
-| `test_minia_bench.py` | 3 | métrique des `CONFIRMED` faux |
+| `test_minia_bench.py` | 3 | métriques fondées sur le verdict |
 | `frontend/src/exploration.test.tsx`, `frontend/src/minia.test.tsx` | 33 | rendu des verdicts |
 
 ### 2.5 Documentation
@@ -67,7 +67,10 @@ juge la conclusion du modèle.
 `docs/ARCHITECTURE.md` § 12.0, § 12.3, § 12.4 (« Minia propose, Taxo vérifie »), récits TAXO-COV-01, TAXO-01N,
 TAXO-ARCH-REF-01 et récits terminés (historique, à ne pas réécrire).
 
-## 3. Ce qui est déjà fait sans toucher au contrat
+## 3. Ce que les lots A à C apportent sans toucher au contrat
+
+Ces lots sont en revue (PR #132 à #134) et **ne sont pas encore sur `main`** : sur `main`, les questions Minia
+passent toujours par `_explore` et `_verified`. Le récit ne peut pas se clore sur ce point avant leur fusion.
 
 - Le parcours d'enquête (lots A à C) n'offre pas `verify_claim` et ne rend aucun verdict : il restitue trois zones
   (transmis, exploration et notes, hors exploration) et confronte la déclaration finale au journal des livraisons
@@ -85,7 +88,9 @@ TAXO-ARCH-REF-01 et récits terminés (historique, à ne pas réécrire).
   - les questions sur un commit et sur le projet passent au parcours d'enquête (un récit d'écran suit) ;
   - en attendant, l'écran remplace « Affirmations vérifiées par Taxo » / « Confirmée par Taxo » par une formulation
     descriptive (« Correspond à un fait de la Maille », « Aucun fait correspondant dans le périmètre analysé ») ;
-  - le banc remplace la métrique « `CONFIRMED` faux » par « référence citée absente des livraisons ».
+  - le banc remplace ses deux métriques fondées sur le verdict : « `CONFIRMED` faux » devient « référence citée
+    absente des livraisons » (discordance de la déclaration), et `unjustified()` devient « affirmation sans élément
+    MIP déclaré » ; l'une et l'autre se lisent sur la déclaration finale, jamais sur un verdict.
 - Coût : écran et tests Minia ; zéro risque pour les clients du protocole.
 
 ### Option 2 — Dépréciation annoncée
@@ -104,6 +109,6 @@ TAXO-ARCH-REF-01 et récits terminés (historique, à ne pas réécrire).
 ## 5. Recommandation
 
 Option 1. Elle respecte INV-01 dans tout Minia, ne change pas silencieusement le contrat public (AC-17), et laisse
-l'option 2 ouverte si un client externe du protocole apparaît. Le récit TAXO-MINIA-ENQUETE-01 se clôt alors sur les
-lots A à C, cet inventaire et la décision ; l'écran d'enquête et le retrait des verdicts dans Minia forment un récit
+l'option 2 ouverte si un client externe du protocole apparaît. Le récit TAXO-MINIA-ENQUETE-01 se clôt alors, après fusion des
+lots A à C, sur cet inventaire et la décision ; l'écran d'enquête et le retrait des verdicts dans Minia forment un récit
 suivant.
