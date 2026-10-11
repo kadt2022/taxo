@@ -114,3 +114,38 @@ def test_a_refused_tile_is_said_and_the_exploration_goes_on(make_repo, tmp_path)
     assert wrong_anchor['error']['code'] == 'INVALID_ARGUMENT' and 'endpoint' in wrong_anchor['error']['message']
     assert unknown_argument['error'] == {'code': 'INVALID_ARGUMENT', 'message': 'Argument inconnu : depth.'}
     assert result['mode'] == 'exploration' and result['statements'][0]['type'] == 'unknown'
+
+
+def test_a_tile_question_naming_an_author_sends_no_identity_and_the_trajectory_keeps_no_secret(
+        make_repo, git, tmp_path):
+    """TAXO-MINIA-SEC-01 (E3, E4) : sur le chemin des Tuiles aussi, chaque charge reellement envoyee au fournisseur
+    est protegee (auteur nomme dans la question, co-auteur, secret du depot) ; la trajectoire rendue au portail ne
+    porte que les operations, leurs arguments et leurs issues, jamais le contenu des reponses."""
+    name, email, secret = 'Ada Lovelace', 'ada@example.org', 'admin123'
+    root = make_repo({**fixture_files(),
+                      'src/main/resources/application.yml': f'spring:\n  datasource:\n    password: {secret}\n'})
+    git(root, '-c', f'user.name={name}', '-c', f'user.email={email}', 'commit', '-q', '--allow-empty', '-m',
+        'feat: inscription\n\nCo-authored-by: Bob Martin <bob@example.org>')
+    model = Scripted(
+        lambda message: call('find_references', analysis=analysis_of(message), prefix='CourseController.register',
+                             match='NAME'),
+        call('get_tile', reference=REGISTER, profile='method-context/1'),
+        answer(statement('interpretation', 'personne-1 a écrit une méthode qui délègue au service.')))
+    app = create_app(f'sqlite:///{tmp_path / "tiles.db"}', [root], minia=model)
+    Base.metadata.create_all(app.state.engine)
+    with TestClient(app) as client:
+        project = client.post('/api/projects', json={'name': 'Cours', 'path': str(root)}).json()
+        client.post(f'/api/projects/{project["id"]}/scans')
+        stream = client.post(f'/api/projects/{project["id"]}/ask/stream',
+                             json={'question': f'Que fait CourseController.register, écrit par {name} ?'})
+    events = [(block.split('\n')[0][len('event: '):], json.loads(block.split('\n')[1][len('data: '):]))
+              for block in stream.text.strip().split('\n\n') if not block.startswith(':')]
+    result = completed(events)
+    assert [step['operation'] for step in result['trajectory']] == ['describe', 'find_references', 'get_tile']
+    assert result['trajectory'][2]['outcome'] == 'OK'
+    for _, user, _ in model.calls:
+        for forbidden in (name, 'Lovelace', email, 'bob@example.org', 'Bob Martin', secret):
+            assert forbidden not in user, forbidden
+    assert result['statements'][0]['text'] == f'{name} a écrit une méthode qui délègue au service.'
+    assert result['withheld']['identities'] >= 1
+    assert secret not in json.dumps(result['trajectory']) and 'response' not in json.dumps(result['trajectory'])

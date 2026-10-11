@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {claimText, limitText, proofText, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
+import {claimText, limitText, proofText, refusals, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
 import {MiniaProgress, reduceMinia, stageText, startMinia} from './minia-live';
 import {SelectionAnswerView, type SelectionAnswer} from './query';
 
@@ -49,7 +49,8 @@ describe('trajectoire', ()=>{
   it('dit chaque opération, son issue et ce qui n’a pas été transmis', ()=>{
     expect(stepText(steps[0])).toBe('Ce que Taxo sait servir → 9 résultats · 900 octets');
     expect(stepText(steps[1])).toBe('Recherche de faits (relation CHANGES) → 12 résultats, 3 non transmis · 4000 octets');
-    expect(stepText(steps[2])).toContain('→ refusé (NO_CONSENT)');
+    expect(stepText(steps[2])).toContain('→ refusé : non (NO_CONSENT)');
+    expect(stepText({...steps[2], error:undefined})).toContain('→ refusé : refus');
     expect(stepText(steps[3])).toContain('→ Confirmée par Taxo');
     expect(stepText({operation:'autre', arguments:{}, outcome:'OK', bytes:1, items:1})).toBe('autre → 1 résultat · 1 octets');
     expect(stepText({operation:'diff_facts', arguments:{commit:'c'}, outcome:'OK', bytes:9, items:2, ignored:['path', 'subject']}))
@@ -58,6 +59,15 @@ describe('trajectoire', ()=>{
     const html=renderToStaticMarkup(<Trajectory steps={steps}/>);
     expect(html).toContain('4 opérations demandées à Taxo');
     expect(html).toContain('class="refused"');
+  });
+  it('dit chaque refus de Taxo une fois, avec sa raison, et rien quand tout a été servi', ()=>{
+    expect(refusals(steps)).toEqual([`Taxo a refusé « Diff d’un fichier (commit ${sha}, path a) » : non (NO_CONSENT).`]);
+    expect(refusals([steps[2], steps[2]])).toHaveLength(1);
+    expect(refusals([{operation:'get_source', arguments:{reference:'symbol:A#b()'}, outcome:'ERROR', bytes:1,
+      error:{code:'NO_CONSENT', message:'La lecture du code n’est pas autorisée'}}]))
+      .toEqual(['Taxo a refusé « Code d’un symbole (reference symbol:A#b()) » : La lecture du code n’est pas autorisée (NO_CONSENT).']);
+    expect(refusals([steps[0], steps[1]])).toEqual([]);
+    expect(refusals()).toEqual([]);
   });
   it('se montre en direct pendant que Minia travaille', ()=>{
     let live=startMinia();
@@ -89,6 +99,14 @@ describe('réponse en exploration', ()=>{
     expect(html).toContain('Il ajusterait l’application.');
     expect(html).toContain('Taxo ne dit pas pourquoi.');
     expect(html).toContain('Chemin de Minia');
+  });
+  it('montre chaque refus de Taxo dans ce que Taxo ne sait pas, jamais parmi les faits', ()=>{
+    for(const view of [answer, {...answer, mode:'paquet' as const, statements:undefined}]){
+      const html=renderToStaticMarkup(<SelectionAnswerView answer={view}/>);
+      const orange=html.slice(html.indexOf('minia-block unknown'), html.indexOf('</article>', html.indexOf('minia-block unknown')));
+      expect(orange).toContain('Taxo a refusé « Diff d’un fichier');
+      expect(html.slice(0, html.indexOf('minia-block unknown'))).not.toContain('Taxo a refusé');
+    }
   });
   it('dit quand un bloc est vide', ()=>{
     const html=renderToStaticMarkup(<Statements statements={[]}/>);
