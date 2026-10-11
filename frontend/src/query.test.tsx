@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe as group, expect, it, vi} from 'vitest';
-import {actions, askInit, elementsPath, selectWithElement, when, AskTaxo, describe, factLine, outcome, queryPath, SelectionAnswerView, SelectionView, submitWith, track,
+import {actions, askInit, readingNote, elementsPath, selectWithElement, when, AskTaxo, describe, factLine, outcome, queryPath, SelectionAnswerView, SelectionView, submitWith, track,
   type Selection, type SelectionAnswer} from './query';
 
 const request={kind:'LATEST' as const, text:'3 derniers', count:3, commit:null, since:null, until:null};
@@ -64,6 +64,10 @@ group('vues', ()=>{
     expect(html).toContain('TAXO · réponse directe, sans modèle');
     expect(html).toContain('Selon Git : bbbb : Ada.');
     expect(html).not.toContain('non vérifié');
+    expect(html).not.toContain('Lecture du code');
+    const consented=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, mode:'taxo', answer:'Selon Git : bbbb : Ada.',
+      facts:[], source_reading:{status:'UNAVAILABLE'}}}/>);
+    expect(consented).toContain('Taxo a répondu seul d’après Git, aucun code n’a été lu');
   });
   it('signale ce que Taxo a protégé avant l’envoi, sans valeur', ()=>{
     const html=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, withheld:{identities:1, secrets:0, trailers:0}}}/>);
@@ -86,13 +90,30 @@ group('vues', ()=>{
     expect(nothing).toContain('Minia ne propose aucune interprétation.');
     expect(nothing).toContain('2 faits n’ont pas été transmis');
     expect(nothing).toContain('écartées : F9.');
+    expect(renderToStaticMarkup(<SelectionAnswerView answer={{...answer, fallback:'opération répétée', source_reading:{status:'ON_DEMAND'}}}/>))
+      .toContain('Minia pouvait lire le code');
   });
   it('présente le panneau sans rien interroger d’avance', ()=>{
     const run=vi.fn();
     const html=renderToStaticMarkup(<AskTaxo base="/projects/p" request={run}/>);
     expect(html).toContain('id="taxo-query"');
     expect(html).toContain('value=""');
+    expect(html).not.toContain('lire le code');
     expect(run).not.toHaveBeenCalled();
+  });
+  it('propose la case du code seulement si le réglage la permet (décochée à l’affichage, l’accord suit le fournisseur)', ()=>{
+    const minia={configured:true, provider:'ollama', model:'m', source_context:'off' as const, remote:false, source_reading:'symbol' as const};
+    expect(renderToStaticMarkup(<AskTaxo base="/projects/p" request={vi.fn()} minia={minia}/>))
+      .toContain('Autoriser Minia à lire le code des classes, méthodes et constructeurs qu’elle trouve');
+    expect(renderToStaticMarkup(<AskTaxo base="/projects/p" request={vi.fn()} minia={{...minia, source_reading:'off'}}/>))
+      .not.toContain('lire le code');
+  });
+  it('dit ce que la demande permettait du code', ()=>{
+    expect(readingNote(undefined)).toBe('');
+    expect(readingNote({status:'NOT_REQUESTED'})).toBe('');
+    expect(readingNote({status:'DISABLED'})).toContain('Minia n’a lu aucun code');
+    expect(readingNote({status:'ON_DEMAND'})).toContain('pas forcément le dernier');
+    expect(readingNote({status:'UNAVAILABLE'})).toContain('dossier de travail');
   });
 });
 
@@ -138,6 +159,7 @@ group('actions', ()=>{
     expect(queryPath('/projects/p', '3 derniers commits')).toBe('/projects/p/query?q=3+derniers+commits');
     expect(JSON.parse(askInit('Pourquoi ?').body as string)).toEqual({question:'Pourquoi ?'});
     expect(JSON.parse(askInit('Pourquoi ?', 'claude').body as string)).toEqual({question:'Pourquoi ?', provider:'claude'});
+    expect(JSON.parse(askInit('Pourquoi ?', '', true).body as string)).toEqual({question:'Pourquoi ?', source:true});
   });
   it('sélectionne, puis fait expliquer la sélection au fil de l’eau', async ()=>{
     const run=vi.fn().mockResolvedValueOnce(selection);

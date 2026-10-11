@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {gaps, gitFile, withheldNote, MiniaChoice, MiniaView, modelLabel, providerLabel, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
+import {CodeConsent, codeConsent, gaps, gitFile, withheldNote, MiniaChoice, MiniaView, modelLabel, providerLabel, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
   parent:'a'.repeat(40), project:{id:'p-1', name:'Demo-IAM'}, files_not_sent:0,
@@ -136,6 +136,17 @@ describe('contexte de diff (TAXO-MINIA-02)', ()=>{
     expect(html).toContain('Autoriser Minia à lire le diff de ce commit');
     expect(html).toContain('class="warning"');
     expect(renderToStaticMarkup(<SourceConsent status={status} checked onChange={noop}/>)).not.toContain('warning');
+  });
+  it('propose la case du code selon son propre réglage, jamais celui du diff', ()=>{
+    const reading:MiniaStatus={...status, source_context:'off', source_reading:'symbol'};
+    expect(codeConsent(status)).toBeNull();
+    expect(codeConsent({...reading, configured:false})).toBeNull();
+    expect(codeConsent(reading)).toEqual({checked:true, warning:''});
+    expect(codeConsent({...reading, remote:true})).toEqual({checked:false, warning:expect.stringContaining('le code lu quittera')});
+    const noop=()=>undefined;
+    expect(renderToStaticMarkup(<CodeConsent status={status} checked onChange={noop}/>)).toBe('');
+    expect(renderToStaticMarkup(<CodeConsent status={{...reading, remote:true}} checked={false} onChange={noop}/>))
+      .toContain('class="warning"');
   });
 });
 

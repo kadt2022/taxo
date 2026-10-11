@@ -147,7 +147,8 @@ def test_minia_without_a_model_is_disabled_but_taxo_still_works(repo, ask):
     _, added, _ = repo
     client, post = ask(None)
     assert client.get('/api/minia/status').json() == {'configured': False, 'provider': None, 'model': None,
-                                                      'source_context': 'off', 'remote': False, 'providers': []}
+                                                      'source_context': 'off', 'source_reading': 'off',
+                                                      'remote': False, 'providers': []}
     response = post(added)
     assert response.status_code == 503 and 'MINIA_NOT_CONFIGURED' in response.json()['detail']
 

@@ -1001,8 +1001,19 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
 - En exploration, Minia peut aussi demander une **Tuile adaptative** (`get_tile`, TAXO-MIP-ADT-01, PR C) : une
   référence déjà reçue et un profil déclaré (§ 9.5), servis par MIP `EXPAND` sur l'analyse de l'échange, avec
   leurs règles, chemins, frontières, classification et provenance. Minia ne compose aucun parcours ; un refus du
-  profil lui est rendu tel quel. `get_source` ne lui est jamais proposée : elle n'ouvre pas d'échange qui
-  l'autorise (attente de la clôture de TAXO-MINIA-SEC-01).
+  profil lui est rendu tel quel.
+- Elle peut lire le **code d'un symbole** (`get_source`, TAXO-MIP-ADT-01, PR C2) si le réglage du serveur et
+  l'accord de la demande (`"source": true`, la case du portail) l'autorisent : Taxo ne la propose qu'alors, et
+  seulement pour une référence déjà reçue de Taxo dans l'échange (une référence devinée est refusée sans rien
+  lire). La pièce garde sa classification et sa provenance, au commit de l'analyse, qui n'est pas forcément le
+  dernier commit ayant modifié la méthode ; elle n'est jamais un fait, et une affirmation se vérifie toujours sur
+  les faits. Son texte passe par la protection de la demande (secrets et identités masqués) avant le
+  fournisseur. Taxo ne lui donne aucune signification : le modèle lit le code de la méthode appelée plutôt que
+  de déduire un cadre ou une base de données d'un `CALLS`. La réponse dit ce que la demande permettait
+  (`source_reading` : `NOT_REQUESTED` sans l'accord de la demande, `DISABLED` si le réglage du serveur l'interdit,
+  `UNAVAILABLE` si rien n'est lisible (analyse du dossier de travail, sans commit, ou modèle qui ne demande pas
+  d'opérations), `ON_DEMAND` si
+  `get_source` est réellement proposée) ; le repli paquet garde ce statut.
 - Garde-fous fixés par Taxo : nombre d'opérations, octets, délai. À l'épuisement, Minia conclut avec ce
   qu'elle a et dit ce qui manque.
 - La trajectoire (opérations, arguments, tailles, non-transmis, verdicts) est visible en direct ; comme la
@@ -1033,7 +1044,7 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
      dite `truncated`. Sinon, `not_sent` dit pourquoi (`CONFIDENTIAL`, `GENERATED`, `BINARY`, `TOO_LARGE`,
      `NOT_A_REGULAR_FILE`, `CHANGED`, `NOT_DECLARED`, `LIMIT`). Sa classification (`source-classification/1`)
      n'annonce `CODE_SOURCE` que si du code est transmis ; ses restrictions (`source-disclosure/1`) sont à part.
-     Rien de ce qui est lu n'est conservé. Minia ne la demande pas avant la clôture de TAXO-MINIA-SEC-01 ;
+     Rien de ce qui est lu n'est conservé. Minia la demande en exploration, sous ce même double consentement (§ 12.5) ;
    - avec un fournisseur distant, le portail avertit que le contenu quittera la machine, et la case n'est
      pas cochée par défaut.
 5. Cloisonnement : un échange ne voit qu'un projet et un instantané.
