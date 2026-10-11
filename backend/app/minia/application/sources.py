@@ -11,8 +11,6 @@ provenance. Minia ajoute deux garde-fous à ce que le protocole contrôle déjà
 Le texte du code passe, comme tout message, par la protection de la demande (secrets et identités masqués) avant
 le fournisseur.
 """
-import json
-
 from app.protocol.domain.envelope import error
 
 OPERATION = 'get_source'
@@ -30,12 +28,30 @@ def noted(item):
     return {**item, 'note': NOTE} if item.get('operation') == OPERATION else item
 
 
+# Les champs où Taxo rend une référence (recherche, voisinage, faits et preuves d'une Tuile, pièce source). Jamais
+# un texte libre : le code d'une pièce ou un message de commit peut écrire n'importe quel symbole.
+_REFERENCE_FIELDS = frozenset({'reference', 'subject', 'object', 'symbol', 'premises', 'from', 'node', 'root',
+                               'subjects'})
+
+
+def _references(value, field=None):
+    """Les valeurs rendues par Taxo comme références, en parcourant la réponse champ par champ."""
+    if isinstance(value, dict):
+        for name, item in value.items():
+            yield from _references(item, name)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _references(item, field)
+    elif isinstance(value, str) and field in _REFERENCE_FIELDS:
+        yield value
+
+
 def received(reference, exchanged):
-    """Vrai si `reference` figure, comme valeur, dans une réponse déjà reçue de Taxo."""
+    """Vrai si `reference` a été rendue par Taxo comme une référence dans cet échange : égale à la valeur d'un champ
+    de référence, jamais trouvée dans un texte (un symbole écrit dans le code lu n'est pas une référence reçue)."""
     if not isinstance(reference, str) or not reference:
         return False
-    responses = json.dumps([item['response'] for item in exchanged], ensure_ascii=False)
-    return json.dumps(reference, ensure_ascii=False) in responses
+    return any(reference == value for item in exchanged for value in _references(item['response']))
 
 
 def key(step, exchanged):

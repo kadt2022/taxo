@@ -179,3 +179,17 @@ def test_a_working_tree_analysis_says_the_code_is_unavailable_and_never_offers_i
     assert 'get_source' not in [item['operation'] for item in sent(model, 0)['operations']]
     assert result['trajectory'][2]['outcome'] == 'ERROR'
     assert 'studentRepository.findAll()' not in json.dumps(model.calls)
+
+
+def test_a_symbol_written_in_the_code_read_is_not_a_received_reference():
+    """Un symbole écrit dans le code d'une pièce (ou dans tout texte) n'ouvre pas sa lecture : seule une valeur rendue
+    par Taxo comme référence compte, à l'identique."""
+    from app.minia.application import sources
+    hidden = f'{SERVICE}#secret()'
+    piece = {'operation': 'get_source', 'response': {'reference': FIND, 'items': [
+        {'reference': FIND, 'text': f'String next = "{hidden}";'}], 'message': hidden}}
+    tile = {'operation': 'get_tile', 'response': {'facts': [{'fact': {'subject': FIND, 'object': FIND_ALL,
+                                                                       'derivation': {'premises': [FIND_ALL]}}}]}}
+    assert not sources.received(hidden, [piece, tile])
+    assert sources.received(FIND, [piece]) and sources.received(FIND_ALL, [tile])
+    assert not sources.received(FIND[:-2], [piece]), 'jamais un fragment de référence'
