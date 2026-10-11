@@ -17,6 +17,12 @@ def test_a_query_keeps_its_parameter_names_never_their_values():
     assert redacted('/api/projects/p/elements?q=') == '/api/projects/p/elements?q=******'
     assert redacted('/api/health') == '/api/health'
     assert redacted('/api/x?opaque') == '/api/x?opaque=******'
+    assert redacted('/api/x?&') == '/api/x?******'
+
+
+def test_a_parameter_name_stays_encoded_and_cannot_forge_a_log_line():
+    assert redacted('/x?%0d%0aFORGED=value') == '/x?%0d%0aFORGED=******'
+    assert redacted('/x?a\r\nFORGED=1&b c=2') == '/x?aFORGED=******&b%20c=******', 'urlsplit retire déjà CR et LF'
 
 
 def test_the_access_log_never_writes_the_question(caplog):

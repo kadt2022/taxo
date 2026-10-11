@@ -5,7 +5,7 @@ recopier un secret. Le journal d'acces d'uvicorn la recopierait telle quelle ; c
 de chaque parametre. Le chemin, la methode et le statut restent, pour le diagnostic.
 """
 import logging
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import quote, urlsplit
 
 from app.minia.domain.confidentiality import MASK
 
@@ -13,6 +13,9 @@ ACCESS_LOGGER = 'uvicorn.access'
 # Position du chemin dans les arguments d'un message du journal d'acces d'uvicorn :
 # (client, methode, chemin, version HTTP, statut).
 _PATH = 2
+# Un nom de parametre garde sa forme encodee : un caractere de controle ou un espace y reste encode (`%0D%0A`),
+# jamais decode dans le journal, ou il pourrait forger une ligne.
+_NAME_SAFE = "%!$'()*+,-./:;@[]^_`{|}~"
 
 
 def redacted(path):
@@ -20,7 +23,7 @@ def redacted(path):
     parts = urlsplit(path)
     if not parts.query:
         return path
-    names = [name for name, _ in parse_qsl(parts.query, keep_blank_values=True)]
+    names = [quote(item.partition('=')[0], safe=_NAME_SAFE) for item in parts.query.split('&') if item]
     query = '&'.join(f'{name}={MASK}' for name in names) if names else MASK
     return f'{parts.path}?{query}'
 
