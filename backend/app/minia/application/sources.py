@@ -58,8 +58,8 @@ def _strings(value):
 
 
 def _confirmed(item):
-    """Les références que Taxo atteste connaître dans une réponse : une ancre ou un nœud marqué connu, un résultat
-    de recherche (lu dans l'index des noms de l'analyse)."""
+    """Les références que Taxo atteste connaître dans une réponse : une ancre ou un nœud marqué connu, un fait de la
+    Maille, un résultat de recherche (lu dans l'index des noms de l'analyse)."""
     response = item['response']
     found = response.get('items', []) if item.get('operation') == 'find_references' else []
     return {*_known(response), *(row['reference'] for row in found if isinstance(row.get('reference'), str))}
@@ -69,6 +69,8 @@ def _known(value):
     if isinstance(value, dict):
         if value.get('known') is True and isinstance(value.get('reference'), str):
             yield value['reference']
+        if isinstance(value.get('fact'), dict):
+            yield from _references(value['fact'])
         value = list(value.values())
     if isinstance(value, list):
         for item in value:
