@@ -400,8 +400,9 @@ class _Run:
         """Les operations dont la reponse part avec ce message, inscrites avant l'envoi : un arret du processus
         pendant l'appel au modele laisse leur trace (INV-07, AC-06)."""
         items = [InFlight(record, size) for record, _, size in self.waiting if record is not None]
-        if items:
-            self.state = self.state.announce(self.snapshot, items, self.owner.clock())
+        replays = [delivery for record, delivery, _ in self.waiting if record is None]
+        if items or replays:
+            self.state = self.state.announce(self.snapshot, items, self.owner.clock(), replays)
             self._save()
 
     def _interrupted(self):
@@ -472,7 +473,8 @@ class _Run:
         yield 'minia.note', {'note_id': step.note_id, 'status': 'CLOSED'}
 
     def _renew(self, step):
-        self.state, decision = self.state.request_renewal(step.request, self.owner.clock())
+        # Une tranche sans la place d'un refus est epuisee : sinon le modele ne pourrait ni appeler ni continuer.
+        self.state, decision = self.state.request_renewal(step.request, self.owner.clock(), MAX_ERROR_BYTES)
         data = {'granted': decision.granted, 'operations': decision.operations, 'refusal': decision.refusal,
                 'branches': list(step.request.branches)}
         if decision.granted:

@@ -197,13 +197,20 @@ def test_the_same_tile_in_the_same_session_is_replayed_from_memory(session):
     """AC-18 : la meme Tuile redemandee dans la meme demande est rejouee sans nouvel appel a Taxo, avec une
     livraison distincte liee a l'origine ; la repetition est signalee avec les branches ouvertes."""
     model = Scripted(neighborhood(school.SERVICE), neighborhood(school.SERVICE), final())
-    result = completed(session(model).investigate(question=QUESTION))
+    started = session(model)
+    result = completed(started.investigate(question=QUESTION))
 
     first, again = result['trajectory']
     assert first['outcome'] == 'OK' and again == {**again, 'outcome': 'REPLAYED', 'replay_of': first['delivery_id']}
     notice = sent(model, 2)['notices'][0]
     assert notice['notice'] == 'REPEATED' and school.SAVE in notice['open_branches']
     assert result['budget']['operations'] == 1, 'un rejeu n’est pas une opération de Taxo'
+    investigations = started.app.state.minia.investigations
+    announced = [event['data'] for event in investigations.store.events(result['investigation']['id'],
+                                                                     investigations.scope(started.project))
+                 if event['kind'] == 'IN_FLIGHT']
+    assert {'delivery_id': again['delivery_id'], 'replay_of': first['delivery_id']} in announced[-1]['replays'], \
+        'une nouvelle transmission part aussi au modele : le journal l’annonce avant l’envoi'
 
 
 def test_source_is_read_only_under_this_request_consent_and_never_replayed(session):
@@ -286,6 +293,22 @@ def test_responses_never_exceed_the_bytes_left_to_the_investigation(session):
 
     assert 0 < result['budget']['bytes'] <= 6_000
     assert any(sent(model, turn)['calls_left'] == 0 for turn in range(len(model.calls)))
+
+
+def test_a_slice_without_room_for_a_refusal_can_be_renewed(session):
+    """Il reste des operations a la tranche mais pas la place d'une reponse, fut-ce un refus : la tranche est
+    epuisee, et un renouvellement justifie l'ouvre a nouveau."""
+    limits = BudgetLimits(slice_operations=4, slice_bytes=2_800, total_operations=6, total_bytes=30_000,
+                          max_renewals=1)
+
+    def renew(sent_message):
+        return step('renew', branches=sent_message['state']['open_branches'][:1], justification='Poursuivre.')
+    model = Scripted(neighborhood(school.CONTROLLER), renew, final())
+    completed(session(model, limits=limits).investigate(question=QUESTION))
+
+    assert sent(model, 1)['calls_left'] == 0
+    assert sent(model, 2)['calls_left'] > 0
+    assert not sent(model, 2).get('notices')
 
 
 def test_interrupt_then_resume_restores_the_confirmed_question_and_frontier(session):
