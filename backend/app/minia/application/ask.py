@@ -511,7 +511,8 @@ class AskMinia:
         question = self._checked(question)
         projection = self.query(project_id, question)
         if projection['status'] == 'SELECTED' and authorship.asks_author(question):
-            return self._selection_authors(question, projection)
+            # Une réponse directe ne lit jamais de code : elle le dit si l'accord était donné.
+            return self._unread_with(self._selection_authors(question, projection), source)
         model = self._protected(provider, project_id)
         return _reported(self._project_route(model, question, projection, cancel, source), model.disclosure)
 
@@ -531,7 +532,11 @@ class AskMinia:
             return self._explore(model, question, exchange, [], None, result, packet, cancel)
         steps = self._project_steps(model, question, projection, cancel=cancel)
         # Un modèle qui ne demande pas d'opérations ne lit jamais de code : la réponse le dit si l'accord était donné.
-        return _completed_with(steps, {'source_reading': self._unread(source)}) if source else steps
+        return self._unread_with(steps, source)
+
+    def _unread_with(self, steps, requested):
+        """Les étapes d'une réponse sans lecture de code ; si la demande l'autorisait, le résultat dit pourquoi."""
+        return _completed_with(steps, {'source_reading': self._unread(requested)}) if requested else steps
 
     def _unread(self, requested):
         """Ce que la demande permettait du code sans exploration : désactivé par le réglage, sinon illisible."""
