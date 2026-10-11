@@ -75,10 +75,10 @@ class InvestigationState:
 
     # Carnet -------------------------------------------------------------------------------------------------
 
-    def record_tile(self, snapshot: Snapshot, anchor: str, edges=(), frontier=(), *,
-                    at: datetime) -> 'InvestigationState':
+    def record_tile(self, snapshot: Snapshot, anchor: str, edges=(), frontier=(), *, at: datetime,
+                    expanded=()) -> 'InvestigationState':
         self._writable_on(snapshot)
-        logbook = self.logbook.with_tile(anchor, edges, frontier)
+        logbook = self.logbook.with_tile(anchor, edges, frontier, expanded)
         event = Event(EventKind.TILE, at, {'anchor': anchor, 'edges': len(logbook.edges) - len(self.logbook.edges),
                                            'frontier': len(logbook.frontier)})
         return self._changed(event, at, logbook=logbook)

@@ -185,13 +185,17 @@ class Logbook:
 
     # Ecriture : chaque methode rend un nouveau carnet ----------------------------------------------------------
 
-    def with_tile(self, anchor: str, edges=(), frontier=()) -> 'Logbook':
-        """Le developpement d'une Tuile ancree sur `anchor` : l'ancre est visitee, les aretes nouvelles ajoutees,
-        les extremites non developpees deviennent decouvertes, et la frontiere rendue par Taxo est gardee telle
-        quelle. Un noeud deja developpe n'est jamais remis en frontiere : un cycle ne relance rien."""
+    def with_tile(self, anchor: str, edges=(), frontier=(), expanded=()) -> 'Logbook':
+        """Le developpement d'une Tuile ancree sur `anchor` : l'ancre et les noeuds que la Tuile a developpes
+        (`expanded`, sur plusieurs niveaux) sont visites, les aretes nouvelles ajoutees, les extremites non
+        developpees deviennent decouvertes, et la frontiere rendue par Taxo est gardee telle quelle. Un noeud deja
+        developpe n'est jamais remis en frontiere : un cycle ne relance rien."""
         if not anchor:
             raise MiniaError(INVESTIGATION_INVALID, 'Une Tuile sans ancre ne s’inscrit pas au carnet.')
-        visited = _visit(self.visited, anchor, Action.TILE)
+        developed = {anchor, *expanded}
+        visited = self.visited
+        for node in (anchor, *expanded):
+            visited = _visit(visited, node, Action.TILE)
         known = {edge.identity for edge in self.edges}
         added = []
         for edge in edges:
@@ -199,7 +203,7 @@ class Logbook:
                 known.add(edge.identity)
                 added.append(edge)
         kept = [entry for entry in self.frontier
-                if not (entry.node == anchor and entry.kind in _LIFTED_BY_EXPANSION)]
+                if not (entry.node in developed and entry.kind in _LIFTED_BY_EXPANSION)]
         keys = {entry.key for entry in kept}
         for entry in frontier:
             if entry.key not in keys:

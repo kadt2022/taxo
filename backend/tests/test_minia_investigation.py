@@ -69,6 +69,16 @@ def test_a_tile_cut_by_depth_continues_from_its_frontier_node():
     assert state.logbook.open_branches()[-1] == chain[8]
 
 
+def test_a_multilevel_tile_marks_every_node_it_expanded():
+    """Une Tuile de plusieurs niveaux developpe ses noeuds internes : ils quittent la frontiere, ses feuilles y
+    restent."""
+    edges = calls(CONTROLLER, SERVICE) + calls(SERVICE, FIND_STUDENT, SAVE)
+    state = opened().record_tile(SNAPSHOT, CONTROLLER, edges, at=at(1), expanded=(SERVICE,))
+
+    assert state.logbook.expanded(SERVICE)
+    assert state.logbook.open_branches() == (FIND_STUDENT, SAVE)
+
+
 def test_convergence_and_cycle_keep_every_edge_without_reexpanding():
     """AC-03 : deux aretes vers un meme noeud et l'arete qui ferme un cycle sont conservees ; un noeud developpe
     ne revient jamais en frontiere."""
