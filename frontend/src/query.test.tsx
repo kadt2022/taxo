@@ -100,7 +100,7 @@ group('vues', ()=>{
   it('propose la case du code seulement si le réglage la permet (décochée à l’affichage, l’accord suit le fournisseur)', ()=>{
     const minia={configured:true, provider:'ollama', model:'m', source_context:'off' as const, remote:false, source_reading:'symbol' as const};
     expect(renderToStaticMarkup(<AskTaxo base="/projects/p" request={vi.fn()} minia={minia}/>))
-      .toContain('Autoriser Minia à lire le code des méthodes qu’elle trouve');
+      .toContain('Autoriser Minia à lire le code des classes, méthodes et constructeurs qu’elle trouve');
     expect(renderToStaticMarkup(<AskTaxo base="/projects/p" request={vi.fn()} minia={{...minia, source_reading:'off'}}/>))
       .not.toContain('lire le code');
   });
