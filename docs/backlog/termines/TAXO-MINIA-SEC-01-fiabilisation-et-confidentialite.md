@@ -1,14 +1,14 @@
 # TAXO-MINIA-SEC-01 — Fiabilisation des réponses et protection des informations confidentielles
 
-**Statut :** récit accepté par le responsable du produit le 10 octobre 2026 ; E3 (#118), E1 (#119) et E2 (#120)
-fusionnées le 10 octobre 2026 ; restent E4 et la mesure.  
+**Statut :** **terminé le 11 octobre 2026.** Récit accepté le 10 octobre 2026 ; E3 (#118), E1 (#119) et E2 (#120)
+fusionnées le 10 octobre ; E4 (#126) et le banc rejouable (#127) livrés le 11 octobre. Bilan ci-dessous (« Clôture »).  
 **Priorité :** critique.  
 **Référence :** rapport du banc `student-course-demo`, 18 tests du 10 octobre 2026. Le rapport et ses 18
-questions ne sont pas encore dans le dépôt : E1 à E3 ont donc été vérifiées sur des projets synthétiques à vérité
-établie à la main et sur `student-analysis-java`, pas sur le banc lui-même. Le banc, sans donnée personnelle, et son
-rejeu sont un préalable à la clôture du récit : il ne peut pas être déclaré terminé sans eux.  
+questions ne sont pas dans le dépôt : le banc a été reconstitué (#127), réponses attendues établies à la main.
+Le 11 octobre, le responsable du produit a décidé que son rejeu contre un vrai modèle ne conditionne pas la
+clôture : il le fera lui-même pour apprécier le travail ; un écart constaté donnera un nouveau récit.  
 **Source de vérité :** `ARCHITECTURE.md` § 12.4 (verdicts), § 12.5 (transparence) et § 12.6 (sécurité et consentement).  
-**Bloque :** [TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md) (lecture du code des méthodes).
+**Bloquait :** [TAXO-MIP-SOURCE-01](../TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md) (lecture du code des méthodes).
 
 ## 1. Problème
 
@@ -109,3 +109,26 @@ L'ordre peut changer selon les dépendances constatées dans le code ; tout chan
 Aucune modification lourde de contrat ni aucune fusion sans l'accord explicite du responsable du produit.
 
 Ce récit doit être terminé avant d'autoriser la nouvelle lecture de code du récit TAXO-MIP-SOURCE-01.
+
+## Clôture
+
+Ce qui est démontré, et par quoi :
+
+- **Verdicts (E1)** : un `CONFIRMED` porte sur l'affirmation entière ; ses limites (couverture non lue, échec
+  d'exploration ou repli) sont rendues (#119).
+- **Faits de sécurité (E2, tests 9, 11 et 18)** : au commit `01163f1` de `student-course-demo`, Taxo produit
+  `PROTECTED_BY hasAnyRole('ADMIN','TEACHER')` sur `GET /api/students` et `POST /api/enrollments`, en plus de
+  `authenticated()`, et `ANNOTATED_WITH EnableMethodSecurity` sur `SecurityConfig` ; `csrf.disable()` est un fait
+  `CONFIGURES` (#120). Les 32 triplets de sécurité établis à la main sont la vérité du banc (#127).
+- **Confidentialité (E3)** : une seule couche protège chaque message avant tout fournisseur (#118). Les tests
+  capturent les charges réellement envoyées, y compris sur le chemin des Tuiles : aucun nom, courriel, ligne
+  de fin de commit ni secret ; un mot de passe écrit en dur reste visible comme tel, valeur masquée (#126, #127).
+- **Transparence (E4)** : observations, interprétations et inconnues restent séparées ; chaque refus de Taxo est
+  dit avec sa raison ; le journal d'accès ne garde que les noms de paramètres ; la trajectoire ne garde ni secret
+  ni réponse brute (#126).
+- **Banc** : `backend/scripts/minia_bench.py` rejoue les 18 questions, trois fois chacune, et mesure exactitude,
+  fausses confirmations de sécurité, opérations, appels, octets, temps et fuites dans les charges (#127).
+
+Limite : le rejeu contre un vrai modèle n'a pas été exécuté dans le cadre du récit, par décision du responsable
+du produit (voir le statut). [TAXO-MIP-SOURCE-01](../TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md) n'est
+plus bloqué.

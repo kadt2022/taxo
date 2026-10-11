@@ -6,7 +6,7 @@
 **Statut :** accepté par le responsable du produit le 10 octobre 2026 (fusion avec TAXO-MIP-SOURCE-01, champ `profile`
 et annotations observées acceptés ; classification des Tuiles ajoutée le même jour, § 21 bis). PR A en cours.  
 **Priorité :** haute.  
-**Dépendance préalable :** [TAXO-MINIA-SEC-01](TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md) — fiabilité et
+**Dépendance préalable :** [TAXO-MINIA-SEC-01](termines/TAXO-MINIA-SEC-01-fiabilisation-et-confidentialite.md) — fiabilité et
 confidentialité.  
 **Rattachement :** [TAXO-MIP-SOURCE-01](TAXO-MIP-SOURCE-01-lecture-du-code-par-la-maille.md), qu'il absorbe (§ 0), et
 [TAXO-01N / MIP-01](TAXO-01N-ask-taxo-general.md).
