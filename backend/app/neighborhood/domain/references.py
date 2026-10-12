@@ -12,7 +12,7 @@ import unicodedata
 
 VERSION = 'references/1'
 KEY_LENGTH = 256
-# Le plus de références qu'une page `CONTAINS` parcourt : la recherche d'un texte ne s'appuie sur aucun index, elle lit les
+# Le plus de références que parcourt une page de recherche de texte : la recherche d'un texte ne s'appuie sur aucun index, elle lit les
 # clés du type demandé dans l'ordre. Atteinte, la page le dit (`not_sent`) et rend une reprise : jamais une absence.
 MAX_SCAN = 20_000
 MAX_PREFIX = 200

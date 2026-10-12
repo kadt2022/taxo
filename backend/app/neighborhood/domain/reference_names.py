@@ -20,8 +20,8 @@ import unicodedata
 
 from app.neighborhood.domain.references import KEY_LENGTH, KEY_MATCH, ReferenceSearchError
 
-KEY, NAME, CONTAINS = KEY_MATCH, 'NAME', 'CONTAINS'
-MATCHES = (KEY, NAME, CONTAINS)
+KEY, NAME = KEY_MATCH, 'NAME'
+MATCHES = (KEY, NAME)
 SEPARATORS = frozenset('./#:$')
 CANONICAL = '.'
 CALLABLE_TYPE, MEMBER, OPENING, CLOSING = 'symbol', '#', '(', ')'

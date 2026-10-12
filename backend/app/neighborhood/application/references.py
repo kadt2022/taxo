@@ -6,8 +6,8 @@ l'index) ; la lecture est celle, bornée et indexée, du port.
 """
 from typing import Protocol
 
-from app.neighborhood.domain.reference_names import CONTAINS, NAME, name_key
-from app.neighborhood.domain.references import MAX_SCAN, prefix_key
+from app.neighborhood.domain.reference_names import NAME, name_key
+from app.neighborhood.domain.references import prefix_key
 
 
 class ReferenceSearch(Protocol):
@@ -33,14 +33,12 @@ class ReferenceSearch(Protocol):
 
 def compared(prefix, match):
     """Le préfixe, ou le nom, tel qu'il se compare dans ce mode."""
-    return name_key(prefix) if match == NAME else prefix_key(prefix)  # CONTAINS se replie comme un préfixe
+    return name_key(prefix) if match == NAME else prefix_key(prefix)
 
 
 def find_references(search: ReferenceSearch, scan_id, prefix, kind, after, limit, match=None):
     """Une page de références et s'il en reste : dans l'ordre de leur clé, ou de leur empreinte en mode `NAME`
     (None si l'analyse n'a pas d'index des noms)."""
-    if match == CONTAINS:
-        return search.containing(scan_id, prefix_key(prefix), kind, after, limit, MAX_SCAN)
     if match == NAME:
         return search.named(scan_id, name_key(prefix), kind, after, limit)
     return search.references(scan_id, prefix_key(prefix), kind, after, limit)

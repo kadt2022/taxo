@@ -30,13 +30,16 @@ from app.protocol.application.arguments import claim_object as _claim_object, no
 from app.protocol.application.arguments import reference as _reference, relation as _relation, text as _text
 from app.knowledge.domain.knowledge import AnalysisKnowledge, contains
 from app.protocol.domain.verdict import judge
-from app.neighborhood.application.references import MAX_SCAN, compared, find_references
-from app.neighborhood.domain.reference_names import CONTAINS, KEY, MATCHES, NAME
+from app.neighborhood.application.references import compared, find_references
+from app.neighborhood.domain.reference_names import KEY, MATCHES, NAME
+from app.neighborhood.domain.references import MAX_SCAN, prefix_key
 from app.neighborhood.domain import handle, references
 from app.protocol.application.neighborhood_operation import neighborhood
 
 logger = logging.getLogger(__name__)
 
+# Le mode de recherche d'un texte contenu dans la clé : propre au protocole, le voisinage n'en connaît pas le nom.
+CONTAINS = 'CONTAINS'
 DEFAULT_OPERATION_BYTES = 8_000
 MAX_OPERATION_BYTES = 32_000
 DEFAULT_EXCHANGE_BYTES = 64_000
@@ -567,7 +570,10 @@ class Exchange:
             after = references.decode(arguments.get('after'), self.scan.id, revision, folded, kind, match)
         except references.ReferenceSearchError as exc:
             raise OperationError(INVALID_ARGUMENT, str(exc)) from exc
-        page = find_references(self.facts, self.scan.id, prefix, kind, after, limit, match)
+        if match == CONTAINS:
+            page = self.facts.containing(self.scan.id, prefix_key(prefix), kind, after, limit, MAX_SCAN)
+        else:
+            page = find_references(self.facts, self.scan.id, prefix, kind, after, limit, match)
         if page is None:
             raise OperationError(NOT_AVAILABLE, 'Cette analyse n’a pas d’index des noms : relancer l’analyse, ou '
                                                 'chercher par préfixe de clé (match KEY).')
@@ -662,7 +668,7 @@ def _search(arguments, analysis):
     if type(limit) is not int or not 1 <= limit <= references.MAX_LIMIT:
         raise OperationError(INVALID_ARGUMENT, f'limit doit être un entier entre 1 et {references.MAX_LIMIT}.')
     match = arguments.get('match', KEY)
-    if not isinstance(match, str) or match not in MATCHES:
+    if not isinstance(match, str) or match not in MATCHES + (CONTAINS,):
         raise OperationError(INVALID_ARGUMENT, 'match : KEY (préfixe de la clé), NAME (nom simple ou qualifié) ou '
                              'CONTAINS (texte contenu dans la clé, avec un type).')
     prefix = arguments.get('prefix')

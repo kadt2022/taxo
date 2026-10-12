@@ -3,7 +3,7 @@ d'un type, sans tenir compte de la casse. Ce n'est pas une recherche indexée : 
 elle s'arrête à sa borne, la page le dit dans `not_sent` et rend une reprise. Jamais une absence."""
 import pytest
 
-from app.neighborhood.application import references as application
+from app.protocol.application import exchange as application
 from test_neighborhood_conformance import STORAGES, Twin, edge
 
 REFERENCES = ['module:Orders', 'module:orders-api', 'module:ordinal', 'module:Straße', 'module:strasse-x',
