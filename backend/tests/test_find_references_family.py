@@ -97,6 +97,16 @@ def test_the_response_declares_its_coverage_and_its_type(taxo):
     assert page['coverage'], 'la couverture est déclarée dans chaque réponse'
 
 
+def test_describe_advertises_that_the_prefix_may_be_omitted_with_a_type(taxo):
+    client, url = taxo
+    described = client.post(url, json={'requests': [{'operation': 'describe', 'arguments': {}}]}).json()
+    items = described['responses'][0]['items']
+    declared = next(item for item in items if item.get('operation') == 'find_references')['arguments']
+    assert 'facultatif ou vide' in declared['prefix']
+    assert 'liste toute la famille' in declared['prefix']
+    assert 'seul, il liste la famille' in declared['type']
+
+
 def test_without_a_type_the_prefix_stays_required(taxo):
     page = search(taxo, limit=50)
     assert page['outcome'] == 'ERROR'

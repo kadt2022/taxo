@@ -91,8 +91,10 @@ _ARGUMENTS = {
                                  'renvois par indice)',
                          'continuation': 'reprise d’une adjacence coupée (facultatif)'},
     'find_references': {'analysis': 'identifiant de l’analyse', 'prefix': 'début de la clé (après le type), 1..200 ; '
-                                                                         'en NAME, le nom cherché',
-                        'type': 'type de référence (facultatif)', 'limit': '1..50', 'after': 'reprise (facultatif)',
+                                                                         'en NAME, le nom cherché ; facultatif ou vide '
+                                                                         'avec type en KEY : liste toute la famille',
+                        'type': 'type de référence (facultatif ; seul, il liste la famille)', 'limit': '1..50',
+                        'after': 'reprise (facultatif)',
                         'match': 'KEY (défaut) | NAME : nom simple ou qualifié (VetController, '
                                  'OwnerRepository.findById, Items.list(String)), égal à la fin de la clé'},
     'get_source': {'reference': 'symbole déclaré : type, méthode ou constructeur (jamais un fichier)'},
