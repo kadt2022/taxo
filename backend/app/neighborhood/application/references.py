@@ -15,6 +15,12 @@ class ReferenceSearch(Protocol):
                    limit: int) -> tuple[list[tuple], bool]:
         """Au plus `limit` (clé, empreinte, référence, type) après `after`, et s'il en reste."""
 
+    def containing(self, scan_id: str, text: str, kind: str, after: tuple | None, limit: int,
+                   max_scan: int) -> tuple[list[tuple], bool, tuple | None]:
+        """Au plus `limit` (clé, empreinte, référence, type) du type dont la clé contient `text` (déjà replié), après
+        `after`, en lisant au plus `max_scan` références ; s'il en reste ; et, si la lecture s'est arrêtée à la borne, la
+        (clé, empreinte) où reprendre (None sinon)."""
+
     def families(self, scan_id: str) -> list[tuple[str, int]]:
         """(type, nombre de références indexées) pour l'analyse, le plus nombreux d'abord ; vide si l'analyse n'a
         pas d'index."""

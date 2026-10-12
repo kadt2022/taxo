@@ -148,6 +148,19 @@ class SqlAlchemyAnalysisFacts:
                        and (after is None or (key, hash_) > tuple(after)))
         return found[:limit], len(found) > limit
 
+    def containing(self, scan_id, text, kind, after, limit, max_scan):
+        """The same bounded search over this fallback table, which is no longer fed: kept for the equivalence tests."""
+        ordered = sorted((key, hash_, reference, kind_) for reference in self._references_of(scan_id)
+                         for kind_, key, hash_ in [_searched(reference)]
+                         if kind_ == kind and (after is None or (key, hash_) > tuple(after)))
+        window = ordered[:max_scan]
+        found = [item for item in window if text in item[0]]
+        if len(found) > limit:
+            return found[:limit], True, None
+        if len(ordered) > max_scan:
+            return found, True, (window[-1][0], window[-1][1])
+        return found, False, None
+
     def families(self, scan_id):
         """The same count over this fallback table, which is no longer fed: kept for the equivalence tests only."""
         counts = {}

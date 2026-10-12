@@ -92,9 +92,10 @@ def test_an_analysis_without_an_index_announces_no_family_and_describe_still_wor
 
 
 def test_the_other_items_of_describe_are_untouched(taxo, monkeypatch):
-    with_families = describe(taxo)
+    # Un budget large : ce test compare les éléments, pas la place que la légende prend sous la limite par défaut.
+    with_families = describe(taxo, max_bytes=30_000)
     monkeypatch.setattr(SqlAlchemyFactMemory, 'families', lambda self, scan_id: [])
-    without = describe(taxo)
+    without = describe(taxo, max_bytes=30_000)
     kept = [item for item in with_families['items'] if item['kind'] != 'family']
     assert kept == without['items']
 

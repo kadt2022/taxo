@@ -380,6 +380,11 @@ class SqlAlchemyFactMemory:
         with Session(self.engine) as db:
             return reference_index.search(db, scan_id, prefix, kind, after, limit)
 
+    def containing(self, scan_id, text, kind, after, limit, max_scan):
+        """References of a type whose key contains `text`: a bounded read of the keys of that type in order."""
+        with Session(self.engine) as db:
+            return reference_index.containing(db, scan_id, text, kind, after, limit, max_scan)
+
     def families(self, scan_id):
         """How many references of the analysis the index holds per type, most numerous first: one grouped read."""
         with Session(self.engine) as db:
