@@ -1014,6 +1014,12 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   `UNAVAILABLE` si rien n'est lisible (analyse du dossier de travail, sans commit, ou modèle qui ne demande pas
   d'opérations), `ON_DEMAND` si
   `get_source` est réellement proposée) ; le repli paquet garde ce statut.
+- **Trois choses ne se confondent pas** : un fait de Taxo (une affirmation confirmée par `verify_claim`), ce que
+  Minia a lu dans le code, et son interprétation. La note de `get_source` demande à Minia de rapporter ce qu'elle
+  lit en `interpretation` qui commence par « Code lu » et cite le symbole et les lignes : jamais un verdict, jamais
+  une relation de Taxo que Taxo n'a pas confirmée. La règle voyage avec l'opération, pas dans la consigne de chaque
+  tour : la fenêtre d'un petit modèle ne la paie que lorsque la lecture est permise. Aucun type d'énoncé n'est
+  ajouté à la réponse de Minia.
 - Garde-fous fixés par Taxo : nombre d'opérations, octets, délai. À l'épuisement, Minia conclut avec ce
   qu'elle a et dit ce qui manque.
 - **Répétition bornée.** Une opération redemandée à l'identique n'est pas rejouée : si sa réponse est un
