@@ -639,9 +639,6 @@ def _search(arguments, analysis):
     _no_other(arguments, ('analysis', 'prefix', 'type', 'limit', 'after', 'match'))
     if arguments.get('analysis') != analysis:
         raise OperationError(INVALID_ARGUMENT, 'analysis doit identifier l’analyse de cet échange (describe).')
-    prefix = arguments.get('prefix')
-    if not isinstance(prefix, str) or not 1 <= len(prefix) <= references.MAX_PREFIX:
-        raise OperationError(INVALID_ARGUMENT, f'prefix : de 1 à {references.MAX_PREFIX} caractères.')
     kind = arguments.get('type')
     if kind is not None and kind not in _REFERENCE_TYPES:
         raise OperationError(INVALID_ARGUMENT, 'type : un type de référence du vocabulaire.')
@@ -651,6 +648,14 @@ def _search(arguments, analysis):
     match = arguments.get('match', KEY)
     if not isinstance(match, str) or match not in MATCHES:
         raise OperationError(INVALID_ARGUMENT, 'match : KEY (préfixe de la clé) ou NAME (nom simple ou qualifié).')
+    prefix = arguments.get('prefix')
+    # Une famille entière se consulte sans préfixe : avec un `type`, en mode KEY, un préfixe absent ou vide liste toutes
+    # ses références, par pages. Sans type, ou en mode NAME (qui cherche un nom), le préfixe reste obligatoire.
+    if prefix in (None, '') and kind is not None and match == KEY:
+        return '', kind, limit, match
+    if not isinstance(prefix, str) or not 1 <= len(prefix) <= references.MAX_PREFIX:
+        raise OperationError(INVALID_ARGUMENT, f'prefix : de 1 à {references.MAX_PREFIX} caractères ; il ne peut être '
+                             'omis qu’avec un type, en mode KEY, pour lister toute la famille.')
     return prefix, kind, limit, match
 
 
