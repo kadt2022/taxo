@@ -658,6 +658,10 @@ $env:MINIA_GEMINI_MODEL = 'gemini-3.8-flash'    # nom exact d'un modèle ouvert 
 $env:MINIA_GEMINI_TIER  = 'free'                # défaut ; 'paid' si la clé est facturée
 ```
 
+Un second modèle Gemini peut être proposé à côté du premier, avec la même clé et les mêmes protections
+(`MINIA_GEMINI_LITE_MODEL`, par exemple `gemini-3.1-flash-lite`, et `MINIA_GEMINI_LITE_TIER`) : le portail le liste
+comme « Gemini Lite ». Les quotas gratuits sont propres à chaque modèle et à chaque projet (AI Studio, Rate limits).
+
 Au niveau gratuit, Google peut utiliser les données envoyées pour améliorer ses produits : le portail
 l'indique (« niveau gratuit ») et le déconseille pour du code privé ; le diff reste décoché par défaut. La
 clé passe dans un en-tête, jamais dans l'URL. Une réponse bloquée, déclinée ou coupée est signalée, un

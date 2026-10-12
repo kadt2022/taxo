@@ -13,14 +13,14 @@ def hypotheses_models(value=None):
     return [name.strip() for name in raw.split(',') if name.strip()]
 
 def minia(provider=None, url=None, model=None, claude_model=None, gemini_model=None, mistral_model=None,
-          groq_model=None):
+          groq_model=None, gemini_lite_model=None):
     """Reglages de Minia : fournisseur par defaut, puis chaque fournisseur. Un fournisseur sans modele reste
     desactive ; sans aucun, Minia est desactivee. Claude et Gemini ne s'activent que sur choix explicite
     d'un modele (MINIA_CLAUDE_MODEL, MINIA_GEMINI_MODEL) : ce sont des services distants. MINIA_GEMINI_TIER
     dit si la cle Gemini est au niveau gratuit (defaut : les donnees peuvent servir a Google) ou payant ;
     MINIA_MISTRAL_MODEL et MINIA_MISTRAL_TIER font de meme pour Mistral ; MINIA_MISTRAL_NUM_CTX donne la
     fenetre du modele Mistral choisi, en tokens ; MINIA_GROQ_MODEL, MINIA_GROQ_TIER et MINIA_GROQ_NUM_CTX font de
-    meme pour Groq."""
+    meme pour Groq ; MINIA_GEMINI_LITE_MODEL et MINIA_GEMINI_LITE_TIER ajoutent un second modele Gemini a cote du premier."""
     return {'provider': (provider or os.getenv('MINIA_PROVIDER', 'ollama')).strip().lower(),
             'url': url or os.getenv('MINIA_OLLAMA_URL', 'http://127.0.0.1:11434'),
             'model': (model if model is not None else os.getenv('MINIA_OLLAMA_MODEL', '')).strip(),
@@ -35,6 +35,9 @@ def minia(provider=None, url=None, model=None, claude_model=None, gemini_model=N
                               else os.getenv('MINIA_MISTRAL_MODEL', '')).strip(),
             'mistral_tier': os.getenv('MINIA_MISTRAL_TIER', 'free').strip().lower(),
             'mistral_num_ctx': int(os.getenv('MINIA_MISTRAL_NUM_CTX', '32768')),
+            'gemini_lite_model': (gemini_lite_model if gemini_lite_model is not None
+                                  else os.getenv('MINIA_GEMINI_LITE_MODEL', '')).strip(),
+            'gemini_lite_tier': os.getenv('MINIA_GEMINI_LITE_TIER', 'free').strip().lower(),
             'groq_model': (groq_model if groq_model is not None else os.getenv('MINIA_GROQ_MODEL', '')).strip(),
             'groq_tier': os.getenv('MINIA_GROQ_TIER', 'free').strip().lower(),
             'groq_num_ctx': int(os.getenv('MINIA_GROQ_NUM_CTX', '32768'))}

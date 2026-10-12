@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {CodeConsent, codeConsent, gaps, gitFile, withheldNote, MiniaChoice, MiniaView, modelLabel, providerLabel, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
+import {CodeConsent, codeConsent, gaps, gitFile, withheldNote, MiniaChoice, MiniaView, modelLabel, providerLabel, providerName, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
   parent:'a'.repeat(40), project:{id:'p-1', name:'Demo-IAM'}, files_not_sent:0,
@@ -199,6 +199,11 @@ describe('niveau gratuit (TAXO-MINIA-06)', ()=>{
     expect(providerLabel({provider:'mistral', model:'mistral-small-latest', remote:true, data_use:true}))
       .toBe('Mistral · mistral-small-latest (distant, niveau gratuit)');
     expect(remoteNote({...status, provider:'mistral', remote:true, data_use:true})).toContain('Minia Mistral est un service distant');
+  });
+  it('nomme le second modèle Gemini à côté du premier', ()=>{
+    expect(providerLabel({provider:'gemini-lite', model:'gemini-3.1-flash-lite', remote:true, data_use:true}))
+      .toBe('Gemini Lite · gemini-3.1-flash-lite (distant, niveau gratuit)');
+    expect(providerName('gemini')).toBe('Gemini');
   });
   it('nomme Minia Groq, service distant dont le niveau gratuit est signalé', ()=>{
     expect(providerLabel({provider:'groq', model:'openai/gpt-oss-120b', remote:true, data_use:true}))

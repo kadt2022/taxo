@@ -283,20 +283,22 @@ def test_settings_choose_the_provider(monkeypatch):
     for name in ('MINIA_PROVIDER', 'MINIA_OLLAMA_URL', 'MINIA_OLLAMA_MODEL', 'MINIA_OLLAMA_NUM_CTX',
                  'MINIA_OLLAMA_TIMEOUT_SECONDS',
                  'MINIA_CLAUDE_MODEL', 'MINIA_GEMINI_MODEL', 'MINIA_GEMINI_TIER', 'MINIA_MISTRAL_MODEL',
-                 'MINIA_MISTRAL_TIER', 'MINIA_GROQ_MODEL', 'MINIA_GROQ_TIER', 'MINIA_GROQ_NUM_CTX'):
+                 'MINIA_MISTRAL_TIER', 'MINIA_GROQ_MODEL', 'MINIA_GROQ_TIER', 'MINIA_GROQ_NUM_CTX',
+                 'MINIA_GEMINI_LITE_MODEL', 'MINIA_GEMINI_LITE_TIER'):
         monkeypatch.delenv(name, raising=False)
     assert settings.minia() == {'provider': 'ollama', 'url': 'http://127.0.0.1:11434', 'model': '', 'num_ctx': 16384,
                                 'timeout': 900.0,
                                 'claude_model': '', 'gemini_model': '', 'gemini_tier': 'free', 'mistral_model': '',
                                 'mistral_tier': 'free', 'mistral_num_ctx': 32768, 'groq_model': '',
-                                'groq_tier': 'free', 'groq_num_ctx': 32768}
+                                'groq_tier': 'free', 'groq_num_ctx': 32768, 'gemini_lite_model': '',
+                                'gemini_lite_tier': 'free'}
     assert minia_model(settings.minia()) is None, 'sans modele, Minia reste desactivee'
     monkeypatch.setenv('MINIA_OLLAMA_MODEL', ' qwen2.5:3b ')
     model = minia_model(settings.minia())
     assert (model.provider, model.model_name, model.url) == ('ollama', 'qwen2.5:3b', 'http://127.0.0.1:11434')
     monkeypatch.setenv('MINIA_OLLAMA_NUM_CTX', '32768')
     assert minia_model(settings.minia()).num_ctx == 32768
-    with pytest.raises(ValueError, match='ollama, claude, gemini, mistral ou groq'):
+    with pytest.raises(ValueError, match='ollama, claude, gemini, gemini-lite, mistral ou groq'):
         minia_model(settings.minia(provider='inconnu'))
     monkeypatch.setenv('MINIA_CLAUDE_MODEL', 'claude-opus-5')
     models = minia_models(settings.minia())
