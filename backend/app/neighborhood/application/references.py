@@ -15,6 +15,10 @@ class ReferenceSearch(Protocol):
                    limit: int) -> tuple[list[tuple], bool]:
         """Au plus `limit` (clé, empreinte, référence, type) après `after`, et s'il en reste."""
 
+    def families(self, scan_id: str) -> list[tuple[str, int]]:
+        """(type, nombre de références indexées) pour l'analyse, le plus nombreux d'abord ; vide si l'analyse n'a
+        pas d'index."""
+
     def named(self, scan_id: str, name: str, kind: str | None, after: tuple | None,
               limit: int) -> tuple[list[tuple], bool] | None:
         """Au plus `limit` (nom, empreinte, référence, type) après `after`, et s'il en reste ; None si

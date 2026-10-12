@@ -380,6 +380,11 @@ class SqlAlchemyFactMemory:
         with Session(self.engine) as db:
             return reference_index.search(db, scan_id, prefix, kind, after, limit)
 
+    def families(self, scan_id):
+        """How many references of the analysis the index holds per type, most numerous first: one grouped read."""
+        with Session(self.engine) as db:
+            return reference_index.families(db, scan_id)
+
     def named(self, scan_id, name, kind, after, limit):
         """References of the analysis found under `name`: one equality read of a fixed-size index, or None
         when the analysis predates that index."""
