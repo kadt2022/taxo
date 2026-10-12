@@ -198,13 +198,16 @@ def limits(tiles):
     return tuple(dict.fromkeys(found))
 
 
-def tile(question, anchor, tiles, project=None, max_bytes=None):
+def tile(question, anchor, tiles, project=None, max_bytes=None, unserved=None):
     """Message transmis au modele pour une ancre : les faits de ses Tuiles MIP, leurs preuves réduites à leur
-    localisation, et ce que les Tuiles ne savent pas. Les faits qui ne tiennent pas ne sont pas transmis."""
+    localisation, et ce que les Tuiles ne savent pas. Les faits qui ne tiennent pas ne sont pas transmis.
+    `unserved` : pourquoi une Tuile n'a pas pu être servie ; c'est une limite, jamais une absence de faits."""
     repository, name = (f'repository:{project[0]}', project[1]) if project else (None, None)
     # Une Tuile par groupe de relations : un fait vu par deux d'entre elles n'est transmis qu'une fois.
     items = list({_said(item['fact']): item for found in tiles for item in found['facts']}.values())
     unknown = limits(tiles)
+    if unserved:
+        unknown = (*unknown, f'Une Tuile n’a pas pu être servie : {unserved}')
 
     def render(count):
         facts = []

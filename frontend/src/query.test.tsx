@@ -93,6 +93,17 @@ group('vues', ()=>{
     expect(renderToStaticMarkup(<SelectionAnswerView answer={{...answer, fallback:'opération répétée', source_reading:{status:'ON_DEMAND'}}}/>))
       .toContain('Minia pouvait lire le code');
   });
+  it('dit « pas conclu » comme une limite de Taxo, sans absence de faits ni parole de Minia', ()=>{
+    const unknown='Taxo n’a pas pu conclure : la Tuile a été coupée par un budget avant de livrer un fait.';
+    const html=renderToStaticMarkup(<SelectionAnswerView answer={{...answer, status:'NOT_CONCLUDED', mode:'paquet', facts:[],
+      answer:'', unknown, fallback:'Minia ne progressait plus', model:{provider:null, model:null}}}/>);
+    expect(html).toContain('Taxo n’a pas pu conclure');
+    expect(html).toContain('Exploration interrompue (Minia ne progressait plus).');
+    expect(html).not.toContain('Minia a répondu à partir d’un paquet de faits');
+    expect(html).not.toContain('Minia dit ne pas savoir');
+    expect(html).not.toContain('Aucune limite signalée par Taxo.');
+    expect(html).toContain('Aucun fait de Taxo n’appuie cette réponse.');
+  });
   it('présente le panneau sans rien interroger d’avance', ()=>{
     const run=vi.fn();
     const html=renderToStaticMarkup(<AskTaxo base="/projects/p" request={run}/>);

@@ -95,6 +95,19 @@ def _split_comment(value):
     return (value, '') if comment is None else (value[:comment.start()], value[comment.start():])
 
 
+def _texts(value):
+    """Tous les textes d'un message decode : cles et valeurs, sans l'ecriture JSON qui les entoure."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield str(key)
+            yield from _texts(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _texts(item)
+    elif isinstance(value, str):
+        yield value
+
+
 def _strip_trailers(text):
     """Le texte sans le paragraphe final de trailers, et le nombre de trailers retires."""
     match = _TRAILERS.search(text)
@@ -334,10 +347,14 @@ class Disclosure:
         return pseudonym
 
     def _check(self, protected):
-        """Dernier controle avant l'envoi : rien de ce qui doit etre protege ne subsiste."""
+        """Dernier controle avant l'envoi : rien de ce qui doit etre protege ne subsiste.
+
+        Il lit les textes decodes, tels que le modele les lira, et non leur ecriture JSON : dans celle-ci, un saut de
+        ligne est `\\n`, et `\\n@Configuration` se lirait comme l'adresse `n@Configuration`."""
+        text = '\n'.join(_texts(json.loads(protected)))
         whole = [form for form in self._pseudonyms if ' ' in form or _EMAIL.fullmatch(form)]
-        leaked = (_EMAIL.search(protected) or _TOKENS.search(protected)
-                  or any(re.search(rf'(?<![\w.@-]){re.escape(form)}(?![\w@-])', protected, re.IGNORECASE)
+        leaked = (_EMAIL.search(text) or _TOKENS.search(text)
+                  or any(re.search(rf'(?<![\w.@-]){re.escape(form)}(?![\w@-])', text, re.IGNORECASE)
                          for form in whole))
         if leaked:
             raise MiniaError(CONFIDENTIALITY_REFUSED, 'Une donnée confidentielle subsiste après protection : '

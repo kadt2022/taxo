@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.bootstrap.database import Base
 from app.main import create_app
+from app.minia.application.ask import MAX_REPEATS
 from test_minia_explore import answer, call, completed, statement
 from test_minia_general import Scripted, analysis_of
 
@@ -158,16 +159,21 @@ def test_without_both_consents_the_code_is_never_offered_nor_read(make_repo, tmp
         assert 'studentRepository.findAll()' not in json.dumps(model.calls)
 
 
-def test_the_same_reading_twice_in_the_same_state_is_a_repetition(make_repo, tmp_path):
-    """Seule une référence devenue reçue peut être redemandée : relire le même code n'apporte rien, l'exploration
-    s'arrête comme pour toute opération répétée."""
-    model = Scripted(found, call('get_source', reference=FIND), call('get_source', reference=FIND),
+def test_the_same_reading_again_is_reused_a_bounded_number_of_times_then_stops(make_repo, tmp_path):
+    """Relire le même code n'apporte rien : la pièce n'est pas relue (une seule lecture), sa réponse est réutilisée au
+    plus MAX_REPEATS fois ; la répétition suivante arrête l'exploration, comme pour toute opération répétée."""
+    read = call('get_source', reference=FIND)
+    model = Scripted(found, read, *([read] * (MAX_REPEATS + 1)),
                      json.dumps({'cited': [], 'answer': '', 'unknown': 'Repli sur le paquet.'}))
     result = ask(make_repo, tmp_path, model)
     assert result['mode'] == 'paquet' and 'répétée' in result['fallback']
     assert result['source_reading'] == {'status': 'ON_DEMAND'}, 'le repli garde ce que la demande permettait'
-    operations = [step['operation'] for step in result['trajectory']]
-    assert operations[:3] == ['describe', 'find_references', 'get_source'] and operations.count('get_source') == 1
+    steps = result['trajectory']
+    assert [step['operation'] for step in steps[:3]] == ['describe', 'find_references', 'get_source']
+    reused = [step for step in steps if step.get('reused')]
+    assert len(reused) == MAX_REPEATS
+    assert all(step['bytes'] == 0 for step in reused)
+    assert sum(1 for step in steps if step['operation'] == 'get_source' and not step.get('reused')) == 1
 
 
 def test_a_working_tree_analysis_says_the_code_is_unavailable_and_never_offers_it(make_repo, tmp_path):
