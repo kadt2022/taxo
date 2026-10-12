@@ -13,7 +13,9 @@ le fournisseur.
 """
 import re
 
+from app.minia.domain.exploration import UNKNOWN
 from app.protocol.domain.envelope import error
+from app.protocol.domain.source import nature
 
 OPERATION = 'get_source'
 _INVALID = 'INVALID_ARGUMENT'
@@ -152,6 +154,61 @@ def received(reference, exchanged):
     if not isinstance(reference, str) or not reference:
         return False
     return any(reference in _discovered(item) for item in exchanged)
+
+
+# La garde de conclusion : une conclusion qui porte un « inconnu » et cite un symbole reçu de Taxo, lisible et jamais lu,
+# revient une fois au modèle. La règle est fixe et ne juge rien : elle compare des noms à des références reçues ; le modèle lit
+# le code ou garde son inconnu.
+GUARD = 'conclusion'
+RETURNED = 'RETURNED'
+MAX_RETURNED = 3
+GUARD_NOTE = ('Conclusion renvoyée une fois : elle porte un « unknown » et cite un symbole reçu de Taxo dont le code est '
+              'lisible et n’a pas été lu ({}). Lis-le avec get_source avant de conclure, ou garde cet unknown.')
+
+
+def _owner(reference):
+    """La classe d'une référence de symbole : la référence elle-même, ou celle qui précède le membre (`#`)."""
+    return reference.split('#', 1)[0]
+
+
+def _simple(reference):
+    """Le nom simple de la classe d'une référence de symbole (`symbol:java:a.b.Orders#list()` → `Orders`)."""
+    return re.split(r'[.:]', _owner(reference))[-1]
+
+
+def _cited(statement):
+    """Ce qu'un énoncé écrit : son texte et, pour une affirmation, ses références."""
+    yield statement['text']
+    yield from (value for value in statement.get('claim', {}).values() if value)
+
+
+def unread(statements, exchanged):
+    """Pour une conclusion qui porte un « unknown » : les symboles reçus de Taxo dont la classe est citée par un de ses
+    énoncés et dont aucun code n'a été lu dans l'échange (ni la classe, ni un de ses membres). Une référence par classe :
+    celle que la conclusion cite, sinon la classe, sinon le premier membre reçu."""
+    if not any(statement['type'] == UNKNOWN for statement in statements):
+        return []
+    texts = [text for statement in statements for text in _cited(statement)]
+    read = {_owner(item['arguments'].get('reference', '')) for item in exchanged
+            if item['operation'] == OPERATION and item['response'].get('outcome') == 'OK'}
+    # Seuls une classe, une méthode ou un constructeur ont un code que `get_source` sert : jamais un champ.
+    known = {reference for item in exchanged for reference in _discovered(item)
+             if reference.startswith('symbol:') and nature(reference) != 'MEMBER'}
+    by_owner = {}
+    for reference in sorted(known, key=lambda value: ('#' in value, value)):
+        owner = _owner(reference)
+        if owner in read or not any(re.search(rf'(?<![\w$]){re.escape(_simple(reference))}(?![\w$])', text)
+                                    for text in texts):
+            continue
+        if owner not in by_owner or reference in texts:
+            by_owner[owner] = reference
+    return [by_owner[owner] for owner in sorted(by_owner)][:MAX_RETURNED]
+
+
+def returned(references):
+    """Ce que Minia voit de sa conclusion renvoyée : la règle et les références lisibles, jamais un verdict."""
+    return {'operation': GUARD, 'arguments': {},
+            'response': {'outcome': RETURNED, 'unread': references, 'note': GUARD_NOTE.format(', '.join(references))}}
 
 
 def key(step, exchanged):

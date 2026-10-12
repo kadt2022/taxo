@@ -702,6 +702,9 @@ class AskMinia:
                     # Les Tuiles adaptatives (TAXO-MIP-ADT-01, PR C) : un profil déclaré, sur la même analyse.
                     operations.append(tiles.offered())
         opening = len(trajectory)
+        # La garde de conclusion (ARCHITECTURE § 12.5) : seulement si le code est lisible dans cet échange, une fois.
+        readable = any(item.get('operation') == sources.OPERATION for item in operations)
+        guarded = []
         try:
             while True:
                 calls_left = MAX_CALLS - (len(trajectory) - opening)
@@ -715,7 +718,15 @@ class AskMinia:
                 # Ce que le modele rend porte des pseudonymes : Taxo travaille sur les valeurs d'origine.
                 step = exploration.restored(exploration.parse_step(raw), model.disclosure)
                 if isinstance(step, exploration.Answer):
-                    break
+                    unread = (sources.unread(step.statements, exchanged)
+                              if readable and not guarded and calls_left > 0 else [])
+                    if not unread:
+                        break
+                    # Un inconnu sur un code lisible jamais lu : la conclusion revient une fois au modèle, sans
+                    # appel à Taxo ni tour compté ; il lit le code ou garde son inconnu.
+                    guarded = unread
+                    exchanged.append(sources.returned(unread))
+                    continue
                 key = sources.key(step, exchanged)
                 if calls_left <= 0:
                     raise MiniaError(INVALID_ANSWER, STALLED)
@@ -750,14 +761,17 @@ class AskMinia:
             # L'exploration a echoue (format invalide, boucle sans progres, fenetre du modele depassee) : Taxo
             # bascule en mode paquet, qui ajuste son contexte a la place disponible.
             yield _stage('exploration', 'done', label, len(trajectory))
-            yield from packet(str(exc), trajectory)
+            # Le repli dit aussi la conclusion renvoyée : la garde a eu lieu, quelle que soit la suite.
+            fallback = packet(str(exc), trajectory)
+            yield from _completed_with(fallback, {'returned': guarded}) if guarded else fallback
             return
         yield _stage('exploration', 'done', label, len(trajectory))
         statements = yield from self._verified(step.statements, exchange, trajectory, cancel)
         check(cancel)
         yield COMPLETED, {
             **result, 'status': ANSWERED, 'mode': EXPLORATION, 'statements': statements, 'trajectory': trajectory,
-            'budget': {'max_bytes': exchange.budget, 'used': exchange.used}}
+            'budget': {'max_bytes': exchange.budget, 'used': exchange.used},
+            **({'returned': guarded} if guarded else {})}
 
     def _served(self, exchange, step, bounded, space, exchanged):
         """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, comptée dans
