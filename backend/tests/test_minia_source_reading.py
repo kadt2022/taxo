@@ -234,3 +234,40 @@ def test_a_direct_answer_on_authors_says_the_code_was_not_read(make_repo, tmp_pa
     result = ask(make_repo, tmp_path, model, question='Qui a écrit les 2 derniers commits ?')
     assert result['mode'] == 'taxo' and result['source_reading'] == {'status': 'UNAVAILABLE'}
     assert model.calls == []
+
+
+# --- Ce que Minia lit dans le code n'est pas une relation de Taxo -----------------------------------------------
+
+def test_the_note_of_get_source_tells_minia_to_report_the_code_it_read_as_such(make_repo, tmp_path):
+    model = Scripted(answer(statement('unknown', 'Rien à conclure.')))
+    ask(make_repo, tmp_path, model)
+    offered = {item['operation']: item for item in sent(model, 0)['operations']}
+    note = offered['get_source']['note']
+    assert 'commence par "Code lu"' in note
+    assert 'cite le symbole et les lignes' in note
+    assert 'ce n’est pas une relation de Taxo' in note
+    assert 'quand Taxo ne l’a pas fait' in note
+
+
+def test_the_rule_travels_with_the_operation_so_a_small_window_pays_it_only_when_reading_is_allowed(make_repo, tmp_path):
+    from app.minia.domain import exploration
+    assert 'Code lu' not in exploration.SYSTEM
+    model = Scripted(answer(statement('unknown', 'Rien à conclure.')))
+    ask(make_repo, tmp_path, model, source=False)
+    assert 'Code lu' not in json.dumps(sent(model, 0)['operations'])
+
+
+def test_code_read_and_a_fact_confirmed_by_taxo_stay_two_different_statements(make_repo, tmp_path):
+    model = Scripted(
+        lambda message: call('find_references', analysis=analysis_of(message), prefix='StudentService.findStudents',
+                             match='NAME'),
+        call('get_source', reference=FIND),
+        answer(statement('interpretation', f'Code lu (StudentService.findStudents, lignes 16-18) : {BODY.strip()}'),
+               statement('claim', 'findStudents appelle findAll.', FIND, 'CALLS', FIND_ALL)))
+    result = ask(make_repo, tmp_path, model)
+    observed, claimed = result['statements']
+    assert observed['type'] == 'interpretation'
+    assert 'verdict' not in observed, 'le code lu n’est jamais affiché comme un verdict de Taxo'
+    assert observed['text'].startswith('Code lu')
+    assert claimed['type'] == 'claim'
+    assert claimed['verdict'] == 'CONFIRMED'

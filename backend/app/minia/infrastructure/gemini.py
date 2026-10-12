@@ -203,3 +203,10 @@ def _check(response, model_name):
     if response.status_code == 400:
         raise MiniaError(UNAVAILABLE, f'Requête refusée par l’API Gemini : {message or "requête invalide"}')
     raise MiniaError(UNAVAILABLE, f'L’API Gemini a répondu {response.status_code}.')
+
+
+class GeminiLiteModel(GeminiModel):
+    """Un second modele Gemini, choisi a cote du premier (MINIA_GEMINI_LITE_MODEL) : un modele plus leger, aux quotas
+    gratuits souvent plus larges. Meme adaptateur, meme cle, memes protections ; seul l'identifiant du fournisseur change,
+    pour que le portail et les demandes puissent choisir l'un ou l'autre."""
+    provider = 'gemini-lite'

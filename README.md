@@ -658,6 +658,10 @@ $env:MINIA_GEMINI_MODEL = 'gemini-3.8-flash'    # nom exact d'un modèle ouvert 
 $env:MINIA_GEMINI_TIER  = 'free'                # défaut ; 'paid' si la clé est facturée
 ```
 
+Un second modèle Gemini peut être proposé à côté du premier, avec la même clé et les mêmes protections
+(`MINIA_GEMINI_LITE_MODEL`, par exemple `gemini-3.1-flash-lite`, et `MINIA_GEMINI_LITE_TIER`) : le portail le liste
+comme « Gemini Lite ». Les quotas gratuits sont propres à chaque modèle et à chaque projet (AI Studio, Rate limits).
+
 Au niveau gratuit, Google peut utiliser les données envoyées pour améliorer ses produits : le portail
 l'indique (« niveau gratuit ») et le déconseille pour du code privé ; le diff reste décoché par défaut. La
 clé passe dans un en-tête, jamais dans l'URL. Une réponse bloquée, déclinée ou coupée est signalée, un
@@ -685,6 +689,26 @@ entraîner ses modèles : le portail l'indique (« niveau gratuit ») et le déc
 diff reste décoché par défaut. La réponse est contrainte par un schéma JSON ; une réponse coupée est
 signalée, une surcharge passagère (5xx) est réessayée deux fois avant tout texte, un quota atteint (429)
 jamais.
+
+### Minia Groq
+
+Cinquième fournisseur de Minia (GroqCloud, API compatible OpenAI), même travail que les autres, mode exploration
+compris. Un service distant : la question et les faits transmis quittent la machine, avec les mêmes masquages
+(secrets, auteurs) et le même double consentement pour le code.
+
+```powershell
+setx GROQ_API_KEY "..."                      # clé créée sur console.groq.com (jamais dans le dépôt)
+$env:MINIA_GROQ_MODEL = 'openai/gpt-oss-120b'   # nom exact d'un modèle ouvert à ce compte
+$env:MINIA_GROQ_TIER  = 'free'               # défaut ; 'paid' si la clé est facturée
+$env:MINIA_GROQ_NUM_CTX = '32768'            # fenêtre du modèle en tokens (défaut prudent)
+```
+
+La réponse est contrainte par un schéma JSON strict pour les modèles que Groq documente (`openai/gpt-oss-20b`,
+`openai/gpt-oss-120b`, `qwen/qwen3.8-27b`) ; pour les autres, par un objet JSON dont le schéma est redit dans les
+consignes. Le raisonnement d'un modèle qui réfléchit n'est jamais transmis. Groq dit ne conserver aucune donnée
+d'inférence par défaut, mais ne dit pas si elles servent à entraîner des modèles : Taxo le suppose au niveau
+gratuit (« niveau gratuit » dans le portail, diff décoché). Le niveau gratuit limite fortement les tokens par
+minute : une demande trop grande (413) ou un quota atteint (429) est dit en clair, jamais réessayé.
 
 ### Clochette (SmolLM2-135M, expérimental, ARCHITECTURE § 13)
 
