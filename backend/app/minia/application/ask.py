@@ -761,7 +761,9 @@ class AskMinia:
             # L'exploration a echoue (format invalide, boucle sans progres, fenetre du modele depassee) : Taxo
             # bascule en mode paquet, qui ajuste son contexte a la place disponible.
             yield _stage('exploration', 'done', label, len(trajectory))
-            yield from packet(str(exc), trajectory)
+            # Le repli dit aussi la conclusion renvoyée : la garde a eu lieu, quelle que soit la suite.
+            fallback = packet(str(exc), trajectory)
+            yield from _completed_with(fallback, {'returned': guarded}) if guarded else fallback
             return
         yield _stage('exploration', 'done', label, len(trajectory))
         statements = yield from self._verified(step.statements, exchange, trajectory, cancel)

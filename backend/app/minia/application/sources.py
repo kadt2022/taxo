@@ -15,6 +15,7 @@ import re
 
 from app.minia.domain.exploration import UNKNOWN
 from app.protocol.domain.envelope import error
+from app.protocol.domain.source import nature
 
 OPERATION = 'get_source'
 _INVALID = 'INVALID_ARGUMENT'
@@ -190,7 +191,9 @@ def unread(statements, exchanged):
     texts = [text for statement in statements for text in _cited(statement)]
     read = {_owner(item['arguments'].get('reference', '')) for item in exchanged
             if item['operation'] == OPERATION and item['response'].get('outcome') == 'OK'}
-    known = {reference for item in exchanged for reference in _discovered(item) if reference.startswith('symbol:')}
+    # Seuls une classe, une méthode ou un constructeur ont un code que `get_source` sert : jamais un champ.
+    known = {reference for item in exchanged for reference in _discovered(item)
+             if reference.startswith('symbol:') and nature(reference) != 'MEMBER'}
     by_owner = {}
     for reference in sorted(known, key=lambda value: ('#' in value, value)):
         owner = _owner(reference)

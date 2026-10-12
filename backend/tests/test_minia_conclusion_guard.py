@@ -78,3 +78,20 @@ def test_a_symbol_cited_by_a_claim_is_returned_when_the_conclusion_has_an_unknow
     model = Scripted(found, answer(claim, statement('unknown', 'Impossible de dire ce que rend la méthode.')),
                      answer(KEPT))
     assert ask(make_repo, tmp_path, model)['returned'] == [FIND]
+
+
+def test_a_field_is_never_returned_since_its_code_cannot_be_read():
+    field = 'symbol:java:com.example.demo.service.StudentService#studentRepository'
+    exchanged = [{'operation': 'get_neighborhood', 'arguments': {},
+                  'response': {'outcome': 'OK', 'items': [{'reference': field}, {'reference': FIND}]}}]
+    claim = {'type': 'claim', 'text': 'StudentService garde un repository.',
+             'claim': {'subject': field, 'relation': 'HAS', 'object': ''}}
+    unknown = {'type': 'unknown', 'text': 'Le code de StudentService n’a pas été lu.'}
+    assert sources.unread([claim, unknown], exchanged) == [FIND]
+
+
+def test_a_fallback_after_the_return_still_says_the_conclusion_was_returned(make_repo, tmp_path):
+    model = Scripted(found, answer(UNREAD), 'pas du JSON', lambda sent: '{"cited": [], "answer": "", "unknown": "x"}')
+    result = ask(make_repo, tmp_path, model)
+    assert result['mode'] == 'paquet'
+    assert result['returned'] == [FIND]
