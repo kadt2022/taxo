@@ -926,7 +926,7 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 
 | Opération | Rend | État |
 | --- | --- | --- |
-| `describe` | opérations disponibles pour ce projet, relations et références présentes, analyseurs et couverture | Existant |
+| `describe` | opérations disponibles pour ce projet, relations et références présentes, analyseurs et couverture ; la légende de la carte : un élément `family` par type de référence que l'index de l'analyse tient, avec son effectif | Existant ; `family` (légende de la carte, P1) |
 | `find_facts` | faits selon `subject`, `relation`, `object`, `nature` | Existant |
 | `get_evidence` | preuves d'un fait reçu (`F…` de l'échange), ou d'une occurrence par sa poignée (TAXO-01J) | Existant |
 | `get_coverage` | couverture d'un périmètre | Existant |
@@ -944,6 +944,14 @@ liste toutes les références de ce type, dans l'ordre de leur clé, par pages b
 `after`). Sans `type`, ou en mode `NAME` (qui cherche un nom), le préfixe reste obligatoire et le refus le dit.
 C'est un assouplissement : un appel qui réussissait donne la même réponse. Une page dit ce qu'elle rend, pas que la
 famille est tout le programme : la couverture reste déclarée dans chaque réponse.
+
+**Légende de la carte (`family`).** Un élément `{kind: "family", type, count, source: "analysis-index"}` par type de
+référence que l'index de l'analyse tient, le plus nombreux d'abord, puis par nom. C'est un effectif d'**index d'analyse**,
+pas le nombre d'éléments du programme : Taxo dit ce qu'il a cartographié, jamais que son analyse couvre tout. L'élément
+est additif (un consommateur qui ne le connaît pas l'ignore), sans fait ni verdict, et ne porte qu'un type du vocabulaire
+et un nombre, jamais un nom ni un chemin. Une analyse sans index n'en annonce aucun. Il **précède** les analyseurs et
+les relations, bien plus longs : sous `max_bytes` (8 000 octets par défaut), c'est la fin de `describe` qui est
+coupée, comptée dans `not_sent`, et la légende est conservée.
 
 `describe` ne propose que les opérations servables pour le projet. Correspondance avec les opérations
 d'une Tuile adaptative : CAPABILITIES = `describe`, TILE et EXPAND = `get_neighborhood`, VERIFY =

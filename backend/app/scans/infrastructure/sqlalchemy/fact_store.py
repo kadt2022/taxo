@@ -148,6 +148,14 @@ class SqlAlchemyAnalysisFacts:
                        and (after is None or (key, hash_) > tuple(after)))
         return found[:limit], len(found) > limit
 
+    def families(self, scan_id):
+        """The same count over this fallback table, which is no longer fed: kept for the equivalence tests only."""
+        counts = {}
+        for reference in self._references_of(scan_id):
+            kind = _searched(reference)[0]
+            counts[kind] = counts.get(kind, 0) + 1
+        return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+
     def named(self, scan_id, name, kind, after, limit):
         """The same search by name over this fallback table: every reference of the analysis is read."""
         found = sorted((hash_, reference, kind_) for reference in self._references_of(scan_id)

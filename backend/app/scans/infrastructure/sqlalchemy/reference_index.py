@@ -10,7 +10,7 @@ de la clé, puis de l'empreinte de la référence.
 """
 import hashlib
 
-from sqlalchemy import Column, ForeignKey, Index, String, Text, select
+from sqlalchemy import Column, ForeignKey, Index, String, Text, func, select
 from sqlalchemy.dialects import postgresql, sqlite
 
 from app.neighborhood.domain.references import KEY_LENGTH, fold
@@ -77,6 +77,14 @@ def insert_new(db, table, rows_):
     keys = [column.name for column in table.primary_key.columns]
     for start in range(0, len(rows_), 500):
         db.execute(dialect.insert(table).on_conflict_do_nothing(index_elements=keys), rows_[start:start + 500])
+
+
+def families(db, scan_id):
+    """Le nombre de références indexées par type pour l'analyse : une lecture groupée de l'index par type, jamais un
+    parcours des faits. Vide si l'analyse n'a pas d'index (antérieure à la table)."""
+    row = AnalysisReferenceRow
+    found = db.execute(select(row.type, func.count()).where(row.scan_id == scan_id).group_by(row.type)).all()
+    return sorted(((kind, count) for kind, count in found), key=lambda item: (-item[1], item[0]))
 
 
 def search(db, scan_id, prefix, kind, after, limit):

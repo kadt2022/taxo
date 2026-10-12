@@ -488,6 +488,12 @@ class Exchange:
             response.add('items', {'kind': 'operation', 'operation': name, 'arguments': _ARGUMENTS[name]})
         response.add('items', {'kind': _LANGUAGES, 'present': list(self.languages),
                                 'complete': self.complete})
+        # La légende de la carte : ce que l'index de l'analyse tient par type de référence. Un effectif d'index, pas le
+        # nombre d'éléments du programme : Taxo dit ce qu'il a cartographié, pas que son analyse couvre tout. Elle précède
+        # les analyseurs et les relations, bien plus longs : sous la limite par défaut (8 000 octets), c'est la fin de
+        # `describe` qui est comptée dans `not_sent`, pas la légende.
+        for kind, count in self.facts.families(self.scan.id):
+            response.add('items', {'kind': 'family', 'type': kind, 'count': count, 'source': 'analysis-index'})
         for analyzer, evaluation in zip(self.analyzers(), self.evaluations):
             response.add('items', {'kind': 'analyzer', 'analyzer': analyzer.analyzer_id,
                                    'status': evaluation.get('status'), 'relations': sorted(analyzer.relations),
