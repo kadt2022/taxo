@@ -75,7 +75,8 @@ def run(courses, tmp_path, model, mip, question=WHO_CALLS):
 def test_a_really_empty_tile_read_in_full_says_taxo_knows_nothing(courses, tmp_path):
     model = Scripted(explores=False)
     result = run(courses, tmp_path, model, FakeMip(tile()))
-    assert result['status'] == 'TAXO_KNOWS_NOTHING' and NO_FACT_FOUND in result['unknown']
+    assert result['status'] == 'TAXO_KNOWS_NOTHING'
+    assert NO_FACT_FOUND in result['unknown']
     assert model.calls == [], 'une Tuile vide n’a rien à faire interpréter'
 
 
@@ -83,7 +84,8 @@ def test_a_truncated_tile_without_a_fact_is_never_an_absence_of_facts(courses, t
     model = Scripted(explores=False)
     result = run(courses, tmp_path, model, FakeMip(tile(truncated=True, stop='BYTES')))
     assert result['status'] == 'NOT_CONCLUDED'
-    assert NO_FACT_FOUND not in result['unknown'] and 'coupée par un budget' in result['unknown']
+    assert NO_FACT_FOUND not in result['unknown']
+    assert 'coupée par un budget' in result['unknown']
     assert 'Ce n\'est pas une absence de faits' in result['unknown']
     assert model.calls == [], 'rien n’a été lu : aucun appel, donc rien d’envoyé'
 
@@ -92,14 +94,17 @@ def test_a_tile_whose_envelope_fills_the_whole_budget_is_not_an_absence(courses,
     """L'enveloppe (couverture, frontière) tient, mais plus un seul fait : la Tuile n'est pas vide, elle est coupée."""
     model = Scripted(explores=False)
     result = run(courses, tmp_path, model, FakeMip(tile(truncated=True, stop='BYTES', pad=9000)))
-    assert result['status'] == 'NOT_CONCLUDED' and NO_FACT_FOUND not in result['unknown']
+    assert result['status'] == 'NOT_CONCLUDED'
+    assert NO_FACT_FOUND not in result['unknown']
 
 
 def test_a_tile_refused_for_lack_of_room_is_not_an_absence_either(courses, tmp_path):
     model = Scripted(explores=False)
     result = run(courses, tmp_path, model, FakeMip(refusal()))
-    assert result['status'] == 'NOT_CONCLUDED' and 'n\'a pas pu être servie' in result['unknown']
-    assert NO_FACT_FOUND not in result['unknown'] and model.calls == []
+    assert result['status'] == 'NOT_CONCLUDED'
+    assert 'n\'a pas pu être servie' in result['unknown']
+    assert NO_FACT_FOUND not in result['unknown']
+    assert model.calls == []
 
 
 @pytest.mark.parametrize('capacity', [300, 800, 1500, 2500, 4000, 6000, 9000, 14000])
@@ -135,7 +140,8 @@ def test_no_secret_in_a_served_tile_reaches_the_model_when_the_next_tile_is_refu
     served = tile([fact(REGISTER, 'CALLS', SERVICE), fact(SERVICE, 'CONFIGURED_BY', f'password={SECRET}')])
     model = Scripted(json.dumps({'cited': [], 'answer': 'Rien.', 'unknown': ''}), explores=False)
     result = run(courses, tmp_path, model, FakeMip(served, refusal()))
-    assert result['status'] == 'ANSWERED' and model.calls
+    assert result['status'] == 'ANSWERED'
+    assert model.calls
     assert SECRET not in json.dumps(model.calls), 'le secret n’est pas transmis, même avec une Tuile refusée'
 
 
@@ -143,7 +149,8 @@ def test_a_not_concluded_answer_carries_no_value_from_the_tile(courses, tmp_path
     cut = tile([fact(SERVICE, 'CONFIGURED_BY', f'password={SECRET}')], truncated=True, stop='BYTES')
     model = Scripted(explores=False, capacity=1)  # rien ne tient : aucun fait n'est transmis
     result = run(courses, tmp_path, model, FakeMip(cut))
-    assert result['status'] == 'NOT_CONCLUDED' and model.calls == []
+    assert result['status'] == 'NOT_CONCLUDED'
+    assert model.calls == []
     assert SECRET not in json.dumps(result)
 
 
@@ -190,12 +197,15 @@ def test_a_small_window_shrinks_the_budgets_and_keeps_one_byte_at_least():
     mip = FakeMip(refusal())
     found = anchored(20, mip, max_bytes=1000)
     assert [query['bounds']['max_bytes'] for query in mip.queries] == [1], 'une seule Tuile demandée : refusée'
-    assert found.refused and not found.tiles and not found.truncated
+    assert found.refused
+    assert not found.tiles
+    assert not found.truncated
 
 
 def test_a_served_tile_cut_by_a_budget_is_reported_as_truncated():
     mip = FakeMip(tile([fact(REGISTER, 'CALLS', SERVICE)], truncated=True, stop='BYTES'))
     found = anchored(3, mip)
-    assert found.truncated and found.refused is None
+    assert found.truncated
+    assert found.refused is None
     brief = briefing.tile('Que fait Items.list ?', 'symbol:java:a.Items#list()', found.tiles)
     assert any('coupée par un budget (BYTES)' in limit for limit in brief.not_interpreted), 'dit au modèle'

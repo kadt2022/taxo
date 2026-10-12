@@ -171,7 +171,8 @@ def test_the_same_reading_again_is_reused_a_bounded_number_of_times_then_stops(m
     steps = result['trajectory']
     assert [step['operation'] for step in steps[:3]] == ['describe', 'find_references', 'get_source']
     reused = [step for step in steps if step.get('reused')]
-    assert len(reused) == MAX_REPEATS and all(step['bytes'] == 0 for step in reused)
+    assert len(reused) == MAX_REPEATS
+    assert all(step['bytes'] == 0 for step in reused)
     assert sum(1 for step in steps if step['operation'] == 'get_source' and not step.get('reused')) == 1
 
 

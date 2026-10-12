@@ -113,8 +113,8 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
   // Pas conclu (Tuile coupée par un budget, ou non servie) : Minia n'a pas été appelée, et le message est celui de Taxo,
   // une limite qu'il constate, jamais une absence de faits ni une parole de Minia.
   const notConcluded=answer.status==='NOT_CONCLUDED';
-  const interrupted=answer.fallback?(notConcluded?`Exploration interrompue (${answer.fallback}).`
-    :`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir d’un paquet de faits.`):'';
+  const packetNote=notConcluded?'.':' : Minia a répondu à partir d’un paquet de faits.';
+  const interrupted=answer.fallback?`Exploration interrompue (${answer.fallback})${packetNote}`:'';
   const limits=[notConcluded?answer.unknown:'', interrupted, answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:'',

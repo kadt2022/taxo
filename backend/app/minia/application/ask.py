@@ -46,8 +46,10 @@ MAX_CLAIMS = 10
 # réponse qui dépend du budget, l'exploration s'arrête comme avant.
 MAX_REPEATS = 2
 STALLED = 'Minia ne progressait plus (opération répétée ou limite atteinte).'
-# Les refus qui ne changent pas tant que la demande et l'état sont les mêmes ; un refus de budget, lui, dépend de la place.
-_REUSABLE_REFUSALS = frozenset({INVALID_ARGUMENT, NOT_AVAILABLE, NO_CONSENT})
+# Les refus de configuration, qui ne changent pas dans l'échange. Un refus de budget dépend de la place ; un
+# INVALID_ARGUMENT peut dépendre de ce que l'échange a reçu depuis (une référence qui n'était pas encore reçue) : il
+# n'est jamais réutilisé, la demande est rejouée si l'échange a appris quelque chose, sinon l'exploration s'arrête.
+_REUSABLE_REFUSALS = frozenset({NOT_AVAILABLE, NO_CONSENT})
 _REUSED_NOTE = ('Même opération, mêmes arguments : la réponse du tour {} reste valable dans la trajectoire, '
                 'rien n’a été redemandé à Taxo. Conclus ou demande une autre opération.')
 # Budget d'un echange d'exploration : 64 Ko au plus, et jamais plus que la place du modele, moins une marge
@@ -260,6 +262,19 @@ def _reusable(response):
     """Une réponse qu'une même demande, dans le même état, rendrait à l'identique : un résultat, ou un refus qui ne
     dépend pas de la place restante."""
     return response['outcome'] == 'OK' or response['error']['code'] in _REUSABLE_REFUSALS
+
+
+def _learned(exchanged):
+    """Ce que l'échange a reçu de Taxo : les réponses réussies, sans les renvois."""
+    return sum(1 for item in exchanged
+               if item['response'].get('outcome') == 'OK' and not item['response'].get('reused'))
+
+
+def _may_change(prior, exchanged):
+    """Un refus d'argument rendu avant que l'échange ait reçu autre chose : redemandé à l'identique, il peut aboutir."""
+    response = prior['response']
+    return (response['outcome'] != 'OK' and response['error']['code'] == INVALID_ARGUMENT
+            and _learned(exchanged) > prior['learned'])
 
 
 def _reused(step, prior):
@@ -704,12 +719,16 @@ class AskMinia:
                 key = sources.key(step, exchanged)
                 if calls_left <= 0:
                     raise MiniaError(INVALID_ANSWER, STALLED)
+                prior = None
                 if key in seen:
                     # Une répétition bornée : la réponse admissible déjà reçue est réutilisée, sans rien redemander à
                     # Taxo, et le tour compte dans la limite globale ; sinon, ou passé MAX_REPEATS, l'exploration s'arrête.
                     prior = served.get(key)
-                    if prior is None or repeats >= MAX_REPEATS or not _reusable(prior['response']):
+                    if prior is not None and _may_change(prior, exchanged):
+                        prior = None  # rejouée, comme une opération nouvelle : elle compte dans la limite globale
+                    elif prior is None or repeats >= MAX_REPEATS or not _reusable(prior['response']):
                         raise MiniaError(INVALID_ANSWER, STALLED)
+                if prior is not None:
                     repeats += 1
                     exchanged.append(_reused(step, prior))
                     trajectory.append({**prior['step'], 'bytes': 0, 'reused': True})
@@ -721,7 +740,8 @@ class AskMinia:
                 response = self._served(exchange, step, bounded, space, exchanged)
                 exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
                 trajectory.append(_step(step.operation, step.arguments, response))
-                served[key] = {'response': response, 'step': trajectory[-1], 'turn': len(trajectory)}
+                served[key] = {'response': response, 'step': trajectory[-1], 'turn': len(trajectory),
+                               'learned': _learned(exchanged)}
                 yield 'minia.operation', trajectory[-1]
                 yield _stage('exploration', 'running', label, len(trajectory))
         except MiniaError as exc:
