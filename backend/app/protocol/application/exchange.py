@@ -91,8 +91,10 @@ _ARGUMENTS = {
                                  'renvois par indice)',
                          'continuation': 'reprise d’une adjacence coupée (facultatif)'},
     'find_references': {'analysis': 'identifiant de l’analyse', 'prefix': 'début de la clé (après le type), 1..200 ; '
-                                                                         'en NAME, le nom cherché',
-                        'type': 'type de référence (facultatif)', 'limit': '1..50', 'after': 'reprise (facultatif)',
+                                                                         'en NAME, le nom cherché ; facultatif ou vide '
+                                                                         'avec type en KEY : liste toute la famille',
+                        'type': 'type de référence (facultatif ; seul, il liste la famille)', 'limit': '1..50',
+                        'after': 'reprise (facultatif)',
                         'match': 'KEY (défaut) | NAME : nom simple ou qualifié (VetController, '
                                  'OwnerRepository.findById, Items.list(String)), égal à la fin de la clé'},
     'get_source': {'reference': 'symbole déclaré : type, méthode ou constructeur (jamais un fichier)'},
@@ -639,9 +641,6 @@ def _search(arguments, analysis):
     _no_other(arguments, ('analysis', 'prefix', 'type', 'limit', 'after', 'match'))
     if arguments.get('analysis') != analysis:
         raise OperationError(INVALID_ARGUMENT, 'analysis doit identifier l’analyse de cet échange (describe).')
-    prefix = arguments.get('prefix')
-    if not isinstance(prefix, str) or not 1 <= len(prefix) <= references.MAX_PREFIX:
-        raise OperationError(INVALID_ARGUMENT, f'prefix : de 1 à {references.MAX_PREFIX} caractères.')
     kind = arguments.get('type')
     if kind is not None and kind not in _REFERENCE_TYPES:
         raise OperationError(INVALID_ARGUMENT, 'type : un type de référence du vocabulaire.')
@@ -651,6 +650,14 @@ def _search(arguments, analysis):
     match = arguments.get('match', KEY)
     if not isinstance(match, str) or match not in MATCHES:
         raise OperationError(INVALID_ARGUMENT, 'match : KEY (préfixe de la clé) ou NAME (nom simple ou qualifié).')
+    prefix = arguments.get('prefix')
+    # Une famille entière se consulte sans préfixe : avec un `type`, en mode KEY, un préfixe absent ou vide liste toutes
+    # ses références, par pages. Sans type, ou en mode NAME (qui cherche un nom), le préfixe reste obligatoire.
+    if prefix in (None, '') and kind is not None and match == KEY:
+        return '', kind, limit, match
+    if not isinstance(prefix, str) or not 1 <= len(prefix) <= references.MAX_PREFIX:
+        raise OperationError(INVALID_ARGUMENT, f'prefix : de 1 à {references.MAX_PREFIX} caractères ; il ne peut être '
+                             'omis qu’avec un type, en mode KEY, pour lister toute la famille.')
     return prefix, kind, limit, match
 
 
