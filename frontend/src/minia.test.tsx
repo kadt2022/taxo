@@ -200,6 +200,12 @@ describe('niveau gratuit (TAXO-MINIA-06)', ()=>{
       .toBe('Mistral · mistral-small-latest (distant, niveau gratuit)');
     expect(remoteNote({...status, provider:'mistral', remote:true, data_use:true})).toContain('Minia Mistral est un service distant');
   });
+  it('nomme Minia Groq, service distant dont le niveau gratuit est signalé', ()=>{
+    expect(providerLabel({provider:'groq', model:'openai/gpt-oss-120b', remote:true, data_use:true}))
+      .toBe('Groq · openai/gpt-oss-120b (distant, niveau gratuit)');
+    expect(remoteNote({...status, provider:'groq', remote:true, data_use:true})).toContain('Minia Groq est un service distant');
+    expect(remoteNote({...status, provider:'groq', remote:true, data_use:false})).not.toContain('améliorer');
+  });
 });
 
 describe('question sur un commit en exploration (MINIA-09b)', ()=>{
