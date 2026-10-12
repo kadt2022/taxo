@@ -298,8 +298,9 @@ def test_settings_choose_the_provider(monkeypatch):
     assert (model.provider, model.model_name, model.url) == ('ollama', 'qwen2.5:3b', 'http://127.0.0.1:11434')
     monkeypatch.setenv('MINIA_OLLAMA_NUM_CTX', '32768')
     assert minia_model(settings.minia()).num_ctx == 32768
+    options = settings.minia(provider='inconnu')
     with pytest.raises(ValueError, match='ollama, claude, gemini, gemini-lite, mistral ou groq'):
-        minia_model(settings.minia(provider='inconnu'))
+        minia_model(options)
     monkeypatch.setenv('MINIA_CLAUDE_MODEL', 'claude-opus-5')
     models = minia_models(settings.minia())
     assert list(models) == ['ollama', 'claude'] and models['claude'].remote and not models['ollama'].remote

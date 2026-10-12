@@ -9,7 +9,8 @@ from app.bootstrap import settings
 from app.bootstrap.application import minia_models
 from app.minia.domain import exploration
 from app.minia.domain.errors import MiniaError
-from app.minia.infrastructure.groq import ANSWER_SCHEMA, API_URL, STRICT_MODELS, GroqModel
+from app.minia.infrastructure.groq import API_URL, STRICT_MODELS, GroqModel
+from app.minia.infrastructure.mistral import ANSWER_SCHEMA
 
 ANSWER = '{"cited": [], "answer": "Le commit restreindrait les origines.", "unknown": ""}'
 STRICT = 'openai/gpt-oss-120b'
@@ -93,10 +94,46 @@ def test_the_reasoning_of_the_model_is_never_returned():
     assert model.complete('s', 'u') == ANSWER
 
 
-def test_the_stream_gives_the_content_and_ends_with_the_model_that_answered():
+def drained(parts):
+    """Les morceaux d'un flux, et le modèle qui a répondu."""
+    received = []
+    while True:
+        try:
+            received.append(next(parts))
+        except StopIteration as done:
+            return received, done.value
+
+
+def test_a_strict_schema_is_never_streamed_because_groq_does_not_support_it():
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json=reply(ANSWER))
+
+    received, served = drained(groq(handler).stream('s', 'u'))
+    assert seen[0]['stream'] is False
+    assert seen[0]['response_format']['type'] == 'json_schema'
+    assert ''.join(received) == ANSWER
+    assert served == 'served-1'
+
+
+def test_a_cancellable_strict_answer_goes_through_the_same_single_request():
+    from app.minia.domain.cancellation import Cancellation
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json=reply(ANSWER))
+
+    assert groq(handler).complete('s', 'u', cancel=Cancellation()) == ANSWER
+    assert [body['stream'] for body in seen] == [False]
+
+
+def test_the_stream_of_a_json_object_model_gives_the_content_and_ends_with_the_model_that_answered():
     lines = [chunk('', reasoning='réflexion'), chunk('{"cited": [],'), chunk(' "answer": "x", "unknown": ""}'),
              chunk('', 'stop'), 'data: [DONE]']
-    model = groq(lambda request: httpx.Response(200, text='\n\n'.join(lines) + '\n\n'))
+    model = groq(lambda request: httpx.Response(200, text='\n\n'.join(lines) + '\n\n'), model='un-autre-modele')
     parts = model.stream('s', 'u')
     received = []
     while True:
@@ -127,8 +164,9 @@ def test_without_a_key_minia_says_which_variable_to_define(monkeypatch):
     (413, 'limite de tokens'), (429, 'Quota de l’API Groq'), (400, 'Requête refusée par l’API Groq'),
     (500, 'a répondu 500')])
 def test_the_errors_of_the_api_are_said_in_clear_without_the_key(status, expected):
+    model = groq(refusing(status, 'détail du service'))
     with pytest.raises(MiniaError) as raised:
-        groq(refusing(status, 'détail du service')).complete('s', 'u')
+        model.complete('s', 'u')
     assert expected in str(raised.value)
     assert 'cle-test' not in str(raised.value)
 
