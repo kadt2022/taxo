@@ -1049,6 +1049,12 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   l'échange a reçu depuis (une référence pas encore reçue) : il n'est jamais réutilisé ; la demande est rejouée,
   comme une opération nouvelle, si l'échange a reçu une réponse réussie depuis, sinon l'exploration s'arrête (repli
   paquet). Une erreur qui dépend de la place restante (`BUDGET_EXHAUSTED`, erreur interne) n'est jamais réutilisée.
+- **Garde de conclusion.** Quand `get_source` est proposée, une conclusion qui porte un `unknown` et cite (texte ou
+  références d'une affirmation) une classe reçue de Taxo dont aucun code n'a été lu dans l'échange revient une fois
+  au modèle, avec au plus 3 références lisibles (entrée `conclusion`, issue `RETURNED`). Le modèle lit le code ou
+  garde son inconnu. La règle compare des noms à des références reçues : elle ne juge pas la réponse, n'appelle pas
+  Taxo et ne compte pas dans les 8 opérations ; un nom jamais rendu par Taxo ne la déclenche pas. Le résultat le dit
+  (`returned`).
 - **Référence `qualifiers.filter_chain`.** Elle ouvre la lecture de la méthode qui construit la chaîne de filtres
   (`get_source`) seulement si le fait qui la porte vient de `taxo.spring-security`, dit `MATCHED_BY`,
   `PROTECTED_BY` ou `AUTHORIZED_BY`, est `OBSERVED` ou `INFERRED`, `VALID`, date du commit de la réponse, et si
