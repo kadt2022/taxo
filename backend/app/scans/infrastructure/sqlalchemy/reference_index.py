@@ -87,6 +87,27 @@ def families(db, scan_id):
     return sorted(((kind, count) for kind, count in found), key=lambda item: (-item[1], item[0]))
 
 
+def containing(db, scan_id, text, kind, after, limit, max_scan):
+    """Au plus `limit` références du type dont la clé (repliée) contient `text`, après `after`, dans l'ordre de la clé :
+    une lecture bornée à `max_scan` clés, par l'index par type. Rend aussi s'il en reste et, si la lecture s'est arrêtée
+    à la borne avant la fin du type, la (clé, empreinte) où reprendre."""
+    row = AnalysisReferenceRow
+    statement = select(row.search_key, row.reference_hash, row.reference, row.type).where(
+        row.scan_id == scan_id, row.type == kind)
+    if after is not None:
+        statement = statement.where((row.search_key > after[0])
+                                    | ((row.search_key == after[0]) & (row.reference_hash > after[1])))
+    window = db.execute(statement.order_by(row.search_key, row.reference_hash).limit(max_scan + 1)).all()
+    cut = len(window) > max_scan
+    window = window[:max_scan]
+    found = [item for item in window if text in item[0]]
+    if len(found) > limit:
+        return found[:limit], True, None
+    if cut:
+        return found, True, (window[-1][0], window[-1][1])
+    return found, False, None
+
+
 def search(db, scan_id, prefix, kind, after, limit):
     """Au plus `limit` références dont la clé commence par `prefix` (déjà repliée), après `after` : (clé,
     empreinte) de la dernière rendue. Rend aussi s'il en reste."""

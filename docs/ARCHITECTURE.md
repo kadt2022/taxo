@@ -935,7 +935,7 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 | `verify_claim` | verdict sur une affirmation structurée | Existant |
 | `diff_facts` | faits introduits, modifiés ou retirés par un commit ; depuis les analyses enregistrées du commit et de son parent quand elles existent (`source`, `analyses`), sinon en relisant le dépôt (TAXO-01F, tranche E) | Existant |
 | `get_neighborhood` | voisinage explicite, à un saut (`neighborhood/1`) ou sur plusieurs niveaux (`neighborhood/2`), avec reprises, frontière localisée et preuves accessibles | Existant ; profils servis par MIP `EXPAND` (§ 9.5, TAXO-MIP-ADT-01) |
-| `find_references` | références de l'analyse qui commencent par un préfixe, page bornée avec reprise ; avec `match: NAME`, celles qui se retrouvent sous un nom simple ou qualifié (une fin de clé prise à un début de segment, séparateurs `. / # : $` confondus, un séparateur en tête du nom ignoré pour qu'un chemin `/api/students` se retrouve, liste de paramètres lue sur les seuls symboles appelables), chacune une fois, sans descendants | Existant (TAXO-01J) ; `match: NAME` (TAXO-01N, PR A2) ; une famille entière sans préfixe (P2) |
+| `find_references` | références de l'analyse qui commencent par un préfixe, page bornée avec reprise ; avec `match: NAME`, celles qui se retrouvent sous un nom simple ou qualifié (une fin de clé prise à un début de segment, séparateurs `. / # : $` confondus, un séparateur en tête du nom ignoré pour qu'un chemin `/api/students` se retrouve, liste de paramètres lue sur les seuls symboles appelables), chacune une fois, sans descendants | Existant (TAXO-01J) ; `match: NAME` (TAXO-01N, PR A2) ; une famille entière sans préfixe (P2) ; `match: CONTAINS` (P3) |
 | `find_callers`, `find_callees`, `find_dependencies`, `find_configuration`, `trace_access_control`, `find_endpoint` | questions génériques | réservées, activées par les analyseurs |
 | `get_source` | code d'un **symbole** déclaré (type, méthode, constructeur ; une surcharge par sa signature), jamais un fichier entier ni un chemin, lu au commit de l'analyse, sous son propre double consentement ; une pièce source avec sa classification, jamais un fait | Existant (TAXO-MIP-ADT-01, PR B) ; non transmis à Minia |
 
@@ -952,6 +952,14 @@ est additif (un consommateur qui ne le connaît pas l'ignore), sans fait ni verd
 et un nombre, jamais un nom ni un chemin. Une analyse sans index n'en annonce aucun. Il **précède** les analyseurs et
 les relations, bien plus longs : sous `max_bytes` (8 000 octets par défaut), c'est la fin de `describe` qui est
 coupée, comptée dans `not_sent`, et la légende est conservée.
+
+**Un texte contenu dans la clé (`match: CONTAINS`).** Avec un `type` (obligatoire), `prefix` est un texte cherché
+n'importe où dans la clé des références de ce type, sans tenir compte de la casse ; la réponse rend le mode (`match`) pour
+que le lecteur sache quelle recherche a été faite. Ce n'est pas une recherche indexée par préfixe : la lecture parcourt
+les clés du type dans l'ordre et s'arrête à `MAX_SCAN` (20 000) clés. Atteinte, la page le dit (`not_sent`, raison
+`SCAN_LIMIT`) et rend une reprise qui part de la dernière clé lue : une page vide et coupée veut dire « rien trouvé dans
+ce qui a été lu », jamais « rien dans le type ». La recherche porte sur les 256 premiers caractères de la clé repliée
+(la longueur de l'index). Une reprise d'un autre mode est refusée. Aucun fait, aucun verdict.
 
 `describe` ne propose que les opérations servables pour le projet. Correspondance avec les opérations
 d'une Tuile adaptative : CAPABILITIES = `describe`, TILE et EXPAND = `get_neighborhood`, VERIFY =

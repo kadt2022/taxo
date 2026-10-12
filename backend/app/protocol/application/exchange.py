@@ -30,8 +30,8 @@ from app.protocol.application.arguments import claim_object as _claim_object, no
 from app.protocol.application.arguments import reference as _reference, relation as _relation, text as _text
 from app.knowledge.domain.knowledge import AnalysisKnowledge, contains
 from app.protocol.domain.verdict import judge
-from app.neighborhood.application.references import compared, find_references
-from app.neighborhood.domain.reference_names import KEY, MATCHES, NAME
+from app.neighborhood.application.references import MAX_SCAN, compared, find_references
+from app.neighborhood.domain.reference_names import CONTAINS, KEY, MATCHES, NAME
 from app.neighborhood.domain import handle, references
 from app.protocol.application.neighborhood_operation import neighborhood
 
@@ -96,7 +96,8 @@ _ARGUMENTS = {
                         'type': 'type de référence (facultatif ; seul, il liste la famille)', 'limit': '1..50',
                         'after': 'reprise (facultatif)',
                         'match': 'KEY (défaut) | NAME : nom simple ou qualifié (VetController, '
-                                 'OwnerRepository.findById, Items.list(String)), égal à la fin de la clé'},
+                                 'OwnerRepository.findById, Items.list(String)), égal à la fin de la clé | CONTAINS : '
+                                 'prefix = texte dans la clé, type obligatoire, lecture bornée'},
     'get_source': {'reference': 'symbole déclaré : type, méthode ou constructeur (jamais un fichier)'},
 }
 
@@ -570,7 +571,7 @@ class Exchange:
         if page is None:
             raise OperationError(NOT_AVAILABLE, 'Cette analyse n’a pas d’index des noms : relancer l’analyse, ou '
                                                 'chercher par préfixe de clé (match KEY).')
-        rows, more = page
+        rows, more, resume = page if len(page) == 3 else (*page, None)
         if self.facts.revision(self.scan.id) != revision:
             # Comme une Tuile : une page ne mêle jamais deux générations, et sa reprise ne lie que la sienne.
             raise OperationError(INVALID_ARGUMENT, 'Les faits de cette analyse ont changé pendant la recherche ; '
@@ -578,12 +579,19 @@ class Exchange:
         coverage = self.envelope_coverage()
         # La page la plus longue qui tient avec sa reprise : celle-ci est mesuree avec la page, jamais ajoutee apres.
         for count in range(len(rows), 0 if rows else -1, -1):
-            last = rows[count - 1][:2] if count < len(rows) or more else None
+            if count < len(rows):
+                last = rows[count - 1][:2]
+            elif resume:
+                last = resume  # la lecture s'est arrêtée à sa borne : la reprise part de la dernière clé lue
+            else:
+                last = rows[count - 1][:2] if more else None
             token = references.encode(self.scan.id, revision, folded, kind, last, match) if last else None
             # Le mode n'est rendu que s'il a été choisi : une réponse du mode KEY reste celle d'avant.
-            chosen = {'match': match} if match == NAME else {}
+            chosen = {'match': match} if match != KEY else {}
             response = self.response('find_references', coverage, max_bytes, prefix=prefix, type=kind,
                                      **chosen, next=token)
+            if resume:
+                response.not_sent({'what': 'search', 'reason': 'SCAN_LIMIT', 'scanned': MAX_SCAN})
             if all(response.add('items', {'reference': row[2], 'type': row[3]}) for row in rows[:count]):
                 response.skip('items', len(rows) - count)
                 return response
@@ -655,8 +663,12 @@ def _search(arguments, analysis):
         raise OperationError(INVALID_ARGUMENT, f'limit doit être un entier entre 1 et {references.MAX_LIMIT}.')
     match = arguments.get('match', KEY)
     if not isinstance(match, str) or match not in MATCHES:
-        raise OperationError(INVALID_ARGUMENT, 'match : KEY (préfixe de la clé) ou NAME (nom simple ou qualifié).')
+        raise OperationError(INVALID_ARGUMENT, 'match : KEY (préfixe de la clé), NAME (nom simple ou qualifié) ou '
+                             'CONTAINS (texte contenu dans la clé, avec un type).')
     prefix = arguments.get('prefix')
+    if match == CONTAINS and kind is None:
+        raise OperationError(INVALID_ARGUMENT, 'match CONTAINS demande un type : le texte est cherché dans les clés '
+                             'de ce type.')
     # Une famille entière se consulte sans préfixe : avec un `type`, en mode KEY, un préfixe absent ou vide liste toutes
     # ses références, par pages. Sans type, ou en mode NAME (qui cherche un nom), le préfixe reste obligatoire.
     if prefix in (None, '') and kind is not None and match == KEY:
