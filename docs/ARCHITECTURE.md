@@ -1020,6 +1020,9 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   `UNAVAILABLE` si rien n'est lisible (analyse du dossier de travail, sans commit, ou modèle qui ne demande pas
   d'opérations), `ON_DEMAND` si
   `get_source` est réellement proposée) ; le repli paquet garde ce statut.
+- **Lister une famille.** Minia joint à `find_references` une indication courte (« Pour lister les références d'une
+  famille, donne type sans prefix ») : elle ne dit que ce que le protocole accepte (§ 12.3, une famille entière sans
+  préfixe) et ne nomme ni famille ni référence du projet. Elle voyage avec l'opération, comme celle de `get_source`.
 - Garde-fous fixés par Taxo : nombre d'opérations, octets, délai. À l'épuisement, Minia conclut avec ce
   qu'elle a et dit ce qui manque.
 - **Répétition bornée.** Une opération redemandée à l'identique n'est pas rejouée : si sa réponse est un

@@ -25,9 +25,20 @@ NOTE = ('Le code exact d’un symbole déclaré, lu au commit de l’analyse ("c
         'appelée, avec une référence reçue de Taxo.')
 
 
+# Une indication courte pour `find_references` : comment lister une famille entière. Elle ne dit que ce que le protocole
+# accepte déjà (un type sans préfixe) ; elle ne nomme aucune famille ni aucune référence du projet.
+FIND_NOTE = 'Pour lister les références d’une famille, donne type sans prefix.'
+FIND = 'find_references'
+
+
 def noted(item):
-    """L'opération telle que Minia la voit : `get_source` porte sa consigne, les autres sont inchangées."""
-    return {**item, 'note': NOTE} if item.get('operation') == OPERATION else item
+    """L'opération telle que Minia la voit : `get_source` et `find_references` portent leur indication, les autres sont
+    inchangées."""
+    if item.get('operation') == OPERATION:
+        return {**item, 'note': NOTE}
+    if item.get('operation') == FIND:
+        return {**item, 'note': FIND_NOTE}
+    return item
 
 
 # Les champs où Taxo rend une référence (recherche, voisinage, faits et preuves d'une Tuile, pièce source). Jamais
