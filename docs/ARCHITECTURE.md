@@ -949,8 +949,9 @@ famille est tout le programme : la couverture reste déclarée dans chaque répo
 référence que l'index de l'analyse tient, le plus nombreux d'abord, puis par nom. C'est un effectif d'**index d'analyse**,
 pas le nombre d'éléments du programme : Taxo dit ce qu'il a cartographié, jamais que son analyse couvre tout. L'élément
 est additif (un consommateur qui ne le connaît pas l'ignore), sans fait ni verdict, et ne porte qu'un type du vocabulaire
-et un nombre, jamais un nom ni un chemin. Une analyse sans index n'en annonce aucun. Il suit les autres éléments de
-`describe` : s'il ne tient pas dans `max_bytes`, ce qui manque est compté dans `not_sent`.
+et un nombre, jamais un nom ni un chemin. Une analyse sans index n'en annonce aucun. Il **précède** les analyseurs et
+les relations, bien plus longs : sous `max_bytes` (8 000 octets par défaut), c'est la fin de `describe` qui est
+coupée, comptée dans `not_sent`, et la légende est conservée.
 
 `describe` ne propose que les opérations servables pour le projet. Correspondance avec les opérations
 d'une Tuile adaptative : CAPABILITIES = `describe`, TILE et EXPAND = `get_neighborhood`, VERIFY =

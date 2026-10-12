@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.bootstrap.database import Base
 from app.main import create_app
 from app.scans.infrastructure.sqlalchemy.fact_memory import SqlAlchemyFactMemory
+from test_neighborhood_conformance import Twin, edge
 from tests.method_security_sources import FILES
 
 KEYS = {'kind', 'type', 'count', 'source'}
@@ -76,7 +77,10 @@ def test_a_family_carries_only_a_type_and_a_count_never_a_name_or_a_path(taxo):
 
 
 def test_describe_is_deterministic_for_the_same_analysis(taxo):
-    assert families(describe(taxo)) == families(describe(taxo))
+    first = families(describe(taxo))
+    second = families(describe(taxo))
+    assert first
+    assert first == second
 
 
 def test_an_analysis_without_an_index_announces_no_family_and_describe_still_works(taxo, monkeypatch):
@@ -117,3 +121,16 @@ def test_the_legend_costs_well_under_two_kilobytes(taxo, monkeypatch):
     monkeypatch.setattr(SqlAlchemyFactMemory, 'families', lambda self, scan_id: [])
     without = describe(taxo)['bytes']
     assert 0 < with_families - without <= 2000
+
+
+def test_both_storages_count_the_same_families_and_describe_announces_them(tmp_path):
+    twin = Twin(tmp_path)
+    twin.add([edge('module:A', 'CONTAINS', subject='module:root'), edge('file:x', 'CONTAINS', subject='module:root'),
+              edge('module:B', 'DEPENDS_ON', subject='module:root')])
+    expected = [('module', 3), ('file', 1)]
+    for name, store in twin.stores.items():
+        assert store.families('analysis-1') == expected, name
+        described = twin.exchange(name).call({'operation': 'describe'})
+        announced = [(item['type'], item['count']) for item in described['items'] if item['kind'] == 'family']
+        assert announced == expected, name
+    assert twin.stores['fact_memory'].families('analysis-2') == []
