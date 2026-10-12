@@ -32,6 +32,7 @@ from app.minia.domain.errors import (CANCELLED, CONFIDENTIALITY_REFUSED, CONTEXT
                                     INVALID_QUESTION, NOT_CONFIGURED, UNKNOWN_PROVIDER, MiniaError)
 from app.minia.domain.model import MiniaModel
 from app.projection.domain.errors import NO_ANALYSIS, QueryError
+from app.protocol.domain.envelope import INVALID_ARGUMENT, NO_CONSENT, NOT_AVAILABLE
 from app.projects.application.queries import require_project
 from app.projects.domain.project import ProjectError
 
@@ -40,6 +41,15 @@ MAX_QUESTION = 1000
 # choisies par Minia, puis au plus 10 affirmations verifiees ; l'echange en permet 20.
 MAX_CALLS = 8
 MAX_CLAIMS = 10
+# Une opération redemandée à l'identique n'est pas rejouée : sa réponse est réutilisée, au plus MAX_REPEATS fois par
+# exploration, et chaque réutilisation compte dans MAX_CALLS (la limite globale reste entière). Au-delà, ou pour une
+# réponse qui dépend du budget, l'exploration s'arrête comme avant.
+MAX_REPEATS = 2
+STALLED = 'Minia ne progressait plus (opération répétée ou limite atteinte).'
+# Les refus qui ne changent pas tant que la demande et l'état sont les mêmes ; un refus de budget, lui, dépend de la place.
+_REUSABLE_REFUSALS = frozenset({INVALID_ARGUMENT, NOT_AVAILABLE, NO_CONSENT})
+_REUSED_NOTE = ('Même opération, mêmes arguments : la réponse du tour {} reste valable dans la trajectoire, '
+                'rien n’a été redemandé à Taxo. Conclus ou demande une autre opération.')
 # Budget d'un echange d'exploration : 64 Ko au plus, et jamais plus que la place du modele, moins une marge
 # pour la question, la liste des operations et l'enveloppe de chaque tour.
 EXCHANGE_BYTES = 64_000
@@ -59,6 +69,9 @@ EXPLORATION, PACKET = 'exploration', 'paquet'
 # Reponse donnee par Taxo seul, sans modele (recit TAXO-MINIA-SEC-01, E3) : l'auteur d'un commit, par exemple.
 DIRECT = 'taxo'
 ANSWERED, NOTHING_KNOWN, NEEDS_SELECTION = 'ANSWERED', 'TAXO_KNOWS_NOTHING', 'NEEDS_SELECTION'
+# Taxo n'a pas pu lire ce qu'il faut pour conclure (Tuile coupée par un budget, ou non servie) : ce n'est jamais une
+# absence de faits, que seul NOTHING_KNOWN dit, pour une Tuile lue en entier et vide.
+NOT_CONCLUDED = 'NOT_CONCLUDED'
 _NOT_REQUESTED = {'status': 'NOT_REQUESTED'}
 _DISABLED = {'status': 'DISABLED'}
 # En exploration, le diff n'est pas joint d'avance : Minia le demande fichier par fichier (get_diff).
@@ -81,6 +94,9 @@ _NOTHING_AROUND = "Taxo ne connaît aucun fait autour de {} dans cette analyse."
 _NOTHING_SENT = ("Taxo connaît {} fait(s) autour de {}, mais aucun n'a tenu dans la place du modèle : "
                  "Minia n'a pas été appelée. Consultez la Tuile dans l'explorateur.")
 _NOT_SERVED = "La Tuile de {} n'a pas pu être servie : {}"
+# La Tuile a été lue, mais coupée par un budget avant le moindre fait : elle ne dit rien de ce qui existe autour.
+_TILE_CUT = ("Taxo n'a pas pu conclure : la Tuile de {} a été coupée par un budget avant de livrer un fait. "
+             "Ce n'est pas une absence de faits ; Minia n'a pas été appelée. Consultez la Tuile dans l'explorateur.")
 MAX_SHOWN_CANDIDATES = 5
 # L'evenement qui clot une demande, avec son resultat.
 COMPLETED = 'minia.completed'
@@ -238,6 +254,22 @@ def _step(operation, arguments, response):
     else:
         entry['error'] = response['error']
     return entry
+
+
+def _reusable(response):
+    """Une réponse qu'une même demande, dans le même état, rendrait à l'identique : un résultat, ou un refus qui ne
+    dépend pas de la place restante."""
+    return response['outcome'] == 'OK' or response['error']['code'] in _REUSABLE_REFUSALS
+
+
+def _reused(step, prior):
+    """Ce que Minia voit d'une demande réutilisée : l'issue et un renvoi vers le tour d'origine, jamais la réponse
+    recopiée (rien n'est dupliqué dans sa fenêtre)."""
+    response = prior['response']
+    entry = {'outcome': response['outcome'], 'reused': True, 'note': _REUSED_NOTE.format(prior['turn'])}
+    if response['outcome'] != 'OK':
+        entry['error'] = response['error']
+    return {'operation': step.operation, 'arguments': step.arguments, 'response': entry}
 
 
 def _generation(exchange):
@@ -629,6 +661,7 @@ class AskMinia:
             return request if space is None else {**request, 'max_bytes': max(space, 1)}
 
         trajectory, exchanged, seen, operations = [], [], set(), []
+        served, repeats = {}, 0
         for operation, arguments in (('describe', {}), *seeds):
             space = room(operations, exchanged, MAX_CALLS)
             if space is not None:
@@ -669,13 +702,26 @@ class AskMinia:
                 if isinstance(step, exploration.Answer):
                     break
                 key = sources.key(step, exchanged)
-                if calls_left <= 0 or key in seen:
-                    raise MiniaError(INVALID_ANSWER, 'Minia ne progressait plus (opération répétée ou limite atteinte).')
+                if calls_left <= 0:
+                    raise MiniaError(INVALID_ANSWER, STALLED)
+                if key in seen:
+                    # Une répétition bornée : la réponse admissible déjà reçue est réutilisée, sans rien redemander à
+                    # Taxo, et le tour compte dans la limite globale ; sinon, ou passé MAX_REPEATS, l'exploration s'arrête.
+                    prior = served.get(key)
+                    if prior is None or repeats >= MAX_REPEATS or not _reusable(prior['response']):
+                        raise MiniaError(INVALID_ANSWER, STALLED)
+                    repeats += 1
+                    exchanged.append(_reused(step, prior))
+                    trajectory.append({**prior['step'], 'bytes': 0, 'reused': True})
+                    yield 'minia.operation', trajectory[-1]
+                    yield _stage('exploration', 'running', label, len(trajectory))
+                    continue
                 seen.add(key)
                 check(cancel)
                 response = self._served(exchange, step, bounded, space, exchanged)
                 exchanged.append({'operation': step.operation, 'arguments': step.arguments, 'response': response})
                 trajectory.append(_step(step.operation, step.arguments, response))
+                served[key] = {'response': response, 'step': trajectory[-1], 'turn': len(trajectory)}
                 yield 'minia.operation', trajectory[-1]
                 yield _stage('exploration', 'running', label, len(trajectory))
         except MiniaError as exc:
@@ -811,17 +857,25 @@ class AskMinia:
         if resolution.status != anchors.FOUND:
             yield COMPLETED, {**result, 'status': NEEDS_SELECTION, 'unknown': _unanchored(resolution)}
             return
-        if found.refused:
-            yield COMPLETED, {**result, 'status': NOTHING_KNOWN,
+        if found.refused and not found.tiles:
+            yield COMPLETED, {**result, 'status': NOT_CONCLUDED,
                                       'unknown': _NOT_SERVED.format(resolution.anchor, found.refused)}
             return
+        # Une Tuile refusée après d'autres n'efface pas leurs faits : elle est dite au modèle comme une limite.
         brief = briefing.tile(question, resolution.anchor, found.tiles, (project['id'], project['name']),
-                              self._capacity(model, SYSTEM_TILE))
+                              self._capacity(model, SYSTEM_TILE), unserved=found.refused)
         result = {**result, 'not_interpreted': list(brief.not_interpreted), 'facts_not_sent': brief.truncated}
         if not brief.refs:
-            unknown = (_NOTHING_SENT.format(brief.truncated, resolution.anchor) if brief.truncated
-                       else _NOTHING_AROUND.format(resolution.anchor))
-            yield COMPLETED, {**result, 'status': NOTHING_KNOWN, 'unknown': unknown}
+            # Zéro fait ne vaut absence que pour une Tuile lue en entier : coupée ou refusée, elle ne conclut pas.
+            if brief.truncated:
+                unknown = _NOTHING_SENT.format(brief.truncated, resolution.anchor)
+            elif found.truncated or found.refused:
+                unknown = _TILE_CUT.format(resolution.anchor)
+            else:
+                yield COMPLETED, {**result, 'status': NOTHING_KNOWN,
+                                          'unknown': _NOTHING_AROUND.format(resolution.anchor)}
+                return
+            yield COMPLETED, {**result, 'status': NOT_CONCLUDED, 'unknown': unknown}
             return
         yield _stage('context', 'done', 'Préparation du contexte')
         raw, served = yield from self._interpret(model, SYSTEM_TILE, brief, cancel=cancel)

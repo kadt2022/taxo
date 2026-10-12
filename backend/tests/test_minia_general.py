@@ -173,7 +173,7 @@ def test_an_instruction_hidden_in_the_answer_never_becomes_a_fact(courses, tmp_p
 def test_a_tile_beyond_the_budget_is_refused_never_cut_silently(courses, tmp_path):
     model = Scripted(explores=False, capacity=600)
     result, _, _ = ask(courses, tmp_path, model, WHO_CALLS)
-    assert result['status'] == 'TAXO_KNOWS_NOTHING'
+    assert result['status'] == 'NOT_CONCLUDED', 'une Tuile non servie ne dit pas que Taxo ne sait rien'
     assert 'n\'a pas pu être servie' in result['unknown'] and model.calls == []
 
 

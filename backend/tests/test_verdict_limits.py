@@ -105,7 +105,7 @@ def test_facts_that_did_not_fit_are_never_said_unknown(tmp_path, make_repo, monk
     from test_java_calls import fixture_files
     from test_minia_general import WHO_CALLS, Scripted, ask
     original = briefing.tile
-    monkeypatch.setattr(briefing, 'tile', lambda *args: original(*args[:-1], 1))
+    monkeypatch.setattr(briefing, 'tile', lambda *args, **more: original(*args[:-1], 1, **more))
     model = Scripted(explores=False)
     result, _, _ = ask(make_repo(fixture_files()), tmp_path, model, WHO_CALLS)
     assert model.calls == [] and result['facts_not_sent'] > 0

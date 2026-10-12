@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.bootstrap.database import Base
 from app.main import create_app
-from app.minia.application.ask import MAX_CALLS, MAX_CLAIMS
+from app.minia.application.ask import MAX_CALLS, MAX_CLAIMS, MAX_REPEATS
 from app.minia.domain import exploration
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, INVALID_ANSWER, MiniaError
 from app.minia.infrastructure.claude import ClaudeModel
@@ -135,7 +135,8 @@ def test_a_malformed_claim_is_shown_unverified_never_as_established(repo, tmp_pa
 
 @pytest.mark.parametrize('replies', [
     ('pas du JSON',),
-    (call('describe'), call('describe')),
+    # Une répétition est réutilisée MAX_REPEATS fois ; la suivante arrête l'exploration.
+    (call('describe'),) * (MAX_REPEATS + 2),
     tuple(call('find_facts', subject=f'file:f{index}.txt') for index in range(MAX_CALLS + 1)),
 ], ids=['illisible', 'sans progres', 'limite'])
 def test_a_failed_exploration_falls_back_to_the_packet(repo, tmp_path, replies):

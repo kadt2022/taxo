@@ -21,7 +21,7 @@ export type Selection = {status:string; request:Request; analysis:{id:string; cr
   total_commits:number|null; commits:SelectedCommit[]; facts:GitFact[]; not_interpreted:string[];
   // TAXO-01N : sans selection de commits, l'element que la question nomme, retrouve sans modele.
   element?:Located};
-export type SelectionAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'|'NEEDS_SELECTION'; question:string; request:Request;
+export type SelectionAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'|'NEEDS_SELECTION'|'NOT_CONCLUDED'; question:string; request:Request;
   model:AnswerModel; commits:SelectedCommit[]; facts:(GitFact&{ref:string})[];
   answer:string; unknown:string; not_interpreted:string[]; facts_not_sent:number; rejected_citations:string[];
   // MINIA-09 : en exploration, la reponse est faite d'enonces types ; en repli, le paquet dit pourquoi.
@@ -110,7 +110,12 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
     <footer>Minia a interrogé Taxo opération par opération ; Taxo a vérifié chacune de ses affirmations. Aucune phrase n’est affichée comme établie sans verdict de Taxo, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
   // Ce que Taxo constate lui-meme ; ce que Minia dit ne pas savoir reste avec son texte, non verifie (MINIA-11).
-  const limits=[answer.fallback?`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir d’un paquet de faits.`:'', answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
+  // Pas conclu (Tuile coupée par un budget, ou non servie) : Minia n'a pas été appelée, et le message est celui de Taxo,
+  // une limite qu'il constate, jamais une absence de faits ni une parole de Minia.
+  const notConcluded=answer.status==='NOT_CONCLUDED';
+  const interrupted=answer.fallback?(notConcluded?`Exploration interrompue (${answer.fallback}).`
+    :`Exploration interrompue (${answer.fallback}) : Minia a répondu à partir d’un paquet de faits.`):'';
+  const limits=[notConcluded?answer.unknown:'', interrupted, answer.not_interpreted.length?`Non analysé par Taxo : ${answer.not_interpreted.join(', ')}.`:'',
     answer.facts_not_sent?`${answer.facts_not_sent} faits n’ont pas été transmis à Minia (limite de taille).`:'',
     answer.rejected_citations.length?`Références inventées par Minia et écartées : ${answer.rejected_citations.join(', ')}.`:'',
     readingNote(answer.source_reading), ...refusals(answer.trajectory), withheldNote(answer.withheld)??''].filter(Boolean);
@@ -130,7 +135,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
       <article className="minia-block interpretation">
         <h3>Ce que Minia en déduit <span className="badge">non vérifié</span></h3>
         <p>{answer.answer||'Minia ne propose aucune interprétation.'}</p>
-        {answer.unknown&&<p><em>Minia dit ne pas savoir :</em> {answer.unknown}</p>}
+        {answer.unknown&&!notConcluded&&<p><em>Minia dit ne pas savoir :</em> {answer.unknown}</p>}
       </article>
       <article className="minia-block unknown">
         <h3>Ce que Taxo ne sait pas</h3>

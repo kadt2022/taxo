@@ -11,6 +11,8 @@ provenance. Minia ajoute deux garde-fous à ce que le protocole contrôle déjà
 Le texte du code passe, comme tout message, par la protection de la demande (secrets et identités masqués) avant
 le fournisseur.
 """
+import re
+
 from app.protocol.domain.envelope import error
 
 OPERATION = 'get_source'
@@ -44,6 +46,51 @@ def _references(value, field=None):
             yield from _references(item, field)
     elif isinstance(value, str) and field in _REFERENCE_FIELDS:
         yield value
+
+
+# La chaîne de filtres d'une règle de sécurité est une référence que Taxo rend hors d'un champ de référence :
+# l'évaluateur Spring Security l'écrit dans `qualifiers.filter_chain` de ses faits. Elle n'est reçue qu'après une
+# validation déterministe de son origine (producteur, relation, statut, validité, même commit que la réponse qui la
+# porte, dans les faits rendus par Taxo) et de son type (une méthode Java). Aucun autre qualificatif n'ouvre la lecture.
+_CHAIN_FIELD = 'filter_chain'
+_CHAIN_PRODUCER = 'taxo.spring-security'
+_CHAIN_RELATIONS = frozenset({'MATCHED_BY', 'PROTECTED_BY', 'AUTHORIZED_BY'})
+_CHAIN_STATUSES = frozenset({'OBSERVED', 'INFERRED'})
+_CHAIN_FACT_LISTS = ('facts', 'items')
+MAX_CHAIN = 400
+_JAVA_METHOD = re.compile(
+    r'symbol:java:[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*#[A-Za-z_$][\w$]*\([\w$.<>\[\],?]*\)')
+
+
+def _chain(fact, commit):
+    """La chaîne de filtres que ce fait porte légitimement, ou None : le fait vient du producteur de sécurité, dit une
+    relation de sécurité, est valide, et date du commit de la réponse ; la valeur est une méthode Java."""
+    if not isinstance(fact, dict) or commit is None:
+        return None
+    qualifiers, produced, snapshot = fact.get('qualifiers'), fact.get('produced_by'), fact.get('snapshot')
+    chain = qualifiers.get(_CHAIN_FIELD) if isinstance(qualifiers, dict) else None
+    if (not isinstance(chain, str) or len(chain) > MAX_CHAIN or not _JAVA_METHOD.fullmatch(chain)
+            or fact.get('relation') not in _CHAIN_RELATIONS or fact.get('status') not in _CHAIN_STATUSES
+            or fact.get('validity') != 'VALID' or not isinstance(produced, dict)
+            or produced.get('producer_id') != _CHAIN_PRODUCER or not isinstance(snapshot, dict)
+            or snapshot.get('commit') != commit):
+        return None
+    return chain
+
+
+def _chains(item):
+    """Les chaînes de filtres validées d'une réponse de Taxo, lues seulement dans les listes de faits qu'il rend ;
+    jamais celles d'une pièce de code, ni d'un texte."""
+    response = item['response']
+    if item.get('operation') == OPERATION or not isinstance(response, dict):
+        return
+    snapshot = response.get('snapshot')
+    commit = snapshot.get('commit') if isinstance(snapshot, dict) else None
+    for name in _CHAIN_FACT_LISTS:
+        for entry in response.get(name) or []:
+            chain = _chain(entry.get('fact') if isinstance(entry, dict) else None, commit)
+            if chain is not None:
+                yield chain
 
 
 def _strings(value):
@@ -83,7 +130,8 @@ def _discovered(item):
     voisinage inconnue, la couverture) : un symbole deviné par le modèle n'en devient pas une découverte de Taxo ;
     un symbole demandé que Taxo reconnaît (ancre connue, résultat de recherche) l'est."""
     asked = set(_strings(item.get('arguments', {}))) - _confirmed(item)
-    return {value for value in _references(item['response']) if value not in asked}
+    found = {value for value in _references(item['response']) if value not in asked}
+    return found | {chain for chain in _chains(item) if chain not in asked}
 
 
 def received(reference, exchanged):

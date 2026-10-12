@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from app.minia.domain import anchors
 from app.minia.domain.cancellation import check
+from app.protocol.domain.envelope import size
 
 MAX_PAGES = 3
 PAGE = 20
@@ -16,15 +17,23 @@ MAX_RELATIONS = 16
 TILE_BOUNDS = {'depth': 1, 'max_nodes': 30, 'max_facts': 60}
 # Le paquet d'une ancre ne prend jamais plus que ce budget, quelle que soit la place du modèle.
 MAX_TILE_BYTES = 16_000
+# Ce qu'une Tuile suivante garde au moins : son enveloppe seule (couverture, frontière, nœuds) pèse environ 3 Ko.
+MIN_TILE_BYTES = 4_000
 OK, ERROR = 'OK', 'ERROR'
 
 
 @dataclass(frozen=True)
 class Anchored:
-    """Ce que le repli a trouvé : la résolution des ancres, et les Tuiles de l'ancre unique."""
+    """Ce que le repli a trouvé : la résolution des ancres, et les Tuiles de l'ancre unique. `refused` : la raison
+    pour laquelle une Tuile n'a pas pu être servie ; les Tuiles déjà servies restent."""
     resolution: anchors.Resolution
     tiles: tuple
     refused: str | None = None
+
+    @property
+    def truncated(self):
+        """Vrai si une Tuile a été coupée par un budget : elle ne dit pas tout, ce n'est pas une absence."""
+        return any(tile['truncated'] for tile in self.tiles)
 
 
 def _step(operation, arguments, response):
@@ -97,9 +106,11 @@ def anchor(exchange, mip, project_id, question, trajectory, max_bytes, cancel=No
     relations = _relations(exchange)
     groups = [relations[start:start + MAX_RELATIONS] for start in range(0, len(relations), MAX_RELATIONS)]
     room = MAX_TILE_BYTES if max_bytes is None else min(max_bytes, MAX_TILE_BYTES)
-    budget = max(room // max(len(groups), 1), 1)
-    tiles = []
-    for group in groups:
+    tiles, spent = [], 0
+    for index, group in enumerate(groups):
+        # Chaque Tuile paie son enveloppe : un partage égal du budget laissait la première sans place pour un seul
+        # fait. Elle reçoit ce qui reste, moins ce qu'il faut au moins aux suivantes ; le total ne dépasse jamais `room`.
+        budget = max(room - spent - MIN_TILE_BYTES * (len(groups) - index - 1), 1)
         query = {'expression': 'EXPAND', 'target': {'reference': resolution.anchor}, 'relations': group,
                  'direction': 'BOTH', 'analysis': exchange.snapshot['analysis'],
                  'bounds': {**TILE_BOUNDS, 'max_bytes': budget}}
@@ -110,4 +121,5 @@ def anchor(exchange, mip, project_id, question, trajectory, max_bytes, cancel=No
         if tile['outcome'] != OK:
             return Anchored(resolution, tuple(tiles), tile['error']['message'])
         tiles.append(tile)
+        spent += size(tile)
     return Anchored(resolution, tuple(tiles))

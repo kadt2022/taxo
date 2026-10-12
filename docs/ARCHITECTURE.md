@@ -1016,6 +1016,24 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   `get_source` est réellement proposée) ; le repli paquet garde ce statut.
 - Garde-fous fixés par Taxo : nombre d'opérations, octets, délai. À l'épuisement, Minia conclut avec ce
   qu'elle a et dit ce qui manque.
+- **Répétition bornée.** Une opération redemandée à l'identique n'est pas rejouée : si sa réponse est un
+  résultat ou un refus stable (`INVALID_ARGUMENT`, `NOT_AVAILABLE`, `NO_CONSENT`), Minia reçoit un renvoi vers le
+  tour d'origine (issue, jamais la réponse recopiée), au plus `MAX_REPEATS` (2) fois par exploration. Chaque
+  réutilisation compte dans la limite globale de 8 opérations. Une erreur reste une erreur : un refus réutilisé
+  garde son issue `ERROR` et ne rend jamais une référence « reçue ». Une erreur qui dépend de la place restante
+  (`BUDGET_EXHAUSTED`, erreur interne) n'est jamais réutilisée, et passé la borne l'exploration s'arrête (repli
+  paquet), comme avant.
+- **Référence `qualifiers.filter_chain`.** Elle ouvre la lecture de la méthode qui construit la chaîne de filtres
+  (`get_source`) seulement si le fait qui la porte vient de `taxo.spring-security`, dit `MATCHED_BY`,
+  `PROTECTED_BY` ou `AUTHORIZED_BY`, est `OBSERVED` ou `INFERRED`, `VALID`, date du commit de la réponse, et si
+  la valeur est une méthode Java (type et origine validés de façon déterministe, jamais par le modèle). Toute
+  autre valeur reste refusée.
+- **Une Tuile tronquée n'est jamais une absence de faits.** Sans fait envoyé, une Tuile coupée, refusée ou dont
+  l'enveloppe occupe tout le budget donne le statut `NOT_CONCLUDED` (« Taxo n'a pas pu conclure », avec la limite
+  dite), jamais `NOTHING_KNOWN`, réservé à une Tuile servie en entier et réellement vide. Le repli partage la
+  place restante entre ses Tuiles en réservant un minimum à celles qui suivent, sous le même plafond par
+  Tuile ; une Tuile refusée après une autre garde les faits de la première et le dit. Le contrat MIP public et
+  la protection de la demande ne changent pas.
 - La trajectoire (opérations, arguments, tailles, non-transmis, verdicts) est visible en direct ; comme la
   réponse, elle n'est pas conservée.
 - Transport indépendant : appel interne, HTTP (`POST /api/projects/{id}/taxo-query`), et plus tard MCP,
