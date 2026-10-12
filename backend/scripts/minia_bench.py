@@ -45,7 +45,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 
 QUESTIONS = Path(__file__).with_name('minia_bench_questions.json')
 MASK = '******'
-EXPLORATION, DIRECT = 'exploration', 'taxo'
+EXPLORATION, DIRECT, PACKET = 'exploration', 'taxo', 'paquet'
 TILE, SOURCE = 'get_tile', 'get_source'
 FACTS, CODE = 'faits', 'faits+code'
 # Un courriel qui aurait passe la protection ; un pseudonyme ne l'est pas.
@@ -387,6 +387,13 @@ def compared(reports):
     row('Exactes avec du code', lambda rows: _rate([item for item in rows if _part([item], 'sources', 'served')]))
     row('Exactes sans Tuile ni code', lambda rows: _rate(
         [item for item in rows if not _part([item], 'tiles', 'served') and not _part([item], 'sources', 'served')]))
+    # Un refus de Taxo et un repli en mode paquet disent qu'une opération a été mal choisie ou mal formée.
+    row('Opérations refusées', lambda rows: sum(item.get('refused_operations', 0) for item in rows))
+    row('Replis en mode paquet', lambda rows: sum(1 for item in rows if item.get('mode') == PACKET))
+    # Une moyenne peut cacher la question qui régresse : chaque question a sa ligne.
+    for identifier in dict.fromkeys(item['id'] for report in reports for item in report['answers'] if 'id' in item):
+        row(f'Exactes, question {identifier}',
+            lambda rows, wanted=identifier: _rate([item for item in rows if item.get('id') == wanted]))
     return '\n'.join(lines)
 
 

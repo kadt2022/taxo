@@ -47,6 +47,9 @@ client ni à une expérimentation agent. La navigation et l’API sont utilisabl
      persistant (SQLite WAL, reçus sans contenu source) et Taxo ne porte plus de verdict sur les conclusions du LLM dans
      ce parcours. `verify_claim` reste en coexistence, `taxo-query/1` inchangé
      ([inventaire du lot D](termines/TAXO-MINIA-ENQUETE-01-lot-D-inventaire-verify-claim.md)).
+   - → **Notes d'usage des opérations de Minia** ([TAXO-MINIA-OPS-01](TAXO-MINIA-OPS-01-notes-des-operations.md)),
+     expérience non fusionnée : une note courte par opération, côté Minia, sans changer `describe` ni le MIP
+     (+674 octets par tour). Rejeu avant/après des questions 5, 9, 13 et de la route HTTP à faire avec le modèle.
 7. Première projection Arbre, sur `get_neighborhood`, indépendante du stockage physique.
 8. Profils adaptatifs et Forêt ; cache seulement si les mesures le justifient.
 9. Enrichissement de la Maille : E2/E3, appels Java, lecteur Python, selon leurs propres dépendances.

@@ -284,3 +284,29 @@ def test_a_failed_answer_still_counts_the_tiles_and_code_already_streamed():
     entry = bench.score(question, None, 'MINIA_PROVIDER_ERROR : coupé', [], 1.0, TRUTH, [], streamed)
     assert not entry['exact'] and entry['taxo_operations'] == 2
     assert entry['tiles']['served'] == 1 and entry['sources'] == {'served': 1, 'refused': 0, 'bytes': 300}
+
+
+def test_the_operation_notes_subset_replays_the_reference_questions_unchanged_and_the_route_question():
+    """TAXO-MINIA-OPS-01 : les questions 5, 9 et 13 sont celles du banc de référence, à l'identique, sur le même
+    commit et la même vérité ; la question 19 est la seule ajoutée."""
+    reference = json.loads(bench.QUESTIONS.read_text(encoding='utf-8'))
+    subset = json.loads((bench.QUESTIONS.parent / 'minia_bench_operations.json').read_text(encoding='utf-8'))
+    assert {key: value for key, value in subset.items() if key not in ('origine', 'questions')} == {
+        key: value for key, value in reference.items() if key not in ('origine', 'questions')}
+    by_id = {item['id']: item for item in reference['questions']}
+    assert [item['id'] for item in subset['questions']] == [5, 9, 13, 19]
+    assert all(item == by_id[item['id']] for item in subset['questions'] if item['id'] in by_id)
+    assert subset['questions'][-1]['must'] == [['/api/students'], ['GET']]
+
+
+def test_the_comparison_shows_refusals_fallbacks_and_each_question_so_an_average_hides_no_regression():
+    before = [{**answer_row(True), 'id': 9, 'refused_operations': 1, 'mode': 'paquet'},
+              {**answer_row(False), 'id': 19, 'refused_operations': 2, 'mode': 'exploration'}]
+    after = [{**answer_row(False), 'id': 9, 'refused_operations': 0, 'mode': 'exploration'},
+             {**answer_row(True), 'id': 19, 'refused_operations': 0, 'mode': 'exploration'}]
+    table = bench.compared([{'series': 'avant', 'answers': before}, {'series': 'après', 'answers': after}])
+    assert '| Réponses exactes | 1/2 | 1/2 |' in table.splitlines()
+    assert '| Opérations refusées | 3 | 0 |' in table.splitlines()
+    assert '| Replis en mode paquet | 1 | 0 |' in table.splitlines()
+    assert '| Exactes, question 9 | 1/1 | 0/1 |' in table.splitlines()
+    assert '| Exactes, question 19 | 0/1 | 1/1 |' in table.splitlines()

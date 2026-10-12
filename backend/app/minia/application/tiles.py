@@ -24,8 +24,9 @@ _SIZE_FIELD = 32
 _INVALID = 'INVALID_ARGUMENT'
 # Ce que Minia doit savoir d'une Tuile, avec l'opération plutôt que dans ses consignes : la fenêtre d'un petit modèle
 # ne paie ce texte que lorsque l'opération est proposée.
-_NOTE = ('Le profil fixe les relations suivies. Chaque fait porte "selection" (règle et chemin) ; "frontier" et '
-         '"profile.limits" disent ce qui n’a pas été parcouru ou rendu, jamais une absence. Aucun code source.')
+_NOTE = ('Choisis un profil dont l’ancre est le type de la référence (avant ":") ; il fixe les relations suivies. '
+         'Chaque fait porte "selection" (règle et chemin) ; "frontier" et "profile.limits" disent ce qui n’a pas été '
+         'parcouru ou rendu, jamais une absence. Aucun code source.')
 
 
 def offered():
