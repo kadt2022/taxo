@@ -39,6 +39,8 @@ ANSWER_SCHEMA = {
 
 class ClaudeModel:
     provider = 'claude'
+    # Le réglage qui choisit ce modèle : une erreur de modèle le nomme, pour corriger le bon.
+    setting = 'MINIA_CLAUDE_MODEL'
     remote = True
     # Sait mener l'exploration de MINIA-09 : demander les operations de Taxo une par une (ARCHITECTURE § 12).
     explores = True
@@ -93,7 +95,7 @@ class ClaudeModel:
         try:
             message = self._messages().create(**request)
         except anthropic.AnthropicError as exc:
-            raise _failure(exc, self.model_name) from exc
+            raise _failure(exc, self.model_name, self.setting) from exc
         _accepted(message)
         return ''.join(block.text for block in message.content if block.type == 'text')
 
@@ -117,7 +119,7 @@ class ClaudeModel:
                     forget()
         except (anthropic.AnthropicError, httpx.HTTPError) as exc:
             check(cancel)
-            raise _failure(exc, self.model_name) from exc
+            raise _failure(exc, self.model_name, self.setting) from exc
         _accepted(message)
         return getattr(message, 'model', None) or self.model_name
 
@@ -141,7 +143,7 @@ def _not_configured():
     return MiniaError(UNAVAILABLE, 'Minia Claude n’a pas d’identifiants : définir ANTHROPIC_API_KEY.')
 
 
-def _failure(exc, model_name):
+def _failure(exc, model_name, setting='MINIA_CLAUDE_MODEL'):
     """Erreur de l'API Claude, dite en clair ; les plus precises d'abord."""
     if isinstance(exc, anthropic.CredentialsError):
         return _not_configured()
@@ -150,7 +152,7 @@ def _failure(exc, model_name):
     if isinstance(exc, anthropic.PermissionDeniedError):
         return MiniaError(UNAVAILABLE, 'Le compte Claude n’a pas accès à ce modèle ou à cette fonction.')
     if isinstance(exc, anthropic.NotFoundError):
-        return MiniaError(UNAVAILABLE, f'Modèle Claude inconnu : {model_name} (MINIA_CLAUDE_MODEL).')
+        return MiniaError(UNAVAILABLE, f'Modèle Claude inconnu : {model_name} ({setting}).')
     if isinstance(exc, anthropic.RateLimitError):
         return MiniaError(UNAVAILABLE, 'Limite de débit de l’API Claude atteinte : réessayer dans un moment.')
     if isinstance(exc, anthropic.BadRequestError):
@@ -160,3 +162,11 @@ def _failure(exc, model_name):
     if isinstance(exc, anthropic.APIConnectionError):
         return MiniaError(UNAVAILABLE, 'API Claude injoignable : vérifier la connexion réseau.')
     return MiniaError(UNAVAILABLE, f'Erreur de l’API Claude : {exc}')
+
+
+class ClaudeSonnetModel(ClaudeModel):
+    """Un second modele Claude, choisi a cote du premier (MINIA_CLAUDE_SONNET_MODEL) : un modele plus riche, et plus
+    cher, pour les questions ou le premier raisonne trop court. Meme adaptateur, meme cle, memes protections ; seul
+    l'identifiant du fournisseur change, pour que le portail et les demandes puissent choisir l'un ou l'autre."""
+    provider = 'claude-sonnet'
+    setting = 'MINIA_CLAUDE_SONNET_MODEL'
