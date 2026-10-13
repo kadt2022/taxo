@@ -300,7 +300,9 @@ class Exchange:
         déclarations (`CONTAINS`), remontées sans ambiguïté : il ne dépend que des langages de ce fichier."""
         located = self._declaring_file(subject) if subject.startswith(_SYMBOL_PREFIX) else subject
         if located is not None and located.startswith(_FILE_PREFIX):
-            return present_languages(self.query(subject=located, relation=WRITTEN_IN, kind=_ASSERTION))
+            languages = present_languages(self.query(subject=located, relation=WRITTEN_IN, kind=_ASSERTION))
+            # Un symbole situé dans un fichier dont aucun langage n'est établi reste de portée inconnue.
+            return languages if languages or not subject.startswith(_SYMBOL_PREFIX) else None
         return None
 
     def _declaring_file(self, symbol):

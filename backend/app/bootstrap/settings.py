@@ -47,6 +47,11 @@ def minia_max_calls(value=None):
     return int(value if value is not None else os.getenv('MINIA_MAX_CALLS', '8'))
 
 
+def minia_trace(value=None):
+    """Journal de développement des échanges dans la console (MINIA_TRACE) : off (défaut), summary ou full."""
+    return (value or os.getenv('MINIA_TRACE', 'off')).strip().lower()
+
+
 def minia_exchange_bytes(value=None):
     """Le budget d'un échange d'exploration, en octets (MINIA_EXCHANGE_BYTES, défaut 64 000) ; jamais plus que la
     fenêtre du modèle."""

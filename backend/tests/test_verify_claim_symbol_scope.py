@@ -61,6 +61,17 @@ def test_the_name_taxo_holds_is_confirmed(taxo):
     assert verify(taxo, ENROLL, 'ANNOTATED_WITH', 'annotation:PostMapping')['verdict'] == 'CONFIRMED'
 
 
+def test_a_file_without_an_established_language_keeps_the_scope_unknown(taxo, monkeypatch):
+    """Le symbole est situé, mais aucun `WRITTEN_IN` ne dit le langage de son fichier : rien ne change."""
+    original = Exchange.query
+
+    def without_languages(self, **criteria):
+        return [] if criteria.get('relation') == 'WRITTEN_IN' else original(self, **criteria)
+    monkeypatch.setattr(Exchange, 'query', without_languages)
+    response = verify(taxo, ENROLL, 'ANNOTATED_WITH', 'annotation:org.springframework.web.bind.annotation.PostMapping')
+    assert response['reason'] == 'NOT_ANALYSED'
+
+
 def test_a_symbol_taxo_cannot_place_in_a_file_keeps_the_whole_repository_scope(taxo):
     """Sans déclaration qui le situe, rien ne change : tous les langages présents comptent."""
     response = verify(taxo, 'symbol:java:com.acme.web.Absent#m()', 'ANNOTATED_WITH', 'annotation:PostMapping')
