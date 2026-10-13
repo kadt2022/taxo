@@ -1052,7 +1052,7 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
 - **Garde de conclusion.** Quand `get_source` est proposée, une conclusion qui porte un `unknown` et cite (texte ou
   références d'une affirmation) une classe reçue de Taxo dont aucun code n'a été lu dans l'échange revient une fois
   au modèle, avec au plus 3 références lisibles reçues de Taxo (jamais une signature devinée) : pour chaque classe,
-  celle qu'une affirmation cite, sinon la seule méthode nommée `Classe.méthode`, sinon la classe, sinon toutes les
+  celles qu'une affirmation cite, sinon la seule méthode nommée `Classe.méthode`, sinon la classe, sinon toutes les
   candidates (surcharges, homonymes) : une ambiguïté est montrée, jamais tranchée (entrée `conclusion`, issue
   `RETURNED`). Le modèle lit le code ou
   garde son inconnu. La règle compare des noms à des références reçues : elle ne juge pas la réponse, n'appelle pas

@@ -187,12 +187,12 @@ def _member(reference):
 
 
 def _chosen(references, texts):
-    """Ce que la garde propose pour une classe, parmi ses références reçues : celle qu'une affirmation cite, sinon la
+    """Ce que la garde propose pour une classe, parmi ses références reçues : celles qu'une affirmation cite, sinon la
     seule méthode nommée `Classe.méthode`, sinon la classe, sinon toutes les candidates (les surcharges nommées, ou
     les membres reçus) : une ambiguïté est montrée, jamais tranchée au hasard."""
     cited = sorted(reference for reference in references if reference in texts)
     if cited:
-        return cited[:1]
+        return cited
     named = sorted(reference for reference in references if _member(reference) is not None
                    and _mentions(f'{_simple(reference)}.{_member(reference)}', texts))
     if len(named) == 1:

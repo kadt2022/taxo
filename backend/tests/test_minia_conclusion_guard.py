@@ -162,3 +162,9 @@ def test_a_class_already_read_is_never_returned_whatever_the_method_named():
     read = [*SEARCHED, {'operation': 'get_source', 'arguments': {'reference': FIND_ALL},
                         'response': {'outcome': 'OK', 'items': []}}]
     assert sources.unread([unknown('EnrollmentRepository.save n’a pas été examiné.')], read) == []
+
+
+def test_every_reference_cited_by_a_claim_is_kept_never_one_dropped():
+    claim = {'type': 'claim', 'text': 'save appelle findAll.',
+             'claim': {'subject': SAVE, 'relation': 'CALLS', 'object': FIND_ALL}}
+    assert sources.unread([claim, unknown('Rien de plus sur EnrollmentRepository.')], SEARCHED) == [FIND_ALL, SAVE]
