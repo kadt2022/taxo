@@ -159,6 +159,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     # Le diff d'un commit ne lui est joint que si MINIA_SOURCE_CONTEXT=diff et que la demande l'autorise (ARCHITECTURE § 12.6).
     # Le carnet des enquêtes navigables (récit TAXO-MINIA-ENQUETE-01) : un fichier SQLite WAL ouvert à la première.
     api.state.minia = AskMinia(history, models, projects, query, source, default, taxo_query=api.state.taxo_query,
-                               mip=mip, investigations=minia_investigations(investigations_path))
+                               mip=mip, investigations=minia_investigations(investigations_path),
+                               max_calls=settings.minia_max_calls())
     api.include_router(minia_router(api.state.minia))
     return api

@@ -412,6 +412,11 @@ class Exchange:
         self.used += result['bytes']
         return result
 
+    @property
+    def operations_left(self):
+        """Les opérations que l'échange peut encore servir avant d'être clos (MAX_OPERATIONS)."""
+        return MAX_OPERATIONS - self.calls
+
     def checkpoint(self):
         """L'etat de l'echange (operations, octets, references) avant une reponse qui peut etre redemandee."""
         return self.calls, self.used, self.refs.saved()
