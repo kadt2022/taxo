@@ -291,6 +291,9 @@ def test_the_reading_question_lists_the_code_a_human_reads_to_answer():
     reading = next(item for item in reference['questions'] if item['id'] == 19)
     assert reading['must_read'] == ['EnrollmentService', 'EnrollmentRepository', 'model.Enrollment']
     assert reading['must'] and reading['must_not'] and reading['truth']
+    written = json.dumps(reading['must'])
+    assert all(name in written for name in ('EnrollmentController', 'EnrollmentService', 'EnrollmentRepository',
+                                            'exception')), 'le parcours demandé est noté, pas seulement la conclusion'
 
 
 def test_a_reading_gesture_is_missed_until_the_code_is_read():
@@ -298,7 +301,10 @@ def test_a_reading_gesture_is_missed_until_the_code_is_read():
     read = [{'operation': 'get_source', 'outcome': 'OK',
              'arguments': {'reference': 'symbol:java:com.x.repository.EnrollmentRepository#save(Long,Long)'}},
             {'operation': 'get_source', 'outcome': 'ERROR', 'arguments': {'reference': 'symbol:java:com.x.model.Enrollment'}}]
+    read[0]['items'] = 1
     assert bench.reads(question, read) == ['model.Enrollment'], 'une lecture refusée n’est pas une lecture'
+    read[0]['items'] = 0
+    assert 'EnrollmentRepository' in bench.reads(question, read), 'une pièce non livrée n’est pas une lecture'
     assert bench.reads(question, []) == ['EnrollmentRepository', 'model.Enrollment']
 
 
@@ -310,3 +316,5 @@ def test_malformed_claims_and_chosen_operations_are_counted():
     steps = [{'operation': 'describe'}, {'operation': 'find_references'}, {'operation': 'get_source'},
              {'operation': 'verify_claim'}]
     assert bench.chosen(steps) == 2
+    seeded = [{'operation': 'describe'}, {'operation': 'get_commit'}, {'operation': 'diff_facts'}]
+    assert bench.chosen(seeded) == 1, 'le get_commit servi d’office n’est pas un choix du modèle'

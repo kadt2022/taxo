@@ -184,7 +184,7 @@ def reads(question, trajectory):
     """Les gestes de lecture : les symboles de `must_read` dont aucun code n'a été lu avec succès. Un symbole est lu si
     une référence lue avec `get_source` le contient (`EnrollmentRepository` couvre la classe et ses méthodes)."""
     read = [str(step.get('arguments', {}).get('reference', '')) for step in trajectory
-            if step.get('operation') == SOURCE and step.get('outcome') == 'OK']
+            if step.get('operation') == SOURCE and step.get('outcome') == 'OK' and step.get('items')]
     return [name for name in question.get('must_read', ()) if not any(name in reference for reference in read)]
 
 
@@ -196,8 +196,11 @@ def malformed(result):
 
 
 def chosen(trajectory):
-    """Les opérations choisies par le modèle : ni l'ouverture (`describe`), ni les vérifications de Taxo."""
-    return sum(1 for step in trajectory if step.get('operation') not in ('describe', 'verify_claim'))
+    """Les opérations choisies par le modèle : ni l'ouverture de Taxo (`describe`, et le `get_commit` qu'il sert
+    d'office à une question sur un commit), ni ses vérifications."""
+    opening = 1 + (len(trajectory) > 1 and trajectory[0].get('operation') == 'describe'
+                   and trajectory[1].get('operation') == 'get_commit')
+    return sum(1 for step in trajectory[opening:] if step.get('operation') not in ('describe', 'verify_claim'))
 
 
 def is_security(claim, bench):
