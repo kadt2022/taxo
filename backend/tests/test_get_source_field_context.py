@@ -99,7 +99,8 @@ def test_the_fields_used_as_receivers_are_joined_with_their_whole_declaration(ta
     items = response['field_context'][0]
     assert (items['line_start'], items['line_end']) == (line('    @Deprecated'), line('        ConcurrentHashMap.newKeySet();'))
     assert items['content_hash'] == content_hash(SOURCE.encode(), items['line_start'], items['line_end'])
-    assert items['resolution'] == 'RESOLVED' and items['path'] == f'{ROOT}Orders.java'
+    assert items['resolution'] == 'RESOLVED' and 'path' not in items
+    assert response['path'] == f'{ROOT}Orders.java', 'les lignes d’un champ sont celles du fichier de la pièce'
     assert 'Javadoc' not in items['text']
     assert_consistent(response)
 

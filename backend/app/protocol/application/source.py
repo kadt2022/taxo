@@ -72,7 +72,7 @@ class SourceOperation:
             raise OperationError(BUDGET_EXHAUSTED, 'Cette pièce source ne tient pas dans le budget : augmenter '
                                                    'max_bytes.')
         if context:
-            _field_context(response, reference, path, fields)
+            _field_context(response, reference, fields)
         return response
 
     def _declaration(self, reference):
@@ -125,11 +125,12 @@ class SourceOperation:
         return found, None, tuple((name, piece) for name, piece in fields if piece is not None and not piece.truncated)
 
 
-def _field_context(response, reference, path, fields):
-    """Les déclarations des champs utilisés, dans leur section et sous leur plafond ; le reste est compté."""
+def _field_context(response, reference, fields):
+    """Les déclarations des champs utilisés, dans leur section et sous leur plafond ; le reste est compté. Un champ
+    est lu dans le fichier de la pièce (`path` de la réponse) : il ne le répète pas."""
     owner, used, refused = reference.split('#', 1)[0], 0, 0
     for name, piece in fields:
-        item = {'field': f'{owner}#{name}', 'path': path, 'line_start': piece.line_start, 'line_end': piece.line_end,
+        item = {'field': f'{owner}#{name}', 'line_start': piece.line_start, 'line_end': piece.line_end,
                 'content_hash': piece.content_hash, 'resolution': source.RESOLVED, 'text': piece.text}
         cost = len(json.dumps(item, ensure_ascii=False).encode('utf-8'))
         if refused or used + cost > source.MAX_FIELD_CONTEXT_BYTES:

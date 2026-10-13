@@ -1105,8 +1105,8 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
      n'annonce `CODE_SOURCE` que si du code est transmis ; ses restrictions (`source-disclosure/1`) sont à part.
      Rien de ce qui est lu n'est conservé. Minia la demande en exploration, sous ce même double consentement (§ 12.5) ;
    - **contexte des champs** (version 1) : pour une méthode ou un constructeur servis, une section distincte
-     `field_context` joint la déclaration exacte (texte, plage `line_start`-`line_end`, empreinte, `resolution:
-     RESOLVED`) des champs **du type courant** que le corps utilise comme **receveurs d'appels**, tels que la règle
+     `field_context` joint la déclaration exacte (texte, plage `line_start`-`line_end` dans le fichier de la pièce,
+     empreinte, `resolution: RESOLVED`) des champs **du type courant** que le corps utilise comme **receveurs d'appels**, tels que la règle
      des appels les désigne (un nom masqué par un paramètre ou une variable locale n'en est pas un). La pièce reste
      inchangée ; même fichier, même commit, même protection. Une déclaration qui ne se lit pas en entier n'est pas
      jointe. Plafond propre de 1 Ko (au-delà, `not_sent` `FIELD_CONTEXT_LIMIT`), puis le budget de l'opération
