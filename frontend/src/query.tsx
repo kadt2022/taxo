@@ -4,7 +4,7 @@ import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
 import {ask as askMinia, askButton, createStop, MiniaProgress, type MiniaLive, type MiniaStop} from './minia-live';
-import {CodeConsent, codeConsent, DirectAnswer, LimitsChoice, MiniaChoice, modelLabel, type Tuning, withProvider, withheldNote, type AnswerModel, type MiniaStatus,
+import {checkedTuning, CodeConsent, codeConsent, DirectAnswer, LimitsChoice, MiniaChoice, modelLabel, type Tuning, withProvider, withheldNote, type AnswerModel, type MiniaStatus,
   type Withheld} from './minia';
 import {openStream, type ServerEvent} from './sse';
 import {refusals, Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
@@ -205,7 +205,7 @@ export function AskTaxo({base, request, stream, minia=null}:Readonly<{base:strin
   const chosen=withProvider(minia,provider), [code,setCode]=useState(false), [tuning,setTuning]=useState<Tuning>({});
   useEffect(()=>{setCode(codeConsent(chosen)?.checked??false);},[chosen?.provider,chosen?.source_reading]);
   const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setLive},stream,provider,control,
-    code&&codeConsent(chosen)!==null, tuning);
+    code&&codeConsent(chosen)!==null, checkedTuning(tuning, minia?.limits));
   return <section className="results ask-taxo" aria-label="Interroger Taxo">
     <div className="section-heading"><div><h2>Interroger Taxo</h2><p>Taxo répond à partir des faits de la dernière analyse globale. Sur l’historique : « les 3 derniers commits », « le commit 5b9022b », « depuis 2026-09-01 ». Sur le code : « qui appelle OwnerRepository.findById ? », « que contient `VetController` ? ».</p></div></div>
     <form onSubmit={submitWith(select)}>

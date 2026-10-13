@@ -5,7 +5,7 @@ import anyio
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictInt
 
 from app.minia.application.ask import HEARTBEAT
 from app.minia.domain.cancellation import Cancellation
@@ -29,8 +29,8 @@ class Question(BaseModel):
     # Fournisseur choisi pour cette demande (ollama, claude...) ; celui par defaut sinon.
     provider: str | None = None
     # Essais : nombre d'operations et budget de l'echange pour cette demande ; ceux du serveur sinon.
-    max_calls: int | None = None
-    max_bytes: int | None = None
+    max_calls: StrictInt | None = None
+    max_bytes: StrictInt | None = None
 
 
 class ProjectQuestion(BaseModel):
@@ -40,8 +40,8 @@ class ProjectQuestion(BaseModel):
     # TAXO_SOURCE_READING vaut off.
     source: bool = False
     # Essais : nombre d'operations et budget de l'echange pour cette demande ; ceux du serveur sinon.
-    max_calls: int | None = None
-    max_bytes: int | None = None
+    max_calls: StrictInt | None = None
+    max_bytes: StrictInt | None = None
 
 
 class InvestigationRequest(BaseModel):

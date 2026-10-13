@@ -67,7 +67,8 @@ def test_without_values_the_server_settings_apply(repo, tmp_path):
 
 
 @pytest.mark.parametrize('limits', [{'max_calls': 0}, {'max_calls': MAX_ALLOWED_CALLS + 1},
-                                    {'max_bytes': 1000}, {'max_bytes': MAX_EXCHANGE_SETTING + 1}])
+                                    {'max_bytes': 1000}, {'max_bytes': MAX_EXCHANGE_SETTING + 1},
+                                    {'max_calls': True}, {'max_calls': '12'}, {'max_bytes': 64000.5}])
 def test_a_request_out_of_bounds_is_refused_before_any_model_call(repo, tmp_path, limits):
     model = ScriptedModel()
     _, refused = ask(repo[0], tmp_path, model, **limits)

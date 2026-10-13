@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {CodeConsent, codeConsent, gaps, gitFile, withheldNote, LimitsChoice, MiniaChoice, MiniaView, modelLabel, providerLabel, providerName, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
+import {CodeConsent, codeConsent, gaps, gitFile, withheldNote, checkedTuning, LimitsChoice, MiniaChoice, MiniaView, modelLabel, providerLabel, providerName, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
   parent:'a'.repeat(40), project:{id:'p-1', name:'Demo-IAM'}, files_not_sent:0,
@@ -276,6 +276,16 @@ describe('réglages de l’exploration (essais)', ()=>{
     expect(html).toContain('Budget (octets)');
     expect(html).toContain('max="200000"');
     expect(html).toContain('placeholder="64000"');
+  });
+  it('n’envoie que des valeurs entières dans les bornes, et dit quand une valeur est hors bornes', ()=>{
+    expect(checkedTuning({max_calls:12, max_bytes:100000}, limits)).toEqual({max_calls:12, max_bytes:100000});
+    expect(checkedTuning({max_calls:0, max_bytes:1000}, limits)).toEqual({});
+    expect(checkedTuning({max_calls:2.5, max_bytes:100000}, limits)).toEqual({max_bytes:100000});
+    expect(checkedTuning({max_calls:12}, undefined)).toEqual({});
+    expect(renderToStaticMarkup(<LimitsChoice id="l" status={configured} value={{max_calls:99}} onChange={()=>undefined}/>))
+      .toContain('hors bornes');
+    expect(renderToStaticMarkup(<LimitsChoice id="l" status={configured} value={{max_calls:12}} onChange={()=>undefined}/>))
+      .not.toContain('hors bornes');
   });
   it('affiche la valeur choisie, et rien sans Minia ni bornes', ()=>{
     expect(renderToStaticMarkup(<LimitsChoice id="l" status={configured} value={{max_calls:10}} onChange={()=>undefined}/>)).toContain('value="10"');

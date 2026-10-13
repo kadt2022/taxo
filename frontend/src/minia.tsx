@@ -133,6 +133,19 @@ export function MiniaChoice({status, value, onChange, id}:Readonly<{status:Minia
 }
 
 const tuned=(raw:string)=>raw.trim()===''?undefined:Number(raw);
+const inside=(value:number|undefined, range:[number,number])=>value!==undefined&&Number.isInteger(value)&&value>=range[0]&&value<=range[1];
+
+/** Ce qui part avec la demande : seulement les valeurs entières dans les bornes du serveur ; une valeur hors bornes
+ * n'est jamais envoyée (le réglage du serveur s'applique, et le formulaire le dit). */
+export function checkedTuning(tuning:Tuning, limits?:ExplorationLimits):Tuning{
+  if(!limits)return {};
+  return {...(inside(tuning.max_calls,limits.max_calls_range)?{max_calls:tuning.max_calls}:{}),
+    ...(inside(tuning.max_bytes,limits.max_bytes_range)?{max_bytes:tuning.max_bytes}:{})};
+}
+
+const outside=(value:Tuning, limits:ExplorationLimits)=>
+  (value.max_calls!==undefined&&!inside(value.max_calls,limits.max_calls_range))
+  ||(value.max_bytes!==undefined&&!inside(value.max_bytes,limits.max_bytes_range));
 
 /** Le nombre d'opérations et le budget de l'échange pour une demande d'essai, dans les bornes du serveur ; un champ
  * vide garde le réglage du serveur, affiché en indication. */
@@ -146,6 +159,7 @@ export function LimitsChoice({status, value, onChange, id}:Readonly<{status:Mini
     <label htmlFor={`${id}-bytes`}>Budget (octets)</label>
     <input id={`${id}-bytes`} type="number" min={limits.max_bytes_range[0]} max={limits.max_bytes_range[1]} step={1000}
       placeholder={String(limits.max_bytes)} value={value.max_bytes??''} onChange={e=>onChange({...value, max_bytes:tuned(e.target.value)})}/>
+    {outside(value,limits)?<p className="warning">Valeur hors bornes : le réglage du serveur s’applique.</p>:null}
   </fieldset>;
 }
 
