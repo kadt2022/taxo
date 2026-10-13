@@ -78,12 +78,15 @@ export function claimSentence(claim:Claim){
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }
 
-/** Une valeur d'argument lisible : un pas de voisinage par sa relation suivie (`HANDLED_BY → CALLS`), une liste
- * élément par élément, un objet par ses champs ; jamais « [object Object] ». */
+/** La relation d'un pas de voisinage (`{relation, direction}` en neighborhood/2) ; `undefined` sinon. */
+const stepRelation=(item:unknown)=>item&&typeof item==='object'&&'relation' in item?(item as {relation:unknown}).relation:undefined;
+
+/** Une valeur d'argument lisible : des pas de voisinage par leur relation (`HANDLED_BY → CALLS`, un sens entrant
+ * signalé `←`), une liste élément par élément, un objet par ses champs ; jamais « [object Object] ». */
 export function argumentText(value:unknown):string{
   if(Array.isArray(value)){
-    const steps=value.every(item=>item&&typeof item==='object'&&'follow' in item);
-    return steps?value.map(item=>argumentText((item as {follow:unknown}).follow)).join(' → ')
+    const steps=value.length>0&&value.every(item=>stepRelation(item)!==undefined);
+    return steps?value.map(item=>`${(item as {direction?:string}).direction==='INCOMING'?'← ':''}${argumentText(stepRelation(item))}`).join(' → ')
       :`[${value.map(argumentText).join(', ')}]`;
   }
   if(value&&typeof value==='object')return Object.entries(value).map(([key,item])=>`${key} ${argumentText(item)}`).join(', ');

@@ -62,10 +62,12 @@ describe('trajectoire', ()=>{
   });
   it('écrit les pas d’un voisinage par leur relation, jamais [object Object]', ()=>{
     const neighborhood={operation:'get_neighborhood', outcome:'OK' as const, bytes:9, items:1,
-      arguments:{root:'endpoint:POST /x', steps:[{follow:'HANDLED_BY', direction:'OUTGOING'}, {follow:'CALLS'}], depth:2}};
+      arguments:{root:'endpoint:POST /x', steps:[{relation:'HANDLED_BY', direction:'OUTGOING'}, {relation:'CALLS', direction:'OUTGOING'}], depth:2}};
     expect(stepText(neighborhood)).toBe('get_neighborhood (root endpoint:POST /x, steps HANDLED_BY → CALLS, depth 2) → 1 résultat · 9 octets');
     expect(stepText(neighborhood)).not.toContain('[object Object]');
     expect(argumentText(['a', 'b'])).toBe('[a, b]');
+    expect(argumentText([{relation:'CALLS', direction:'INCOMING'}])).toBe('← CALLS');
+    expect(argumentText([])).toBe('[]');
     expect(argumentText({follow:'CALLS', direction:'OUTGOING'})).toBe('follow CALLS, direction OUTGOING');
     expect(argumentText(3)).toBe('3');
   });
