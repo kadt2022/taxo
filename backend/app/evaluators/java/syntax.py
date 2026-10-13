@@ -429,6 +429,10 @@ class _Reader:
         listing = _first(node, ('type_arguments',))
         found = []
         for argument in (listing.named_children if listing is not None else ()):
+            if argument.type == 'annotated_type':
+                # Une annotation d'usage de type (`@Nullable Item`) ne change pas l'argument écrit.
+                argument = next((child for child in reversed(argument.named_children)
+                                 if child.type not in ('marker_annotation', 'annotation')), argument)
             if argument.type not in ('type_identifier', 'scoped_type_identifier', 'generic_type'):
                 continue
             written = _type_name(_base(argument))
@@ -447,7 +451,8 @@ class _Reader:
                 written = _type_name(item.child_by_field_name('type'))
                 variable = written.partition('.')[0] in variables
                 yield replace(_spanning(_field(item, written, None if variable else self._type(written, owner),
-                                               variable), item), component=True)
+                                               variable), item), component=True,
+                              type_arguments=self._type_arguments(item.child_by_field_name('type'), owner, variables))
             elif item.type == 'spread_parameter':
                 declarator = next(child for child in item.named_children if child.type == 'variable_declarator')
                 written = _type_name(next(child for child in item.named_children if child.type not in (

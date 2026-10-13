@@ -10,6 +10,10 @@ ROOT = 'src/main/java/com/acme/'
 STORE, ITEM = 'symbol:java:com.acme.Store', 'symbol:java:com.acme.Item'
 FILES = {
     f'{ROOT}Item.java': 'package com.acme;\n\npublic record Item(Long id) {\n}\n',
+    f'{ROOT}Shelf.java': 'package com.acme;\n\nimport java.util.List;\n\npublic record Shelf(List<Item> items) {\n}\n',
+    f'{ROOT}Tagged.java': '\n'.join(['package com.acme;', '', 'import java.util.List;', '',
+                                     'public class Tagged {', '    private List<@Nullable Item> maybe;', '}', '']),
+    f'{ROOT}Nullable.java': 'package com.acme;\n\npublic @interface Nullable {\n}\n',
     f'{ROOT}Store.java': '\n'.join([
         'package com.acme;',
         '',
@@ -50,10 +54,11 @@ def taxo_fixture(tmp_path_factory):
         yield client, url
 
 
-def arguments(taxo):
+def arguments(taxo, owner=STORE):
     client, url = taxo
     found = exchange(client, url, ('find_facts', {'relation': 'TYPE_ARGUMENT'}))['responses'][0]
-    return sorted((item['fact']['subject'].split('#')[1], item['fact']['object']) for item in found['items'])
+    return sorted((item['fact']['subject'].split('#')[1], item['fact']['object']) for item in found['items']
+                  if item['fact']['subject'].split('#')[0] == owner)
 
 
 def test_a_source_type_argument_is_a_fact(taxo):
@@ -82,3 +87,11 @@ def test_describe_announces_the_relation(taxo):
     described = exchange(client, url, ('describe', {}))['responses'][0]
     relations = {item['relation'] for item in described['items'] if item['kind'] == 'relation'}
     assert 'TYPE_ARGUMENT' in relations
+
+
+def test_a_record_component_gives_its_type_argument(taxo):
+    assert arguments(taxo, 'symbol:java:com.acme.Shelf') == [('items', ITEM)]
+
+
+def test_a_type_use_annotation_does_not_hide_the_argument(taxo):
+    assert arguments(taxo, 'symbol:java:com.acme.Tagged') == [('maybe', ITEM)]
