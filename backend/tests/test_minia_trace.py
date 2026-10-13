@@ -86,6 +86,16 @@ def test_a_streamed_answer_keeps_what_the_stream_returns():
             except StopIteration as end:
                 assert end.value == 'modèle-réel'
                 break
-        assert said == ['a', 'b'] and 'LLM <- scripted/scripted-1 : 2 octets : ab' in out.getvalue()
+        assert said == ['a', 'b']
+        assert 'LLM <- scripted/modèle-réel : 2 octets : ab' in out.getvalue(), 'le modèle qui a réellement répondu'
     finally:
         trace.configure(trace.OFF)
+
+
+def test_navigable_investigations_trace_their_taxo_operations(journal, monkeypatch):
+    """Le parcours des enquêtes sert ses opérations sans passer par l'exploration : il les journalise aussi."""
+    import inspect
+    from app.minia.application import investigation
+    source = inspect.getsource(investigation)
+    assert "trace.taxo('describe', {}, describe)" in source
+    assert 'trace.taxo(step.operation, step.arguments, response)' in source

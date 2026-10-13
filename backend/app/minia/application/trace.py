@@ -89,13 +89,15 @@ def sent(model, system, user):
         LOGGER.info('LLM message : %s', user)
 
 
-def received(model, reply):
-    """La réponse brute du modèle, avant toute restitution des valeurs d'origine."""
+def received(model, reply, served=None):
+    """La réponse brute du modèle, avant toute restitution des valeurs d'origine. `served` : le modèle qui a
+    réellement répondu, quand le fournisseur le dit (un repli côté serveur, une version datée)."""
     if not active():
         return reply
     text = reply if isinstance(reply, str) else str(reply)
-    LOGGER.info('LLM <- %s/%s : %s octets : %s', getattr(model, 'provider', '?'), getattr(model, 'model_name', '?'),
-                _size(text), text if _full() else _cut(text))
+    name = served if isinstance(served, str) and served else getattr(model, 'model_name', '?')
+    LOGGER.info('LLM <- %s/%s : %s octets : %s', getattr(model, 'provider', '?'), name, _size(text),
+                text if _full() else _cut(text))
     return reply
 
 
@@ -110,7 +112,7 @@ def streamed(model, pieces):
             try:
                 piece = next(iterator)
             except StopIteration as end:
-                received(model, ''.join(said))
+                received(model, ''.join(said), end.value)
                 return end.value
             said.append(piece if isinstance(piece, str) else str(piece))
             yield piece
