@@ -160,3 +160,10 @@ def _failure(exc, model_name):
     if isinstance(exc, anthropic.APIConnectionError):
         return MiniaError(UNAVAILABLE, 'API Claude injoignable : vérifier la connexion réseau.')
     return MiniaError(UNAVAILABLE, f'Erreur de l’API Claude : {exc}')
+
+
+class ClaudeSonnetModel(ClaudeModel):
+    """Un second modele Claude, choisi a cote du premier (MINIA_CLAUDE_SONNET_MODEL) : un modele plus riche, et plus
+    cher, pour les questions ou le premier raisonne trop court. Meme adaptateur, meme cle, memes protections ; seul
+    l'identifiant du fournisseur change, pour que le portail et les demandes puissent choisir l'un ou l'autre."""
+    provider = 'claude-sonnet'
