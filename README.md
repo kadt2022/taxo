@@ -624,6 +624,7 @@ configurés) ; la réponse indique lequel a répondu, ce qui permet de comparer.
 ```powershell
 $env:MINIA_OLLAMA_MODEL = 'qwen2.5:3b'        # Minia Ollama : local
 $env:MINIA_CLAUDE_MODEL = 'claude-opus-5'     # Minia Claude : distant, activée seulement par ce choix
+$env:MINIA_CLAUDE_SONNET_MODEL = 'claude-sonnet-5-5'  # facultatif : second modèle Claude, « Claude Sonnet »
 $env:ANTHROPIC_API_KEY  = '…'                 # identifiants de l'API Claude (jamais dans le dépôt)
 $env:MINIA_PROVIDER     = 'ollama'            # fournisseur proposé par défaut
 ```
@@ -656,6 +657,7 @@ permet de tester un gros modèle distant sans acheter de crédits.
 setx GEMINI_API_KEY "..."                       # clé créée dans Google AI Studio (jamais dans le dépôt)
 $env:MINIA_GEMINI_MODEL = 'gemini-3.8-flash'    # nom exact d'un modèle ouvert à ce projet (AI Studio)
 $env:MINIA_GEMINI_TIER  = 'free'                # défaut ; 'paid' si la clé est facturée
+$env:MINIA_GEMINI_LITE_MODEL = 'gemini-3.1-flash-lite'  # facultatif : second modèle Gemini, « Gemini Lite »
 ```
 
 Au niveau gratuit, Google peut utiliser les données envoyées pour améliorer ses produits : le portail

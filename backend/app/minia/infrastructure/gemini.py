@@ -61,6 +61,8 @@ def gemini_schema(schema):
 
 class GeminiModel:
     provider = 'gemini'
+    # Les réglages qui choisissent ce modèle et son niveau : une erreur les nomme, pour corriger le bon.
+    setting, tier_setting = 'MINIA_GEMINI_MODEL', 'MINIA_GEMINI_TIER'
     remote = True
     # Sait mener l'exploration de MINIA-09 : demander les operations de Taxo une par une (ARCHITECTURE § 12).
     explores = True
@@ -68,7 +70,7 @@ class GeminiModel:
     def __init__(self, model_name, tier=FREE, api_key=None, transport=None, timeout=300.0,
                  max_input_bytes=MAX_INPUT_BYTES, sleep=time.sleep):
         if tier not in (FREE, PAID):
-            raise ValueError(f'MINIA_GEMINI_TIER invalide : {tier} (free ou paid).')
+            raise ValueError(f'{self.tier_setting} invalide : {tier} (free ou paid).')
         self.model_name, self.max_input_bytes = model_name, max_input_bytes
         # Au niveau gratuit, les donnees envoyees peuvent servir a Google ; au niveau payant, non.
         self.data_use = tier == FREE
@@ -103,7 +105,7 @@ class GeminiModel:
     def _open(self, url, body, headers, stream, client=None, cancel=None):
         """Reponse 200 de l'API ; une erreur passagere (surcharge 503, reseau...) est reessayee."""
         return retrying.send(client or self._client, url, body, headers, stream, self._sleep,
-                             lambda response: _check(response, self.model_name), _unreachable, cancel)
+                             lambda response: _check(response, self.model_name, self.setting), _unreachable, cancel)
 
     def complete(self, system, user, schema=None, cancel=None):
         """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia. Avec
@@ -176,7 +178,7 @@ def _unreachable():
     return MiniaError(UNAVAILABLE, 'API Gemini injoignable : vérifier la connexion réseau.')
 
 
-def _check(response, model_name):
+def _check(response, model_name, setting='MINIA_GEMINI_MODEL'):
     """Erreur de l'API Gemini, dite en clair."""
     if response.status_code == 200:
         return
@@ -193,7 +195,7 @@ def _check(response, model_name):
         # (Google reserve parfois d'anciens modeles aux projets qui les utilisaient deja).
         said = f' Google : « {message} »' if message else ''
         raise MiniaError(UNAVAILABLE, f'Modèle Gemini introuvable ou non accessible avec cette clé : {model_name} '
-                         f'(MINIA_GEMINI_MODEL). Choisir un modèle listé pour ce projet dans Google AI Studio.{said}')
+                         f'({setting}). Choisir un modèle listé pour ce projet dans Google AI Studio.{said}')
     if response.status_code == 503:
         said = f' Google : « {message} »' if message else ''
         raise MiniaError(UNAVAILABLE, f'Gemini est momentanément surchargé (503), même après {RETRIES} nouvelles '
@@ -203,3 +205,11 @@ def _check(response, model_name):
     if response.status_code == 400:
         raise MiniaError(UNAVAILABLE, f'Requête refusée par l’API Gemini : {message or "requête invalide"}')
     raise MiniaError(UNAVAILABLE, f'L’API Gemini a répondu {response.status_code}.')
+
+
+class GeminiLiteModel(GeminiModel):
+    """Un second modele Gemini, choisi a cote du premier (MINIA_GEMINI_LITE_MODEL) : un modele plus leger, aux quotas
+    gratuits souvent plus larges. Meme adaptateur, meme cle, memes protections ; seul l'identifiant du fournisseur change,
+    pour que le portail et les demandes puissent choisir l'un ou l'autre."""
+    provider = 'gemini-lite'
+    setting, tier_setting = 'MINIA_GEMINI_LITE_MODEL', 'MINIA_GEMINI_LITE_TIER'
