@@ -79,8 +79,9 @@ def test_a_code_without_category_is_refused_never_guessed():
 
 def test_the_producer_version_says_the_diagnostic_changed():
     # 1.4.0 : diagnostic classé (TAXO-01M). 1.5.0 et catalogue 2 : annotations observées (TAXO-MIP-ADT-01, PR A2).
-    # 1.6.0 et catalogue 3 : arguments de type des champs (TYPE_ARGUMENT).
-    assert JavaCallsEvaluator.producer_version == '1.6.0'
+    # 1.6.0 et catalogue 3 : arguments de type des champs (TYPE_ARGUMENT). 1.7.0 : annotations nommées telles
+    # qu'écrites (décision « Taxo témoin », D2) ; le catalogue ne change pas.
+    assert JavaCallsEvaluator.producer_version == '1.7.0'
     assert CATALOG.catalog_version == '3'
 
 

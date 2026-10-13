@@ -3,7 +3,7 @@
   "commit": "01163f17c1729a02ecce18e0b77c4f16469f50b9",
   "origine": "Banc reconstitué pour TAXO-MINIA-SEC-01 : le rapport du 10 octobre 2026 n'est pas dans le dépôt. Les tests 9, 11 et 18 portent, comme dans le récit, sur @PreAuthorize, @EnableMethodSecurity et les règles de sécurité. Chaque réponse attendue a été établie à la main en lisant les sources du dépôt au commit figé ; Taxo n'y a pas contribué.",
   "security_relations": ["PROTECTED_BY", "AUTHORIZED_BY", "PERMITS_ALL", "CONFIGURES"],
-  "security_annotations": ["org.springframework.security."],
+  "security_annotations": ["annotation:PreAuthorize", "annotation:PostAuthorize", "annotation:Secured", "annotation:RolesAllowed", "annotation:EnableMethodSecurity", "annotation:EnableGlobalMethodSecurity"],
   "security_truth": [
     ["endpoint:GET /api/courses", "PROTECTED_BY", "policy-rule:authenticated()"],
     ["endpoint:GET /api/courses/{id}", "PROTECTED_BY", "policy-rule:authenticated()"],
@@ -30,13 +30,13 @@
     ["symbol:java:com.example.school.controller.StudentController#getStudent(Long)", "AUTHORIZED_BY", "hasAnyRole('ADMIN','TEACHER','STUDENT')"],
     ["symbol:java:com.example.school.controller.StudentController#createStudent(CreateStudentRequest)", "AUTHORIZED_BY", "hasRole('ADMIN')"],
     ["symbol:java:com.example.school.config.SecurityConfig#securityFilterChain(HttpSecurity)", "CONFIGURES", "policy-rule:csrf.disable()"],
-    ["symbol:java:com.example.school.config.SecurityConfig", "ANNOTATED_WITH", "annotation:org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity"],
-    ["symbol:java:com.example.school.controller.CourseController#createCourse(CreateCourseRequest)", "ANNOTATED_WITH", "annotation:org.springframework.security.access.prepost.PreAuthorize"],
-    ["symbol:java:com.example.school.controller.EnrollmentController#enroll(Long,Long)", "ANNOTATED_WITH", "annotation:org.springframework.security.access.prepost.PreAuthorize"],
-    ["symbol:java:com.example.school.controller.EnrollmentController#getStudentEnrollments(Long)", "ANNOTATED_WITH", "annotation:org.springframework.security.access.prepost.PreAuthorize"],
-    ["symbol:java:com.example.school.controller.StudentController#getStudents()", "ANNOTATED_WITH", "annotation:org.springframework.security.access.prepost.PreAuthorize"],
-    ["symbol:java:com.example.school.controller.StudentController#getStudent(Long)", "ANNOTATED_WITH", "annotation:org.springframework.security.access.prepost.PreAuthorize"],
-    ["symbol:java:com.example.school.controller.StudentController#createStudent(CreateStudentRequest)", "ANNOTATED_WITH", "annotation:org.springframework.security.access.prepost.PreAuthorize"]
+    ["symbol:java:com.example.school.config.SecurityConfig", "ANNOTATED_WITH", "annotation:EnableMethodSecurity"],
+    ["symbol:java:com.example.school.controller.CourseController#createCourse(CreateCourseRequest)", "ANNOTATED_WITH", "annotation:PreAuthorize"],
+    ["symbol:java:com.example.school.controller.EnrollmentController#enroll(Long,Long)", "ANNOTATED_WITH", "annotation:PreAuthorize"],
+    ["symbol:java:com.example.school.controller.EnrollmentController#getStudentEnrollments(Long)", "ANNOTATED_WITH", "annotation:PreAuthorize"],
+    ["symbol:java:com.example.school.controller.StudentController#getStudents()", "ANNOTATED_WITH", "annotation:PreAuthorize"],
+    ["symbol:java:com.example.school.controller.StudentController#getStudent(Long)", "ANNOTATED_WITH", "annotation:PreAuthorize"],
+    ["symbol:java:com.example.school.controller.StudentController#createStudent(CreateStudentRequest)", "ANNOTATED_WITH", "annotation:PreAuthorize"]
   ],
   "questions": [
     {"id": 1, "theme": "routes", "question": "Quelles routes HTTP expose l'application ?",

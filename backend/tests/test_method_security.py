@@ -135,7 +135,7 @@ def test_pre_authorize_protects_the_endpoint_its_method_handles_beside_the_url_r
     derivation = protection['derivation']
     assert derivation['rule'] == METHOD_RULE
     assert derivation['premises'] == [f'HANDLED_BY : {ENDPOINT} -> {HANDLER}', f'AUTHORIZED_BY : {HANDLER} -> {ROLES}',
-                                      f'ANNOTATED_WITH : {CONFIG} -> annotation:{ENABLE}']
+                                      f'ANNOTATED_WITH : {CONFIG} -> annotation:EnableMethodSecurity']
     assert derivation['known_gaps'], 'les rôles des utilisateurs sont des données'
     lines = {(item['path'].rsplit('/', 1)[-1], item['line_start']) for item in protection['evidence']}
     assert lines == {('ItemController.java', 14), ('SecurityConfig.java', 13)}
@@ -147,7 +147,8 @@ def test_the_written_facts_are_observed_at_their_line():
     assert (guard['status'], guard['object'], guard['qualifiers']) == ('OBSERVED', ROLES, {'annotation': 'PreAuthorize'})
     assert [item['line_start'] for item in guard['evidence']] == [14], 'la garde n’a que sa propre ligne pour preuve'
     [enabling] = found(output, 'ANNOTATED_WITH')
-    assert (enabling['subject'], enabling['object']) == (CONFIG, f'annotation:{ENABLE}')
+    assert (enabling['subject'], enabling['object']) == (CONFIG, 'annotation:EnableMethodSecurity'), 'le nom écrit (D2)'
+    assert enabling['qualifiers']['resolved_name'] == ENABLE, 'le nom reconnu reste un constat'
     assert enabling['evidence'][0]['line_start'] == 13
     [csrf] = found(output, 'CONFIGURES')
     assert (csrf['subject'], csrf['object'], csrf['status']) == (CHAIN, 'policy-rule:csrf.disable()', 'OBSERVED')
@@ -174,7 +175,8 @@ def test_global_method_security_enables_pre_authorize_only_when_written():
     on = evaluate(shop(security(imports, '@EnableGlobalMethodSecurity(prePostEnabled = true)')))
     assert len(method_protection(on)) == 1
     [enabling] = found(on, 'ANNOTATED_WITH')
-    assert enabling['qualifiers'] == {'prePostEnabled': 'true'}
+    assert enabling['qualifiers'] == {'written_name': 'EnableGlobalMethodSecurity', 'resolved_name': GLOBAL,
+                                      'prePostEnabled': 'true'}
 
 
 def test_an_enabling_attribute_that_is_not_a_literal_is_declared_not_interpreted():
