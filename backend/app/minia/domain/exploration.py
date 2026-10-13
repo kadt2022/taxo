@@ -75,7 +75,7 @@ A chaque tour, rends un seul objet JSON avec tous ses champs (chaine vide ou lis
 Enonces :
 - "claim" : une affirmation verifiable. "text" la dit en une phrase ; "subject", "relation" et "object"
   la structurent avec les references et les relations de Taxo (par exemple commit:<identifiant complet>,
-  CHANGES, file:<chemin>). Taxo la verifie avant affichage : confirmee, contredite ou non prouvee.
+  CHANGES, file:<chemin>). Taxo dit ce qu'il trouve, sans juger : ne pas trouver n'est pas une absence.
 - "interpretation" : un raisonnement ou une hypothese, au conditionnel. Toujours affiche comme non verifie.
 - "unknown" : ce qui manque pour conclure, ou ce que Taxo n'a pas pu etablir.
 Pour "interpretation" et "unknown", laisse "subject", "relation" et "object" vides.

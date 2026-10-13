@@ -212,7 +212,7 @@ describe('niveau gratuit (TAXO-MINIA-06)', ()=>{
 
 describe('question sur un commit en exploration (MINIA-09b)', ()=>{
   const explored:MiniaAnswer={...answer, facts:[], answer:'', unknown:'', mode:'exploration', source_context:{status:'ON_DEMAND'},
-    statements:[{type:'claim', text:'Le commit modifie Security.java.', verdict:'CONFIRMED', reason:null,
+    statements:[{type:'claim', text:'Le commit modifie Security.java.', found:true,
       claim:{subject:'commit:'+'b'.repeat(40), relation:'CHANGES', object:'file:Security.java'}},
       {type:'interpretation', text:'La route serait désormais protégée.'}],
     trajectory:[{operation:'describe', arguments:{}, outcome:'OK', bytes:900, items:9, not_sent:[]},

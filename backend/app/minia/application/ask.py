@@ -54,6 +54,8 @@ STALLED = 'Minia ne progressait plus (opération répétée ou limite atteinte).
 # INVALID_ARGUMENT peut dépendre de ce que l'échange a reçu depuis (une référence qui n'était pas encore reçue) : il
 # n'est jamais réutilisé, la demande est rejouée si l'échange a appris quelque chose, sinon l'exploration s'arrête.
 _REUSABLE_REFUSALS = frozenset({NOT_AVAILABLE, NO_CONSENT})
+# L'ancienne vérification rend un verdict : Minia ne la propose plus au modèle (décision « Taxo témoin », D3).
+_JUDGING = frozenset({'verify_claim'})
 _REUSED_NOTE = ('Même opération, mêmes arguments : la réponse du tour {} reste valable dans la trajectoire, '
                 'rien n’a été redemandé à Taxo. Conclus ou demande une autre opération.')
 # La trajectoire compacte (MINIA_COMPACT_AFTER, désactivée par défaut) : au-delà des N dernières réponses, une réponse
@@ -270,6 +272,8 @@ def _step(operation, arguments, response):
                      not_sent=response.get('not_sent', []))
         if 'verdict' in response:
             entry.update(verdict=response['verdict'], reason=response['reason'])
+        if 'found' in response:
+            entry['found'] = response['found']
         if response.get('field_context'):
             # Les champs dont la déclaration a été jointe, par référence : jamais leur code dans la trajectoire.
             entry['fields'] = [item['field'] for item in response['field_context']]
@@ -779,7 +783,7 @@ class AskMinia:
                 return
             if operation == 'describe':
                 operations = [sources.noted(item) for item in response.get('items', [])
-                              if item.get('kind') == 'operation']
+                              if item.get('kind') == 'operation' and item.get('operation') not in _JUDGING]
                 if self.mip is not None:
                     # Les Tuiles adaptatives (TAXO-MIP-ADT-01, PR C) : un profil déclaré, sur la même analyse.
                     operations.append(tiles.offered())
@@ -869,39 +873,38 @@ class AskMinia:
 
     @staticmethod
     def _verified(statements, exchange, trajectory, cancel=None):
-        """Chaque affirmation de Minia est verifiee par Taxo avant l'affichage ; au-dela de MAX_CLAIMS,
-        elle est montree comme non verifiee, jamais comme etablie."""
+        """Pour chaque affirmation de Minia, Taxo dit ce qu'il a trouvé (`find_claim`, décision « Taxo témoin », D3) :
+        ce qui a été demandé, les faits qu'il établit pour ce sujet et cette relation, et si l'objet demandé y est
+        (`found`). Jamais de verdict. Au-delà de MAX_CLAIMS, ou faute de place, l'affirmation reste non vérifiée."""
         claims = sum(1 for item in statements if item['type'] == exploration.CLAIM)
-        yield _stage('verification', 'running', 'Taxo vérifie les affirmations de Minia', claims)
+        yield _stage('verification', 'running', 'Taxo cherche ce qu’il sait de chaque affirmation', claims)
         verified, checked = [], 0
         for statement in statements:
             if statement['type'] != exploration.CLAIM:
                 verified.append(statement)
                 continue
             if checked >= MAX_CLAIMS:
-                verified.append({**statement, 'verdict': None, 'error': {
-                    'code': 'NOT_VERIFIED', 'message': f'Au-delà de {MAX_CLAIMS} affirmations, Taxo ne vérifie plus.'}})
+                verified.append({**statement, 'found': None, 'error': {
+                    'code': 'NOT_VERIFIED', 'message': f'Au-delà de {MAX_CLAIMS} affirmations, Taxo ne cherche plus.'}})
                 continue
             if getattr(exchange, 'operations_left', 1) <= 0:
-                verified.append({**statement, 'verdict': None, 'error': {'code': 'NOT_VERIFIED',
-                                                                         'message': _EXCHANGE_FULL}})
+                verified.append({**statement, 'found': None, 'error': {'code': 'NOT_VERIFIED',
+                                                                       'message': _EXCHANGE_FULL}})
                 continue
             checked += 1
             arguments = {name: value for name, value in statement['claim'].items() if value}
             check(cancel)
-            response = exchange.call({'operation': 'verify_claim', 'arguments': arguments})
-            trajectory.append(_step('verify_claim', arguments, response))
+            response = exchange.call({'operation': 'find_claim', 'arguments': arguments})
+            trajectory.append(_step('find_claim', arguments, response))
             yield 'minia.operation', trajectory[-1]
             if response['outcome'] != 'OK':
-                verified.append({**statement, 'verdict': None, 'error': response['error']})
+                verified.append({**statement, 'found': None, 'error': response['error']})
                 continue
-            # Les limites accompagnent le verdict : une confirmation ne couvre pas ce que Taxo n'a pas su lire.
-            verified.append({**statement, 'claim': response['claim'], 'verdict': response['verdict'],
-                             'reason': response['reason'], 'facts': response['items'],
-                             'evidence': response['evidence'], 'not_sent': response['not_sent'],
-                             'limits': response.get('limits', []),
-                             **({'known_objects': response['known_objects']} if response.get('known_objects') else {})})
-        yield _stage('verification', 'done', 'Taxo vérifie les affirmations de Minia', claims)
+            # Ce que Taxo a trouvé, ses preuves, et ce qu'il n'a pas su lire : jamais un jugement de l'affirmation.
+            verified.append({**statement, 'claim': response['asked'], 'found': response['found'],
+                             'facts': response['items'], 'evidence': response['evidence'],
+                             'not_sent': response['not_sent'], 'limits': response.get('limits', [])})
+        yield _stage('verification', 'done', 'Taxo cherche ce qu’il sait de chaque affirmation', claims)
         return verified
 
     def _project_result(self, model, question, projection):

@@ -80,16 +80,17 @@ def test_minia_asks_taxo_then_every_claim_is_verified_before_display(repo, tmp_p
     result = completed(run(repo, tmp_path, model))
     assert (result['status'], result['mode']) == ('ANSWERED', 'exploration')
     changes, author, readme, guess, missing = result['statements']
-    assert (changes['verdict'], changes['reason']) == ('CONFIRMED', None)
+    assert changes['found'] is True and 'verdict' not in changes, 'Taxo dit ce qu’il a trouvé, sans verdict'
     assert changes['facts'][0]['fact']['object'] == 'file:src/app.txt' and changes['evidence']
-    assert author['verdict'] == 'REFUTED' and author['facts'][0]['fact']['object'] == AUTHOR, \
-        'Taxo contredit avec le fait qui dit le contraire'
-    assert (readme['verdict'], readme['reason']) == ('NOT_PROVEN', 'NOT_FOUND_IN_ANALYSED_SCOPE')
+    assert author['found'] is False and author['facts'][0]['fact']['object'] == AUTHOR, \
+        'Taxo montre le fait qu’il a trouvé, sans contredire'
+    assert readme['found'] is False, 'README n’est pas parmi ce que Taxo a trouvé : ce n’est pas une absence'
+    assert [item['fact']['object'] for item in readme['facts']] == ['file:src/app.txt'], 'ce que Taxo a trouvé'
     assert guess == {'type': 'interpretation', 'text': 'Il ajusterait le contenu de l’application.'}
     assert missing['type'] == 'unknown'
     assert result['answer'] == '', 'aucun texte hors des enonces types'
     operations = [step['operation'] for step in result['trajectory']]
-    assert operations == ['describe', 'get_commit', 'verify_claim', 'verify_claim', 'verify_claim']
+    assert operations == ['describe', 'get_commit', 'find_claim', 'find_claim', 'find_claim']
     assert result['trajectory'][1]['outcome'] == 'OK' and result['trajectory'][1]['items'] >= 3
     assert result['budget']['used'] <= result['budget']['max_bytes']
 
@@ -127,10 +128,10 @@ def test_a_malformed_claim_is_shown_unverified_never_as_established(repo, tmp_pa
     model = ScriptedModel(answer(statement('claim', 'Mal formée.', f'commit:{sha}', 'INVENTED', 'file:x'), *claims))
     result = completed(run(repo, tmp_path, model))
     malformed, *rest = result['statements']
-    assert malformed['verdict'] is None and malformed['error']['code'] == 'INVALID_ARGUMENT'
-    assert rest[-1]['verdict'] is None and rest[-1]['error']['code'] == 'NOT_VERIFIED', \
+    assert malformed['found'] is None and malformed['error']['code'] == 'INVALID_ARGUMENT'
+    assert rest[-1]['found'] is None and rest[-1]['error']['code'] == 'NOT_VERIFIED', \
         f'au-dela de {MAX_CLAIMS} affirmations, Taxo ne verifie plus'
-    assert all(item['verdict'] == 'CONFIRMED' for item in rest[:-1])
+    assert all(item['found'] is True for item in rest[:-1])
 
 
 @pytest.mark.parametrize('replies', [
@@ -233,9 +234,9 @@ def test_minia_finds_an_element_by_name_then_reads_its_neighborhood(repo, tmp_pa
     assert (result['status'], result['mode']) == ('ANSWERED', 'exploration')
     steps = [(step['operation'], step['outcome']) for step in result['trajectory']]
     assert steps == [('describe', 'OK'), ('find_references', 'OK'), ('get_neighborhood', 'OK'),
-                     ('verify_claim', 'OK')], 'les deux operations recoivent enfin leurs arguments'
+                     ('find_claim', 'OK')], 'les deux operations recoivent enfin leurs arguments'
     assert result['trajectory'][2]['arguments']['follow'] == ['CONTAINS'], 'une liste passe telle quelle'
-    assert result['statements'][0]['verdict'] == 'CONFIRMED', 'Taxo verifie avant affichage'
+    assert result['statements'][0]['found'] is True, 'Taxo dit ce qu’il a trouvé avant affichage'
 
 
 def test_each_provider_constrains_the_step_with_the_schema():
@@ -297,9 +298,9 @@ def test_a_commit_question_starts_from_what_git_knows_then_minia_explores(repo, 
     assert (result['mode'], result['commit'], result['source_context']) == ('exploration', sha, {'status': 'ON_DEMAND'})
     assert result['git']['sha'] == sha and result['git']['files'][0]['path'] == 'src/app.txt'
     operations = [step['operation'] for step in result['trajectory']]
-    assert operations == ['describe', 'get_commit', 'diff_facts', 'get_diff', 'verify_claim']
+    assert operations == ['describe', 'get_commit', 'diff_facts', 'get_diff', 'find_claim']
     assert result['trajectory'][3]['outcome'] == 'OK', 'le diff est lisible sur double accord'
-    assert result['statements'][0]['verdict'] == 'CONFIRMED'
+    assert result['statements'][0]['found'] is True
     first = json.loads(model.calls[0][1])
     assert first['context'] == {'commit': f'commit:{sha}', 'parent': first['context']['parent'], 'diff_readable': True}
     assert [step['operation'] for step in first['trajectory']] == ['describe', 'get_commit']
@@ -416,8 +417,8 @@ def test_ollama_follows_the_same_protocol_as_the_remote_providers(repo, tmp_path
     result = completed(ask_commit(repo, tmp_path, model, sha, source=True))
     assert (result['mode'], result['model']['provider']) == ('exploration', 'ollama')
     assert [step['operation'] for step in result['trajectory']] == [
-        'describe', 'get_commit', 'diff_facts', 'get_diff', 'verify_claim']
-    assert result['statements'][0]['verdict'] == 'CONFIRMED'
+        'describe', 'get_commit', 'diff_facts', 'get_diff', 'find_claim']
+    assert result['statements'][0]['found'] is True
     assert all(body['format'] == exploration.STEP_SCHEMA for body in bodies), 'chaque tour contraint par le schema'
     assert all(body['options']['num_ctx'] == 16384 for body in bodies)
     capacity = model.capacity(exploration.SYSTEM)

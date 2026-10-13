@@ -67,8 +67,9 @@ def test_describe_offers_only_what_taxo_can_serve(taxo):
     described = result['responses'][0]
     assert described['protocol'] == 'taxo-query/1' and described['outcome'] == 'OK'
     operations = [item['operation'] for item in described['items'] if item['kind'] == 'operation']
-    assert operations == ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'verify_claim',
-                          'diff_facts', 'get_neighborhood', 'find_references']
+    assert operations == ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit',
+                          'diff_facts', 'get_neighborhood', 'find_references', 'find_claim']
+    assert 'verify_claim' not in operations, 'servie aux anciens clients, plus annoncée : find_claim la remplace (D3)'
     assert 'get_diff' not in operations, 'sans MINIA_SOURCE_CONTEXT=diff, le diff n est pas propose'
     analyzers = {item['analyzer'] for item in described['items'] if item['kind'] == 'analyzer'}
     assert analyzers == {'taxo.inventory', 'taxo.git', 'taxo.spring-api', 'taxo.spring-boot', 'taxo.spring-security', 'taxo.structure', 'taxo.java-calls'}

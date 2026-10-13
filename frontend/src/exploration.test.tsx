@@ -1,33 +1,38 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {argumentText, claimText, knownText, limitText, proofText, refusals, returnedText, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
+import {argumentText, claimText, foundText, limitText, proofText, refusals, returnedText, stepText, Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
 import {MiniaProgress, reduceMinia, stageText, startMinia} from './minia-live';
 import {SelectionAnswerView, type SelectionAnswer} from './query';
 
 const sha='c'.repeat(40);
-const confirmed:Statement={type:'claim', text:'Le commit modifie src/app.txt.', verdict:'CONFIRMED', reason:null,
+const confirmed:Statement={type:'claim', text:'Le commit modifie src/app.txt.', found:true,
   claim:{subject:`commit:${sha}`, relation:'CHANGES', object:'file:src/app.txt'},
   facts:[{ref:'F1', fact:{subject:`commit:${sha}`, relation:'CHANGES', object:'file:src/app.txt', qualifiers:{change:'MODIFIED'}}, evidence_count:1}],
   evidence:[{ref:'E1', fact:'F1', location:{object:`commit:${sha}`, method:'git.log'}}]};
-const refuted:Statement={type:'claim', text:'Écrit par quelqu’un d’autre.', verdict:'REFUTED', reason:null,
+const refuted:Statement={type:'claim', text:'Écrit par quelqu’un d’autre.', found:false,
   claim:{subject:`commit:${sha}`, relation:'AUTHORED_BY', object:'person:autre@x'}, facts:[]};
-const unproven:Statement={type:'claim', text:'Protégé par R1.', verdict:'NOT_PROVEN', reason:'NOT_ANALYSED',
+const unproven:Statement={type:'claim', text:'Protégé par R1.', found:false,
   claim:{subject:'endpoint:POST /items', relation:'PROTECTED_BY', object:'policy-rule:R1'}};
-const malformed:Statement={type:'claim', text:'Mal formée.', verdict:null, claim:{subject:'x', relation:'Y'},
+const malformed:Statement={type:'claim', text:'Mal formée.', found:null, claim:{subject:'x', relation:'Y'},
   error:{code:'INVALID_ARGUMENT', message:'Relation hors du vocabulaire : Y.'}};
 const steps:TrajectoryStep[]=[
   {operation:'describe', arguments:{}, outcome:'OK', bytes:900, items:9, not_sent:[]},
   {operation:'find_facts', arguments:{relation:'CHANGES'}, outcome:'OK', bytes:4000, items:12, not_sent:[{what:'items', count:3, reason:'BUDGET'}]},
   {operation:'get_diff', arguments:{commit:sha, path:'a'}, outcome:'ERROR', bytes:300, error:{code:'NO_CONSENT', message:'non'}},
-  {operation:'verify_claim', arguments:{subject:'s', relation:'CHANGES', object:'o'}, outcome:'OK', bytes:700, items:1, verdict:'CONFIRMED', reason:null}];
+  {operation:'find_claim', arguments:{subject:'s', relation:'CHANGES', object:'o'}, outcome:'OK', bytes:700, items:1, found:true}];
 
-describe('verdicts', ()=>{
-  it('dit le verdict de Taxo et sa raison', ()=>{
-    expect(verdictText(confirmed as Extract<Statement,{type:'claim'}>)).toBe('Confirmée par Taxo');
-    expect(verdictText(refuted as Extract<Statement,{type:'claim'}>)).toBe('Contredite par Taxo');
-    expect(verdictText(unproven as Extract<Statement,{type:'claim'}>)).toBe('Non prouvée : aucun analyseur de Taxo ne couvre encore cette dimension');
-    expect(verdictText(malformed as Extract<Statement,{type:'claim'}>)).toBe('Non vérifiable : Relation hors du vocabulaire : Y.');
-    expect(verdictText({...malformed, error:undefined} as Extract<Statement,{type:'claim'}>)).toBe('Non vérifiable : Taxo n’a pas pu la vérifier.');
+describe('ce que Taxo a trouvé (témoin, D3)', ()=>{
+  it('dit ce que Taxo a trouvé, jamais un verdict', ()=>{
+    expect(foundText(confirmed as Extract<Statement,{type:'claim'}>)).toBe('Trouvé par Taxo tel que demandé');
+    expect(foundText(refuted as Extract<Statement,{type:'claim'}>)).toBe('Taxo n’a rien trouvé pour ce sujet et cette relation (ce n’est pas une absence)');
+    expect(foundText({...refuted, facts:confirmed.type==='claim'?confirmed.facts:[]} as Extract<Statement,{type:'claim'}>))
+      .toBe('Pas trouvé sous cette forme ; Taxo a trouvé autre chose');
+    expect(foundText({...refuted, facts:[], not_sent:[{what:'items', count:2, reason:'BUDGET'}]} as Extract<Statement,{type:'claim'}>))
+      .toBe('Pas trouvé sous cette forme ; Taxo a trouvé autre chose');
+    expect(foundText(malformed as Extract<Statement,{type:'claim'}>)).toBe('Non vérifiable : Relation hors du vocabulaire : Y.');
+    expect(foundText({...malformed, error:undefined} as Extract<Statement,{type:'claim'}>)).toBe('Non vérifiable : Taxo n’a pas pu chercher.');
+    for(const said of [confirmed, refuted, unproven, malformed])
+      expect(foundText(said as Extract<Statement,{type:'claim'}>)).not.toMatch(/Confirmée|Contredite|Non prouvée/);
   });
   it('écrit l’affirmation vérifiée', ()=>{
     expect(claimText({subject:`commit:${sha}`, relation:'CHANGES', object:'file:src/app.txt'})).toBe('commit cccccccccccc modifie src/app.txt');
@@ -51,7 +56,7 @@ describe('trajectoire', ()=>{
     expect(stepText(steps[1])).toBe('Recherche de faits (relation CHANGES) → 12 résultats, 3 non transmis · 4000 octets');
     expect(stepText(steps[2])).toContain('→ refusé : non (NO_CONSENT)');
     expect(stepText({...steps[2], error:undefined})).toContain('→ refusé : refus');
-    expect(stepText(steps[3])).toContain('→ Confirmée par Taxo');
+    expect(stepText(steps[3])).toContain('→ trouvé tel que demandé');
     expect(stepText({operation:'autre', arguments:{}, outcome:'OK', bytes:1, items:1})).toBe('autre → 1 résultat · 1 octets');
     expect(stepText({operation:'diff_facts', arguments:{commit:'c'}, outcome:'OK', bytes:9, items:2, ignored:['path', 'subject']}))
       .toBe('diff_facts (commit c) → 2 résultats · 9 octets · ignorés : path, subject');
@@ -109,12 +114,12 @@ describe('réponse en exploration', ()=>{
     commits:[], facts:[], answer:'', unknown:'', not_interpreted:[], facts_not_sent:0, rejected_citations:[], mode:'exploration',
     statements:[confirmed, refuted, unproven, malformed, {type:'interpretation', text:'Il ajusterait l’application.'},
       {type:'unknown', text:'Taxo ne dit pas pourquoi.'}], trajectory:steps};
-  it('affiche chaque affirmation avec son verdict, jamais comme établie sans lui', ()=>{
+  it('affiche pour chaque affirmation ce que Taxo a trouvé, jamais comme établie sans un fait', ()=>{
     const html=renderToStaticMarkup(<SelectionAnswerView answer={answer}/>);
     expect(html).toContain('MINIA · gemini gemini-3.8-flash · exploration');
     expect(html).toContain('verdict verdict-confirmed');
-    expect(html).toContain('verdict verdict-refuted');
     expect(html).toContain('verdict verdict-not-proven');
+    expect(html).toContain('Ce que Taxo a trouvé');
     expect(html).not.toContain('verdict verdict-none');
     expect(html).toContain('Minia : « Mal formée. »');
     expect(html).toContain('commit cccccccccccc modifie src/app.txt (MODIFIED)');
@@ -133,7 +138,7 @@ describe('réponse en exploration', ()=>{
   });
   it('dit quand un bloc est vide', ()=>{
     const html=renderToStaticMarkup(<Statements statements={[]}/>);
-    expect(html).toContain('Minia n’a fait aucune affirmation à vérifier.');
+    expect(html).toContain('Minia n’a fait aucune affirmation à chercher.');
     expect(html).toContain('Minia ne propose aucune interprétation.');
     expect(html).toContain('Aucune limite signalée par Taxo.');
   });
@@ -149,7 +154,7 @@ describe('frontière preuve / texte libre (MINIA-11)', ()=>{
   // Le scénario à interdire : une phrase fausse de Minia, jointe à un triplet vrai.
   const catastrophe:Statement={type:'claim', text:'Ce commit supprime l’authentification.',
     claim:{subject:`commit:${'c'.repeat(40)}`, relation:'AUTHORED_BY', object:'person:kadt2022@gmail.com'},
-    verdict:'CONFIRMED', reason:null, facts:[], evidence:[]};
+    found:true, facts:[], evidence:[]};
   const html=renderToStaticMarkup(<Statements statements={[catastrophe, {type:'unknown', text:'Le risque exact n’est pas établi.'}]}
     limits={['Non analysé par Taxo : file:A.']}/>);
   const green=html.slice(html.indexOf('minia-block fact'), html.indexOf('minia-block interpretation'));
@@ -157,19 +162,19 @@ describe('frontière preuve / texte libre (MINIA-11)', ()=>{
   const orange=html.slice(html.indexOf('minia-block unknown'));
 
   it('ne met jamais une phrase de Minia à côté d’un badge vert', ()=>{
-    expect(green).toContain('Confirmée par Taxo');
+    expect(green).toContain('Trouvé par Taxo');
     expect(green).not.toContain('supprime l’authentification');
     expect(green).toContain(`Commit ${'c'.repeat(12)} a pour auteur kadt2022@gmail.com.`);
   });
-  it('montre exactement ce que Taxo a vérifié : sujet, relation, objet, verdict', ()=>{
-    for(const value of [`commit:${'c'.repeat(40)}`, 'AUTHORED_BY', 'person:kadt2022@gmail.com', 'CONFIRMED'])
+  it('montre exactement ce que Taxo a cherché et trouvé : sujet, relation, objet', ()=>{
+    for(const value of [`commit:${'c'.repeat(40)}`, 'AUTHORED_BY', 'person:kadt2022@gmail.com', 'oui'])
       expect(green).toContain(`<code>${value}</code>`);
-    expect(green).toContain('Aucune preuve : Taxo n’a établi aucun fait');
+    expect(green).toContain('Taxo n’a établi aucun fait pour ce sujet et cette relation');
   });
   it('range tout le texte de Minia dans la colonne non vérifiée', ()=>{
     expect(blue).toContain('non vérifié');
     expect(blue).toContain('Minia : « Ce commit supprime l’authentification. »');
-    expect(blue).toContain('Taxo n’a vérifié que : Commit');
+    expect(blue).toContain('Taxo a cherché : Commit');
     expect(blue).toContain('Minia dit ne pas savoir :</em> Le risque exact n’est pas établi.');
   });
   it('ne laisse dans la colonne de Taxo que ce que Taxo constate', ()=>{
@@ -180,13 +185,13 @@ describe('frontière preuve / texte libre (MINIA-11)', ()=>{
 
 describe('affirmation non vérifiable (MINIA-11)', ()=>{
   it('reste un texte de Minia, jamais reformulée par Taxo en vert', ()=>{
-    const unchecked:Statement={type:'claim', text:'Ce commit désactive la sécurité.', verdict:null,
+    const unchecked:Statement={type:'claim', text:'Ce commit désactive la sécurité.', found:null,
       claim:{subject:`commit:${'d'.repeat(40)}`, relation:'INVENTED', object:'file:A.java'},
       error:{code:'INVALID_ARGUMENT', message:'Relation hors du vocabulaire : INVENTED.'}};
     const html=renderToStaticMarkup(<Statements statements={[unchecked]}/>);
     const green=html.slice(html.indexOf('minia-block fact'), html.indexOf('minia-block interpretation'));
     const blue=html.slice(html.indexOf('minia-block interpretation'), html.indexOf('minia-block unknown'));
-    expect(green).toContain('Minia n’a fait aucune affirmation à vérifier.');
+    expect(green).toContain('Minia n’a fait aucune affirmation à chercher.');
     expect(green).not.toContain('d'.repeat(12));
     expect(green).not.toContain('Non vérifiable');
     expect(blue).toContain('Minia : « Ce commit désactive la sécurité. »');
@@ -196,7 +201,7 @@ describe('affirmation non vérifiable (MINIA-11)', ()=>{
 
 describe('confirmation par déduction (TAXO-05)', ()=>{
   const endpoint='endpoint:GET /api/v1/users';
-  const protectedClaim:Statement={type:'claim', text:'Cette route est protégée.', verdict:'CONFIRMED', reason:null,
+  const protectedClaim:Statement={type:'claim', text:'Cette route est protégée.', found:true,
     claim:{subject:endpoint, relation:'PROTECTED_BY', object:'policy-rule:authenticated()'},
     facts:[{ref:'F1', evidence_count:1, fact:{subject:endpoint, relation:'PROTECTED_BY', object:'policy-rule:authenticated()',
       status:'INFERRED', derivation:{rule:'spring-security.route-authorization-applies',
@@ -207,8 +212,8 @@ describe('confirmation par déduction (TAXO-05)', ()=>{
   const html=renderToStaticMarkup(<Statements statements={[protectedClaim]}/>);
 
   it('dit qu’une confirmation repose sur une déduction, pas sur une observation', ()=>{
-    expect(verdictText(protectedClaim as Extract<Statement,{type:'claim'}>)).toBe('Confirmée par Taxo, par déduction');
-    expect(verdictText(confirmed as Extract<Statement,{type:'claim'}>)).toBe('Confirmée par Taxo');
+    expect(foundText(protectedClaim as Extract<Statement,{type:'claim'}>)).toBe('Trouvé par Taxo, par déduction');
+    expect(foundText(confirmed as Extract<Statement,{type:'claim'}>)).toBe('Trouvé par Taxo tel que demandé');
   });
   it('montre les prémisses, ce qui a été écarté et les limites connues', ()=>{
     expect(html).toContain('spring-security.route-authorization-applies');
@@ -225,12 +230,12 @@ describe('confirmation par déduction (TAXO-05)', ()=>{
 });
 
 describe('limites jointes au verdict (TAXO-MINIA-SEC-01)', ()=>{
-  const limited={type:'claim', text:'La route exige seulement une authentification.', verdict:'CONFIRMED', reason:null,
+  const limited={type:'claim', text:'La route exige seulement une authentification.', found:true,
     claim:{subject:'endpoint:GET /api/items', relation:'PROTECTED_BY', object:'policy-rule:authenticated()'}, facts:[], evidence:[],
     limits:[{subject:'endpoint:GET /api/items', type:'NOT_INTERPRETED', producer:'taxo.spring-security',
       reason:'sécurité de méthode non interprétée (@PreAuthorize)'}]} as Extract<Statement,{type:'claim'}>;
   it('dit qu’une confirmation a des limites, et lesquelles', ()=>{
-    expect(verdictText(limited)).toBe('Confirmée par Taxo, avec limites');
+    expect(foundText(limited)).toBe('Trouvé par Taxo tel que demandé, avec limites');
     expect(limitText(limited.limits![0])).toContain('sécurité de méthode non interprétée (@PreAuthorize)');
     const html=renderToStaticMarkup(<Statements statements={[limited]}/>);
     expect(html).toContain('verdict-limited');
@@ -242,22 +247,26 @@ describe('limites jointes au verdict (TAXO-MINIA-SEC-01)', ()=>{
   });
   it('une limite non transmise faute de place garde la confirmation limitée', ()=>{
     const unsent={...limited, limits:[], not_sent:[{what:'limits', count:2, reason:'BUDGET'}]};
-    expect(verdictText(unsent)).toBe('Confirmée par Taxo, avec limites');
+    expect(foundText(unsent)).toBe('Trouvé par Taxo tel que demandé, avec limites');
     const html=renderToStaticMarkup(<Statements statements={[unsent]}/>);
     expect(html).toContain('verdict-limited');
     expect(html).toContain('Taxo connaît 2 autres limites, non transmises faute de place.');
   });
   it('une confirmation sans limite reste une confirmation', ()=>{
-    expect(verdictText({...limited, limits:[]})).toBe('Confirmée par Taxo');
+    expect(foundText({...limited, limits:[]})).toBe('Trouvé par Taxo tel que demandé');
   });
 });
 
-describe('affirmation non prouvée', ()=>{
-  it('dit ce que Taxo établit pour le même sujet et la même relation', ()=>{
-    expect(knownText(['annotation:PostMapping'])).toContain('Taxo établit pour ce sujet et cette relation');
-    expect(knownText(['annotation:PostMapping'], 3)).toContain('et 3 autres, non transmis');
-    const claim:Statement={type:'claim', text:'Annoté', claim:{subject:'symbol:java:a.B#c()', relation:'ANNOTATED_WITH',
-      object:'annotation:org.x.PostMapping'}, verdict:'NOT_PROVEN', known_objects:['annotation:PostMapping']};
-    expect(renderToStaticMarkup(<Statements statements={[claim]}/>)).toContain('Taxo établit pour ce sujet et cette relation');
+describe('pas trouvé sous cette forme', ()=>{
+  it('montre ce que Taxo a trouvé pour ce sujet et cette relation, et compte ce qui n’a pas tenu', ()=>{
+    const subject='symbol:java:a.B#c()';
+    const claim:Statement={type:'claim', text:'Annoté', claim:{subject, relation:'ANNOTATED_WITH',
+      object:'annotation:org.x.PostMapping'}, found:false,
+      facts:[{ref:'F1', evidence_count:1, fact:{subject, relation:'ANNOTATED_WITH', object:'annotation:PostMapping'}}],
+      not_sent:[{what:'items', count:3, reason:'BUDGET'}]};
+    const html=renderToStaticMarkup(<Statements statements={[claim]}/>);
+    expect(html).toContain('Pas trouvé sous cette forme ; Taxo a trouvé autre chose');
+    expect(html).toContain('PostMapping');
+    expect(html).toContain('Taxo a trouvé 3 autres faits, non transmis faute de place.');
   });
 });

@@ -67,7 +67,11 @@ V1 = ('describe', 'find_facts', 'get_evidence', 'get_coverage', 'get_commit', 'g
 # Operations reservees d'ARCHITECTURE § 12 que Taxo sait deja servir : `diff_facts` s'appuie sur l'impact d'un
 # commit (comparaison des faits des evaluateurs de contenu entre le parent et le commit, TAXO-HIST-01). `get_source`
 # lit le code d'un symbole declare, sous son propre double consentement (TAXO-MIP-ADT-01, PR B).
-ACTIVATED = ('diff_facts', 'get_neighborhood', 'find_references', 'get_source')
+# `find_claim` (décision « Taxo témoin », D3) : ce qui a été demandé et ce que Taxo a trouvé, sans verdict.
+ACTIVATED = ('diff_facts', 'get_neighborhood', 'find_references', 'get_source', 'find_claim')
+# Servie pour les clients existants, mais plus annoncée par `describe` : `find_claim` la remplace (D3). `describe` garde
+# ainsi sa taille, que la fenêtre d'un petit modèle doit pouvoir contenir.
+LEGACY = frozenset({'verify_claim'})
 OPERATIONS = V1 + ACTIVATED
 RESERVED = ('find_endpoint', 'trace_access_control', 'find_callers', 'find_callees', 'find_dependencies',
             'find_configuration')
@@ -82,6 +86,7 @@ _ARGUMENTS = {
     'get_commit': _COMMIT_ARGUMENT,
     'get_diff': {**_COMMIT_ARGUMENT, 'path': 'chemin d’un fichier touche'},
     'verify_claim': _CLAIM_ARGUMENTS,
+    'find_claim': _CLAIM_ARGUMENTS,
     'diff_facts': _COMMIT_ARGUMENT,
     'get_neighborhood': {'engine': 'neighborhood/1|neighborhood/2 (facultatif ; sinon neighborhood/1 pour une '
                                    'demande qui y est valide, neighborhood/2 pour toute autre)',
@@ -375,7 +380,7 @@ class Exchange:
             item['evaluator_id'], frozenset(item.get('relations', {}))) for item in self.evaluations)
 
     def available(self):
-        operations = ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'verify_claim', 'get_neighborhood',
+        operations = ['describe', 'find_facts', 'get_evidence', 'get_coverage', 'find_claim', 'get_neighborhood',
                       'find_references']
         if self._history_available():
             operations += ['get_commit', 'diff_facts']
@@ -471,7 +476,7 @@ class Exchange:
             raise OperationError(NOT_AVAILABLE, f'{operation} attend un analyseur qui le rende possible.')
         if operation is None:
             raise OperationError(INVALID_ARGUMENT, f'Opération inconnue : {str(request.get("operation"))[:100]}.')
-        if operation not in self.available():
+        if operation not in self.available() and operation not in LEGACY:
             raise self._unavailable(operation)
         return arguments, max_bytes
 
@@ -656,7 +661,9 @@ class Exchange:
     def get_source(self, arguments, max_bytes):
         return self.sources.get_source(arguments, max_bytes)
 
-    def verify_claim(self, arguments, max_bytes):
+    def _asked(self, arguments):
+        """L'affirmation demandée, vérifiée dans sa forme, et les faits valides que Taxo établit pour son sujet et sa
+        relation."""
         _no_other(arguments, ('subject', 'relation', 'object'))
         subject = _reference(arguments, 'subject', required=True)
         relation = _relation(arguments, required=True)
@@ -671,6 +678,33 @@ class Exchange:
             claim['object'] = target
         established = [fact for fact in self.query(subject=subject, relation=relation, kind=_ASSERTION)
                        if fact.get('validity', 'VALID') == 'VALID']
+        return claim, established
+
+    def find_claim(self, arguments, max_bytes):
+        """Taxo témoin (D3) : ce qui a été demandé (`asked`), les faits qu'il établit pour ce sujet et cette relation,
+        avec leurs preuves (`items`, ceux qui portent l'objet demandé d'abord), et `found`, une comparaison littérale :
+        l'objet demandé est-il parmi eux (sans objet : un fait existe-t-il) ? Jamais un verdict : la couverture et les
+        limites disent ce que Taxo a lu et ce qu'il n'a pas pu lire ; ne pas trouver n'est pas une absence."""
+        claim, established = self._asked(arguments)
+        target = claim.get('object')
+        found = (any(fact.get('object') == target for fact in established) if target is not None
+                 else bool(established))
+        concerned = {claim['subject'], target} - {None}
+        response = self.response('find_claim', self.envelope_coverage(claim['relation'], concerned), max_bytes,
+                                 asked=claim, found=found, limits=[])
+        limits = self.limits(claim['relation'], concerned)
+        for index, limit in enumerate(limits):
+            if not response.add('limits', limit):
+                response.skip('limits', len(limits) - index - 1)
+                break
+        ordered = sorted(established, key=lambda fact: (fact.get('object') != target, str(fact.get('object'))))
+        self.add_facts(response, ordered, evidence=True)
+        return response
+
+    def verify_claim(self, arguments, max_bytes):
+        """L'ancienne vérification, avec verdict : servie pour la compatibilité, remplacée par `find_claim` (D3)."""
+        claim, established = self._asked(arguments)
+        subject, relation, target = claim['subject'], claim['relation'], claim.get('object')
         verdict = judge(claim, established, self.knowledge(self.analyzers()), self.needed(subject))
         concerned = {subject, target} - {None}
         known = sorted({fact['object'] for fact in established if fact.get('object') not in (None, target)})
@@ -738,6 +772,7 @@ _SERVED = {
     'get_commit': Exchange.get_commit,
     'get_diff': Exchange.get_diff,
     'verify_claim': Exchange.verify_claim,
+    'find_claim': Exchange.find_claim,
     'diff_facts': Exchange.diff_facts,
     'get_neighborhood': Exchange.get_neighborhood,
     'find_references': Exchange.find_references,

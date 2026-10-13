@@ -86,15 +86,15 @@ def test_who_calls_a_named_method_is_found_read_and_verified(courses, tmp_path):
     result, _, _ = ask(courses, tmp_path, model, WHO_CALLS)
     assert (result['status'], result['mode']) == ('ANSWERED', 'exploration')
     operations = [step['operation'] for step in result['trajectory']]
-    assert operations == ['describe', 'find_references', 'get_neighborhood', 'verify_claim']
+    assert operations == ['describe', 'find_references', 'get_neighborhood', 'find_claim']
     found = json.loads(model.calls[1][1])['trajectory'][1]['response']
     assert [item['reference'] for item in found['items']] == [SERVICE], 'le nom seul trouve la méthode'
     neighborhood = json.loads(model.calls[2][1])['trajectory'][2]['response']
     assert (REGISTER, 'CALLS', SERVICE) in [(item['fact']['subject'], item['fact']['relation'], item['fact']['object'])
                                             for item in neighborhood['items']]
     claim, guess = result['statements']
-    assert claim['verdict'] == 'CONFIRMED'
-    assert guess['type'] == 'interpretation' and 'verdict' not in guess, 'une interprétation reste non vérifiée'
+    assert claim['found'] is True
+    assert guess['type'] == 'interpretation' and 'found' not in guess, 'une interprétation reste non vérifiée'
 
 
 # --- Repli paquet : une ancre explicite, sa Tuile MIP, et rien d'inventé -----------------------------------------
