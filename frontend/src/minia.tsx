@@ -232,7 +232,7 @@ export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
     <CommitFacts git={answer.git}/>
     <Statements statements={answer.statements} limits={limits}/>
     <Trajectory steps={answer.trajectory??[]} returned={answer.returned}/>
-    <footer>Minia a interrogé Taxo opération par opération à partir de ce que Git sait du commit ; Taxo a vérifié chacune de ses affirmations. Le diff n’est lu que sur double accord, jamais le reste du dépôt, et la réponse n’est jamais enregistrée comme un fait.</footer>
+    <footer>Minia a interrogé Taxo opération par opération à partir de ce que Git sait du commit ; pour chacune de ses affirmations, Taxo dit ce qu’il a trouvé, avec ses preuves, sans juger. Le diff n’est lu que sur double accord, jamais le reste du dépôt, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
   return <section className="minia" aria-label="Réponse de Minia">
     <p className="eyebrow">MINIA{modelLabel(answer.model)}</p>

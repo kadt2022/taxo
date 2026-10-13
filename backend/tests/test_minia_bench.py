@@ -17,8 +17,8 @@ TRUTH = {'security_relations': ['PROTECTED_BY', 'AUTHORIZED_BY', 'PERMITS_ALL', 
                             ['route-pattern:/**', 'PERMITS_ALL', None]]}
 
 
-def claim(subject, relation, object_=None, verdict='CONFIRMED', text=''):
-    return {'type': 'claim', 'text': text, 'verdict': verdict,
+def claim(subject, relation, object_=None, found=True, text=''):
+    return {'type': 'claim', 'text': text, 'found': found,
             'claim': {'subject': subject, 'relation': relation, 'object': object_}}
 
 
@@ -39,7 +39,7 @@ def test_a_confirmation_outside_the_hand_established_truth_is_a_false_one():
         claim('symbol:A', 'ANNOTATED_WITH', 'annotation:org.springframework.security.access.prepost.PreAuthorize'),
         claim('symbol:A', 'ANNOTATED_WITH', 'annotation:RestController'),
         claim('symbol:A', 'CALLS', 'symbol:B'),
-        claim('endpoint:GET /api/students', 'PROTECTED_BY', 'policy-rule:permitAll()', verdict='NOT_PROVEN'),
+        claim('endpoint:GET /api/students', 'PROTECTED_BY', 'policy-rule:permitAll()', found=False),
         {'type': 'interpretation', 'text': 'La route est ouverte.'}]}
     assert bench.false_confirmations(result, TRUTH) == [
         ['endpoint:GET /api/students', 'PROTECTED_BY', 'policy-rule:permitAll()'],
@@ -309,9 +309,9 @@ def test_a_reading_gesture_is_missed_until_the_code_is_read():
 
 
 def test_malformed_claims_and_chosen_operations_are_counted():
-    result = {'statements': [{'type': 'claim', 'verdict': None, 'error': {'code': 'INVALID_ARGUMENT'}},
-                             {'type': 'claim', 'verdict': None, 'error': {'code': 'NOT_VERIFIED'}},
-                             {'type': 'claim', 'verdict': 'CONFIRMED'}]}
+    result = {'statements': [{'type': 'claim', 'found': None, 'error': {'code': 'INVALID_ARGUMENT'}},
+                             {'type': 'claim', 'found': None, 'error': {'code': 'NOT_VERIFIED'}},
+                             {'type': 'claim', 'found': True}]}
     assert bench.malformed(result) == 1
     steps = [{'operation': 'describe'}, {'operation': 'find_references'}, {'operation': 'get_source'},
              {'operation': 'verify_claim'}]

@@ -191,7 +191,7 @@ def reads(question, trajectory):
 def malformed(result):
     """Les affirmations que Taxo a refusées pour leur forme (sujet, relation ou objet invalides)."""
     return sum(1 for statement in result.get('statements') or ()
-               if statement.get('type') == 'claim' and statement.get('verdict') is None
+               if statement.get('type') == 'claim' and statement.get('found') is None
                and (statement.get('error') or {}).get('code') == 'INVALID_ARGUMENT')
 
 
@@ -200,7 +200,8 @@ def chosen(trajectory):
     d'office à une question sur un commit), ni ses vérifications."""
     opening = 1 + (len(trajectory) > 1 and trajectory[0].get('operation') == 'describe'
                    and trajectory[1].get('operation') == 'get_commit')
-    return sum(1 for step in trajectory[opening:] if step.get('operation') not in ('describe', 'verify_claim'))
+    return sum(1 for step in trajectory[opening:]
+               if step.get('operation') not in ('describe', 'verify_claim', 'find_claim'))
 
 
 def is_security(claim, bench):
@@ -211,12 +212,13 @@ def is_security(claim, bench):
 
 
 def false_confirmations(result, bench):
-    """Les affirmations de securite que Taxo a confirmees et que la verite etablie a la main ne contient pas."""
+    """Les affirmations de securite que Taxo a trouvees telles que demandees (`found`, D3) et que la verite etablie a
+    la main ne contient pas : un fait de Taxo qui contredirait la verite."""
     truth = {tuple(item) for item in bench['security_truth']}
     wrong = []
     for statement in result.get('statements') or ():
         claim = statement.get('claim') or {}
-        if statement.get('verdict') != 'CONFIRMED' or not is_security(claim, bench):
+        if statement.get('found') is not True or not is_security(claim, bench):
             continue
         triple = (claim.get('subject'), claim.get('relation'), claim.get('object') or None)
         if triple not in truth:
@@ -225,9 +227,9 @@ def false_confirmations(result, bench):
 
 
 def unjustified(result):
-    """Affirmations de Minia que Taxo n'a pas confirmees (contredites, non prouvees ou non verifiables)."""
+    """Affirmations de Minia que Taxo n'a pas trouvees telles que demandees, ou n'a pas pu chercher."""
     return sum(1 for statement in result.get('statements') or ()
-               if statement.get('type') == 'claim' and statement.get('verdict') != 'CONFIRMED')
+               if statement.get('type') == 'claim' and statement.get('found') is not True)
 
 
 def _served(step):

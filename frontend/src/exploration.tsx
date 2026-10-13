@@ -6,7 +6,7 @@ import {reference, VERBS, label} from './vocabulary';
 type ProtocolError = {code:string; message:string};
 type NotSent = {what:string; count?:number; reason:string};
 export type TrajectoryStep = {operation:string; arguments:Record<string,unknown>; outcome:'OK'|'ERROR'; bytes:number;
-  items?:number; not_sent?:NotSent[]; verdict?:string; reason?:string|null; error?:ProtocolError;
+  items?:number; not_sent?:NotSent[]; verdict?:string; reason?:string|null; error?:ProtocolError; found?:boolean;
   // La lecture d'une méthode : les champs de son type dont la déclaration a été jointe (field_context), par référence.
   fields?:string[];
   // Champs du tour que l'operation ne lit pas : ignores par Taxo, et dits (MINIA-09c).
@@ -16,10 +16,10 @@ type Location = {path?:string; line_start?:number; line_end?:number; object?:str
 type Proof = {ref:string; fact:string; location:Location};
 export type Statement =
   | {type:'interpretation'|'unknown'; text:string}
-  | {type:'claim'; text:string; claim:Claim; verdict:string|null; reason?:string|null; error?:ProtocolError;
+  // Décision « Taxo témoin » (D3) : pour chaque affirmation, ce que Taxo a trouvé (`facts`) et si l'objet demandé y
+  // est (`found`) ; `null` quand Taxo n'a pas pu chercher (forme refusée, limite atteinte). Jamais un verdict.
+  | {type:'claim'; text:string; claim:Claim; found:boolean|null; error?:ProtocolError;
       facts?:{ref:string; fact:GitFact; evidence_count:number}[]; evidence?:Proof[]; limits?:Limit[];
-      // Une affirmation non prouvée : ce que Taxo établit pour le même sujet et la même relation.
-      known_objects?:string[];
       not_sent?:{what:string; count:number; reason:string}[]};
 /** Ce que Taxo n'a pas su lire sur le sujet ou l'objet d'une affirmation (TAXO-MINIA-SEC-01) : le verdict n'en dit rien. */
 export type Limit = {subject:string; type:string; producer:string|null; reason:string|null};
@@ -29,34 +29,32 @@ const REASONS:Record<string,string>={NOT_FOUND_IN_ANALYSED_SCOPE:'Taxo a cherch�
   NOT_INTERPRETED:'Taxo a vu cette zone sans savoir la lire', NOT_ANALYSED:'aucun analyseur de Taxo ne couvre encore cette dimension'};
 const OPERATIONS:Record<string,string>={describe:'Ce que Taxo sait servir', find_facts:'Recherche de faits',
   get_evidence:'Preuves d’un fait', get_coverage:'Couverture', get_commit:'Commit', get_diff:'Diff d’un fichier',
-  verify_claim:'Vérification d’une affirmation', get_tile:'Tuile adaptative', get_source:'Code d’un symbole'};
+  verify_claim:'Vérification d’une affirmation', find_claim:'Ce que Taxo sait d’une affirmation',
+  get_tile:'Tuile adaptative', get_source:'Code d’un symbole'};
 
-/** Le verdict de Taxo en clair ; une affirmation que Taxo n'a pas pu verifier le dit. */
-export function verdictText(statement:Extract<Statement,{type:'claim'}>){
-  if(statement.verdict===null)return `Non vérifiable : ${statement.error?.message??'Taxo n’a pas pu la vérifier.'}`;
-  const inferred=statement.verdict==='CONFIRMED'&&statement.facts?.some(item=>item.fact.status==='INFERRED');
-  // Une confirmation qui repose sur une deduction de Taxo le dit : elle n'a pas la force d'une observation.
-  const base=inferred?'Confirmée par Taxo, par déduction':VERDICTS[statement.verdict]??statement.verdict;
-  // Une confirmation ne couvre pas ce que Taxo n'a pas su lire : elle le dit, au lieu de paraitre complete.
-  const text=limited(statement)?`${base}, avec limites`:base;
-  return statement.reason?`${text} : ${REASONS[statement.reason]??statement.reason}`:text;
+/** Ce que Taxo a trouvé, en clair (D3) : jamais un jugement de l'affirmation. Ne pas trouver n'est pas une absence. */
+export function foundText(statement:Extract<Statement,{type:'claim'}>){
+  if(statement.found===null||statement.found===undefined)
+    return `Non vérifiable : ${statement.error?.message??'Taxo n’a pas pu chercher.'}`;
+  const inferred=statement.found&&statement.facts?.some(item=>item.fact.status==='INFERRED');
+  const base=statement.found?(inferred?'Trouvé par Taxo, par déduction':'Trouvé par Taxo tel que demandé')
+    :statement.facts?.length?'Pas trouvé sous cette forme ; Taxo a trouvé autre chose'
+    :'Taxo n’a rien trouvé pour ce sujet et cette relation (ce n’est pas une absence)';
+  // Ce que Taxo a trouvé ne couvre pas ce qu'il n'a pas su lire : il le dit, au lieu de paraître complet.
+  return limited(statement)?`${base}, avec limites`:base;
 }
 
 /** Les limites qu'une reponse n'a pas pu transmettre faute de place : elles existent, Taxo les compte. */
 const unsentLimits=(statement:Extract<Statement,{type:'claim'}>)=>
   statement.not_sent?.filter(item=>item.what==='limits').reduce((total,item)=>total+item.count,0)??0;
 
-/** Une confirmation qui ne couvre pas tout : des limites jointes, ou comptees sans place pour les dire. */
+/** Ce que Taxo a trouvé ne couvre pas tout : des limites jointes, ou comptees sans place pour les dire. */
 const limited=(statement:Extract<Statement,{type:'claim'}>)=>
-  statement.verdict==='CONFIRMED'&&(Boolean(statement.limits?.length)||unsentLimits(statement)>0);
+  statement.found!==null&&statement.found!==undefined&&(Boolean(statement.limits?.length)||unsentLimits(statement)>0);
 
-/** Ce que Taxo établit pour le même sujet et la même relation, quand l'affirmation n'est pas prouvée. */
-export const knownText=(objects:string[], omitted=0)=>`Taxo établit pour ce sujet et cette relation : ${objects.map(item=>reference(item)).join(', ')}${
-  omitted?` et ${omitted} autre${omitted>1?'s':''}, non transmis`:''}.`;
-
-/** Les objets connus que la réponse n'a pas pu transmettre (plafond ou budget) : comptés, jamais tus. */
-const unsentKnown=(statement:Extract<Statement,{type:'claim'}>)=>
-  statement.not_sent?.filter(item=>item.what==='known_objects').reduce((total,item)=>total+item.count,0)??0;
+/** Les faits trouvés que la réponse n'a pas pu transmettre (budget) : comptés, jamais tus. */
+const unsentFacts=(statement:Extract<Statement,{type:'claim'}>)=>
+  statement.not_sent?.filter(item=>item.what==='items').reduce((total,item)=>total+item.count,0)??0;
 
 const unsentText=(count:number)=>count>1?`Taxo connaît ${count} autres limites, non transmises faute de place.`
   :'Taxo connaît une autre limite, non transmise faute de place.';
@@ -114,6 +112,7 @@ const refusalText=(step:TrajectoryStep)=>step.error?.message?`${step.error.messa
 /** Une etape de la trajectoire en une ligne : l'operation, ses arguments, l'issue. */
 export function stepText(step:TrajectoryStep){
   const outcome=step.outcome==='ERROR'?`refusé : ${refusalText(step)}`
+    :step.found!==undefined?(step.found?'trouvé tel que demandé':'pas trouvé sous cette forme')
     :step.verdict?(VERDICTS[step.verdict]??step.verdict)
     :`${step.items??0} résultat${(step.items??0)>1?'s':''}`;
   const cut=(step.not_sent??[]).reduce((total,item)=>total+(item.count??1),0);
@@ -141,7 +140,7 @@ export function proofText(location:Location){
 }
 
 const verdictClass=(statement:Extract<Statement,{type:'claim'}>)=>limited(statement)
-  ?'verdict verdict-limited':`verdict verdict-${(statement.verdict??'none').toLowerCase().replaceAll('_','-')}`;
+  ?'verdict verdict-limited':statement.found?'verdict verdict-confirmed':'verdict verdict-not-proven';
 
 /** La garde de conclusion (ARCHITECTURE § 12.5) : la conclusion revenue une fois à Minia, et ce qu'elle devait lire. */
 export const returnedText=(returned:string[]=[])=>returned.length
@@ -164,44 +163,45 @@ export function Trajectory({steps, returned=[]}:Readonly<{steps:TrajectoryStep[]
  * - Jaune : seulement ce que Taxo constate lui-meme (`limits`). */
 export function Statements({statements, limits=[]}:Readonly<{statements:Statement[]; limits?:string[]}>){
   const all=statements.filter((item):item is Extract<Statement,{type:'claim'}>=>item.type==='claim');
-  // Seule une affirmation a laquelle Taxo a rendu un verdict entre en vert ; une affirmation qu'il n'a pas pu
-  // verifier (mal formee, au-dela de la limite) reste un texte de Minia, sans reformulation par Taxo.
-  const claims=all.filter(item=>item.verdict!==null);
-  const unchecked=all.filter(item=>item.verdict===null);
+  // Seule une affirmation pour laquelle Taxo a cherché entre en vert, avec ce qu'il a trouvé ; une affirmation qu'il
+  // n'a pas pu chercher (mal formee, au-dela de la limite) reste un texte de Minia, sans reformulation par Taxo.
+  const searched=(item:Extract<Statement,{type:'claim'}>)=>item.found!==null&&item.found!==undefined;
+  const claims=all.filter(searched);
+  const unchecked=all.filter(item=>!searched(item));
   const interpretations=statements.filter(item=>item.type==='interpretation');
   const worded=claims.filter(item=>item.text.trim());
   const unknowns=statements.filter(item=>item.type==='unknown');
   const said=interpretations.length+worded.length+unchecked.length+unknowns.length;
   return <div className="minia-blocks">
     <article className="minia-block fact">
-      <h3>Affirmations vérifiées par Taxo</h3>
+      <h3>Ce que Taxo a trouvé</h3>
       {claims.length?<ul>{claims.map((item,index)=><li key={index}>
-        <span className={verdictClass(item)}>{verdictText(item)}</span> {claimSentence(item.claim)}
+        <span className={verdictClass(item)}>{foundText(item)}</span> {claimSentence(item.claim)}
         {item.limits?.length?<ul className="claim-limits">{item.limits.map(limit=><li key={`${limit.subject}:${limit.reason}`}>
           Taxo n’a pas lu : {limitText(limit)}</li>)}</ul>:null}
         {unsentLimits(item)?<p className="claim-limits">{unsentText(unsentLimits(item))}</p>:null}
-        {item.known_objects?.length?<p className="claim-limits">{knownText(item.known_objects, unsentKnown(item))}</p>:null}
-        <details className="proof"><summary>Ce que Taxo a vérifié</summary>
+        {unsentFacts(item)?<p className="claim-limits">{`Taxo a trouvé ${unsentFacts(item)} autre${unsentFacts(item)>1?'s':''} fait${unsentFacts(item)>1?'s':''}, non transmis faute de place.`}</p>:null}
+        <details className="proof"><summary>Ce que Taxo a cherché et trouvé</summary>
           <dl className="verified-claim">
             <div><dt>subject</dt><dd><code>{item.claim.subject}</code></dd></div>
             <div><dt>relation</dt><dd><code>{item.claim.relation}</code></dd></div>
             <div><dt>object</dt><dd><code>{item.claim.object??'—'}</code></dd></div>
-            <div><dt>verdict</dt><dd><code>{item.verdict??'—'}</code>{item.reason?<> · <code>{item.reason}</code></>:null}</dd></div>
+            <div><dt>trouvé</dt><dd><code>{item.found?'oui':'non'}</code></dd></div>
           </dl>
           {item.facts?.length?<ul>{item.facts.map(f=><li key={f.ref}>{factLine(f.fact)}
             {(item.evidence??[]).filter(proof=>proof.fact===f.ref).map(proof=><span className="evidence" key={proof.ref}>{proofText(proof.location)}</span>)}
             {f.fact.status==='INFERRED'&&f.fact.derivation?<DerivationView derivation={f.fact.derivation}/>:null}
-          </li>)}</ul>:<p className="muted">Aucune preuve : Taxo n’a établi aucun fait pour cette affirmation.</p>}
-        </details></li>)}</ul>:<p className="muted">Minia n’a fait aucune affirmation à vérifier.</p>}
+          </li>)}</ul>:<p className="muted">Taxo n’a établi aucun fait pour ce sujet et cette relation, là où il a lu.</p>}
+        </details></li>)}</ul>:<p className="muted">Minia n’a fait aucune affirmation à chercher.</p>}
     </article>
     <article className="minia-block interpretation">
       <h3>Ce que Minia en déduit <span className="badge">non vérifié</span></h3>
       {said?<ul>
         {interpretations.map(item=><li key={`i:${item.text}`}>{item.text}</li>)}
         {worded.map(item=><li key={`c:${item.text}:${claimText(item.claim)}`}>Minia : « {item.text} » <span className="muted">(sa formulation ;
-          Taxo n’a vérifié que : {claimSentence(item.claim)})</span></li>)}
+          Taxo a cherché : {claimSentence(item.claim)})</span></li>)}
         {unchecked.map(item=><li key={`n:${item.text}:${claimText(item.claim)}`}>Minia : « {item.text||'(affirmation sans texte)'} » <span className="muted">
-          ({verdictText(item)})</span></li>)}
+          ({foundText(item)})</span></li>)}
         {unknowns.map(item=><li key={`u:${item.text}`}><em>Minia dit ne pas savoir :</em> {item.text}</li>)}
       </ul>:<p className="muted">Minia ne propose aucune interprétation.</p>}
     </article>

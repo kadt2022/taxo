@@ -103,7 +103,7 @@ def test_minia_reads_the_tile_then_the_code_then_the_code_of_the_called_method(m
                statement('interpretation', 'findStudents rendrait la liste de tous les étudiants.')))
     result = ask(make_repo, tmp_path, model)
     assert [step['operation'] for step in result['trajectory']] == [
-        'describe', 'find_references', 'get_tile', 'get_source', 'get_source', 'verify_claim']
+        'describe', 'find_references', 'get_tile', 'get_source', 'get_source', 'find_claim']
     assert result['source_reading'] == {'status': 'ON_DEMAND'}
     offered = {item['operation']: item for item in sent(model, 0)['operations']}
     assert 'get_tile' in offered and 'commit de l’analyse' in offered['get_source']['note']
@@ -115,7 +115,7 @@ def test_minia_reads_the_tile_then_the_code_then_the_code_of_the_called_method(m
     assert piece['commit'] == tile['snapshot']['commit'], 'le commit de l’analyse, pour la Tuile et la pièce'
     following = sent(model, 4)['trajectory'][4]['response']
     assert following['reference'] == FIND_ALL and 'return List.of();' in following['items'][0]['text']
-    assert result['statements'][0]['verdict'] == 'CONFIRMED'
+    assert result['statements'][0]['found'] is True
     assert result['statements'][1]['type'] == 'interpretation'
 
 

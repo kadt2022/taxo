@@ -409,7 +409,7 @@ def test_in_exploration_taxo_receives_the_original_references(leaky, tmp_path):
     found = next(step for step in result['trajectory'] if step['operation'] == 'find_facts')
     assert found['arguments']['object'] == f'person:{EMAIL}' and found['items'] >= 1
     [statement] = result['statements']
-    assert statement['verdict'] == 'CONFIRMED' and statement['text'] == f'{NAME} a écrit ce commit.'
+    assert statement['found'] is True and statement['text'] == f'{NAME} a écrit ce commit.'
     for sent in model.calls:
         assert NAME not in sent and EMAIL not in sent
 

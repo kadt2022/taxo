@@ -109,7 +109,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
     <p className="minia-question">{answer.question}</p>
     <Statements statements={answer.statements} limits={[readingNote(answer.source_reading), ...refusals(answer.trajectory), withheldNote(answer.withheld)].filter((item):item is string=>!!item)}/>
     <Trajectory steps={answer.trajectory??[]} returned={answer.returned}/>
-    <footer>Minia a interrogé Taxo opération par opération ; Taxo a vérifié chacune de ses affirmations. Aucune phrase n’est affichée comme établie sans verdict de Taxo, et la réponse n’est jamais enregistrée comme un fait.</footer>
+    <footer>Minia a interrogé Taxo opération par opération ; pour chacune de ses affirmations, Taxo dit ce qu’il a trouvé, avec ses preuves, sans juger. Aucune phrase n’est affichée comme établie sans un fait de Taxo, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
   // Ce que Taxo constate lui-meme ; ce que Minia dit ne pas savoir reste avec son texte, non verifie (MINIA-11).
   // Pas conclu (Tuile coupée par un budget, ou non servie) : Minia n'a pas été appelée, et le message est celui de Taxo,

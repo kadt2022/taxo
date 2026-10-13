@@ -44,7 +44,7 @@ def test_minia_reads_a_method_through_its_declared_profile_on_the_same_analysis(
                          SERVICE)))
     result = ask(make_repo, tmp_path, model)
     assert [step['operation'] for step in result['trajectory']] == [
-        'describe', 'find_references', 'get_tile', 'verify_claim']
+        'describe', 'find_references', 'get_tile', 'find_claim']
     tile = sent(model, 2)['trajectory'][2]['response']
     assert tile['bytes'] == len(json.dumps(tile, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
     assert result['budget']['used'] == sum(step['bytes'] for step in result['trajectory']), \
@@ -58,7 +58,7 @@ def test_minia_reads_a_method_through_its_declared_profile_on_the_same_analysis(
     assert tile['classification']['profile'] == 'method-context/1'
     assert 'CODE_SOURCE' not in tile['classification']['content']
     assert result['trajectory'][2]['items'] == len(tile['facts']) and result['trajectory'][2]['bytes'] > 0
-    assert result['statements'][0]['verdict'] == 'CONFIRMED'
+    assert result['statements'][0]['found'] is True
 
 
 def test_a_fact_handle_of_the_tile_is_one_of_the_exchange(make_repo, tmp_path):

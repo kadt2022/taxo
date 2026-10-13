@@ -95,9 +95,9 @@ def test_minia_shows_the_limits_with_the_verdict_of_her_claim(make_repo, tmp_pat
                       'policy-rule:authenticated()')
     result, _, _ = ask(repo, tmp_path, Scripted(answer(claim)), 'Qui peut lire GET /api/items ?')
     [checked] = result['statements']
-    assert checked['verdict'] == 'CONFIRMED'
+    assert checked['found'] is True
     assert ['@Secured' in limit['reason'] for limit in checked['limits']] == [True], \
-        'le « seulement » de Minia est contredit par la limite que Taxo affiche avec le verdict'
+        'le « seulement » de Minia est démenti par la limite que Taxo affiche avec ce qu’il a trouvé'
 
 
 def test_facts_that_did_not_fit_are_never_said_unknown(tmp_path, make_repo, monkeypatch):

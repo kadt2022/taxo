@@ -933,7 +933,8 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 | `get_coverage` | couverture d'un périmètre | Existant |
 | `get_commit` | ce que Git sait d'un commit, sans contenu | Existant |
 | `get_diff` | blocs modifiés d'un fichier touché, sous double consentement | Existant |
-| `verify_claim` | verdict sur une affirmation structurée | Existant |
+| `verify_claim` | verdict sur une affirmation structurée | Existant, **servie sans être annoncée** depuis D3 : remplacée par `find_claim` |
+| `find_claim` | **témoin** (décision « Taxo témoin », D3) : ce qui a été demandé (`asked`), les faits que Taxo établit pour ce sujet et cette relation, avec leurs preuves (`items`), et `found`, une comparaison littérale (l'objet demandé est-il parmi eux) ; la couverture et les limites ; jamais de verdict ni de motif | Existant |
 | `diff_facts` | faits introduits, modifiés ou retirés par un commit ; depuis les analyses enregistrées du commit et de son parent quand elles existent (`source`, `analyses`), sinon en relisant le dépôt (TAXO-01F, tranche E) | Existant |
 | `get_neighborhood` | voisinage explicite, à un saut (`neighborhood/1`) ou sur plusieurs niveaux (`neighborhood/2`), avec reprises, frontière localisée et preuves accessibles | Existant ; profils servis par MIP `EXPAND` (§ 9.5, TAXO-MIP-ADT-01) |
 | `find_references` | références de l'analyse qui commencent par un préfixe, page bornée avec reprise ; avec `match: NAME`, celles qui se retrouvent sous un nom simple ou qualifié (une fin de clé prise à un début de segment, séparateurs `. / # : $` confondus, un séparateur en tête du nom ignoré pour qu'un chemin `/api/students` se retrouve, liste de paramètres lue sur les seuls symboles appelables), chacune une fois, sans descendants | Existant (TAXO-01J) ; `match: NAME` (TAXO-01N, PR A2) ; une famille entière sans préfixe (P2) ; `match: CONTAINS` (P3) |
@@ -968,6 +969,11 @@ d'une Tuile adaptative : CAPABILITIES = `describe`, TILE et EXPAND = `get_neighb
 opérations, sans sémantique propre.
 
 ### 12.4 Verdicts : Minia propose, Taxo vérifie
+
+> **Depuis la décision « Taxo témoin » (D3)**, Minia n'utilise plus `verify_claim` : pour chaque affirmation, elle
+> demande `find_claim`, et le portail affiche « Ce que Taxo a trouvé » (trouvé tel que demandé, pas trouvé sous cette
+> forme avec ce que Taxo a trouvé, ou rien trouvé — jamais une absence). Les verdicts décrits ci-dessous restent ceux de
+> `verify_claim`, servie pour les clients existants mais plus annoncée par `describe`.
 
 `verify_claim` reçoit une affirmation **structurée** (`subject`, `relation`, `object`), jamais une
 phrase, et rend un verdict :

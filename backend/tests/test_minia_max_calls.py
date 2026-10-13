@@ -53,8 +53,8 @@ def test_claims_beyond_the_exchange_limit_are_said_unverified(repo, tmp_path, mo
     model = ScriptedModel(*replies, answer(*claims))
     result = completed(run(repo, tmp_path, model))
     room = MAX_OPERATIONS - 1 - MAX_ALLOWED_CALLS
-    verdicts = [item['verdict'] for item in result['statements']]
-    assert verdicts[:room] == ['CONFIRMED'] * room
-    assert verdicts[room:] == [None] * (6 - room)
+    found = [item['found'] for item in result['statements']]
+    assert found[:room] == [True] * room
+    assert found[room:] == [None] * (6 - room)
     assert all(item['error']['code'] == 'NOT_VERIFIED' and 'limite' in item['error']['message']
                for item in result['statements'][room:])
