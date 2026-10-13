@@ -4,7 +4,7 @@ import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, VERBS, label, reference} from './vocabulary';
 import {ask as askMinia, askButton, createStop, MiniaProgress, type MiniaLive, type MiniaStop} from './minia-live';
-import {CodeConsent, codeConsent, DirectAnswer, MiniaChoice, modelLabel, withProvider, withheldNote, type AnswerModel, type MiniaStatus,
+import {checkedTuning, CodeConsent, codeConsent, DirectAnswer, LimitsChoice, MiniaChoice, modelLabel, type Tuning, withProvider, withheldNote, type AnswerModel, type MiniaStatus,
   type Withheld} from './minia';
 import {openStream, type ServerEvent} from './sse';
 import {refusals, Statements, Trajectory, type Statement, type TrajectoryStep} from './exploration';
@@ -159,8 +159,9 @@ export async function selectWithElement(base:string, text:string, request:Run):P
   const element=await request<Located>(elementsPath(base,text)).catch(()=>undefined);
   return element?{...selected, element}:selected;
 }
-export const askInit=(text:string, provider='', source=false):RequestInit=>({method:'POST', headers:{'Content-Type':'application/json'},
-  body:JSON.stringify({question:text, ...(provider?{provider}:{}), ...(source?{source}:{})})});
+export const askInit=(text:string, provider='', source=false, tuning:Tuning={}):RequestInit=>({method:'POST', headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({question:text, ...(provider?{provider}:{}), ...(source?{source}:{}),
+    ...(tuning.max_calls===undefined?{}:{max_calls:tuning.max_calls}), ...(tuning.max_bytes===undefined?{}:{max_bytes:tuning.max_bytes})})});
 
 type Setters<T> = {setBusy:(value:boolean)=>void; setError:(value:string)=>void; setValue:(value:T)=>void};
 
@@ -183,14 +184,14 @@ type PanelSetters = {setBusy:(value:boolean)=>void; setError:(value:string)=>voi
 /** Les deux actions du panneau : selectionner des faits, ou demander a Minia d'expliquer la selection. */
 /** Les deux actions du panneau. `control` garde le moyen d'arreter la demande a Minia en cours (TAXO-UX-03). */
 export function actions(base:string, text:string, request:Run, set:PanelSetters, stream:Stream=openStream, provider='',
-  control:{current:MiniaStop|null}={current:null}, source=false){
+  control:{current:MiniaStop|null}={current:null}, source=false, tuning:Tuning={}){
   const common={setBusy:set.setBusy, setError:set.setError};
   return {
     select:()=>track(()=>selectWithElement(base,text,request), {...common, setValue:(value:Selection)=>{set.setResult(value);set.setLive(()=>null);}}),
     explain:()=>{
       const run=createStop();
       control.current=run;
-      return track(()=>askMinia<SelectionAnswer>(()=>stream(`/api${base}/ask/stream`,{...askInit(text,provider,source), signal:run.signal}),
+      return track(()=>askMinia<SelectionAnswer>(()=>stream(`/api${base}/ask/stream`,{...askInit(text,provider,source,tuning), signal:run.signal}),
         change=>set.setLive(live=>change(live as Live)), run), {...common, setValue:()=>undefined});
     },
   };
@@ -203,10 +204,10 @@ export function AskTaxo({base, request, stream, minia=null}:Readonly<{base:strin
   // Quitter le panneau (changer de projet) arrete la demande a Minia en cours.
   useEffect(()=>()=>control.current?.stop(),[]);
   // L'accord pour le code suit le fournisseur choisi : decoche des qu'il est distant (ARCHITECTURE § 12.6).
-  const chosen=withProvider(minia,provider), [code,setCode]=useState(false);
+  const chosen=withProvider(minia,provider), [code,setCode]=useState(false), [tuning,setTuning]=useState<Tuning>({});
   useEffect(()=>{setCode(codeConsent(chosen)?.checked??false);},[chosen?.provider,chosen?.source_reading]);
   const {select,explain}=actions(base,text,request,{setBusy,setError,setResult,setLive},stream,provider,control,
-    code&&codeConsent(chosen)!==null);
+    code&&codeConsent(chosen)!==null, checkedTuning(tuning, minia?.limits));
   return <section className="results ask-taxo" aria-label="Interroger Taxo">
     <div className="section-heading"><div><h2>Interroger Taxo</h2><p>Taxo répond à partir des faits de la dernière analyse globale. Sur l’historique : « les 3 derniers commits », « le commit 5b9022b », « depuis 2026-09-01 ». Sur le code : « qui appelle OwnerRepository.findById ? », « que contient `VetController` ? ».</p></div></div>
     <form onSubmit={submitWith(select)}>
@@ -214,6 +215,7 @@ export function AskTaxo({base, request, stream, minia=null}:Readonly<{base:strin
       <input id="taxo-query" required maxLength={1000} value={text} onChange={typed(setText)} placeholder="les 3 derniers commits"/>
       <MiniaChoice id="taxo-provider" status={minia} value={provider} onChange={setProvider}/>
       <CodeConsent status={chosen} checked={code} onChange={setCode}/>
+      <LimitsChoice id="taxo-limits" status={minia} value={tuning} onChange={setTuning}/>
       <div className="actions"><button type="submit" className="secondary" disabled={busy}>Sélectionner</button>
         <button type="button" className="secondary" disabled={busy||!text.trim()} onClick={explain}>{askButton(busy&&live!==null&&!live.result,'Demander à Minia')}</button></div>
     </form>
