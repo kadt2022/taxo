@@ -318,3 +318,13 @@ def test_malformed_claims_and_chosen_operations_are_counted():
     assert bench.chosen(steps) == 2
     seeded = [{'operation': 'describe'}, {'operation': 'get_commit'}, {'operation': 'diff_facts'}]
     assert bench.chosen(seeded) == 1, 'le get_commit servi d’office n’est pas un choix du modèle'
+
+
+def test_the_restitution_of_each_analyzer_is_said():
+    described = {'items': [
+        {'kind': 'analyzer', 'analyzer': 'taxo.java-calls',
+         'restitution': {'sites_restituted': 29, 'sites_not_restituted': 72, 'subjects_not_read': 0}},
+        {'kind': 'analyzer', 'analyzer': 'taxo.ancien'}, {'kind': 'relation', 'relation': 'CALLS'}]}
+    assert bench.restitution_lines(described) == [
+        'restitution taxo.java-calls : sites restitués 29, non restitués 72 (71.3 %), sujets non lus 0']
+
