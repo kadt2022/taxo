@@ -88,8 +88,7 @@ class SourceOperation:
                       for relation in (_TYPED_AS, _TYPE_ARGUMENT) for fact in self._facts(field, relation)]
         unique = list({(item['relation'], item.get('from'), item['reference']): item for item in found}.values())
         for item in unique[:source.MAX_USES]:
-            if not response.add(source.USES, item):
-                break
+            response.add(source.USES, item)  # hors budget, chaque usage est compté dans `not_sent`
         if len(unique) > source.MAX_USES:
             response.not_sent({'what': source.USES, 'count': len(unique) - source.MAX_USES, 'reason': source.LIMIT})
 
