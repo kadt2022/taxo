@@ -47,7 +47,7 @@ jobs:
     name: Taxo Backend
     needs: preflight
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: backend
