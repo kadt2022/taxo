@@ -22,6 +22,15 @@ CODE_SOURCE = 'CODE_SOURCE'
 # Raisons d'une pièce non transmise, en plus de celles de la lecture de l'historique (CONFIDENTIAL, BINARY,
 # TOO_LARGE, NOT_A_REGULAR_FILE) et du budget.
 CHANGED, NOT_DECLARED, LIMIT = 'CHANGED', 'NOT_DECLARED', 'LIMIT'
+# Le contexte des champs d'une méthode : la déclaration exacte des champs du type courant que son corps utilise comme
+# receveurs d'appels, dans une section distincte de la pièce. Plafond propre ; au-delà, compté (`FIELD_CONTEXT_LIMIT`).
+FIELD_CONTEXT = 'field_context'
+MAX_FIELD_CONTEXT_BYTES = 1024
+FIELD_CONTEXT_LIMIT = 'FIELD_CONTEXT_LIMIT'
+RESOLVED = 'RESOLVED'
+# Ce que le contexte couvre, et ce qu'il ne suit pas : jamais « aucun champ ».
+FIELD_CONTEXT_SCOPE = {'covers': 'own-fields-used-as-call-receivers/1',
+                       'not_followed': ['INHERITED_FIELDS', 'OTHER_FIELD_USES', 'LAMBDAS_AND_LOCAL_CLASSES']}
 
 _MEMBER, _CALLABLE_END = '#', ')'
 

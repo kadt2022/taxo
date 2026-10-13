@@ -98,6 +98,10 @@ class Field:
     type_variable: bool = False
     # Vrai pour le champ d'un composant de record (TAXO-01L) : declare par l'en-tete, sur la ligne du composant.
     component: bool = False
+    # Les lignes de sa declaration entiere (modificateurs et annotations compris, Javadoc exclue) ; pour un
+    # composant de record, celles du composant. 0 si inconnues.
+    declaration_start: int = 0
+    declaration_end: int = 0
 
 
 @dataclass(frozen=True)
@@ -407,8 +411,8 @@ class _Reader:
                 written = _type_name(member.child_by_field_name('type'))
                 variable = written.partition('.')[0] in variables
                 qualified = None if variable else self._type(written, owner)
-                fields += [_field(declarator, written, qualified, variable) for declarator in member.named_children
-                           if declarator.type == 'variable_declarator']
+                fields += [_spanning(_field(declarator, written, qualified, variable), member)
+                           for declarator in member.named_children if declarator.type == 'variable_declarator']
         return tuple(fields)
 
     def _components(self, node, owner, variables):
@@ -418,13 +422,13 @@ class _Reader:
             if item.type == 'formal_parameter':
                 written = _type_name(item.child_by_field_name('type'))
                 variable = written.partition('.')[0] in variables
-                yield replace(_field(item, written, None if variable else self._type(written, owner), variable),
-                              component=True)
+                yield replace(_spanning(_field(item, written, None if variable else self._type(written, owner),
+                                               variable), item), component=True)
             elif item.type == 'spread_parameter':
                 declarator = next(child for child in item.named_children if child.type == 'variable_declarator')
                 written = _type_name(next(child for child in item.named_children if child.type not in (
                     'modifiers', 'variable_declarator', 'marker_annotation', 'annotation')))
-                yield replace(_field(declarator, written + '[]', None, False), component=True)
+                yield replace(_spanning(_field(declarator, written + '[]', None, False), item), component=True)
 
     def _constants(self, body, qualified):
         """Constantes chaines `static final` du type, dans l'ordre : une constante peut citer les precedentes."""
@@ -570,6 +574,12 @@ def _declaration(scope, name, before):
 
 def _type_text(node):
     return _text(_base(node)) if node is not None else None
+
+
+def _spanning(found, declaration):
+    """Le champ `found`, avec les lignes de la declaration `declaration` qui le porte."""
+    return replace(found, declaration_start=declaration.start_point[0] + 1,
+                   declaration_end=declaration.end_point[0] + 1)
 
 
 def _field(declarator, written, qualified, variable):

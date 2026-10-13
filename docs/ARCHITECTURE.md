@@ -937,7 +937,7 @@ Minia ne cite que des références reçues ; toute autre citation est écartée 
 | `get_neighborhood` | voisinage explicite, à un saut (`neighborhood/1`) ou sur plusieurs niveaux (`neighborhood/2`), avec reprises, frontière localisée et preuves accessibles | Existant ; profils servis par MIP `EXPAND` (§ 9.5, TAXO-MIP-ADT-01) |
 | `find_references` | références de l'analyse qui commencent par un préfixe, page bornée avec reprise ; avec `match: NAME`, celles qui se retrouvent sous un nom simple ou qualifié (une fin de clé prise à un début de segment, séparateurs `. / # : $` confondus, un séparateur en tête du nom ignoré pour qu'un chemin `/api/students` se retrouve, liste de paramètres lue sur les seuls symboles appelables), chacune une fois, sans descendants | Existant (TAXO-01J) ; `match: NAME` (TAXO-01N, PR A2) ; une famille entière sans préfixe (P2) ; `match: CONTAINS` (P3) |
 | `find_callers`, `find_callees`, `find_dependencies`, `find_configuration`, `trace_access_control`, `find_endpoint` | questions génériques | réservées, activées par les analyseurs |
-| `get_source` | code d'un **symbole** déclaré (type, méthode, constructeur ; une surcharge par sa signature), jamais un fichier entier ni un chemin, lu au commit de l'analyse, sous son propre double consentement ; une pièce source avec sa classification, jamais un fait | Existant (TAXO-MIP-ADT-01, PR B) ; non transmis à Minia |
+| `get_source` | code d'un **symbole** déclaré (type, méthode, constructeur ; une surcharge par sa signature), jamais un fichier entier ni un chemin, lu au commit de l'analyse, sous son propre double consentement ; une pièce source avec sa classification, jamais un fait ; pour une méthode, la déclaration des champs du type qu'elle utilise comme receveurs (`field_context`, § 12.6) | Existant (TAXO-MIP-ADT-01, PR B) ; non transmis à Minia |
 
 **Une famille entière, sans préfixe (`find_references`).** Avec un `type`, en mode `KEY`, un `prefix` absent ou vide
 liste toutes les références de ce type, dans l'ordre de leur clé, par pages bornées avec reprise (même `limit`, même
@@ -1066,6 +1066,15 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   place restante entre ses Tuiles en réservant un minimum à celles qui suivent, sous le même plafond par
   Tuile ; une Tuile refusée après une autre garde les faits de la première et le dit. Le contrat MIP public et
   la protection de la demande ne changent pas.
+- **Cible (Proposé, non implémenté, non démontré) : navigation inter-classes et inter-types.** Principe : Taxo ne
+  transmet pas tout le contexte ; il permet de retrouver le contexte pertinent. Le contexte des champs (§ 12.6) en
+  est une exception locale et bornée, pas le modèle général. La cible : des références résolues, avec provenance
+  et frontières (champ hérité, type utilisé ou instancié, méthode appelée), que Minia lit à la demande sous budget
+  et consentement ; une bibliothèque externe reste une frontière documentée, jamais un code inventé, et une
+  relation non résolue reste inconnue. Ces références appartiennent à la connaissance structurelle de la Maille
+  (faits et provenance) : `get_source` peut les exposer, jamais en être le seul accès. La résolution des champs
+  hérités, des arguments de type et la lecture d'une référence de champ ne sont pas démontrées ; aucune n'est
+  promise avant mesure.
 - La trajectoire (opérations, arguments, tailles, non-transmis, verdicts) est visible en direct ; comme la
   réponse, elle n'est pas conservée.
 - Transport indépendant : appel interne, HTTP (`POST /api/projects/{id}/taxo-query`), et plus tard MCP,
@@ -1095,6 +1104,14 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
      `NOT_A_REGULAR_FILE`, `CHANGED`, `NOT_DECLARED`, `LIMIT`). Sa classification (`source-classification/1`)
      n'annonce `CODE_SOURCE` que si du code est transmis ; ses restrictions (`source-disclosure/1`) sont à part.
      Rien de ce qui est lu n'est conservé. Minia la demande en exploration, sous ce même double consentement (§ 12.5) ;
+   - **contexte des champs** (version 1) : pour une méthode ou un constructeur servis, une section distincte
+     `field_context` joint la déclaration exacte (texte, plage `line_start`-`line_end`, empreinte, `resolution:
+     RESOLVED`) des champs **du type courant** que le corps utilise comme **receveurs d'appels**, tels que la règle
+     des appels les désigne (un nom masqué par un paramètre ou une variable locale n'en est pas un). La pièce reste
+     inchangée ; même fichier, même commit, même protection. Une déclaration qui ne se lit pas en entier n'est pas
+     jointe. Plafond propre de 1 Ko (au-delà, `not_sent` `FIELD_CONTEXT_LIMIT`), puis le budget de l'opération
+     (`BUDGET`) ; la pièce passe toujours en premier. `field_context_scope` dit ce qui n'est pas suivi (champs
+     hérités, autres usages, lambdas et classes locales) : une liste vide n'est jamais « aucun champ » ;
    - avec un fournisseur distant, le portail avertit que le contenu quittera la machine, et la case n'est
      pas cochée par défaut.
 5. Cloisonnement : un échange ne voit qu'un projet et un instantané.
