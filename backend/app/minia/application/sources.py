@@ -147,6 +147,11 @@ def _discovered(item):
     return found | {chain for chain in _chains(item) if chain not in asked}
 
 
+def references_of(item):
+    """Les références qu'une réponse de l'échange a apportées (celles qu'un résumé de la réponse garde)."""
+    return sorted(_discovered(item))
+
+
 def received(reference, exchanged):
     """Vrai si `reference` a été découverte par Taxo dans cet échange : égale à la valeur d'un champ de référence d'une
     réponse, jamais trouvée dans un texte (un symbole écrit dans le code lu n'est pas reçu) ni simplement répétée

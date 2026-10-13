@@ -1047,6 +1047,11 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   Le budget d'un échange est réglable aussi (`MINIA_EXCHANGE_BYTES`, défaut 64 000, de 16 000 à 200 000), jamais plus
   que la fenêtre du modèle. Pour les essais, une demande peut fixer les deux (`max_calls`, `max_bytes`) dans ces
   bornes ; le statut les propose au portail, et la réponse dit le budget réellement appliqué (`budget.max_bytes`).
+- **Trajectoire compacte** (`MINIA_COMPACT_AFTER`, 0 par défaut : désactivée ; de 1 à 15) : chaque tour renvoie au
+  modèle toute la trajectoire. Avec le réglage, seules les N dernières réponses restent entières ; les plus anciennes
+  sont résumées (opération, issue, taille, instantané, références apportées). Le code lu (`get_source`) n'est jamais
+  résumé ; les références d'une réponse résumée restent reçues ; une demande répétée rend la réponse entière, sans
+  appel à Taxo. À mesurer sur le banc avant de l'activer par défaut.
 - **Répétition bornée.** Une opération redemandée à l'identique n'est pas rejouée : si sa réponse est un
   résultat ou un refus de configuration (`NOT_AVAILABLE`, `NO_CONSENT`), Minia reçoit un renvoi vers le tour
   d'origine (issue, jamais la réponse recopiée), au plus `MAX_REPEATS` (2) fois par exploration. Chaque
@@ -1086,6 +1091,10 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   promise avant mesure.
 - La trajectoire (opérations, arguments, tailles, non-transmis, verdicts) est visible en direct ; comme la
   réponse, elle n'est pas conservée.
+- **Journal de développement** (`MINIA_TRACE`, `off` par défaut) : `summary` écrit dans la console du serveur chaque
+  opération de Taxo et chaque tour du modèle ; `full` y ajoute les réponses de Taxo et les messages complets. Les
+  lignes `LLM` montrent le message réellement envoyé, après protection ; les lignes `TAXO`, la réponse locale de Taxo.
+  Rien n'est conservé par Taxo.
 - Transport indépendant : appel interne, HTTP (`POST /api/projects/{id}/taxo-query`), et plus tard MCP,
   sans seconde sémantique. Ajouter une opération ou un champ facultatif est compatible ; changer la
   sémantique d'une opération ou d'un verdict crée une nouvelle version.
