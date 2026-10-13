@@ -4,14 +4,17 @@ Une annotation est relevée telle qu'elle est écrite, sans aucune connaissance 
 `@PreAuthorize` sont traitées de la même façon. Taxo ne sait pas si elle vient d'un cadre, si elle agit, ni ce qu'elle
 protège ; il dit seulement qu'elle est là, avec ses arguments.
 
-Le nom de l'annotation devient la référence `annotation:<nom>`, choisi par une règle mécanique dite dans le
-qualificatif `resolution` :
+Le nom **écrit** de l'annotation devient la référence `annotation:<nom écrit>` (décision « Taxo témoin », D2) :
+`@PreAuthorize` donne `annotation:PreAuthorize`, comme `@Toto` donne `annotation:Toto`, quel que soit l'import. Ce
+que l'import désigne est un constat de plus, jamais l'identité : `resolved_name` le dit quand une règle mécanique le
+désigne, et `resolution` dit laquelle :
 
 - `SOURCE_TYPE` : un type des sources que le code écrit désigne sans ambiguïté ;
 - `IMPORTED` : le nom qualifié d'un import explicite (simple ou statique, d'un type membre aussi) ;
-- `AS_WRITTEN` : le nom tel qu'il est écrit, faute d'une désignation sûre (import `*`, même vers un type des
-  sources, `java.lang`, même paquetage hors des sources). Deux annotations de même nom écrit peuvent alors partager
-  une référence : le qualificatif le dit.
+- `AS_WRITTEN` : aucune désignation sûre (import `*`, même vers un type des sources, `java.lang`, même paquetage hors
+  des sources) ; pas de `resolved_name`.
+
+Deux annotations de même nom écrit partagent une référence : leurs qualificatifs les distinguent.
 
 Les arguments forment une liste ordonnée par nom (`name`, `values`). Chaque valeur est rendue dans sa forme écrite ;
 son texte n'est ajouté que si le code l'écrit (chaîne, concaténation, constante des sources), et `resolved` dit
@@ -62,8 +65,9 @@ def _arguments(annotation):
 def read(java_file, annotation, owner):
     """L'annotation `annotation`, écrite dans le type `owner` du fichier `java_file`."""
     name, resolution = _name(java_file, annotation.name, owner)
-    qualifiers = {'written_name': annotation.name, 'resolution': resolution}
+    qualifiers = {'written_name': annotation.name, 'resolution': resolution,
+                  **({'resolved_name': name} if resolution != AS_WRITTEN else {})}
     arguments = _arguments(annotation)
     if arguments:
         qualifiers['arguments'] = arguments
-    return Annotated(f'annotation:{name}', qualifiers, annotation.line_start, annotation.line_end)
+    return Annotated(f'annotation:{annotation.name}', qualifiers, annotation.line_start, annotation.line_end)

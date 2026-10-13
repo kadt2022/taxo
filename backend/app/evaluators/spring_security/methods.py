@@ -50,7 +50,8 @@ class Enabling:
 
     @property
     def reference(self):
-        return f'annotation:{self.qualified}'
+        """L'annotation telle qu'écrite (décision « Taxo témoin », D2) : son nom reconnu reste un qualificatif."""
+        return f'annotation:{self.annotation.name}'
 
 
 @dataclass(frozen=True)

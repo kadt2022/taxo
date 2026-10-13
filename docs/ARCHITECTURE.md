@@ -312,7 +312,7 @@ dans les champs textuels. Tout champ inconnu est refusé, en particulier tout ch
 | `MATCHED_BY` | endpoint → route-pattern | `INFERRED` | Spring Security |
 | `PROTECTED_BY` | endpoint → symbol, policy-rule | `INFERRED`, `HUMAN_VALIDATED` | Spring Security |
 | `CONFIGURES` | symbol → policy-rule | `OBSERVED` | Spring Security (`csrf.disable()`) |
-| `ANNOTATED_WITH` | symbol → annotation | `OBSERVED` | appels Java (toute annotation écrite d'un type ou d'une méthode, sans interprétation, TAXO-MIP-ADT-01) ; Spring Security (activation de la sécurité de méthode) |
+| `ANNOTATED_WITH` | symbol → annotation **telle qu'écrite** (`@PreAuthorize` → `annotation:PreAuthorize`, comme `@Toto` → `annotation:Toto` ; le nom qu'un import désigne reste un constat, `resolved_name`, jamais l'identité — décision « Taxo témoin », D2) | `OBSERVED` | appels Java (toute annotation écrite d'un type ou d'une méthode, sans interprétation, TAXO-MIP-ADT-01) ; Spring Security (activation de la sécurité de méthode) |
 | `CALLS` | symbol → symbol | `INFERRED`, prouvé par ses sites d'appel (§ 14) | appels Java |
 | `IMPLEMENTS` | symbol → symbol | `OBSERVED` entre types, `INFERRED` entre méthodes (§ 14) | appels Java |
 | `EXTENDS` | symbol → symbol (entre types) | `OBSERVED` | appels Java |

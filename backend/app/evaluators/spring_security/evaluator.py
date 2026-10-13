@@ -66,7 +66,7 @@ DATA_GAP = 'les rôles et autorités des utilisateurs sont des données, hors du
 
 class SpringSecurityEvaluator:
     evaluator_id = 'taxo.spring-security'
-    producer_version = '0.4.0'
+    producer_version = '0.5.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
@@ -234,7 +234,9 @@ class _Run:
     def _enabling_facts(self, enabling):
         annotation = enabling.annotation
         evidence = self._evidence(enabling.path, annotation.line_start, annotation.line_end, ENABLING_METHOD)
-        qualifiers = {methods.PRE_POST: enabling.written} if enabling.written is not None else {}
+        # Le nom reconnu reste un constat : l'identité de l'annotation est son nom écrit (D2).
+        qualifiers = {'written_name': annotation.name, 'resolved_name': enabling.qualified,
+                      **({methods.PRE_POST: enabling.written} if enabling.written is not None else {})}
         self._add(_observed(enabling.symbol, 'ANNOTATED_WITH', enabling.reference, [evidence], qualifiers))
         if enabling.state == methods.UNKNOWN:
             self._gap(enabling.symbol, f'file:{enabling.path}',

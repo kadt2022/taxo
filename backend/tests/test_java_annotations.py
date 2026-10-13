@@ -55,25 +55,27 @@ def annotated_fixture():
 
 def test_the_class_annotation_is_observed_as_written_and_nothing_else(annotated):
     fact, = annotated[SERVICE]
-    assert (fact['object'], fact['status']) == ('annotation:org.springframework.stereotype.Component', 'OBSERVED')
-    assert fact['qualifiers'] == {'written_name': 'Component', 'resolution': 'IMPORTED'}
+    assert (fact['object'], fact['status']) == ('annotation:Component', 'OBSERVED'), 'le nom écrit, jamais réécrit'
+    assert fact['qualifiers'] == {'written_name': 'Component', 'resolution': 'IMPORTED',
+                                  'resolved_name': 'org.springframework.stereotype.Component'}
     assert fact['evidence'][0]['line_start'] == 6
-    assert not any(item['object'] == 'annotation:org.springframework.stereotype.Service'
+    assert not any(item['object'] == 'annotation:Service'
                    for facts in annotated.values() for item in facts), 'jamais une annotation qui n’est pas écrite'
 
 
 def test_an_unknown_annotation_is_kept_with_its_written_and_resolved_values(annotated):
     """B3 : `@Toto` est relevée sans interprétation ; une constante des sources est résolue, et le dit."""
     fact, = annotated[f'{SERVICE}#get(Long)']
-    assert fact['object'] == 'annotation:com.acme.Toto'
-    assert fact['qualifiers'] == {'written_name': 'Toto', 'resolution': 'SOURCE_TYPE', 'arguments': [
+    assert fact['object'] == 'annotation:Toto'
+    assert fact['qualifiers'] == {'written_name': 'Toto', 'resolution': 'SOURCE_TYPE', 'resolved_name': 'com.acme.Toto',
+                                  'arguments': [
         {'name': 'role', 'values': [{'written': 'Roles.ADMIN', 'resolved': True, 'value': 'ADMIN'}]}]}
 
 
 def test_an_overload_carries_only_its_own_annotations_and_an_unread_value_stays_written(annotated):
     """B1 : chaque surcharge a les siennes ; une valeur que le code n'écrit pas reste dans sa forme écrite."""
     facts = {fact['object']: fact for fact in annotated[f'{SERVICE}#get(String)']}
-    assert set(facts) == {'annotation:com.acme.Toto', 'annotation:Flag'}
+    assert set(facts) == {'annotation:Toto', 'annotation:Flag'}
     assert facts['annotation:Flag']['qualifiers'] == {'written_name': 'Flag', 'resolution': 'AS_WRITTEN', 'arguments': [
         {'name': 'level', 'values': [{'written': 'Levels.MAX', 'resolved': False}]}]}
 
@@ -95,6 +97,11 @@ def test_the_annotations_are_the_same_on_every_run():
         return [(fact['subject'], fact['object'], fact['qualifiers'], fact['evidence'][0]['line_start'])
                 for fact in execution.facts if fact['relation'] == 'ANNOTATED_WITH']
     assert pick(first) == pick(second) and pick(first)
+
+
+def said(fact):
+    """(référence, règle, nom résolu) : la référence est toujours le nom écrit, le reste un constat."""
+    return fact['object'], fact['qualifiers']['resolution'], fact['qualifiers'].get('resolved_name')
 
 
 def _annotations(sources):
@@ -123,16 +130,17 @@ def test_a_name_reached_only_through_an_on_demand_import_stays_as_written():
 
 
 def test_a_member_annotation_type_is_named_by_its_explicit_import():
-    """`import p.H;` puis `@H.A`, ou `import static p.H.A;` puis `@A` : le type membre importé est nommé en entier."""
+    """`import p.H;` puis `@H.A`, ou `import static p.H.A;` puis `@A` : la référence est le nom écrit, le type membre
+    importé est dit en entier dans `resolved_name`."""
     sources = {f'{ROOT}A.java': 'package com.acme;\nimport org.lib.Holder;\n@Holder.Mark\npublic class A { }\n',
                f'{ROOT}B.java': 'package com.acme;\nimport static org.lib.Holder.Mark;\n@Mark\npublic class B { }\n',
                f'{ROOT}tags/H.java': 'package com.acme.tags;\npublic class H { public @interface In { } }\n',
                f'{ROOT}C.java': 'package com.acme;\nimport static com.acme.tags.H.In;\n@In\npublic class C { }\n'}
     found = _annotations(sources)
-    assert [(found[f'symbol:java:com.acme.{name}']['object'], found[f'symbol:java:com.acme.{name}']['qualifiers'][
-        'resolution']) for name in 'ABC'] == [('annotation:org.lib.Holder.Mark', 'IMPORTED'),
-                                             ('annotation:org.lib.Holder.Mark', 'IMPORTED'),
-                                             ('annotation:com.acme.tags.H.In', 'SOURCE_TYPE')]
+    assert [said(found[f'symbol:java:com.acme.{name}']) for name in 'ABC'] == [
+        ('annotation:Holder.Mark', 'IMPORTED', 'org.lib.Holder.Mark'),
+        ('annotation:Mark', 'IMPORTED', 'org.lib.Holder.Mark'),
+        ('annotation:In', 'SOURCE_TYPE', 'com.acme.tags.H.In')]
 
 
 def test_an_explicit_import_shadows_a_type_of_the_same_package():
@@ -141,9 +149,8 @@ def test_an_explicit_import_shadows_a_type_of_the_same_package():
                f'{ROOT}A.java': 'package com.acme;\nimport org.lib.Audit;\n@Audit\npublic class A { }\n',
                f'{ROOT}B.java': 'package com.acme;\n@Audit\npublic class B { }\n'}
     found = _annotations(sources)
-    assert [(found[f'symbol:java:com.acme.{name}']['object'], found[f'symbol:java:com.acme.{name}']['qualifiers'][
-        'resolution']) for name in 'AB'] == [('annotation:org.lib.Audit', 'IMPORTED'),
-                                            ('annotation:com.acme.Audit', 'SOURCE_TYPE')]
+    assert [said(found[f'symbol:java:com.acme.{name}']) for name in 'AB'] == [
+        ('annotation:Audit', 'IMPORTED', 'org.lib.Audit'), ('annotation:Audit', 'SOURCE_TYPE', 'com.acme.Audit')]
 
 
 def test_an_explicit_import_shadows_a_type_of_the_unnamed_package():
@@ -152,5 +159,5 @@ def test_an_explicit_import_shadows_a_type_of_the_unnamed_package():
                f'{ROOT}A.java': 'import q.Audit;\n@Audit\npublic class A { }\n',
                f'{ROOT}B.java': '@Audit\npublic class B { }\n'}
     found = _annotations(sources)
-    assert [(found[f'symbol:java:{name}']['object'], found[f'symbol:java:{name}']['qualifiers']['resolution'])
-            for name in 'AB'] == [('annotation:q.Audit', 'IMPORTED'), ('annotation:Audit', 'SOURCE_TYPE')]
+    assert [said(found[f'symbol:java:{name}']) for name in 'AB'] == [
+        ('annotation:Audit', 'IMPORTED', 'q.Audit'), ('annotation:Audit', 'SOURCE_TYPE', 'Audit')]

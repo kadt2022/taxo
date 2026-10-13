@@ -229,11 +229,11 @@ def test_a_wrong_annotation_claim_is_corrected_by_the_observed_annotations(cours
     taxo, scan = courses
     service = 'symbol:java:com.example.demo.service.CourseServiceImpl'
     tile = ask(taxo, expand(service, relations=('ANNOTATED_WITH',), bounds={'max_bytes': 32_000}))
-    assert [fact['fact']['object'] for fact in tile['facts']] == ['annotation:org.springframework.stereotype.Service']
+    assert [fact['fact']['object'] for fact in tile['facts']] == ['annotation:Service'], 'le nom écrit (D2)'
     written, other = taxo.ask(
         ('verify_claim', {'subject': service, 'relation': 'ANNOTATED_WITH',
-                          'object': 'annotation:org.springframework.stereotype.Service'}),
+                          'object': 'annotation:Service'}),
         ('verify_claim', {'subject': service, 'relation': 'ANNOTATED_WITH',
-                          'object': 'annotation:org.springframework.stereotype.Component'}), analysis=scan)
+                          'object': 'annotation:Component'}), analysis=scan)
     assert written['verdict'] == 'CONFIRMED'
     assert other['verdict'] == 'NOT_PROVEN'

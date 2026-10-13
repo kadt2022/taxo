@@ -37,7 +37,7 @@ PARSE_ERROR_REASON = 'Fichier Java lu en partie (erreur de syntaxe) : ses décla
 
 class JavaCallsEvaluator:
     evaluator_id = 'taxo.java-calls'
-    producer_version = '1.6.0'
+    producer_version = '1.7.0'
     catalog = CATALOG
     # Les lignes de la déclaration d'un symbole qu'il a déclaré : ce que lit `get_source` (TAXO-MIP-ADT-01, PR B).
     declaration_lines = staticmethod(source_range.declaration_lines)
