@@ -56,6 +56,15 @@ STALLED = 'Minia ne progressait plus (opération répétée ou limite atteinte).
 _REUSABLE_REFUSALS = frozenset({NOT_AVAILABLE, NO_CONSENT})
 _REUSED_NOTE = ('Même opération, mêmes arguments : la réponse du tour {} reste valable dans la trajectoire, '
                 'rien n’a été redemandé à Taxo. Conclus ou demande une autre opération.')
+# La trajectoire compacte (MINIA_COMPACT_AFTER, désactivée par défaut) : au-delà des N dernières réponses, une réponse
+# envoyée au modèle est résumée (opération, issue, taille, références apportées) ; le code lu reste entier. Le modèle
+# qui redemande la même opération la reçoit de nouveau en entier, sans rien redemander à Taxo.
+MAX_COMPACT_AFTER = 15
+MAX_COMPACT_REFERENCES = 30
+_KEEP_WHOLE = frozenset({sources.OPERATION})
+_COMPACT_NOTE = ('Réponse résumée pour la place : ses références restent reçues. Redemande la même opération pour la '
+                 'relire en entier.')
+_RESENT_NOTE = 'Même opération, mêmes arguments : la réponse du tour {}, rendue de nouveau en entier.'
 # Budget d'un echange d'exploration : 64 Ko au plus, et jamais plus que la place du modele, moins une marge
 # pour la question, la liste des operations et l'enveloppe de chaque tour.
 EXCHANGE_BYTES = 64_000
@@ -298,6 +307,34 @@ def _reused(step, prior):
     return {'operation': step.operation, 'arguments': step.arguments, 'response': entry}
 
 
+def _compacted(exchanged, keep):
+    """Ce que le modèle voit de la trajectoire : les `keep` dernières réponses entières, les plus anciennes
+    résumées, sauf le code lu et ce qui n'est pas une réponse réussie de Taxo. `keep` à 0 : tout entier."""
+    if not keep or len(exchanged) <= keep:
+        return exchanged
+    shown = []
+    for index, item in enumerate(exchanged):
+        response = item.get('response') or {}
+        # Une réponse rendue de nouveau (`_resent`) reste entière tant qu'elle est récente, puis se résume comme les
+        # autres ; un simple renvoi (sans contenu) n'a rien à résumer.
+        if (index >= len(exchanged) - keep or item['operation'] in _KEEP_WHOLE or response.get('outcome') != 'OK'
+                or (response.get('reused') and 'items' not in response and 'facts' not in response)):
+            shown.append(item)
+            continue
+        shown.append({'operation': item['operation'], 'arguments': item['arguments'], 'response': {
+            'outcome': 'OK', 'compacted': True, 'bytes': response.get('bytes'),
+            # L'instantané reste : l'analyse qu'il nomme sert d'argument aux opérations suivantes.
+            **({'snapshot': response['snapshot']} if 'snapshot' in response else {}),
+            'references': sources.references_of(item)[:MAX_COMPACT_REFERENCES], 'note': _COMPACT_NOTE}})
+    return shown
+
+
+def _resent(step, prior):
+    """Une demande répétée quand la trajectoire est compacte : la réponse d'origine, entière, sans appel à Taxo."""
+    return {'operation': step.operation, 'arguments': step.arguments,
+            'response': {**prior['response'], 'reused': True, 'note': _RESENT_NOTE.format(prior['turn'])}}
+
+
 def _generation(exchange):
     """La generation des faits de l'analyse de l'echange : une enquete n'est jamais poursuivie sur une autre."""
     return None if exchange is None else exchange.facts.revision(exchange.scan.id)
@@ -343,7 +380,8 @@ class AskMinia:
     """
 
     def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None,
-                 taxo_query=None, mip=None, investigations=None, max_calls=MAX_CALLS, exchange_bytes=EXCHANGE_BYTES):
+                 taxo_query=None, mip=None, investigations=None, max_calls=MAX_CALLS, exchange_bytes=EXCHANGE_BYTES,
+                 compact_after=0):
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
         if not _within(max_calls, 1, MAX_ALLOWED_CALLS):
@@ -351,7 +389,9 @@ class AskMinia:
         if not _within(exchange_bytes, MIN_EXCHANGE_SETTING, MAX_EXCHANGE_SETTING):
             raise ValueError(f'MINIA_EXCHANGE_BYTES invalide : {exchange_bytes} '
                              f'(de {MIN_EXCHANGE_SETTING} à {MAX_EXCHANGE_SETTING}).')
-        self.max_calls, self.exchange_bytes = max_calls, exchange_bytes
+        if not _within(compact_after, 0, MAX_COMPACT_AFTER):
+            raise ValueError(f'MINIA_COMPACT_AFTER invalide : {compact_after} (de 0, désactivé, à {MAX_COMPACT_AFTER}).')
+        self.max_calls, self.exchange_bytes, self.compact_after = max_calls, exchange_bytes, compact_after
         self.history, self.projects, self.query = history, projects, query
         # Protocole Taxo (ARCHITECTURE § 12) : sans lui, Minia recoit toujours un paquet de contexte.
         self.taxo_query = taxo_query
@@ -709,7 +749,8 @@ class AskMinia:
             """Octets qu'une reponse de Taxo peut encore occuper sans depasser la fenetre du modele."""
             if capacity is None:
                 return None
-            text = exploration.message(question, operations, exchanged, calls_left, context)
+            text = exploration.message(question, operations, _compacted(exchanged, self.compact_after), calls_left,
+                                       context)
             return capacity - len(text.encode('utf-8')) - TURN_MARGIN
 
         def bounded(operation, arguments, space):
@@ -752,7 +793,8 @@ class AskMinia:
                 space = room(operations, exchanged, calls_left)
                 if space is not None and space < ROOM_TO_CONTINUE:
                     calls_left = 0  # la fenetre est presque pleine : Minia conclut avec ce qu'elle a
-                text = exploration.message(question, operations, exchanged, calls_left, context)
+                text = exploration.message(question, operations, _compacted(exchanged, self.compact_after),
+                                           calls_left, context)
                 check(cancel)
                 raw = yield from _waiting(
                     lambda: _complete(model, exploration.SYSTEM, text, exploration.STEP_SCHEMA, cancel), cancel)
@@ -783,7 +825,7 @@ class AskMinia:
                         raise MiniaError(INVALID_ANSWER, STALLED)
                 if prior is not None:
                     repeats += 1
-                    exchanged.append(_reused(step, prior))
+                    exchanged.append(_resent(step, prior) if self.compact_after else _reused(step, prior))
                     trajectory.append({**prior['step'], 'bytes': 0, 'reused': True})
                     yield 'minia.operation', trajectory[-1]
                     yield _stage('exploration', 'running', label, len(trajectory))
