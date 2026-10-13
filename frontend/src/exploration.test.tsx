@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {claimText, limitText, proofText, refusals, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
+import {argumentText, claimText, limitText, proofText, refusals, returnedText, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
 import {MiniaProgress, reduceMinia, stageText, startMinia} from './minia-live';
 import {SelectionAnswerView, type SelectionAnswer} from './query';
 
@@ -59,6 +59,29 @@ describe('trajectoire', ()=>{
     const html=renderToStaticMarkup(<Trajectory steps={steps}/>);
     expect(html).toContain('4 opérations demandées à Taxo');
     expect(html).toContain('class="refused"');
+  });
+  it('écrit les pas d’un voisinage par leur relation, jamais [object Object]', ()=>{
+    const neighborhood={operation:'get_neighborhood', outcome:'OK' as const, bytes:9, items:1,
+      arguments:{root:'endpoint:POST /x', steps:[{relation:'HANDLED_BY', direction:'OUTGOING'}, {relation:'CALLS', direction:'OUTGOING'}], depth:2}};
+    expect(stepText(neighborhood)).toBe('get_neighborhood (root endpoint:POST /x, steps HANDLED_BY → CALLS, depth 2) → 1 résultat · 9 octets');
+    expect(stepText(neighborhood)).not.toContain('[object Object]');
+    expect(argumentText(['a', 'b'])).toBe('[a, b]');
+    expect(argumentText([{relation:'CALLS', direction:'INCOMING'}])).toBe('← CALLS');
+    expect(argumentText([])).toBe('[]');
+    expect(argumentText({follow:'CALLS', direction:'OUTGOING'})).toBe('follow CALLS, direction OUTGOING');
+    expect(argumentText(3)).toBe('3');
+  });
+  it('dit les champs joints à la lecture d’une méthode, par leur nom', ()=>{
+    expect(stepText({operation:'get_source', arguments:{reference:'symbol:java:a.Repo#save()'}, outcome:'OK', bytes:3164, items:1,
+      fields:['symbol:java:a.Repo#enrollments']}))
+      .toBe('Code d’un symbole (reference symbol:java:a.Repo#save()) → 1 résultat · 3164 octets · champs joints : enrollments');
+  });
+  it('dit quand la conclusion a été renvoyée une fois à Minia, et rien sinon', ()=>{
+    expect(returnedText()).toBeNull();
+    expect(returnedText(['symbol:java:a.Repo#save(Long,Long)'])).toContain('Conclusion renvoyée une fois à Minia');
+    expect(renderToStaticMarkup(<Trajectory steps={steps} returned={['symbol:java:a.Repo#save(Long,Long)']}/>))
+      .toContain('Conclusion renvoyée une fois');
+    expect(renderToStaticMarkup(<Trajectory steps={steps}/>)).not.toContain('Conclusion renvoyée');
   });
   it('dit chaque refus de Taxo une fois, avec sa raison, et rien quand tout a été servi', ()=>{
     expect(refusals(steps)).toEqual([`Taxo a refusé « Diff d’un fichier (commit ${sha}, path a) » : non (NO_CONSENT).`]);

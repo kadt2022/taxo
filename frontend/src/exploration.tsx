@@ -5,8 +5,10 @@ import {reference, VERBS, label} from './vocabulary';
 
 type ProtocolError = {code:string; message:string};
 type NotSent = {what:string; count?:number; reason:string};
-export type TrajectoryStep = {operation:string; arguments:Record<string,string>; outcome:'OK'|'ERROR'; bytes:number;
+export type TrajectoryStep = {operation:string; arguments:Record<string,unknown>; outcome:'OK'|'ERROR'; bytes:number;
   items?:number; not_sent?:NotSent[]; verdict?:string; reason?:string|null; error?:ProtocolError;
+  // La lecture d'une méthode : les champs de son type dont la déclaration a été jointe (field_context), par référence.
+  fields?:string[];
   // Champs du tour que l'operation ne lit pas : ignores par Taxo, et dits (MINIA-09c).
   ignored?:string[]};
 type Claim = {subject:string; relation:string; object?:string};
@@ -76,8 +78,23 @@ export function claimSentence(claim:Claim){
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }
 
+/** La relation d'un pas de voisinage (`{relation, direction}` en neighborhood/2) ; `undefined` sinon. */
+const stepRelation=(item:unknown)=>item&&typeof item==='object'&&'relation' in item?(item as {relation:unknown}).relation:undefined;
+
+/** Une valeur d'argument lisible : des pas de voisinage par leur relation (`HANDLED_BY → CALLS`, un sens entrant
+ * signalé `←`), une liste élément par élément, un objet par ses champs ; jamais « [object Object] ». */
+export function argumentText(value:unknown):string{
+  if(Array.isArray(value)){
+    const steps=value.length>0&&value.every(item=>stepRelation(item)!==undefined);
+    return steps?value.map(item=>`${(item as {direction?:string}).direction==='INCOMING'?'← ':''}${argumentText(stepRelation(item))}`).join(' → ')
+      :`[${value.map(argumentText).join(', ')}]`;
+  }
+  if(value&&typeof value==='object')return Object.entries(value).map(([key,item])=>`${key} ${argumentText(item)}`).join(', ');
+  return String(value);
+}
+
 const operationText=(step:TrajectoryStep)=>{
-  const args=Object.entries(step.arguments).map(([key,value])=>`${key} ${value}`).join(', ');
+  const args=Object.entries(step.arguments).map(([key,value])=>`${key} ${argumentText(value)}`).join(', ');
   return `${OPERATIONS[step.operation]??step.operation}${args?` (${args})`:''}`;
 };
 
@@ -91,8 +108,12 @@ export function stepText(step:TrajectoryStep){
     :`${step.items??0} résultat${(step.items??0)>1?'s':''}`;
   const cut=(step.not_sent??[]).reduce((total,item)=>total+(item.count??1),0);
   const ignored=step.ignored?.length?` · ignorés : ${step.ignored.join(', ')}`:'';
-  return `${operationText(step)} → ${outcome}${cut?`, ${cut} non transmis`:''} · ${step.bytes} octets${ignored}`;
+  const fields=step.fields?.length?` · champs joints : ${step.fields.map(member).join(', ')}`:'';
+  return `${operationText(step)} → ${outcome}${cut?`, ${cut} non transmis`:''} · ${step.bytes} octets${fields}${ignored}`;
 }
+
+/** Le nom d'un membre dans sa référence (`symbol:java:a.B#items` → `items`). */
+const member=(reference:string)=>reference.split('#').pop()??reference;
 
 /** Les operations que Taxo a refusees a Minia, dites avec leur raison (TAXO-MINIA-SEC-01, E4) : un refus est une
  * frontiere de Taxo, jamais une absence dans le code. Une meme demande refusee deux fois n'est dite qu'une fois. */
@@ -112,10 +133,16 @@ export function proofText(location:Location){
 const verdictClass=(statement:Extract<Statement,{type:'claim'}>)=>limited(statement)
   ?'verdict verdict-limited':`verdict verdict-${(statement.verdict??'none').toLowerCase().replaceAll('_','-')}`;
 
-export function Trajectory({steps}:Readonly<{steps:TrajectoryStep[]}>){
+/** La garde de conclusion (ARCHITECTURE § 12.5) : la conclusion revenue une fois à Minia, et ce qu'elle devait lire. */
+export const returnedText=(returned:string[]=[])=>returned.length
+  ?`Conclusion renvoyée une fois à Minia : un « inconnu » citait un code lisible non lu (${returned.map(item=>reference(item)).join(', ')}).`:null;
+
+export function Trajectory({steps, returned=[]}:Readonly<{steps:TrajectoryStep[]; returned?:string[]}>){
   if(!steps.length)return null;
+  const guard=returnedText(returned);
   return <details className="trajectory"><summary>Chemin de Minia : {steps.length} opération{steps.length>1?'s':''} demandée{steps.length>1?'s':''} à Taxo</summary>
     <ol>{steps.map((step,index)=><li key={index} className={step.outcome==='ERROR'?'refused':undefined}>{stepText(step)}</li>)}</ol>
+    {guard?<p className="muted">{guard}</p>:null}
   </details>;
 }
 
