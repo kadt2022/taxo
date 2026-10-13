@@ -27,3 +27,13 @@ def test_describe_gives_the_measure_of_each_analyzer(taxo):
     assert java['sites_restituted'] >= 2, 'enrol appelle check et save'
     assert set(java) == {'sites_restituted', 'sites_not_restituted', 'subjects_not_read'}
     assert all('restitution' in item for item in analyzers.values())
+
+
+def test_a_truncated_diagnostic_counts_every_site_it_could_not_place(execution):
+    """Un diagnostic qui a vu plus de sites qu'il n'en liste : ceux qu'il ne situe pas ne sont pas restitués."""
+    from dataclasses import replace
+    truncated = [{**fact, 'diagnostic': {**fact['diagnostic'], 'sites_seen': len(fact['diagnostic']['sites']) + 3}}
+                 if fact.get('diagnostic') else fact for fact in execution.coverage]
+    before = execution.summary()['restitution']['sites_not_restituted']
+    after = replace(execution, coverage=tuple(truncated)).summary()['restitution']['sites_not_restituted']
+    assert after == before + 3 * sum(1 for fact in execution.coverage if fact.get('diagnostic'))

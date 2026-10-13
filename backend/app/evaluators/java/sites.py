@@ -85,6 +85,8 @@ class Site:
     line_end: int
     column_start: int
     column_end: int
+    # Le type construit, tel qu'écrit, pour une création (`new B()` → `B`) ; None sinon.
+    created: str | None = None
 
 
 def of(java_file):
@@ -110,9 +112,10 @@ class _Reader:
             if receiver == NAME and context == BODY:
                 variable, declaration = self._body(member).designated(node, written)
         arguments = tuple(_literal(item) for item in _named(node.child_by_field_name('arguments')))
+        created = _created(node) if form == CREATION else None
         return Site(owner, syntax.signature(member) if member is not None else None, context, form, name, receiver,
                     written, variable, declaration, arguments, node.start_point[0] + 1, node.end_point[0] + 1,
-                    node.start_point[1], node.end_point[1])
+                    node.start_point[1], node.end_point[1], created)
 
     def _place(self, node):
         """(type qualifie, noeud de la methode ou du constructeur, contexte) qui portent le site `node`."""
@@ -367,3 +370,14 @@ def _walk(node):
         current = pending.pop()
         yield current
         pending.extend(reversed(current.named_children))
+
+
+def _created(node):
+    """Le type qu'une création écrit (`new p.B<T>()` → `p.B`), sans arguments de type ; None s'il manque."""
+    written = node.child_by_field_name('type')
+    if written is None:
+        return None
+    base = written.child_by_field_name('type') if written.type == 'generic_type' else None
+    named = next((child for child in written.named_children
+                  if child.type in ('type_identifier', 'scoped_type_identifier')), None) if base is None else base
+    return _text(named if written.type == 'generic_type' and named is not None else written)
