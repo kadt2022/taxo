@@ -112,7 +112,8 @@ def test_when_taxo_knows_nothing_minia_says_so_without_asking_the_model(repo, as
 
 
 def test_a_permanent_unreadable_zone_does_not_wake_the_model(make_repo, git, ask, tmp_path):
-    repo = make_repo({'README.md': 'a\n', 'logo.bin': b'\xff\xfe\x00binaire'}, 'zone')
+    # Un texte d'un autre encodage (sans octet nul) : illisible en permanence, mais pas binaire (D4).
+    repo = make_repo({'README.md': 'a\n', 'logo.bin': b'\xff\xfebinaire'}, 'zone')
     (repo / 'README.md').write_text('b\n')
     sha = commit_all(git, repo, 'retouche')
     model = FakeModel('ne doit pas etre appele')
