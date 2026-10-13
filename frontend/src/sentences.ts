@@ -113,6 +113,8 @@ const RULES:Record<string, (subject:Entity, object:Entity, project?:Project)=>Se
   TYPED_AS:(subject, object)=>subject.type==='symbol'&&object.type==='symbol'
     ?[...noun(subject), symbolNoun(subject.key)==='la variable '?' est déclarée du type ':' est déclaré du type ',
       code(object)]:null,
+  TYPE_ARGUMENT:(subject, object)=>subject.type==='symbol'&&object.type==='symbol'
+    ?[...noun(subject), ' a pour argument de type ', code(object)]:null,
 };
 
 /** Le debut d'une phrase prend une majuscule ; elle se termine par un point. */

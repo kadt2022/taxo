@@ -20,6 +20,8 @@ RELATIONS = {
     'IMPLEMENTS': ({'symbol'}, {'symbol'}, {'OBSERVED', 'INFERRED'}),
     'EXTENDS': ({'symbol'}, {'symbol'}, {'OBSERVED'}),
     'TYPED_AS': ({'symbol'}, {'symbol'}, {'OBSERVED'}),
+    # Un argument de type écrit d'un champ, quand il est un type des sources (`Set<Enrollment>` → `Enrollment`).
+    'TYPE_ARGUMENT': ({'symbol'}, {'symbol'}, {'OBSERVED'}),
     'DISPATCHES_TO': ({'symbol'}, {'symbol'}, {'INFERRED'}),
     'HANDLED_BY': ({'endpoint'}, {'symbol'}, {'OBSERVED'}),
     'ACCEPTS': ({'endpoint'}, {'symbol'}, {'OBSERVED'}),

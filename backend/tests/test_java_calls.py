@@ -49,6 +49,7 @@ def test_the_declarations_are_exactly_those_of_the_oracle(execution):
     expected = {('CONTAINS', f"file:{item['file']}", item['type']) for item in ORACLE['declarations']}
     expected |= {('CONTAINS', item['type'], member) for item in ORACLE['declarations'] for member in item['members']}
     expected |= {('TYPED_AS', item['field'], item['type']) for item in ORACLE['typed_as']}
+    expected |= {('TYPE_ARGUMENT', item['field'], item['type']) for item in ORACLE['type_arguments']}
     expected |= {fact for item in ORACLE['variables'] for fact in (
         ('CONTAINS', item['method'], item['variable']), ('TYPED_AS', item['variable'], item['type']))}
     expected |= {('EXTENDS', item['subject'], item['object']) for item in ORACLE['extends']}

@@ -7,10 +7,12 @@ from app.evaluations.domain.evaluator import EvaluatorCatalog
 # et `TYPED_AS`, relations deja declarees. Le vocabulaire ne change pas, la version du catalogue non plus.
 # Version 2 (TAXO-MIP-ADT-01, PR A2) : les annotations ecrites des types et des methodes (ANNOTATED_WITH), relevees
 # sans interpretation. Une relation s'ajoute au catalogue : sa version change.
+# Version 3 : les arguments de type des champs qui sont des types des sources (TYPE_ARGUMENT : `Set<Enrollment>` mène
+# à `Enrollment`), écrits dans le code ; le conteneur n'est jamais interprété.
 CATALOG = EvaluatorCatalog(
     catalog_id='java-calls',
-    catalog_version='2',
-    relations=('ANNOTATED_WITH', 'CALLS', 'CONTAINS', 'EXTENDS', 'IMPLEMENTS', 'TYPED_AS'),
+    catalog_version='3',
+    relations=('ANNOTATED_WITH', 'CALLS', 'CONTAINS', 'EXTENDS', 'IMPLEMENTS', 'TYPED_AS', 'TYPE_ARGUMENT'),
     coverage_types=('ANALYSED', 'NOT_INTERPRETED', 'READ_ERROR'),
     # TAXO-COV-01 : ce catalogue ne lit que les sources Java.
     languages=('Java',),

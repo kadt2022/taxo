@@ -19,7 +19,7 @@ export type DomainId=typeof DOMAINS[number]['id'];
 const BY_RELATION:Record<string, DomainId>={HANDLED_BY:'api', SERVED_BY:'api',
   PROTECTED_BY:'securite', PERMITS_ALL:'securite', AUTHORIZED_BY:'securite', MATCHED_BY:'securite', CONFIGURES:'securite',
   DEPENDS_ON:'architecture', BUILT_FROM:'architecture',
-  CALLS:'architecture', IMPLEMENTS:'architecture', EXTENDS:'architecture', TYPED_AS:'architecture',
+  CALLS:'architecture', IMPLEMENTS:'architecture', EXTENDS:'architecture', TYPED_AS:'architecture', TYPE_ARGUMENT:'architecture',
   USES_TECHNOLOGY:'technologies', DECLARED_BY:'technologies', WRITTEN_IN:'fichiers', CONTAINS:'fichiers',
   HAS_COMMIT:'git', AUTHORED_BY:'git', CHILD_OF:'git', CHANGES:'git'};
 /** Les domaines que chaque evaluateur peut renseigner : un domaine sans evaluateur compare est « non analyse ». */
@@ -60,6 +60,7 @@ const NOUNS:Record<string, Noun>={
   IMPLEMENTS:{one:'implémentation', many:'implémentations', feminine:true},
   EXTENDS:{one:'héritage', many:'héritages'},
   TYPED_AS:{one:'type déclaré', many:'types déclarés'},
+  TYPE_ARGUMENT:{one:'argument de type', many:'arguments de type'},
 };
 const nounOf=(evaluator:string, relation:string):Noun=>NOUNS[`${evaluator}|${relation}`]??NOUNS[relation]
   ??{one:`fait « ${relation} »`, many:`faits « ${relation} »`};

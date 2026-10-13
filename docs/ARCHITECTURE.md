@@ -317,6 +317,7 @@ dans les champs textuels. Tout champ inconnu est refusé, en particulier tout ch
 | `IMPLEMENTS` | symbol → symbol | `OBSERVED` entre types, `INFERRED` entre méthodes (§ 14) | appels Java |
 | `EXTENDS` | symbol → symbol (entre types) | `OBSERVED` | appels Java |
 | `TYPED_AS` | symbol → symbol (champ, paramètre ou variable receveur → type déclaré des sources) | `OBSERVED` | appels Java |
+| `TYPE_ARGUMENT` | symbol → symbol (champ → argument de type direct écrit, s'il est un type des sources : `Set<Enrollment>` → `Enrollment` ; jamais le conteneur, ni un joker, ni une variable de type) | `OBSERVED` | appels Java |
 | `DISPATCHES_TO` | symbol → symbol | `INFERRED` (suspendu, § 14) | aucun |
 | `ACCEPTS`, `RETURNS` | endpoint → symbol | `OBSERVED` | aucun |
 
@@ -1121,7 +1122,8 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
      (`BUDGET`) ; la pièce passe toujours en premier. `field_context_scope` dit ce qui n'est pas suivi (champs
      hérités, autres usages, lambdas et classes locales) : une liste vide n'est jamais « aucun champ » ;
    - **chemins d'une méthode** (`uses`) : pour une méthode ou un constructeur servis, les références que la Maille
-     établit déjà, sans leur code : les méthodes appelées (`CALLS`) et le type des champs utilisés (`TYPED_AS`).
+     établit déjà, sans leur code : les méthodes appelées (`CALLS`), le type des champs utilisés (`TYPED_AS`) et
+     leurs arguments de type (`TYPE_ARGUMENT`).
      Au plus 20 (au-delà, `not_sent` `LIMIT`) ; `uses_scope` dit ce qui n'est pas suivi (appels non résolus, types
      hors des sources). Minia les reçoit comme des références : elle peut les lire, et la garde les proposer. Premier
      pas de la navigation inter-classes (§ 12.5), sans nouvelle analyse ;
