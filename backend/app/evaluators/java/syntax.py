@@ -102,6 +102,9 @@ class Field:
     # composant de record, celles du composant. 0 si inconnues.
     declaration_start: int = 0
     declaration_end: int = 0
+    # Les types des sources nommés par les arguments de type directs du type écrit (`Set<Enrollment>` →
+    # `com.x.Enrollment`), dans l'ordre ; un argument hors des sources, joker ou variable de type n'y figure pas.
+    type_arguments: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -411,9 +414,34 @@ class _Reader:
                 written = _type_name(member.child_by_field_name('type'))
                 variable = written.partition('.')[0] in variables
                 qualified = None if variable else self._type(written, owner)
-                fields += [_spanning(_field(declarator, written, qualified, variable), member)
+                arguments = self._type_arguments(member.child_by_field_name('type'), owner, variables)
+                fields += [replace(_spanning(_field(declarator, written, qualified, variable), member),
+                                   type_arguments=arguments)
                            for declarator in member.named_children if declarator.type == 'variable_declarator']
         return tuple(fields)
+
+    def _type_arguments(self, node, owner, variables):
+        """Les types des sources nommés par les arguments de type directs de `node` (`Map<K, V>` : K puis V), sans
+        doublon. Un joker (`? extends T`), une variable de type, un tableau ou un type hors des sources n'y figurent
+        pas : moins d'arguments, mais vrais."""
+        if node is None or node.type != 'generic_type':
+            return ()
+        listing = _first(node, ('type_arguments',))
+        found = []
+        for argument in (listing.named_children if listing is not None else ()):
+            if argument.type == 'annotated_type':
+                # Une annotation d'usage de type (`@Nullable Item`) ne change pas l'argument écrit.
+                argument = next((child for child in reversed(argument.named_children)
+                                 if child.type not in ('marker_annotation', 'annotation')), argument)
+            if argument.type not in ('type_identifier', 'scoped_type_identifier', 'generic_type'):
+                continue
+            written = _type_name(_base(argument))
+            if written.partition('.')[0] in variables:
+                continue
+            qualified = self._type(written, owner)
+            if qualified is not None and qualified not in found:
+                found.append(qualified)
+        return tuple(found)
 
     def _components(self, node, owner, variables):
         """Les champs des composants d'un record, dans l'ordre de l'en-tete (JLS 8.10.3) ; un composant variable
@@ -423,7 +451,8 @@ class _Reader:
                 written = _type_name(item.child_by_field_name('type'))
                 variable = written.partition('.')[0] in variables
                 yield replace(_spanning(_field(item, written, None if variable else self._type(written, owner),
-                                               variable), item), component=True)
+                                               variable), item), component=True,
+                              type_arguments=self._type_arguments(item.child_by_field_name('type'), owner, variables))
             elif item.type == 'spread_parameter':
                 declarator = next(child for child in item.named_children if child.type == 'variable_declarator')
                 written = _type_name(next(child for child in item.named_children if child.type not in (

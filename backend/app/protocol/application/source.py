@@ -22,7 +22,7 @@ from app.protocol.domain import source
 from app.protocol.domain.envelope import BUDGET_EXHAUSTED, INVALID_ARGUMENT, NO_CONSENT, NOT_AVAILABLE, OperationError
 
 _DECLARES = 'CONTAINS'
-_CALLS, _TYPED_AS = 'CALLS', 'TYPED_AS'
+_CALLS, _TYPED_AS, _TYPE_ARGUMENT = 'CALLS', 'TYPED_AS', 'TYPE_ARGUMENT'
 _SYMBOL = 'symbol:'
 _WHAT = 'source'
 
@@ -84,8 +84,8 @@ class SourceOperation:
         found = [{'relation': _CALLS, 'reference': fact['object']} for fact in self._facts(reference, _CALLS)]
         for name, _ in fields:
             field = f'{owner}#{name}'
-            found += [{'relation': _TYPED_AS, 'from': field, 'reference': fact['object']}
-                      for fact in self._facts(field, _TYPED_AS)]
+            found += [{'relation': relation, 'from': field, 'reference': fact['object']}
+                      for relation in (_TYPED_AS, _TYPE_ARGUMENT) for fact in self._facts(field, relation)]
         unique = list({(item['relation'], item.get('from'), item['reference']): item for item in found}.values())
         for item in unique[:source.MAX_USES]:
             response.add(source.USES, item)  # hors budget, chaque usage est compté dans `not_sent`

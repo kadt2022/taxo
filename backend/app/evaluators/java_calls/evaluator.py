@@ -37,7 +37,7 @@ PARSE_ERROR_REASON = 'Fichier Java lu en partie (erreur de syntaxe) : ses décla
 
 class JavaCallsEvaluator:
     evaluator_id = 'taxo.java-calls'
-    producer_version = '1.5.0'
+    producer_version = '1.6.0'
     catalog = CATALOG
     # Les lignes de la déclaration d'un symbole qu'il a déclaré : ce que lit `get_source` (TAXO-MIP-ADT-01, PR B).
     declaration_lines = staticmethod(source_range.declaration_lines)
@@ -132,6 +132,11 @@ class _Run:
             self.facts.declaration(symbol(qualified), 'CONTAINS', symbol(qualified, item.name), path, item.line)
             if item.qualified_type is not None:
                 self.facts.declaration(symbol(qualified, item.name), 'TYPED_AS', symbol(item.qualified_type), path,
+                                       item.line)
+            for argument in item.type_arguments:
+                # `Set<Enrollment> enrollments` : le champ est un `Set` (hors des sources), ses éléments des
+                # `Enrollment`. Écrit dans le code, jamais une interprétation du conteneur.
+                self.facts.declaration(symbol(qualified, item.name), 'TYPE_ARGUMENT', symbol(argument), path,
                                        item.line)
         for accessor in accessors.declarations(java_type):
             self.facts.accessor(symbol(qualified), symbol(qualified, accessor.signature), path, accessor.name_line,

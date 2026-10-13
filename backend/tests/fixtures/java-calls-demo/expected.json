@@ -97,6 +97,12 @@
       ]
     }
   ],
+  "type_arguments": [
+    {
+      "field": "symbol:java:com.example.demo.service.CourseCatalog#byTitle",
+      "type": "symbol:java:com.example.demo.model.Course"
+    }
+  ],
   "typed_as": [
     {
       "field": "symbol:java:com.example.demo.controller.CourseController#courseService",
