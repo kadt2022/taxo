@@ -17,6 +17,15 @@ def test_the_summary_counts_restituted_and_kept_sites(execution):
     assert kept == len(ORACLE['not_interpreted']), 'chaque site que l’oracle dit non interprété est compté'
 
 
+def test_a_truncated_diagnostic_counts_every_site_it_saw(execution):
+    from dataclasses import replace
+    truncated = [{**fact, 'diagnostic': {**fact['diagnostic'], 'sites_seen': len(fact['diagnostic']['sites']) + 3}}
+                 if fact.get('diagnostic') else fact for fact in execution.coverage]
+    before = execution.summary()['restitution']['sites_not_restituted']
+    after = replace(execution, coverage=tuple(truncated)).summary()['restitution']['sites_not_restituted']
+    assert after == before + 3 * sum(1 for fact in execution.coverage if fact.get('diagnostic'))
+
+
 def test_describe_gives_the_measure_of_each_analyzer(taxo):
     client, url = taxo
     described = exchange(client, url, ('describe', {}))['responses'][0]

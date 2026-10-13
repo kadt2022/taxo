@@ -43,12 +43,11 @@ class EvaluatorExecution:
         un sujet non lu est une couverture illisible, ou non interprétée sans site."""
         restituted = sum(1 for fact in self.facts for proof in fact.get('evidence', ())
                          if proof.get('role') == 'call-site')
-        kept = [((fact.get('diagnostic') or {}).get('sites') or ()) for fact in self.coverage
-                if fact['coverage_type'] == 'NOT_INTERPRETED']
+        # Un diagnostic peut ne lister qu'une partie des sites vus (`sites_seen`) : tous comptent.
+        kept = sum(_seen(fact.get('diagnostic')) for fact in self.coverage if fact['coverage_type'] == 'NOT_INTERPRETED')
         unread = sum(1 for fact in self.coverage if fact['coverage_type'] == 'READ_ERROR'
                      or (fact['coverage_type'] == 'NOT_INTERPRETED' and not (fact.get('diagnostic') or {}).get('sites')))
-        return {'sites_restituted': restituted, 'sites_not_restituted': sum(len(sites) for sites in kept),
-                'subjects_not_read': unread}
+        return {'sites_restituted': restituted, 'sites_not_restituted': kept, 'subjects_not_read': unread}
 
     def summary(self):
         coverage_counts = Counter()
@@ -101,3 +100,10 @@ class EvaluatorExecution:
             'coverage': list(self.coverage),
             'warnings': list(self.warnings),
         }
+
+
+def _seen(diagnostic):
+    """Les sites qu'un diagnostic a vus, listés ou non."""
+    if not diagnostic:
+        return 0
+    return max(diagnostic.get('sites_seen', 0), len(diagnostic.get('sites') or ()))
