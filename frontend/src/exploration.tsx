@@ -18,6 +18,8 @@ export type Statement =
   | {type:'interpretation'|'unknown'; text:string}
   | {type:'claim'; text:string; claim:Claim; verdict:string|null; reason?:string|null; error?:ProtocolError;
       facts?:{ref:string; fact:GitFact; evidence_count:number}[]; evidence?:Proof[]; limits?:Limit[];
+      // Une affirmation non prouvée : ce que Taxo établit pour le même sujet et la même relation.
+      known_objects?:string[];
       not_sent?:{what:string; count:number; reason:string}[]};
 /** Ce que Taxo n'a pas su lire sur le sujet ou l'objet d'une affirmation (TAXO-MINIA-SEC-01) : le verdict n'en dit rien. */
 export type Limit = {subject:string; type:string; producer:string|null; reason:string|null};
@@ -47,6 +49,9 @@ const unsentLimits=(statement:Extract<Statement,{type:'claim'}>)=>
 /** Une confirmation qui ne couvre pas tout : des limites jointes, ou comptees sans place pour les dire. */
 const limited=(statement:Extract<Statement,{type:'claim'}>)=>
   statement.verdict==='CONFIRMED'&&(Boolean(statement.limits?.length)||unsentLimits(statement)>0);
+
+/** Ce que Taxo établit pour le même sujet et la même relation, quand l'affirmation n'est pas prouvée. */
+export const knownText=(objects:string[])=>`Taxo établit pour ce sujet et cette relation : ${objects.map(item=>reference(item)).join(', ')}.`;
 
 const unsentText=(count:number)=>count>1?`Taxo connaît ${count} autres limites, non transmises faute de place.`
   :'Taxo connaît une autre limite, non transmise faute de place.';
@@ -170,6 +175,7 @@ export function Statements({statements, limits=[]}:Readonly<{statements:Statemen
         {item.limits?.length?<ul className="claim-limits">{item.limits.map(limit=><li key={`${limit.subject}:${limit.reason}`}>
           Taxo n’a pas lu : {limitText(limit)}</li>)}</ul>:null}
         {unsentLimits(item)?<p className="claim-limits">{unsentText(unsentLimits(item))}</p>:null}
+        {item.known_objects?.length?<p className="claim-limits">{knownText(item.known_objects)}</p>:null}
         <details className="proof"><summary>Ce que Taxo a vérifié</summary>
           <dl className="verified-claim">
             <div><dt>subject</dt><dd><code>{item.claim.subject}</code></dd></div>

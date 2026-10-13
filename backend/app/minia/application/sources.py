@@ -46,7 +46,7 @@ def noted(item):
 # Les champs où Taxo rend une référence (recherche, voisinage, faits et preuves d'une Tuile, pièce source). Jamais
 # un texte libre : le code d'une pièce ou un message de commit peut écrire n'importe quel symbole.
 _REFERENCE_FIELDS = frozenset({'reference', 'subject', 'object', 'symbol', 'premises', 'from', 'node', 'root',
-                               'subjects'})
+                               'subjects', 'known_objects'})
 
 
 def _references(value, field=None):

@@ -52,6 +52,9 @@ MIN_EXCHANGE_BYTES = ERROR_RESERVE + 6_000
 _ASSERTION, _LANGUAGES = 'ASSERTION', 'languages'
 # La déclaration d'un symbole par son conteneur (fichier, type) : la remontée qui situe un symbole dans son fichier.
 _DECLARES, _SYMBOL_PREFIX, _FILE_PREFIX, MAX_DECLARATION_DEPTH = 'CONTAINS', 'symbol:', 'file:', 8
+# Une affirmation non prouvée dit ce que Taxo établit pour le même sujet et la même relation (`known_objects`) : la
+# forme qu'il connaît (`annotation:PostMapping`, la méthode appelée plutôt que sa classe). Des faits, jamais un verdict.
+MAX_KNOWN_OBJECTS = 10
 # Les types de reference que le vocabulaire peut nommer, de part et d'autre de ses relations.
 _REFERENCE_TYPES = frozenset(kind for sources, targets, _ in RELATIONS.values() for kind in (*sources, *targets))
 NATURES = (_ASSERTION, 'ABSENCE', 'COVERAGE')
@@ -665,8 +668,11 @@ class Exchange:
                        if fact.get('validity', 'VALID') == 'VALID']
         verdict = judge(claim, established, self.knowledge(self.analyzers()), self.needed(subject))
         concerned = {subject, target} - {None}
+        known = sorted({fact['object'] for fact in established if fact.get('object') not in (None, target)})
+        unproven = verdict.verdict == 'NOT_PROVEN'
         response = self.response('verify_claim', self.envelope_coverage(relation, concerned), max_bytes,
-                                 claim=claim, verdict=verdict.verdict, reason=verdict.reason, limits=[])
+                                 claim=claim, verdict=verdict.verdict, reason=verdict.reason, limits=[],
+                                 **({'known_objects': []} if unproven else {}))
         # Les limites passent avant les faits, dans le budget : une raison longue ne coute jamais le verdict, et
         # une limite qui ne tient pas est comptee dans `not_sent`.
         limits = self.limits(relation, concerned, verdict.verdict, subject)
@@ -675,6 +681,11 @@ class Exchange:
                 response.skip('limits', len(limits) - index - 1)
                 break
         self.add_facts(response, list(verdict.facts), evidence=True)
+        if unproven:
+            for item in known[:MAX_KNOWN_OBJECTS]:
+                response.add('known_objects', item)
+            if len(known) > MAX_KNOWN_OBJECTS:
+                response.not_sent({'what': 'known_objects', 'count': len(known) - MAX_KNOWN_OBJECTS, 'reason': 'LIMIT'})
         return response
 
 
