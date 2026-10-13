@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {argumentText, claimText, limitText, proofText, refusals, returnedText, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
+import {argumentText, claimText, knownText, limitText, proofText, refusals, returnedText, stepText, Statements, Trajectory, verdictText, type Statement, type TrajectoryStep} from './exploration';
 import {MiniaProgress, reduceMinia, stageText, startMinia} from './minia-live';
 import {SelectionAnswerView, type SelectionAnswer} from './query';
 
@@ -249,5 +249,15 @@ describe('limites jointes au verdict (TAXO-MINIA-SEC-01)', ()=>{
   });
   it('une confirmation sans limite reste une confirmation', ()=>{
     expect(verdictText({...limited, limits:[]})).toBe('Confirmée par Taxo');
+  });
+});
+
+describe('affirmation non prouvée', ()=>{
+  it('dit ce que Taxo établit pour le même sujet et la même relation', ()=>{
+    expect(knownText(['annotation:PostMapping'])).toContain('Taxo établit pour ce sujet et cette relation');
+    expect(knownText(['annotation:PostMapping'], 3)).toContain('et 3 autres, non transmis');
+    const claim:Statement={type:'claim', text:'Annoté', claim:{subject:'symbol:java:a.B#c()', relation:'ANNOTATED_WITH',
+      object:'annotation:org.x.PostMapping'}, verdict:'NOT_PROVEN', known_objects:['annotation:PostMapping']};
+    expect(renderToStaticMarkup(<Statements statements={[claim]}/>)).toContain('Taxo établit pour ce sujet et cette relation');
   });
 });

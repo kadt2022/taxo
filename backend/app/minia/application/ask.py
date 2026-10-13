@@ -899,7 +899,8 @@ class AskMinia:
             verified.append({**statement, 'claim': response['claim'], 'verdict': response['verdict'],
                              'reason': response['reason'], 'facts': response['items'],
                              'evidence': response['evidence'], 'not_sent': response['not_sent'],
-                             'limits': response.get('limits', [])})
+                             'limits': response.get('limits', []),
+                             **({'known_objects': response['known_objects']} if response.get('known_objects') else {})})
         yield _stage('verification', 'done', 'Taxo vérifie les affirmations de Minia', claims)
         return verified
 
