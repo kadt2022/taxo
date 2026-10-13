@@ -28,6 +28,12 @@ FIELD_CONTEXT = 'field_context'
 MAX_FIELD_CONTEXT_BYTES = 1024
 FIELD_CONTEXT_LIMIT = 'FIELD_CONTEXT_LIMIT'
 RESOLVED = 'RESOLVED'
+# Les chemins qui partent d'une méthode lue (`uses`) : les références que la Maille établit déjà, sans leur code —
+# les méthodes qu'elle appelle (`CALLS`) et le type des champs qu'elle utilise (`TYPED_AS`). Bornés ; au-delà, comptés.
+USES = 'uses'
+MAX_USES = 20
+USES_SCOPE = {'covers': 'established-calls-and-field-types/1',
+              'not_followed': ['UNRESOLVED_CALLS', 'TYPES_OUTSIDE_THE_SOURCES', 'OTHER_FIELD_USES']}
 # Ce que le contexte couvre, et ce qu'il ne suit pas : jamais « aucun champ ».
 FIELD_CONTEXT_SCOPE = {'covers': 'own-fields-used-as-call-receivers/1',
                        'not_followed': ['INHERITED_FIELDS', 'OTHER_FIELD_USES', 'LAMBDAS_AND_LOCAL_CLASSES']}

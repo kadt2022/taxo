@@ -22,6 +22,7 @@ from app.protocol.domain import source
 from app.protocol.domain.envelope import BUDGET_EXHAUSTED, INVALID_ARGUMENT, NO_CONSENT, NOT_AVAILABLE, OperationError
 
 _DECLARES = 'CONTAINS'
+_CALLS, _TYPED_AS = 'CALLS', 'TYPED_AS'
 _SYMBOL = 'symbol:'
 _WHAT = 'source'
 
@@ -53,7 +54,8 @@ class SourceOperation:
         path = proof['path']
         found, reason, fields = self._read(reference, proof, producer)
         # Le contexte des champs n'accompagne qu'une méthode ou un constructeur servis : sa section, sa portée.
-        context = ({source.FIELD_CONTEXT: [], 'field_context_scope': source.FIELD_CONTEXT_SCOPE}
+        context = ({source.FIELD_CONTEXT: [], 'field_context_scope': source.FIELD_CONTEXT_SCOPE,
+                    source.USES: [], 'uses_scope': source.USES_SCOPE}
                    if found is not None and source.nature(reference) == 'METHOD' else {})
         response = self.exchange.response(
             'get_source', self.exchange.envelope_coverage(_DECLARES, {reference}), max_bytes, reference=reference,
@@ -73,7 +75,28 @@ class SourceOperation:
                                                    'max_bytes.')
         if context:
             _field_context(response, reference, fields)
+            self._uses(response, reference, fields)
         return response
+
+    def _uses(self, response, reference, fields):
+        """Les références où mène la méthode, établies par la Maille : ses appels, puis le type de ses champs."""
+        owner = reference.split('#', 1)[0]
+        found = [{'relation': _CALLS, 'reference': fact['object']} for fact in self._facts(reference, _CALLS)]
+        for name, _ in fields:
+            field = f'{owner}#{name}'
+            found += [{'relation': _TYPED_AS, 'from': field, 'reference': fact['object']}
+                      for fact in self._facts(field, _TYPED_AS)]
+        unique = list({(item['relation'], item.get('from'), item['reference']): item for item in found}.values())
+        for item in unique[:source.MAX_USES]:
+            response.add(source.USES, item)  # hors budget, chaque usage est compté dans `not_sent`
+        if len(unique) > source.MAX_USES:
+            response.not_sent({'what': source.USES, 'count': len(unique) - source.MAX_USES, 'reason': source.LIMIT})
+
+    def _facts(self, subject, relation):
+        """Les faits valides de la Maille pour ce sujet et cette relation, dans l'ordre de leur objet."""
+        return sorted((fact for fact in self.exchange.query(subject=subject, relation=relation, kind='ASSERTION')
+                       if fact.get('validity', 'VALID') == 'VALID' and fact.get('object')),
+                      key=lambda fact: fact['object'])
 
     def _declaration(self, reference):
         """La preuve de l'unique déclaration écrite du symbole, et l'analyseur qui l'a produite."""
