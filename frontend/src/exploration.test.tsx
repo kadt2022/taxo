@@ -27,6 +27,8 @@ describe('ce que Taxo a trouvé (témoin, D3)', ()=>{
     expect(foundText(refuted as Extract<Statement,{type:'claim'}>)).toBe('Taxo n’a rien trouvé pour ce sujet et cette relation (ce n’est pas une absence)');
     expect(foundText({...refuted, facts:confirmed.type==='claim'?confirmed.facts:[]} as Extract<Statement,{type:'claim'}>))
       .toBe('Pas trouvé sous cette forme ; Taxo a trouvé autre chose');
+    expect(foundText({...refuted, facts:[], not_sent:[{what:'items', count:2, reason:'BUDGET'}]} as Extract<Statement,{type:'claim'}>))
+      .toBe('Pas trouvé sous cette forme ; Taxo a trouvé autre chose');
     expect(foundText(malformed as Extract<Statement,{type:'claim'}>)).toBe('Non vérifiable : Relation hors du vocabulaire : Y.');
     expect(foundText({...malformed, error:undefined} as Extract<Statement,{type:'claim'}>)).toBe('Non vérifiable : Taxo n’a pas pu chercher.');
     for(const said of [confirmed, refuted, unproven, malformed])

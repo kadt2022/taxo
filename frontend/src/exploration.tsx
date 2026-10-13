@@ -38,7 +38,8 @@ export function foundText(statement:Extract<Statement,{type:'claim'}>){
     return `Non vérifiable : ${statement.error?.message??'Taxo n’a pas pu chercher.'}`;
   const inferred=statement.found&&statement.facts?.some(item=>item.fact.status==='INFERRED');
   const base=statement.found?(inferred?'Trouvé par Taxo, par déduction':'Trouvé par Taxo tel que demandé')
-    :statement.facts?.length?'Pas trouvé sous cette forme ; Taxo a trouvé autre chose'
+    // Des faits trouvés mais non transmis faute de place restent « autre chose », jamais « rien ».
+    :statement.facts?.length||unsentFacts(statement)>0?'Pas trouvé sous cette forme ; Taxo a trouvé autre chose'
     :'Taxo n’a rien trouvé pour ce sujet et cette relation (ce n’est pas une absence)';
   // Ce que Taxo a trouvé ne couvre pas ce qu'il n'a pas su lire : il le dit, au lieu de paraître complet.
   return limited(statement)?`${base}, avec limites`:base;
