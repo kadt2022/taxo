@@ -526,9 +526,12 @@ class Exchange:
         for kind, count in self.facts.families(self.scan.id):
             response.add('items', {'kind': 'family', 'type': kind, 'count': count, 'source': 'analysis-index'})
         for analyzer, evaluation in zip(self.analyzers(), self.evaluations):
-            response.add('items', {'kind': 'analyzer', 'analyzer': analyzer.analyzer_id,
-                                   'status': evaluation.get('status'), 'relations': sorted(analyzer.relations),
-                                   _LANGUAGES: analyzer.reads.listed()})
+            item = {'kind': 'analyzer', 'analyzer': analyzer.analyzer_id, 'status': evaluation.get('status'),
+                    'relations': sorted(analyzer.relations), _LANGUAGES: analyzer.reads.listed()}
+            if evaluation.get('restitution'):
+                # Ce que l'analyseur a restitué de ce qu'il a lu : une analyse antérieure à la mesure n'en dit rien.
+                item['restitution'] = evaluation['restitution']
+            response.add('items', item)
         present = {}
         for evaluation in self.evaluations:
             for relation, count in evaluation.get('relations', {}).items():
