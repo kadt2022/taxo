@@ -30,6 +30,11 @@ def test_a_binary_file_is_out_of_scope_with_its_reason(make_repo):
     assert validate_fact(out) is None
 
 
+def test_a_nul_byte_makes_a_binary_even_when_it_decodes_as_utf8(make_repo):
+    execution = run(make_repo, {'Hello.java': 'class Hello {}\n', 'data.dat': bytes([0]) + b'abc'})
+    assert coverage(execution, 'OUT_OF_SCOPE') == {'file:data.dat'}
+
+
 def test_a_binary_file_no_longer_makes_the_inventory_incomplete(make_repo):
     execution = run(make_repo, {'Hello.java': 'class Hello {}\n', 'gradle/wrapper.jar': BINARY})
     assert languages_complete(execution.summary())

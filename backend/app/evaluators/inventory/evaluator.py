@@ -104,13 +104,14 @@ class InventoryEvaluator:
             for next_file, (path, data) in enumerate(snapshot.read_many(f.path for f in readable), 1):
                 if next_file % PROGRESS_EVERY == 0 or next_file == len(readable):
                     progress('reading', 'Fichiers lus', next_file, len(readable))
+                if b'\x00' in data and binaries is not None:
+                    # Binaire selon la règle de Git, même si les octets se décodent en UTF-8 : jamais lu comme du texte.
+                    binaries.append(path)
+                    continue
                 try:
                     by_path[path] = self._evidence(snapshot, path, data, 'inventory.file')
                 except UnicodeDecodeError:
-                    if b'\x00' in data and binaries is not None:
-                        binaries.append(path)
-                    else:
-                        warnings.append(f'Fichier non UTF-8 non interprété : {path}')
+                    warnings.append(f'Fichier non UTF-8 non interprété : {path}')
                     continue
                 filename = PurePosixPath(path).name
                 if filename not in MANIFESTS:
