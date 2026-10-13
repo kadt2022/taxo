@@ -50,6 +50,8 @@ ERROR_RESERVE = MAX_OPERATIONS * MAX_ERROR_BYTES
 MIN_EXCHANGE_BYTES = ERROR_RESERVE + 6_000
 
 _ASSERTION, _LANGUAGES = 'ASSERTION', 'languages'
+# La déclaration d'un symbole par son conteneur (fichier, type) : la remontée qui situe un symbole dans son fichier.
+_DECLARES, _SYMBOL_PREFIX, _FILE_PREFIX, MAX_DECLARATION_DEPTH = 'CONTAINS', 'symbol:', 'file:', 8
 # Les types de reference que le vocabulaire peut nommer, de part et d'autre de ses relations.
 _REFERENCE_TYPES = frozenset(kind for sources, targets, _ in RELATIONS.values() for kind in (*sources, *targets))
 NATURES = (_ASSERTION, 'ABSENCE', 'COVERAGE')
@@ -291,9 +293,24 @@ class Exchange:
 
     def needed(self, subject):
         """Ou un sujet aurait pu etre etabli : les langages de son fichier ; sinon `None`, tous les langages
-        presents, et ceux des fichiers que l'inventaire n'a pas lus."""
-        if subject.startswith('file:'):
-            return present_languages(self.query(subject=subject, relation=WRITTEN_IN, kind=_ASSERTION))
+        presents, et ceux des fichiers que l'inventaire n'a pas lus. Un symbole est situé dans son fichier par ses
+        déclarations (`CONTAINS`), remontées sans ambiguïté : il ne dépend que des langages de ce fichier."""
+        located = self._declaring_file(subject) if subject.startswith(_SYMBOL_PREFIX) else subject
+        if located is not None and located.startswith(_FILE_PREFIX):
+            return present_languages(self.query(subject=located, relation=WRITTEN_IN, kind=_ASSERTION))
+        return None
+
+    def _declaring_file(self, symbol):
+        """Le fichier qui déclare `symbol`, en remontant ses conteneurs ; None s'il n'en a pas un seul."""
+        current = symbol
+        for _ in range(MAX_DECLARATION_DEPTH):
+            holders = {fact['subject'] for fact in self.query(relation=_DECLARES, object=current, kind=_ASSERTION)
+                       if fact.get('validity', 'VALID') == 'VALID'}
+            if len(holders) != 1:
+                return None
+            current = holders.pop()
+            if current.startswith(_FILE_PREFIX):
+                return current
         return None
 
     def analyzers(self):
