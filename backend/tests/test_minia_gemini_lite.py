@@ -67,3 +67,16 @@ def test_the_lite_model_asks_its_own_model_with_the_key_in_a_header():
 def test_the_first_gemini_model_keeps_its_identifier():
     assert GeminiModel.provider == 'gemini'
     assert GeminiLiteModel.provider == 'gemini-lite'
+
+
+def test_errors_of_the_lite_model_name_its_own_settings():
+    import pytest
+    from app.minia.domain.errors import MiniaError
+    with pytest.raises(ValueError, match='MINIA_GEMINI_LITE_TIER'):
+        GeminiLiteModel('gemini-3.1-flash-lite', tier='gratuit')
+    with pytest.raises(ValueError, match='MINIA_GEMINI_TIER'):
+        GeminiModel('gemini-3.5-flash', tier='gratuit')
+    missing = GeminiLiteModel('gemini-absent', api_key='cle-test',
+                              transport=httpx.MockTransport(lambda request: httpx.Response(404, json={})))
+    with pytest.raises(MiniaError, match='MINIA_GEMINI_LITE_MODEL'):
+        missing.complete('consignes', 'faits')

@@ -37,3 +37,14 @@ def test_the_second_model_is_the_same_adapter_with_the_same_protections():
 def test_the_second_model_can_be_the_default_provider(monkeypatch):
     monkeypatch.setenv('MINIA_CLAUDE_SONNET_MODEL', 'claude-sonnet-5-5')
     assert 'claude-sonnet' in minia_models(settings.minia(provider='claude-sonnet'))
+
+
+def test_an_unknown_model_error_names_the_setting_of_the_failing_model():
+    import anthropic
+    import httpx
+    from app.minia.infrastructure.claude import _failure
+    response = httpx.Response(404, request=httpx.Request('POST', 'https://api.anthropic.com/v1/messages'))
+    missing = anthropic.NotFoundError('absent', response=response, body=None)
+    sonnet = ClaudeSonnetModel('claude-sonnet-absent')
+    assert 'MINIA_CLAUDE_SONNET_MODEL' in str(_failure(missing, sonnet.model_name, sonnet.setting))
+    assert 'MINIA_CLAUDE_MODEL)' in str(_failure(missing, 'claude-absent', ClaudeModel.setting))
