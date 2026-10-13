@@ -98,6 +98,16 @@ def test_beyond_the_limit_the_rest_is_counted(taxo, monkeypatch):
     assert {'what': 'uses', 'count': 2, 'reason': 'LIMIT'} in response['not_sent']
 
 
+def test_every_use_beyond_the_operation_budget_is_counted(taxo):
+    client, url = taxo
+    full = read(client, url, ENROL)
+    body = {'requests': [{'operation': 'get_source', 'arguments': {'reference': ENROL},
+                          'max_bytes': full['bytes'] - 60}], 'consent': {'source': True}}
+    tight = client.post(url, json=body).json()['responses'][0]
+    counted = sum(item['count'] for item in tight['not_sent'] if item['what'] == 'uses')
+    assert len(tight['uses']) + counted == len(full['uses']), 'ce qui ne tient pas est compté, un par un'
+
+
 def test_minia_receives_the_uses_as_references(taxo):
     """Une référence de `uses` est « reçue de Taxo » : Minia peut la lire, et la garde peut la proposer."""
     response = read(*taxo, ENROL)
