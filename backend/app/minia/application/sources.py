@@ -209,8 +209,8 @@ def _cited(statement):
 
 def unread(statements, exchanged):
     """Pour une conclusion qui porte un « unknown » : les symboles reçus de Taxo dont la classe est citée par un de ses
-    énoncés et dont aucun code n'a été lu dans l'échange (ni la classe, ni un de ses membres). Une référence par classe,
-    selon `_chosen` ; seules des références reçues de Taxo, jamais une signature devinée. Deux classes de même nom
+    énoncés et dont aucun code n'a été lu dans l'échange (ni la classe, ni un de ses membres). Par classe, ce que
+    retient `_chosen` ; seules des références reçues de Taxo, jamais une signature devinée. Deux classes de même nom
     simple sont rendues toutes deux, jamais l'une choisie pour l'autre ; au plus MAX_RETURNED en tout."""
     if not any(statement['type'] == UNKNOWN for statement in statements):
         return []
