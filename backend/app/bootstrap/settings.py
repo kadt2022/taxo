@@ -47,6 +47,11 @@ def minia_max_calls(value=None):
     return int(value if value is not None else os.getenv('MINIA_MAX_CALLS', '8'))
 
 
+def minia_trace(value=None):
+    """Journal de développement des échanges dans la console (MINIA_TRACE) : off (défaut), summary ou full."""
+    return (value or os.getenv('MINIA_TRACE', 'off')).strip().lower()
+
+
 def minia_source_context(value=None):
     """Code source que Minia peut recevoir : `off` (defaut, aucun) ou `diff` (le diff d'un commit, sur
     accord de chaque demande). Avec un Ollama distant, `diff` fait sortir du code de la machine."""

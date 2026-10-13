@@ -34,6 +34,7 @@ from app.history.application.queries import ProjectHistory
 from app.history.application.recorded import RecordedImpact
 from app.history.infrastructure.git_history import GitHistoryReader
 from app.history.api.router import create_router as history_router
+from app.minia.application import trace
 from app.minia.application.ask import AskMinia
 from app.minia.application.investigation import Investigations, InvestigationSettings
 from app.minia.domain.investigation.identity import ExpiryPolicy
@@ -153,6 +154,8 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     api.include_router(mip_router(mip))
     # Minia explique a partir des faits de Taxo ; elle ne produit jamais de fait (ARCHITECTURE § 2, principe 5).
     # Plusieurs fournisseurs peuvent servir Minia (Ollama local, Claude distant) : chaque demande choisit.
+    # Le journal de développement des échanges, dans la console (MINIA_TRACE, désactivé par défaut).
+    trace.configure(settings.minia_trace())
     options = settings.minia()
     models = minia_models(options) if minia is _FROM_SETTINGS else minia
     default = options['provider'] if minia is _FROM_SETTINGS and options['provider'] in models else None

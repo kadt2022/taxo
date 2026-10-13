@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
-from app.minia.application import anchoring, investigation, sources, tiles
+from app.minia.application import anchoring, investigation, sources, tiles, trace
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
 from app.minia.domain.investigation import conversation
@@ -248,6 +248,7 @@ def _packet(fallback, trajectory):
 def _step(operation, arguments, response):
     """Une etape de la trajectoire, telle que l'humain la voit : l'operation, ses arguments, l'issue, la
     taille du resultat et ce qui n'a pas ete transmis (ARCHITECTURE § 12.5)."""
+    trace.taxo(operation, arguments, response)  # le journal de développement, s'il est actif (MINIA_TRACE)
     entry = {'operation': operation, 'arguments': arguments, 'outcome': response['outcome'],
              'bytes': response['bytes']}
     if response['outcome'] == 'OK':
@@ -731,6 +732,7 @@ class AskMinia:
                     # Un inconnu sur un code lisible jamais lu : la conclusion revient une fois au modèle, sans
                     # appel à Taxo ni tour compté ; il lit le code ou garde son inconnu.
                     guarded = unread
+                    trace.note(f'GARDE conclusion renvoyée : {", ".join(unread)}')
                     exchanged.append(sources.returned(unread))
                     continue
                 key = sources.key(step, exchanged)
