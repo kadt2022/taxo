@@ -127,3 +127,38 @@ def test_a_reference_cited_by_a_claim_comes_before_a_named_method():
 def test_a_longer_method_name_is_not_the_named_method():
     said = unknown('Le code de EnrollmentRepository.saveAll n’a pas été lu.')
     assert sources.unread([said], SEARCHED) == [REPOSITORY]
+
+
+def test_an_overloaded_method_is_never_chosen_the_class_covers_it():
+    overload = f'{REPOSITORY}#save(Enrollment)'
+    searched = [{**SEARCHED[0], 'response': {'outcome': 'OK', 'items': [
+        *SEARCHED[0]['response']['items'], {'reference': overload}]}}]
+    said = unknown('Le code de EnrollmentRepository.save n’a pas été examiné.')
+    assert sources.unread([said], searched) == [REPOSITORY]
+
+
+def test_overloads_without_their_class_are_all_shown_never_one_chosen():
+    overload = f'{REPOSITORY}#save(Enrollment)'
+    searched = [{'operation': 'find_references', 'arguments': {},
+                 'response': {'outcome': 'OK', 'items': [{'reference': SAVE}, {'reference': overload},
+                                                         {'reference': FIND_ALL}]}}]
+    found = sources.unread([unknown('EnrollmentRepository.save n’a pas été lu.')], searched)
+    assert sorted(found) == sorted([SAVE, overload]), 'les deux surcharges reçues, ni une seule, ni findAll'
+
+
+def test_a_method_name_alone_without_its_class_does_not_trigger():
+    assert sources.unread([unknown('Le code de save n’a pas été lu.')], SEARCHED) == []
+
+
+def test_two_classes_with_the_same_simple_name_are_both_returned_never_one_for_the_other():
+    other = 'symbol:java:com.legacy.EnrollmentRepository'
+    searched = [{**SEARCHED[0], 'response': {'outcome': 'OK', 'items': [
+        *SEARCHED[0]['response']['items'], {'reference': other}]}}]
+    found = sources.unread([unknown('Le code de EnrollmentRepository.save n’a pas été examiné.')], searched)
+    assert found == [SAVE, other]
+
+
+def test_a_class_already_read_is_never_returned_whatever_the_method_named():
+    read = [*SEARCHED, {'operation': 'get_source', 'arguments': {'reference': FIND_ALL},
+                        'response': {'outcome': 'OK', 'items': []}}]
+    assert sources.unread([unknown('EnrollmentRepository.save n’a pas été examiné.')], read) == []

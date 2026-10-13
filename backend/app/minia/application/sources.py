@@ -181,15 +181,24 @@ def _mentions(name, texts):
     return any(re.search(rf'(?<![\w$]){re.escape(name)}(?![\w$])', text) for text in texts)
 
 
-def _rank(reference, texts):
-    """L'ordre de préférence d'une référence pour sa classe : citée telle quelle par une affirmation, puis la méthode
-    nommée `Classe.méthode` dans un texte, puis la classe, puis un autre membre."""
-    if reference in texts:
-        return 0
-    if '#' not in reference:
-        return 2
-    member = reference.split('#', 1)[1].split('(', 1)[0]
-    return 1 if _mentions(f'{_simple(reference)}.{member}', texts) else 3
+def _member(reference):
+    """Le nom du membre d'une référence (`…#save(Long,Long)` → `save`), ou None pour une classe."""
+    return reference.split('#', 1)[1].split('(', 1)[0] if '#' in reference else None
+
+
+def _chosen(references, texts):
+    """Ce que la garde propose pour une classe, parmi ses références reçues : celle qu'une affirmation cite, sinon la
+    seule méthode nommée `Classe.méthode`, sinon la classe, sinon toutes les candidates (les surcharges nommées, ou
+    les membres reçus) : une ambiguïté est montrée, jamais tranchée au hasard."""
+    cited = sorted(reference for reference in references if reference in texts)
+    if cited:
+        return cited[:1]
+    named = sorted(reference for reference in references if _member(reference) is not None
+                   and _mentions(f'{_simple(reference)}.{_member(reference)}', texts))
+    if len(named) == 1:
+        return named
+    classes = [reference for reference in references if _member(reference) is None]
+    return classes or named or sorted(references)
 
 
 def _cited(statement):
@@ -201,7 +210,8 @@ def _cited(statement):
 def unread(statements, exchanged):
     """Pour une conclusion qui porte un « unknown » : les symboles reçus de Taxo dont la classe est citée par un de ses
     énoncés et dont aucun code n'a été lu dans l'échange (ni la classe, ni un de ses membres). Une référence par classe,
-    la première selon `_rank`."""
+    selon `_chosen` ; seules des références reçues de Taxo, jamais une signature devinée. Deux classes de même nom
+    simple sont rendues toutes deux, jamais l'une choisie pour l'autre ; au plus MAX_RETURNED en tout."""
     if not any(statement['type'] == UNKNOWN for statement in statements):
         return []
     texts = [text for statement in statements for text in _cited(statement)]
@@ -211,11 +221,10 @@ def unread(statements, exchanged):
     known = {reference for item in exchanged for reference in _discovered(item)
              if reference.startswith('symbol:') and nature(reference) != 'MEMBER'}
     by_owner = {}
-    for reference in sorted(known, key=lambda value: (_rank(value, texts), value)):
-        owner = _owner(reference)
-        if owner not in read and _mentions(_simple(reference), texts):
-            by_owner.setdefault(owner, reference)
-    return [by_owner[owner] for owner in sorted(by_owner)][:MAX_RETURNED]
+    for reference in known:
+        if _owner(reference) not in read and _mentions(_simple(reference), texts):
+            by_owner.setdefault(_owner(reference), []).append(reference)
+    return [reference for owner in sorted(by_owner) for reference in _chosen(by_owner[owner], texts)][:MAX_RETURNED]
 
 
 def returned(references):
