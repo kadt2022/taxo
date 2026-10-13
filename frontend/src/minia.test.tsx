@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {CodeConsent, codeConsent, gaps, gitFile, withheldNote, MiniaChoice, MiniaView, modelLabel, providerLabel, providerName, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
+import {CodeConsent, codeConsent, gaps, gitFile, withheldNote, checkedTuning, LimitsChoice, MiniaChoice, MiniaView, modelLabel, providerLabel, providerName, remoteNote, withProvider, named, place, sentence, SourceConsent, sourceConsent, sourceSummary, type MiniaAnswer, type MiniaStatus} from './minia';
 
 const answer:MiniaAnswer={status:'ANSWERED', question:'Pourquoi cette route n’est plus publique ?', commit:'b'.repeat(40),
   parent:'a'.repeat(40), project:{id:'p-1', name:'Demo-IAM'}, files_not_sent:0,
@@ -261,5 +261,35 @@ describe('confidentialité (TAXO-MINIA-SEC-01)', ()=>{
   it('avertit que les auteurs partent sous pseudonyme vers un service distant', ()=>{
     expect(remoteNote({configured:true, provider:'claude', model:'m', source_context:'off', remote:true}))
       .toContain('les auteurs y sont remplacés par des pseudonymes');
+  });
+});
+
+describe('réglages de l’exploration (essais)', ()=>{
+  const limits={max_calls:12, max_calls_range:[1, 15] as [number,number], max_bytes:64000, max_bytes_range:[16000, 200000] as [number,number]};
+  const configured={configured:true, provider:'claude', model:'claude-haiku', source_context:'off' as const, remote:true, limits};
+  it('propose le nombre d’opérations et le budget, bornés, avec les réglages du serveur en indication', ()=>{
+    const html=renderToStaticMarkup(<LimitsChoice id="l" status={configured} value={{}} onChange={()=>undefined}/>);
+    expect(html).toContain('Opérations');
+    expect(html).toContain('min="1"');
+    expect(html).toContain('max="15"');
+    expect(html).toContain('placeholder="12"');
+    expect(html).toContain('Budget (octets)');
+    expect(html).toContain('max="200000"');
+    expect(html).toContain('placeholder="64000"');
+  });
+  it('n’envoie que des valeurs entières dans les bornes, et dit quand une valeur est hors bornes', ()=>{
+    expect(checkedTuning({max_calls:12, max_bytes:100000}, limits)).toEqual({max_calls:12, max_bytes:100000});
+    expect(checkedTuning({max_calls:0, max_bytes:1000}, limits)).toEqual({});
+    expect(checkedTuning({max_calls:2.5, max_bytes:100000}, limits)).toEqual({max_bytes:100000});
+    expect(checkedTuning({max_calls:12}, undefined)).toEqual({});
+    expect(renderToStaticMarkup(<LimitsChoice id="l" status={configured} value={{max_calls:99}} onChange={()=>undefined}/>))
+      .toContain('hors bornes');
+    expect(renderToStaticMarkup(<LimitsChoice id="l" status={configured} value={{max_calls:12}} onChange={()=>undefined}/>))
+      .not.toContain('hors bornes');
+  });
+  it('affiche la valeur choisie, et rien sans Minia ni bornes', ()=>{
+    expect(renderToStaticMarkup(<LimitsChoice id="l" status={configured} value={{max_calls:10}} onChange={()=>undefined}/>)).toContain('value="10"');
+    expect(renderToStaticMarkup(<LimitsChoice id="l" status={null} value={{}} onChange={()=>undefined}/>)).toBe('');
+    expect(renderToStaticMarkup(<LimitsChoice id="l" status={{...configured, limits:undefined}} value={{}} onChange={()=>undefined}/>)).toBe('');
   });
 });

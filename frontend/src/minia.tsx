@@ -19,13 +19,19 @@ export type AnswerModel = {configured?:boolean; provider:string|null; model:stri
 export const modelLabel=(model:AnswerModel)=>model.model
   ?` · ${model.provider} ${model.model}${model.fallback_from?` (repli de ${model.fallback_from})`:''}`:'';
 export type MiniaStatus = {configured:boolean; provider:string|null; model:string|null; source_context:'off'|'diff'; remote:boolean;
-  data_use?:boolean; providers?:MiniaProvider[]; source_reading?:'off'|'symbol'};
+  data_use?:boolean; providers?:MiniaProvider[]; source_reading?:'off'|'symbol'; limits?:ExplorationLimits};
+/** Les réglages d'une exploration proposés par le serveur, et leurs bornes. */
+export type ExplorationLimits = {max_calls:number; max_calls_range:[number,number]; max_bytes:number; max_bytes_range:[number,number]};
+/** Ce que l'utilisateur fixe pour une demande d'essai ; vide, les réglages du serveur s'appliquent. */
+export type Tuning = {max_calls?:number; max_bytes?:number};
 export type MiniaAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'; question:string; commit:string; parent:string|null;
   project:{id:string; name:string}; git:GitCommit; files_not_sent:number; source_context?:SourceContext;
   model:AnswerModel; facts:CitedFact[]; answer:string; unknown:string;
   not_interpreted:string[]; failures:string[]; facts_not_sent:number; rejected_citations:string[];
   // MINIA-09b : en exploration, des enonces types et la trajectoire ; en repli, le paquet dit pourquoi.
   mode?:'exploration'|'paquet'|'taxo'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string;
+  // La garde de conclusion : les références lisibles renvoyées une fois à Minia.
+  returned?:string[];
   // TAXO-MINIA-SEC-01 : ce que Taxo a retenu avant l'envoi au modele, compte, jamais montre.
   withheld?:Withheld};
 /** Valeurs retenues par Taxo avant l'envoi au modele : identites pseudonymisees, secrets masques, trailers retires. */
@@ -128,6 +134,37 @@ export function MiniaChoice({status, value, onChange, id}:Readonly<{status:Minia
   </>;
 }
 
+const tuned=(raw:string)=>raw.trim()===''?undefined:Number(raw);
+const inside=(value:number|undefined, range:[number,number])=>value!==undefined&&Number.isInteger(value)&&value>=range[0]&&value<=range[1];
+
+/** Ce qui part avec la demande : seulement les valeurs entières dans les bornes du serveur ; une valeur hors bornes
+ * n'est jamais envoyée (le réglage du serveur s'applique, et le formulaire le dit). */
+export function checkedTuning(tuning:Tuning, limits?:ExplorationLimits):Tuning{
+  if(!limits)return {};
+  return {...(inside(tuning.max_calls,limits.max_calls_range)?{max_calls:tuning.max_calls}:{}),
+    ...(inside(tuning.max_bytes,limits.max_bytes_range)?{max_bytes:tuning.max_bytes}:{})};
+}
+
+const outside=(value:Tuning, limits:ExplorationLimits)=>
+  (value.max_calls!==undefined&&!inside(value.max_calls,limits.max_calls_range))
+  ||(value.max_bytes!==undefined&&!inside(value.max_bytes,limits.max_bytes_range));
+
+/** Le nombre d'opérations et le budget de l'échange pour une demande d'essai, dans les bornes du serveur ; un champ
+ * vide garde le réglage du serveur, affiché en indication. */
+export function LimitsChoice({status, value, onChange, id}:Readonly<{status:MiniaStatus|null; value:Tuning; onChange:(value:Tuning)=>void; id:string}>){
+  const limits=status?.limits;
+  if(!status?.configured||!limits)return null;
+  return <fieldset className="minia-limits"><legend>Réglages de l’exploration (essais)</legend>
+    <label htmlFor={`${id}-calls`}>Opérations</label>
+    <input id={`${id}-calls`} type="number" min={limits.max_calls_range[0]} max={limits.max_calls_range[1]} step={1}
+      placeholder={String(limits.max_calls)} value={value.max_calls??''} onChange={e=>onChange({...value, max_calls:tuned(e.target.value)})}/>
+    <label htmlFor={`${id}-bytes`}>Budget (octets)</label>
+    <input id={`${id}-bytes`} type="number" min={limits.max_bytes_range[0]} max={limits.max_bytes_range[1]} step={1000}
+      placeholder={String(limits.max_bytes)} value={value.max_bytes??''} onChange={e=>onChange({...value, max_bytes:tuned(e.target.value)})}/>
+    {outside(value,limits)?<p className="warning">Valeur hors bornes : le réglage du serveur s’applique.</p>:null}
+  </fieldset>;
+}
+
 /** La case d'accord : proposee seulement si le reglage l'autorise ; decochee et signalee si le modele est distant. */
 export function sourceConsent(status:MiniaStatus|null){
   if(!status?.configured||status.source_context!=='diff')return null;
@@ -194,7 +231,7 @@ export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
     <p className="minia-question">{answer.question}</p>
     <CommitFacts git={answer.git}/>
     <Statements statements={answer.statements} limits={limits}/>
-    <Trajectory steps={answer.trajectory??[]}/>
+    <Trajectory steps={answer.trajectory??[]} returned={answer.returned}/>
     <footer>Minia a interrogé Taxo opération par opération à partir de ce que Git sait du commit ; Taxo a vérifié chacune de ses affirmations. Le diff n’est lu que sur double accord, jamais le reste du dépôt, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
   return <section className="minia" aria-label="Réponse de Minia">
@@ -225,7 +262,7 @@ export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
         {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée par Taxo.</p>}
       </article>
     </div>
-    <Trajectory steps={answer.trajectory??[]}/>
+    <Trajectory steps={answer.trajectory??[]} returned={answer.returned}/>
     <footer>{diff?'Minia a reçu ce que Git sait du commit, les faits de Taxo, leurs preuves, la couverture et les blocs modifiés du diff, jamais le reste du dépôt.'
       :'Minia ne lit ni le dépôt ni le code : elle ne reçoit que ce que Git sait du commit (sans contenu), les faits de Taxo, leurs preuves et la couverture.'} Sa réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;

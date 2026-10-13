@@ -171,6 +171,9 @@ group('actions', ()=>{
     expect(JSON.parse(askInit('Pourquoi ?').body as string)).toEqual({question:'Pourquoi ?'});
     expect(JSON.parse(askInit('Pourquoi ?', 'claude').body as string)).toEqual({question:'Pourquoi ?', provider:'claude'});
     expect(JSON.parse(askInit('Pourquoi ?', '', true).body as string)).toEqual({question:'Pourquoi ?', source:true});
+    expect(JSON.parse(askInit('Pourquoi ?', '', false, {max_calls:12, max_bytes:100000}).body as string))
+      .toEqual({question:'Pourquoi ?', max_calls:12, max_bytes:100000});
+    expect(JSON.parse(askInit('Pourquoi ?', '', false, {}).body as string)).toEqual({question:'Pourquoi ?'});
   });
   it('sélectionne, puis fait expliquer la sélection au fil de l’eau', async ()=>{
     const run=vi.fn().mockResolvedValueOnce(selection);

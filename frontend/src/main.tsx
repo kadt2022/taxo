@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import './style.css';
 import {diffFactsPath, linksFor} from './links';
 import {CHANGE_LABELS, DiffView, type DiffFacts, type FactChange, type FileDiff} from './diff';
-import {MiniaChoice, MiniaView, SourceConsent, sourceConsent, withProvider, type MiniaAnswer, type MiniaStatus} from './minia';
+import {checkedTuning, LimitsChoice, MiniaChoice, MiniaView, SourceConsent, sourceConsent, withProvider, type MiniaAnswer, type MiniaStatus, type Tuning} from './minia';
 import {ConsultForm} from './consult';
 import {impactSource, notComparable, type ImpactOrigin} from './history';
 import {panelKey} from './overview';
@@ -24,7 +24,7 @@ function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:Minia
   const [commits,setCommits]=useState<Commit[]>([]), [detail,setDetail]=useState<CommitDetail|null>(null);
   const [impact,setImpact]=useState<Impact|null>(null),  [fileDiff,setFileDiff]=useState<FileDiff|null>(null), [links,setLinks]=useState<DiffFacts|null>(null), [question,setQuestion]=useState(''), [live,setLive]=useState<MiniaLive<MiniaAnswer>|null>(null), [consulted,setConsulted]=useState(false), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const base=`/projects/${projectId}/history/commits`;
-  const [provider,setProvider]=useState(''), [source,setSource]=useState(false);
+  const [provider,setProvider]=useState(''), [source,setSource]=useState(false), [tuning,setTuning]=useState<Tuning>({});
   const chosen=withProvider(minia,provider);
   // Un fournisseur distant decoche l'accord pour le diff ; un fournisseur local le coche.
   useEffect(()=>{setSource(sourceConsent(chosen)?.checked??false);},[chosen?.provider,chosen?.source_context]);
@@ -65,7 +65,7 @@ function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:Minia
     const run=createStop();
     stopper.current=run;
     setBusy(true);setError('');setLive(null);
-    try{await askMinia<MiniaAnswer>(()=>openStream(`/api${base}/${sha}/ask/stream`,{...questionInit({question,parent,source_context:source&&sourceConsent(chosen)!==null,provider:provider||undefined}), signal:run.signal}),change=>{if(token===latest.current)setLive(l=>change(l??startMinia()));},run);}
+    try{await askMinia<MiniaAnswer>(()=>openStream(`/api${base}/${sha}/ask/stream`,{...questionInit({question,parent,source_context:source&&sourceConsent(chosen)!==null,provider:provider||undefined, ...checkedTuning(tuning, minia?.limits)}), signal:run.signal}),change=>{if(token===latest.current)setLive(l=>change(l??startMinia()));},run);}
     catch(e){if(token===latest.current)setError((e as Error).message);}
     finally{if(token===latest.current)setBusy(false);}
   }
@@ -100,6 +100,7 @@ function HistoryPanel({projectId, minia}:Readonly<{projectId:string; minia:Minia
         <textarea id="minia-question" rows={2} maxLength={1000} value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Que change ce commit, et est-ce risqué ?"/>
         <MiniaChoice id="minia-provider" status={minia} value={provider} onChange={setProvider}/>
         <SourceConsent status={chosen} checked={source} onChange={setSource}/>
+        <LimitsChoice id="minia-limits" status={minia} value={tuning} onChange={setTuning}/>
         <button type="submit" className="secondary" disabled={busy||!question.trim()}>{askButton(busy&&live!==null&&!live.result,'Demander à Minia')}</button>
       </form>
       {live?.result?.commit===detail.commit.sha?<MiniaView answer={live.result}/>:live&&!live.result&&<MiniaProgress live={live} onStop={()=>stopper.current?.stop()}/>}
