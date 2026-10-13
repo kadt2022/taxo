@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
+from app.minia.application import trace
 from app.minia.domain.cancellation import check
 from app.minia.domain.errors import (CONFIDENTIALITY_REFUSED, INVESTIGATION_EXPIRED, INVESTIGATION_STALE, NOTE_REFUSED,
                                      MiniaError)
@@ -229,6 +230,7 @@ class _Run:
                                       'resumable': self.state.investigation.resumable}
         try:
             describe = self.exchange.call({'operation': 'describe', 'arguments': {}})
+            trace.taxo('describe', {}, describe)
             self.operations = _offered(describe, self.mip_offer)
             self.offered = {item['operation'] for item in self.operations}
             final = yield from self._turns()
@@ -320,6 +322,7 @@ class _Run:
             return request if room is None else {**request, 'max_bytes': max(room, 1)}
         check(self.cancel)
         response = self.turn.serve(self.exchange, step, bounded, space, self.received)
+        trace.taxo(step.operation, step.arguments, response)
         delivery = Delivery(self._delivery_id(), responses.mip_reference(step.operation, step.arguments, response),
                             responses.delivery_kind(step.operation), self.owner.clock())
         record = OperationRecord(step.operation, step.arguments,

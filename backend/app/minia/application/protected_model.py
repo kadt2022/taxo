@@ -8,6 +8,8 @@ ne depend donc ni des consignes du modele, ni de l'endroit ou le message a ete c
 """
 import inspect
 
+from app.minia.application import trace
+
 
 def _accepts(method, name):
     try:
@@ -39,8 +41,12 @@ class ProtectedModel:
 
     def complete(self, system, user, schema=None, cancel=None):
         protected = self.disclosure.protect(user)
-        return self._model.complete(system, protected, **self._options(self._model.complete, schema, cancel))
+        trace.sent(self._model, system, protected)
+        reply = self._model.complete(system, protected, **self._options(self._model.complete, schema, cancel))
+        return trace.received(self._model, reply)
 
     def _stream(self, system, user, schema=None, cancel=None):
         protected = self.disclosure.protect(user)
-        return self._model.stream(system, protected, **self._options(self._model.stream, schema, cancel))
+        trace.sent(self._model, system, protected)
+        return trace.streamed(self._model, self._model.stream(system, protected,
+                                                             **self._options(self._model.stream, schema, cancel)))
