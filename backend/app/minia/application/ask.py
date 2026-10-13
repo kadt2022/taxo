@@ -13,6 +13,7 @@ Chaque demande se deroule en etapes reelles (TAXO-UX-02) : selection des faits, 
 interpretation. Quand le fournisseur sait diffuser sa reponse, le texte provisoire arrive au fil de l'eau ;
 la reponse definitive, citations validees, n'est rendue qu'a la fin.
 """
+import copy
 import inspect
 import re
 import threading
@@ -59,6 +60,9 @@ _REUSED_NOTE = ('Même opération, mêmes arguments : la réponse du tour {} res
 # pour la question, la liste des operations et l'enveloppe de chaque tour.
 EXCHANGE_BYTES = 64_000
 EXCHANGE_MARGIN = 4096
+# Le budget réglable d'un échange (MINIA_EXCHANGE_BYTES, ou par demande) : borné ici, puis par Taxo et par la fenêtre du
+# modèle ; la réponse dit le budget réellement appliqué (`budget.max_bytes`).
+MIN_EXCHANGE_SETTING, MAX_EXCHANGE_SETTING = 16_000, 200_000
 _EXPLORATION_FAILURES = frozenset({INVALID_ANSWER, CONTEXT_TOO_LARGE})
 # Chaque reponse de Taxo est bornee a la place qui reste dans la fenetre du modele au tour suivant (moins
 # l'enveloppe du tour) ; sous ROOM_TO_CONTINUE octets, Minia doit conclure avec ce qu'elle a.
@@ -311,6 +315,11 @@ def _view(model):
             'data_use': bool(getattr(model, 'data_use', False))}
 
 
+def _within(value, low, high):
+    """Un entier (jamais un booléen) entre `low` et `high`."""
+    return isinstance(value, int) and not isinstance(value, bool) and low <= value <= high
+
+
 def _unanchored(resolution):
     """Ce que Taxo dit quand la question ne nomme pas un seul élément : quoi préciser, jamais un choix."""
     if resolution.status == anchors.NONE:
@@ -330,12 +339,15 @@ class AskMinia:
     """
 
     def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None,
-                 taxo_query=None, mip=None, investigations=None, max_calls=MAX_CALLS):
+                 taxo_query=None, mip=None, investigations=None, max_calls=MAX_CALLS, exchange_bytes=EXCHANGE_BYTES):
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
-        if not isinstance(max_calls, int) or not 1 <= max_calls <= MAX_ALLOWED_CALLS:
+        if not _within(max_calls, 1, MAX_ALLOWED_CALLS):
             raise ValueError(f'MINIA_MAX_CALLS invalide : {max_calls} (de 1 à {MAX_ALLOWED_CALLS}).')
-        self.max_calls = max_calls
+        if not _within(exchange_bytes, MIN_EXCHANGE_SETTING, MAX_EXCHANGE_SETTING):
+            raise ValueError(f'MINIA_EXCHANGE_BYTES invalide : {exchange_bytes} '
+                             f'(de {MIN_EXCHANGE_SETTING} à {MAX_EXCHANGE_SETTING}).')
+        self.max_calls, self.exchange_bytes = max_calls, exchange_bytes
         self.history, self.projects, self.query = history, projects, query
         # Protocole Taxo (ARCHITECTURE § 12) : sans lui, Minia recoit toujours un paquet de contexte.
         self.taxo_query = taxo_query
@@ -370,6 +382,25 @@ class AskMinia:
         cancel.cancel()
         return True
 
+    def limited(self, max_calls=None, max_bytes=None):
+        """Minia pour une demande dont l'utilisateur fixe le nombre d'opérations ou le budget de l'échange (essais),
+        dans les mêmes bornes que les réglages du serveur ; une valeur absente garde celle du serveur."""
+        if max_calls is not None and not _within(max_calls, 1, MAX_ALLOWED_CALLS):
+            raise MiniaError(INVALID_QUESTION, f'max_calls : de 1 à {MAX_ALLOWED_CALLS} opérations.')
+        if max_bytes is not None and not _within(max_bytes, MIN_EXCHANGE_SETTING, MAX_EXCHANGE_SETTING):
+            raise MiniaError(INVALID_QUESTION, f'max_bytes : de {MIN_EXCHANGE_SETTING} à {MAX_EXCHANGE_SETTING} octets.')
+        if max_calls is None and max_bytes is None:
+            return self
+        chosen = copy.copy(self)
+        chosen.max_calls = self.max_calls if max_calls is None else max_calls
+        chosen.exchange_bytes = self.exchange_bytes if max_bytes is None else max_bytes
+        return chosen
+
+    def limits(self):
+        """Les réglages d'une exploration et leurs bornes, pour que le portail les propose."""
+        return {'max_calls': self.max_calls, 'max_calls_range': [1, MAX_ALLOWED_CALLS],
+                'max_bytes': self.exchange_bytes, 'max_bytes_range': [MIN_EXCHANGE_SETTING, MAX_EXCHANGE_SETTING]}
+
     def status(self):
         """Etat de Minia : fournisseur par defaut, fournisseurs disponibles ; `remote` dit si ce qu'elle recoit
         quitte la machine de Taxo."""
@@ -379,9 +410,9 @@ class AskMinia:
         reading = getattr(self.taxo_query, 'source_reading', source_context.OFF)
         if self.default is None:
             return {'configured': False, 'provider': None, 'model': None, 'source_context': self.source,
-                    'source_reading': reading, 'remote': False, 'providers': providers}
+                    'source_reading': reading, 'remote': False, 'providers': providers, 'limits': self.limits()}
         return {'configured': True, **_view(self.models[self.default]), 'source_context': self.source,
-                'source_reading': reading, 'providers': providers}
+                'source_reading': reading, 'providers': providers, 'limits': self.limits()}
 
     def _protected(self, provider, project_id):
         """Le modele de la demande, derriere sa propre protection : tout message y passe avant le fournisseur.
@@ -415,11 +446,11 @@ class AskMinia:
                              f'(disponibles : {", ".join(self.models)}).')
         return self.models[name]
 
-    @classmethod
-    def _exchange_bytes(cls, model):
-        """Budget d'un echange d'exploration pour ce modele."""
-        capacity = cls._capacity(model, exploration.SYSTEM)
-        return EXCHANGE_BYTES if capacity is None else max(min(EXCHANGE_BYTES, capacity - EXCHANGE_MARGIN), 1)
+    def _exchange_bytes(self, model):
+        """Budget d'un echange d'exploration pour ce modele : le réglage, jamais plus que sa fenêtre."""
+        capacity = self._capacity(model, exploration.SYSTEM)
+        wanted = self.exchange_bytes
+        return wanted if capacity is None else max(min(wanted, capacity - EXCHANGE_MARGIN), 1)
 
     @staticmethod
     def _capacity(model, system):

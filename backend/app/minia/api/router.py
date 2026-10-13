@@ -28,6 +28,9 @@ class Question(BaseModel):
     source_context: bool = False
     # Fournisseur choisi pour cette demande (ollama, claude...) ; celui par defaut sinon.
     provider: str | None = None
+    # Essais : nombre d'operations et budget de l'echange pour cette demande ; ceux du serveur sinon.
+    max_calls: int | None = None
+    max_bytes: int | None = None
 
 
 class ProjectQuestion(BaseModel):
@@ -36,6 +39,9 @@ class ProjectQuestion(BaseModel):
     # Accord de la demande pour que Minia lise le code d'un symbole (get_source) ; sans effet si
     # TAXO_SOURCE_READING vaut off.
     source: bool = False
+    # Essais : nombre d'operations et budget de l'echange pour cette demande ; ceux du serveur sinon.
+    max_calls: int | None = None
+    max_bytes: int | None = None
 
 
 class InvestigationRequest(BaseModel):
@@ -115,20 +121,23 @@ def create_router(minia):
 
     @router.post('/api/projects/{project_id}/history/commits/{sha}/ask', responses=_ERRORS)
     def ask(project_id: str, sha: str, body: Question):
-        return minia.about_commit(project_id, sha, body.question, body.parent, body.source_context, body.provider)
+        return minia.limited(body.max_calls, body.max_bytes).about_commit(
+            project_id, sha, body.question, body.parent, body.source_context, body.provider)
 
     @router.post('/api/projects/{project_id}/history/commits/{sha}/ask/stream', responses=_ERRORS)
     def ask_stream(project_id: str, sha: str, body: Question):
         cancel = Cancellation()
-        return _stream(minia, minia.about_commit_events(project_id, sha, body.question, body.parent,
-                                                        body.source_context, body.provider, cancel=cancel), cancel)
+        chosen = minia.limited(body.max_calls, body.max_bytes)
+        return _stream(minia, chosen.about_commit_events(project_id, sha, body.question, body.parent,
+                                                         body.source_context, body.provider, cancel=cancel), cancel)
 
     @router.post('/api/projects/{project_id}/ask/stream', responses={
         **_ERRORS, 409: {'description': 'Aucune analyse globale pour ce projet.'}})
     def ask_project_stream(project_id: str, body: ProjectQuestion):
         cancel = Cancellation()
-        return _stream(minia, minia.about_project_events(project_id, body.question, body.provider, cancel=cancel,
-                                                                  source=body.source),
+        chosen = minia.limited(body.max_calls, body.max_bytes)
+        return _stream(minia, chosen.about_project_events(project_id, body.question, body.provider, cancel=cancel,
+                                                          source=body.source),
                        cancel)
 
     @router.get('/api/projects/{project_id}/elements', responses={

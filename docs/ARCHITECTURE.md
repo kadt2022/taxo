@@ -1043,6 +1043,9 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   qu'elle a et dit ce qui manque. Le nombre d'opérations que Minia choisit est réglable (`MINIA_MAX_CALLS`, défaut 8,
   de 1 à 15) ; les vérifications d'affirmations viennent en plus, dans la limite de 20 opérations de l'échange : une
   affirmation qui n'y tient plus est rendue `NOT_VERIFIED`, jamais tue ni confirmée.
+  Le budget d'un échange est réglable aussi (`MINIA_EXCHANGE_BYTES`, défaut 64 000, de 16 000 à 200 000), jamais plus
+  que la fenêtre du modèle. Pour les essais, une demande peut fixer les deux (`max_calls`, `max_bytes`) dans ces
+  bornes ; le statut les propose au portail, et la réponse dit le budget réellement appliqué (`budget.max_bytes`).
 - **Répétition bornée.** Une opération redemandée à l'identique n'est pas rejouée : si sa réponse est un
   résultat ou un refus de configuration (`NOT_AVAILABLE`, `NO_CONSENT`), Minia reçoit un renvoi vers le tour
   d'origine (issue, jamais la réponse recopiée), au plus `MAX_REPEATS` (2) fois par exploration. Chaque

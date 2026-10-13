@@ -47,6 +47,12 @@ def minia_max_calls(value=None):
     return int(value if value is not None else os.getenv('MINIA_MAX_CALLS', '8'))
 
 
+def minia_exchange_bytes(value=None):
+    """Le budget d'un échange d'exploration, en octets (MINIA_EXCHANGE_BYTES, défaut 64 000) ; jamais plus que la
+    fenêtre du modèle."""
+    return int(value if value is not None else os.getenv('MINIA_EXCHANGE_BYTES', '64000'))
+
+
 def minia_source_context(value=None):
     """Code source que Minia peut recevoir : `off` (defaut, aucun) ou `diff` (le diff d'un commit, sur
     accord de chaque demande). Avec un Ollama distant, `diff` fait sortir du code de la machine."""
