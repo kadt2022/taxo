@@ -42,6 +42,13 @@ def test_from_a_route_to_its_handler_application_and_authorizations(taxo_on):
         (2, 'route-pattern:/**', 'AUTHORIZED_BY', 'authenticated()'),
         (2, 'route-pattern:/**', 'AUTHORIZED_BY', 'hasRole("ADMIN")')]
     assert found['stop_reason'] == 'ADJACENCY_COMPLETE'
+    # Deux chaines ecrivent `/**` : Taxo rend les deux regles, chacune avec sa chaine ; le MATCHED_BY dit laquelle
+    # capture la route. Le lecteur relie les deux, Taxo ne trie pas (D5).
+    chains = {(item['fact']['relation'], item['fact'].get('object')): item['fact']['qualifiers']['filter_chain']
+              for item in found['items'] if item['fact']['relation'] in ('MATCHED_BY', 'AUTHORIZED_BY')}
+    shop = 'symbol:java:com.acme.security.ShopSecurity#chain(HttpSecurity)'
+    assert chains[('MATCHED_BY', 'route-pattern:/**')] == chains[('AUTHORIZED_BY', 'authenticated()')] == shop
+    assert chains[('AUTHORIZED_BY', 'hasRole("ADMIN")')] == 'symbol:java:com.acme.admin.AdminSecurity#chain(HttpSecurity)'
     assert [node['reference'] for node in found['node_details']][0] == ORDERS
     assert all(item['occurrence'] for item in found['items'])
 

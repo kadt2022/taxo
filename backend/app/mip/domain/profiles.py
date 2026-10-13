@@ -100,6 +100,8 @@ SECURITY = _profile('security', {'endpoint'}, 2, (
 ), limits=(
     'Parcours documentaire : il ne démontre pas que la route est protégée.',
     'CONFIGURES et ANNOTATED_WITH ne sont pas suivis par cette version du profil.',
+    'Un motif écrit dans plusieurs chaînes de filtres rend les règles de chacune : seule la règle dont '
+    'qualifiers.filter_chain est celui du MATCHED_BY appartient à la chaîne qui capture la route.',
 ), version=2)
 
 PROFILES = {profile.identifier: profile for profile in (METHOD_CONTEXT, CALLS, STRUCTURE, SECURITY)}
