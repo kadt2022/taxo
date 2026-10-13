@@ -51,7 +51,12 @@ const limited=(statement:Extract<Statement,{type:'claim'}>)=>
   statement.verdict==='CONFIRMED'&&(Boolean(statement.limits?.length)||unsentLimits(statement)>0);
 
 /** Ce que Taxo établit pour le même sujet et la même relation, quand l'affirmation n'est pas prouvée. */
-export const knownText=(objects:string[])=>`Taxo établit pour ce sujet et cette relation : ${objects.map(item=>reference(item)).join(', ')}.`;
+export const knownText=(objects:string[], omitted=0)=>`Taxo établit pour ce sujet et cette relation : ${objects.map(item=>reference(item)).join(', ')}${
+  omitted?` et ${omitted} autre${omitted>1?'s':''}, non transmis`:''}.`;
+
+/** Les objets connus que la réponse n'a pas pu transmettre (plafond ou budget) : comptés, jamais tus. */
+const unsentKnown=(statement:Extract<Statement,{type:'claim'}>)=>
+  statement.not_sent?.filter(item=>item.what==='known_objects').reduce((total,item)=>total+item.count,0)??0;
 
 const unsentText=(count:number)=>count>1?`Taxo connaît ${count} autres limites, non transmises faute de place.`
   :'Taxo connaît une autre limite, non transmise faute de place.';
@@ -175,7 +180,7 @@ export function Statements({statements, limits=[]}:Readonly<{statements:Statemen
         {item.limits?.length?<ul className="claim-limits">{item.limits.map(limit=><li key={`${limit.subject}:${limit.reason}`}>
           Taxo n’a pas lu : {limitText(limit)}</li>)}</ul>:null}
         {unsentLimits(item)?<p className="claim-limits">{unsentText(unsentLimits(item))}</p>:null}
-        {item.known_objects?.length?<p className="claim-limits">{knownText(item.known_objects)}</p>:null}
+        {item.known_objects?.length?<p className="claim-limits">{knownText(item.known_objects, unsentKnown(item))}</p>:null}
         <details className="proof"><summary>Ce que Taxo a vérifié</summary>
           <dl className="verified-claim">
             <div><dt>subject</dt><dd><code>{item.claim.subject}</code></dd></div>

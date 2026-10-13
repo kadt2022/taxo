@@ -255,6 +255,7 @@ describe('limites jointes au verdict (TAXO-MINIA-SEC-01)', ()=>{
 describe('affirmation non prouvée', ()=>{
   it('dit ce que Taxo établit pour le même sujet et la même relation', ()=>{
     expect(knownText(['annotation:PostMapping'])).toContain('Taxo établit pour ce sujet et cette relation');
+    expect(knownText(['annotation:PostMapping'], 3)).toContain('et 3 autres, non transmis');
     const claim:Statement={type:'claim', text:'Annoté', claim:{subject:'symbol:java:a.B#c()', relation:'ANNOTATED_WITH',
       object:'annotation:org.x.PostMapping'}, verdict:'NOT_PROVEN', known_objects:['annotation:PostMapping']};
     expect(renderToStaticMarkup(<Statements statements={[claim]}/>)).toContain('Taxo établit pour ce sujet et cette relation');
