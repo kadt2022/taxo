@@ -18,11 +18,15 @@ MAX_FILES = 50000
 MAX_MANIFEST_BYTES = 1024 * 1024
 # Frequence des nouvelles de lecture : assez pour paraitre vivant, sans inonder le flux.
 PROGRESS_EVERY = 250
+# Un fichier binaire (un octet nul, comme le reconnaît Git) n'a aucun texte à lire : il est recensé, dit hors du
+# périmètre de lecture (`OUT_OF_SCOPE`), et ne rend pas l'inventaire incomplet. Un texte d'un autre encodage, lui, peut
+# cacher du code : il reste non interprété.
+BINARY_REASON = 'Fichier binaire : aucun texte à lire.'
 
 
 class InventoryEvaluator:
     evaluator_id = 'taxo.inventory'
-    producer_version = '0.1.0'
+    producer_version = '0.2.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
@@ -41,7 +45,8 @@ class InventoryEvaluator:
                 kind = 'Manifeste' if PurePosixPath(file.path).name in MANIFESTS else 'Fichier'
                 warnings.append(f'{kind} trop volumineux : {file.path}')
         readable = tuple(f for f in files if f.size <= MAX_MANIFEST_BYTES)
-        by_path, read_error_subjects = self._read_contents(snapshot, readable, observed, warnings, progress)
+        binaries = []
+        by_path, read_error_subjects = self._read_contents(snapshot, readable, observed, warnings, progress, binaries)
         repository = f'repository:{snapshot.repository}'
         facts = self._facts(files, by_path, observed, repository)
         file_paths = {f.path for f in files}
@@ -53,6 +58,8 @@ class InventoryEvaluator:
             path = warning.rsplit(': ', 1)[-1]
             if path in file_paths:
                 coverage.append(self._coverage(f'file:{path}', 'NOT_INTERPRETED', f'file:{path}'))
+        for path in binaries:
+            coverage.append({**self._coverage(f'file:{path}', 'OUT_OF_SCOPE', f'file:{path}'), 'reason': BINARY_REASON})
         for subject in read_error_subjects:
             coverage.append(self._coverage(subject, 'READ_ERROR', subject))
         status = EvaluationStatus.PARTIAL if read_error_subjects else EvaluationStatus.SUCCESS
@@ -89,7 +96,7 @@ class InventoryEvaluator:
             files.append(file)
         return tuple(files), excluded, invalid_paths
 
-    def _read_contents(self, snapshot, readable, observed, warnings, progress=silent):
+    def _read_contents(self, snapshot, readable, observed, warnings, progress=silent, binaries=None):
         by_path = {}
         read_error_subjects = ()
         next_file = 0
@@ -100,7 +107,10 @@ class InventoryEvaluator:
                 try:
                     by_path[path] = self._evidence(snapshot, path, data, 'inventory.file')
                 except UnicodeDecodeError:
-                    warnings.append(f'Fichier non UTF-8 non interprété : {path}')
+                    if b'\x00' in data and binaries is not None:
+                        binaries.append(path)
+                    else:
+                        warnings.append(f'Fichier non UTF-8 non interprété : {path}')
                     continue
                 filename = PurePosixPath(path).name
                 if filename not in MANIFESTS:
