@@ -1,0 +1,42 @@
+{
+  "contract_version": 1,
+  "kind": "ASSERTION",
+  "status": "OBSERVED",
+  "validity": "VALID",
+  "subject": "symbol:java:com.example.demo.config.SecurityConfig#securityFilterChain(HttpSecurity)",
+  "relation": "WRITES_CALL",
+  "qualifiers": {
+    "form": "METHOD",
+    "arguments": 1,
+    "name": "csrf",
+    "receiver": "http"
+  },
+  "snapshot": {
+    "repository": "taxo",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "COMMIT"
+  },
+  "evidence": [
+    {
+      "repository": "taxo",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "src/main/java/com/example/demo/config/SecurityConfig.java",
+      "method": "java.call-site",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "line_start": 24,
+      "line_end": 24,
+      "column_start": 8,
+      "column_end": 40,
+      "role": "call-site",
+      "symbol": "symbol:java:com.example.demo.config.SecurityConfig#securityFilterChain(HttpSecurity)"
+    }
+  ],
+  "produced_by": {
+    "producer_type": "EVALUATOR",
+    "producer_id": "taxo.java-calls",
+    "producer_version": "1.8.0",
+    "execution_id": "fixture",
+    "catalog_id": "java-calls",
+    "catalog_version": "4"
+  }
+}

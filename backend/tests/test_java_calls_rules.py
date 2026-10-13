@@ -223,7 +223,7 @@ def test_a_call_on_a_parameter_follows_its_declared_type():
         'CONTAINS : symbol:java:p.B -> symbol:java:p.B#f()']
     assert ('A#g(B)', 'A#g(B)/b') in declared(execution, 'CONTAINS')
     assert ('A#g(B)/b', 'B') in declared(execution, 'TYPED_AS')
-    [contains] = [fact for fact in execution.facts if fact['object'] == 'symbol:java:p.A#g(B)/b']
+    [contains] = [fact for fact in execution.facts if fact.get('object') == 'symbol:java:p.A#g(B)/b']
     assert contains['status'] == 'OBSERVED' and contains['evidence'][0]['line_start'] == 3
 
 
@@ -268,7 +268,7 @@ def test_a_variable_of_an_external_or_unwritten_type_has_no_call(body, why, rece
     [site] = sites(execution).values()
     assert (site['reason'], site.get('receiver_type')) == (why, receiver_type)
     assert not calls(execution) and not declared(execution, 'TYPED_AS')
-    assert not any('/' in fact['object'] for fact in execution.facts)
+    assert not any('/' in fact.get('object', '') for fact in execution.facts)
 
 
 def test_a_variable_whose_call_is_not_established_writes_no_declaration():
@@ -581,3 +581,13 @@ def test_an_accessor_with_arguments_or_of_an_unknown_component_has_no_target():
                     java('R', 'record R(int x) {}'))
     assert not calls(execution)
     assert [reason(execution, 'A#g()', name) for name in ('x', 'y')] == ['NO_MATCHING_DECLARATION'] * 2
+
+
+def test_each_constructor_call_is_written_with_the_type_it_creates():
+    """D1 : `new B()` et `new C()` dans une même méthode sont deux appels écrits, chacun avec son type."""
+    execution = run(java('A', 'class A { void g() { new B(); new C(); new B(); } }'),
+                    java('B', 'class B { }'), java('C', 'class C { }'))
+    written = [fact for fact in execution.facts if fact['relation'] == 'WRITES_CALL']
+    names = sorted((fact['qualifiers']['name'], len(fact['evidence'])) for fact in written)
+    assert names == [('B', 2), ('C', 1)], 'deux B : un fait, deux preuves ; C : un autre fait'
+    assert all(fact['qualifiers']['form'] == 'CREATION' for fact in written)
