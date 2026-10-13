@@ -13,6 +13,8 @@ déclaration dans la Maille, au commit de l'analyse. Le code n'est transmis que 
 Sinon, la réponse dit pourquoi rien n'est transmis (`not_sent`), et sa classification n'annonce aucun code. Rien de ce
 qui est lu n'est conservé. Le protocole ne connaît aucun langage : la plage vient de l'analyseur.
 """
+import json
+
 from app.facts import content_hash
 from app.history.domain.disclosure import GENERATED, generated
 from app.protocol.application.arguments import no_other, reference as _reference
@@ -49,12 +51,15 @@ class SourceOperation:
         proof, producer = self._declaration(reference)
         commit = self.exchange.snapshot['commit']
         path = proof['path']
-        found, reason = self._read(reference, proof, producer)
+        found, reason, fields = self._read(reference, proof, producer)
+        # Le contexte des champs n'accompagne qu'une méthode ou un constructeur servis : sa section, sa portée.
+        context = ({source.FIELD_CONTEXT: [], 'field_context_scope': source.FIELD_CONTEXT_SCOPE}
+                   if found is not None and source.nature(reference) == 'METHOD' else {})
         response = self.exchange.response(
             'get_source', self.exchange.envelope_coverage(_DECLARES, {reference}), max_bytes, reference=reference,
             commit=commit, path=path,
             classification=source.classify(reference, self.exchange.snapshot, path, producer, found is not None),
-            disclosure=source.disclosure(found is not None))
+            disclosure=source.disclosure(found is not None), **context)
         if found is None:
             response.not_sent({'what': _WHAT, 'reason': reason})
             return response
@@ -66,6 +71,8 @@ class SourceOperation:
             # Une classification qui annoncerait un code absent serait fausse : la réponse n'est pas servie.
             raise OperationError(BUDGET_EXHAUSTED, 'Cette pièce source ne tient pas dans le budget : augmenter '
                                                    'max_bytes.')
+        if context:
+            _field_context(response, reference, fields)
         return response
 
     def _declaration(self, reference):
@@ -93,21 +100,51 @@ class SourceOperation:
         return proof, producer
 
     def _read(self, reference, proof, producer):
-        """La pièce source, ou None et la raison de ne pas la transmettre."""
+        """La pièce source, ou None et la raison de ne pas la transmettre ; et les pièces des champs qu'elle utilise."""
         path = proof['path']
         if generated(path):
-            return None, GENERATED
+            return None, GENERATED, ()
         content, reason = self.history.source(self.exchange.project_id, proof['commit'], path)
         if content is None:
-            return None, reason
+            return None, reason, ()
         try:
             unchanged = content_hash(content, proof['line_start'], proof['line_end']) == proof['content_hash']
         except ValueError:
             unchanged = False
         if not unchanged:
-            return None, source.CHANGED
+            return None, source.CHANGED, ()
         lines = self.readers[producer](path, content, reference)
         if lines is None or lines.name_line != proof['line_start']:
-            return None, source.NOT_DECLARED
+            return None, source.NOT_DECLARED, ()
         found = source.piece(content, lines.line_start, lines.line_end)
-        return (found, None) if found is not None else (None, source.LIMIT)
+        if found is None:
+            return None, source.LIMIT, ()
+        # Un champ n'est joint que si sa déclaration se lit en entier : une déclaration partielle reste None, comptée.
+        fields = ((item.name, source.piece(content, item.line_start, item.line_end))
+                  for item in getattr(lines, 'fields', ()))
+        return found, None, tuple((name, piece if piece is not None and not piece.truncated else None)
+                                  for name, piece in fields)
+
+
+def _field_context(response, reference, fields):
+    """Les déclarations des champs utilisés, dans leur section et sous leur plafond ; le reste est compté. Un champ
+    est lu dans le fichier de la pièce (`path` de la réponse) : il ne le répète pas."""
+    owner, used, refused = reference.split('#', 1)[0], 0, 0
+    partial = sum(1 for _, piece in fields if piece is None)
+    for name, piece in fields:
+        if piece is None:
+            continue
+        item = {'field': f'{owner}#{name}', 'line_start': piece.line_start, 'line_end': piece.line_end,
+                'content_hash': piece.content_hash, 'resolution': source.RESOLVED, 'text': piece.text}
+        cost = len(json.dumps(item, ensure_ascii=False).encode('utf-8'))
+        if refused or used + cost > source.MAX_FIELD_CONTEXT_BYTES:
+            refused += 1
+            continue
+        if not response.add(source.FIELD_CONTEXT, item):
+            continue
+        used += cost
+    if partial:
+        # Une déclaration plus longue que les limites d'une pièce n'est jamais jointe coupée, ni tue.
+        response.not_sent({'what': source.FIELD_CONTEXT, 'count': partial, 'reason': source.LIMIT})
+    if refused:
+        response.not_sent({'what': source.FIELD_CONTEXT, 'count': refused, 'reason': source.FIELD_CONTEXT_LIMIT})
