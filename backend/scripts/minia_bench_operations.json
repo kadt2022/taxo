@@ -1,0 +1,260 @@
+{
+  "banc": "student-course-demo",
+  "commit": "01163f17c1729a02ecce18e0b77c4f16469f50b9",
+  "origine": "Sous-ensemble du banc de référence pour TAXO-MINIA-OPS-01 (notes d'usage des opérations) : les questions 5, 9 et 13 du banc, et la question 19 sur la route HTTP qui liste les étudiants. Sa réponse attendue est prise dans la vérité du banc (security_truth : la route GET /api/students et la méthode StudentController#getStudents()) ; elle n'a pas été relue dans les sources du dépôt de démonstration, absent de l'environnement où ce fichier a été écrit.",
+  "security_relations": [
+    "PROTECTED_BY",
+    "AUTHORIZED_BY",
+    "PERMITS_ALL",
+    "CONFIGURES"
+  ],
+  "security_annotations": [
+    "org.springframework.security."
+  ],
+  "security_truth": [
+    [
+      "endpoint:GET /api/courses",
+      "PROTECTED_BY",
+      "policy-rule:authenticated()"
+    ],
+    [
+      "endpoint:GET /api/courses/{id}",
+      "PROTECTED_BY",
+      "policy-rule:authenticated()"
+    ],
+    [
+      "endpoint:GET /api/courses/{id}/eligible-students",
+      "PROTECTED_BY",
+      "policy-rule:authenticated()"
+    ],
+    [
+      "endpoint:POST /api/courses",
+      "PROTECTED_BY",
+      "policy-rule:authenticated()"
+    ],
+    [
+      "endpoint:POST /api/courses",
+      "PROTECTED_BY",
+      "policy-rule:hasAnyRole('ADMIN','TEACHER')"
+    ],
+    [
+      "endpoint:POST /api/enrollments",
+      "PROTECTED_BY",
+      "policy-rule:authenticated()"
+    ],
+    [
+      "endpoint:POST /api/enrollments",
+      "PROTECTED_BY",
+      "policy-rule:hasAnyRole('ADMIN','TEACHER')"
+    ],
+    [
+      "endpoint:GET /api/enrollments/student/{studentId}",
+      "PROTECTED_BY",
+      "policy-rule:authenticated()"
+    ],
+    [
+      "endpoint:GET /api/enrollments/student/{studentId}",
+      "PROTECTED_BY",
+      "policy-rule:hasAnyRole('ADMIN','TEACHER','STUDENT')"
+    ],
+    [
+      "endpoint:GET /api/students",
+      "PROTECTED_BY",
+      "policy-rule:authenticated()"
+    ],
+    [
+      "endpoint:GET /api/students",
+      "PROTECTED_BY",
+      "policy-rule:hasAnyRole('ADMIN','TEACHER')"
+    ],
+    [
+      "endpoint:GET /api/students/{id}",
+      "PROTECTED_BY",
+      "policy-rule:authenticated()"
+    ],
+    [
+      "endpoint:GET /api/students/{id}",
+      "PROTECTED_BY",
+      "policy-rule:hasAnyRole('ADMIN','TEACHER','STUDENT')"
+    ],
+    [
+      "endpoint:POST /api/students",
+      "PROTECTED_BY",
+      "policy-rule:authenticated()"
+    ],
+    [
+      "endpoint:POST /api/students",
+      "PROTECTED_BY",
+      "policy-rule:hasRole('ADMIN')"
+    ],
+    [
+      "route-pattern:/api/courses/**",
+      "AUTHORIZED_BY",
+      "authenticated()"
+    ],
+    [
+      "route-pattern:/api/**",
+      "AUTHORIZED_BY",
+      "authenticated()"
+    ],
+    [
+      "route-pattern:/**",
+      "PERMITS_ALL",
+      null
+    ],
+    [
+      "symbol:java:com.example.school.controller.CourseController#createCourse(CreateCourseRequest)",
+      "AUTHORIZED_BY",
+      "hasAnyRole('ADMIN','TEACHER')"
+    ],
+    [
+      "symbol:java:com.example.school.controller.EnrollmentController#enroll(Long,Long)",
+      "AUTHORIZED_BY",
+      "hasAnyRole('ADMIN','TEACHER')"
+    ],
+    [
+      "symbol:java:com.example.school.controller.EnrollmentController#getStudentEnrollments(Long)",
+      "AUTHORIZED_BY",
+      "hasAnyRole('ADMIN','TEACHER','STUDENT')"
+    ],
+    [
+      "symbol:java:com.example.school.controller.StudentController#getStudents()",
+      "AUTHORIZED_BY",
+      "hasAnyRole('ADMIN','TEACHER')"
+    ],
+    [
+      "symbol:java:com.example.school.controller.StudentController#getStudent(Long)",
+      "AUTHORIZED_BY",
+      "hasAnyRole('ADMIN','TEACHER','STUDENT')"
+    ],
+    [
+      "symbol:java:com.example.school.controller.StudentController#createStudent(CreateStudentRequest)",
+      "AUTHORIZED_BY",
+      "hasRole('ADMIN')"
+    ],
+    [
+      "symbol:java:com.example.school.config.SecurityConfig#securityFilterChain(HttpSecurity)",
+      "CONFIGURES",
+      "policy-rule:csrf.disable()"
+    ],
+    [
+      "symbol:java:com.example.school.config.SecurityConfig",
+      "ANNOTATED_WITH",
+      "annotation:org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity"
+    ],
+    [
+      "symbol:java:com.example.school.controller.CourseController#createCourse(CreateCourseRequest)",
+      "ANNOTATED_WITH",
+      "annotation:org.springframework.security.access.prepost.PreAuthorize"
+    ],
+    [
+      "symbol:java:com.example.school.controller.EnrollmentController#enroll(Long,Long)",
+      "ANNOTATED_WITH",
+      "annotation:org.springframework.security.access.prepost.PreAuthorize"
+    ],
+    [
+      "symbol:java:com.example.school.controller.EnrollmentController#getStudentEnrollments(Long)",
+      "ANNOTATED_WITH",
+      "annotation:org.springframework.security.access.prepost.PreAuthorize"
+    ],
+    [
+      "symbol:java:com.example.school.controller.StudentController#getStudents()",
+      "ANNOTATED_WITH",
+      "annotation:org.springframework.security.access.prepost.PreAuthorize"
+    ],
+    [
+      "symbol:java:com.example.school.controller.StudentController#getStudent(Long)",
+      "ANNOTATED_WITH",
+      "annotation:org.springframework.security.access.prepost.PreAuthorize"
+    ],
+    [
+      "symbol:java:com.example.school.controller.StudentController#createStudent(CreateStudentRequest)",
+      "ANNOTATED_WITH",
+      "annotation:org.springframework.security.access.prepost.PreAuthorize"
+    ]
+  ],
+  "questions": [
+    {
+      "id": 5,
+      "theme": "appels",
+      "question": "Que fait StudentService.findStudents ?",
+      "must": [
+        [
+          "findAll"
+        ]
+      ],
+      "must_not": [
+        "Spring Data",
+        "JpaRepository",
+        "CrudRepository"
+      ]
+    },
+    {
+      "id": 9,
+      "theme": "sécurité",
+      "question": "Un utilisateur STUDENT peut-il appeler GET /api/students ?",
+      "must": [
+        [
+          "ADMIN"
+        ],
+        [
+          "TEACHER"
+        ],
+        [
+          "non",
+          "ne peut pas",
+          "n'est pas autorisé",
+          "n’est pas autorisé",
+          "refus",
+          "interdit"
+        ]
+      ],
+      "must_not": [
+        "seulement (d'une |d’une |une )?authentification",
+        "uniquement (d'une |d’une |une )?authentification",
+        "^\\W*oui\\b"
+      ]
+    },
+    {
+      "id": 13,
+      "theme": "confidentialité",
+      "question": "Ce commit introduit-il des mots de passe écrits en dur ?",
+      "commit": "f2f1b4e",
+      "source_context": true,
+      "masked_password": true,
+      "must": [
+        [
+          "mot de passe",
+          "mots de passe",
+          "password"
+        ],
+        [
+          "en dur",
+          "en clair",
+          "codé",
+          "hardcod",
+          "écrit"
+        ]
+      ],
+      "must_not": [
+        "^\\W*non\\b",
+        "(n'|n’|ne )introdui\\w* (pas|aucun)",
+        "aucun mot de passe",
+        "pas de mots? de passe"
+      ]
+    },
+    {
+      "id": 19,
+      "theme": "routes",
+      "question": "Quelle route HTTP permet de lister les étudiants ?",
+      "must": [
+        [
+          "/api/students"
+        ],
+        [
+          "GET"
+        ]
+      ]
+    }
+  ]
+}

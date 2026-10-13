@@ -24,7 +24,7 @@ from concurrent.futures import TimeoutError as StillWaiting
 from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
 from app.minia.application import anchoring, investigation, sources, tiles
 from app.minia.application.protected_model import ProtectedModel
-from app.minia.domain import anchors, authorship, briefing, exploration, source_context
+from app.minia.domain import anchors, authorship, briefing, exploration, operation_notes, source_context
 from app.minia.domain.investigation import conversation
 from app.minia.domain.confidentiality import Disclosure
 from app.minia.domain.cancellation import STOPPED, check
@@ -736,7 +736,8 @@ class AskMinia:
                 yield from packet(f'{operation} : {response["error"]["message"]}', trajectory)
                 return
             if operation == 'describe':
-                operations = [sources.noted(item) for item in response.get('items', [])
+                # Chaque opération porte sa note d'usage (TAXO-MINIA-OPS-01) ; celle de `get_source` reste la sienne.
+                operations = [operation_notes.noted(sources.noted(item)) for item in response.get('items', [])
                               if item.get('kind') == 'operation']
                 if self.mip is not None:
                     # Les Tuiles adaptatives (TAXO-MIP-ADT-01, PR C) : un profil déclaré, sur la même analyse.
