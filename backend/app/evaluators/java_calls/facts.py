@@ -42,6 +42,20 @@ class Facts:
                     'column_start': site.column_start, 'column_end': site.column_end, 'role': 'call-site'}
         self._inferred(subject, 'CALLS', target, evidence, resolution, premises, counter_examples)
 
+    def written_call(self, subject, path, site):
+        """Un appel tel qu'écrit (`OBSERVED`, D1), sans cible : le nom appelé, la forme et le receveur écrits, prouvé
+        par son site. Les occurrences identiques dans une même méthode sont des preuves du même fait."""
+        evidence = {**self._evidence(path, site.line_start, site.line_end, CALL_SITE, subject),
+                    'column_start': site.column_start, 'column_end': site.column_end, 'role': 'call-site'}
+        qualifiers = {'form': site.form, 'arguments': len(site.arguments), **({'name': site.name} if site.name else {}),
+                      **({'receiver': site.written} if site.written else {})}
+        key = (subject, 'WRITES_CALL', '', json.dumps(qualifiers, sort_keys=True))
+        fact = self._assertions.setdefault(key, {
+            'contract_version': 1, 'kind': 'ASSERTION', 'status': 'OBSERVED', 'validity': 'VALID',
+            'subject': subject, 'relation': 'WRITES_CALL', 'qualifiers': qualifiers, 'evidence': []})
+        if evidence not in fact['evidence']:
+            fact['evidence'].append(evidence)
+
     def accessor(self, subject, target, path, line, premises):
         """Un accesseur implicite de record (`INFERRED`), prouve par la ligne du composant qui l'implique."""
         evidence = self._evidence(path, line, line, DECLARATION, target)

@@ -41,10 +41,14 @@ class EvaluatorExecution:
         """Ce que l'analyseur a restitué de ce qu'il a lu (objectif : 1 % au plus de non restitué). Un site d'appel est
         restitué s'il prouve un fait (`role: call-site`), non restitué s'il n'est que dans un diagnostic de couverture ;
         un sujet non lu est une couverture illisible, ou non interprétée sans site."""
-        restituted = sum(1 for fact in self.facts for proof in fact.get('evidence', ())
-                         if proof.get('role') == 'call-site')
-        kept = [((fact.get('diagnostic') or {}).get('sites') or ()) for fact in self.coverage
-                if fact['coverage_type'] == 'NOT_INTERPRETED']
+        # Un site est situé par son début et sa fin : des appels chaînés (`a.b().c()`) commencent au même endroit.
+        proven = {_site(proof.get('path'), proof) for fact in self.facts for proof in fact.get('evidence', ())
+                  if proof.get('role') == 'call-site'}
+        restituted = len(proven)
+        # Un site gardé en diagnostic (cible non établie) mais restitué tel qu'écrit n'est pas perdu.
+        kept = [[site for site in ((fact.get('diagnostic') or {}).get('sites') or ())
+                 if _site(fact['scope']['include'][0].removeprefix('file:'), site) not in proven]
+                for fact in self.coverage if fact['coverage_type'] == 'NOT_INTERPRETED']
         unread = sum(1 for fact in self.coverage if fact['coverage_type'] == 'READ_ERROR'
                      or (fact['coverage_type'] == 'NOT_INTERPRETED' and not (fact.get('diagnostic') or {}).get('sites')))
         return {'sites_restituted': restituted, 'sites_not_restituted': sum(len(sites) for sites in kept),
@@ -101,3 +105,9 @@ class EvaluatorExecution:
             'coverage': list(self.coverage),
             'warnings': list(self.warnings),
         }
+
+
+def _site(path, located):
+    """Un site d'appel : son fichier, son début et sa fin."""
+    return (path, located.get('line_start'), located.get('column_start'), located.get('line_end'),
+            located.get('column_end'))

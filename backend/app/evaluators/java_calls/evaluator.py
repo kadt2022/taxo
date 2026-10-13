@@ -37,7 +37,7 @@ PARSE_ERROR_REASON = 'Fichier Java lu en partie (erreur de syntaxe) : ses décla
 
 class JavaCallsEvaluator:
     evaluator_id = 'taxo.java-calls'
-    producer_version = '1.7.0'
+    producer_version = '1.8.0'
     catalog = CATALOG
     # Les lignes de la déclaration d'un symbole qu'il a déclaré : ce que lit `get_source` (TAXO-MIP-ADT-01, PR B).
     declaration_lines = staticmethod(source_range.declaration_lines)
@@ -152,6 +152,8 @@ class _Run:
             return  # Le proprietaire n'a pas d'identite unique : la note de sa declaration le dit deja.
         self.seen += 1
         subject = symbol(site.owner, site.member) if site.member is not None else symbol(site.owner)
+        # Témoin d'abord : l'appel est restitué tel qu'écrit, que sa cible soit établie ou non (D1).
+        self.facts.written_call(subject, java_file.path, site)
         outcome = self.resolver.resolve(site, java_file)
         if outcome.target is None:
             self.reasons[outcome.reason] += 1

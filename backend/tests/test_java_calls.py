@@ -57,8 +57,21 @@ def test_the_declarations_are_exactly_those_of_the_oracle(execution):
                  if item['status'] == 'OBSERVED'}
     expected |= {('ANNOTATED_WITH', item['subject'], item['object']) for item in ORACLE['annotations']}
     found = {(fact['relation'], fact['subject'], fact['object']) for fact in execution.facts
-             if fact['status'] == 'OBSERVED'}
+             if fact['status'] == 'OBSERVED' and fact['relation'] != 'WRITES_CALL'}
     assert found == expected
+
+
+def test_every_call_site_is_written_whether_its_target_is_established_or_not(execution):
+    """D1 (« Taxo témoin ») : chaque site d'appel de l'oracle, résolu ou non, est restitué tel qu'écrit."""
+    written = {(proof['path'], proof['line_start'], proof['column_start'], proof['line_end'], proof['column_end'])
+               for fact in of(execution, 'WRITES_CALL') for proof in fact['evidence']}
+    resolved = {(proof['path'], proof['line_start'], proof['column_start'], proof['line_end'], proof['column_end'])
+                for fact in of(execution, 'CALLS') for proof in fact['evidence'] if proof.get('role') == 'call-site'}
+    unresolved = {(fact['scope']['include'][0].removeprefix('file:'), site['line_start'], site['column_start'], site['line_end'], site['column_end'])
+                  for fact in execution.coverage if fact.get('diagnostic') for site in fact['diagnostic']['sites']}
+    assert resolved and unresolved
+    assert resolved | unresolved <= written, 'aucun site perdu : la cible est un plus, jamais une condition'
+    assert all('object' not in fact and fact['status'] == 'OBSERVED' for fact in of(execution, 'WRITES_CALL'))
     assert {fact['relation'] for fact in execution.facts if fact['status'] == 'INFERRED'} == {
         'CALLS', 'IMPLEMENTS', 'CONTAINS'}
 

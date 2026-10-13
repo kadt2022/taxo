@@ -7,14 +7,16 @@ from test_java_calls import ORACLE, execution_fixture  # noqa: F401
 from test_get_source import exchange
 
 
-def test_the_summary_counts_restituted_and_kept_sites(execution):
+def test_every_site_is_restituted_once_written(execution):
+    """Avec D1, chaque site est écrit : ceux dont la cible n'est pas établie ne sont plus perdus."""
     restitution = execution.summary()['restitution']
-    proofs = sum(1 for fact in execution.facts for proof in fact['evidence'] if proof.get('role') == 'call-site')
+    sites = {(proof['path'], proof['line_start'], proof['column_start'], proof['line_end'], proof['column_end'])
+             for fact in execution.facts for proof in fact['evidence'] if proof.get('role') == 'call-site'}
     kept = sum(len(fact['diagnostic']['sites']) for fact in execution.coverage
                if fact['coverage_type'] == 'NOT_INTERPRETED' and fact.get('diagnostic'))
-    assert restitution['sites_restituted'] == proofs > 0
-    assert restitution['sites_not_restituted'] == kept > 0
-    assert kept == len(ORACLE['not_interpreted']), 'chaque site que l’oracle dit non interprété est compté'
+    assert kept == len(ORACLE['not_interpreted']), 'les cibles non établies restent dites en diagnostic'
+    assert restitution['sites_restituted'] == len(sites) > kept
+    assert restitution['sites_not_restituted'] == 0, 'objectif : rien de lu qui ne soit restitué'
 
 
 def test_describe_gives_the_measure_of_each_analyzer(taxo):

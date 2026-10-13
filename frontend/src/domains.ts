@@ -19,7 +19,7 @@ export type DomainId=typeof DOMAINS[number]['id'];
 const BY_RELATION:Record<string, DomainId>={HANDLED_BY:'api', SERVED_BY:'api',
   PROTECTED_BY:'securite', PERMITS_ALL:'securite', AUTHORIZED_BY:'securite', MATCHED_BY:'securite', CONFIGURES:'securite',
   DEPENDS_ON:'architecture', BUILT_FROM:'architecture',
-  CALLS:'architecture', IMPLEMENTS:'architecture', EXTENDS:'architecture', TYPED_AS:'architecture', TYPE_ARGUMENT:'architecture',
+  CALLS:'architecture', WRITES_CALL:'architecture', IMPLEMENTS:'architecture', EXTENDS:'architecture', TYPED_AS:'architecture', TYPE_ARGUMENT:'architecture',
   USES_TECHNOLOGY:'technologies', DECLARED_BY:'technologies', WRITTEN_IN:'fichiers', CONTAINS:'fichiers',
   HAS_COMMIT:'git', AUTHORED_BY:'git', CHILD_OF:'git', CHANGES:'git'};
 /** Les domaines que chaque evaluateur peut renseigner : un domaine sans evaluateur compare est « non analyse ». */
@@ -57,6 +57,7 @@ const NOUNS:Record<string, Noun>={
   DEPENDS_ON:{one:'dépendance entre modules', many:'dépendances entre modules', feminine:true},
   BUILT_FROM:{one:'composition d’application', many:'compositions d’application', feminine:true},
   CALLS:{one:'appel entre méthodes', many:'appels entre méthodes'},
+  WRITES_CALL:{one:'appel écrit', many:'appels écrits'},
   IMPLEMENTS:{one:'implémentation', many:'implémentations', feminine:true},
   EXTENDS:{one:'héritage', many:'héritages'},
   TYPED_AS:{one:'type déclaré', many:'types déclarés'},

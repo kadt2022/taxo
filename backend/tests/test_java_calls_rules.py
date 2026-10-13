@@ -223,7 +223,7 @@ def test_a_call_on_a_parameter_follows_its_declared_type():
         'CONTAINS : symbol:java:p.B -> symbol:java:p.B#f()']
     assert ('A#g(B)', 'A#g(B)/b') in declared(execution, 'CONTAINS')
     assert ('A#g(B)/b', 'B') in declared(execution, 'TYPED_AS')
-    [contains] = [fact for fact in execution.facts if fact['object'] == 'symbol:java:p.A#g(B)/b']
+    [contains] = [fact for fact in execution.facts if fact.get('object') == 'symbol:java:p.A#g(B)/b']
     assert contains['status'] == 'OBSERVED' and contains['evidence'][0]['line_start'] == 3
 
 
@@ -268,7 +268,7 @@ def test_a_variable_of_an_external_or_unwritten_type_has_no_call(body, why, rece
     [site] = sites(execution).values()
     assert (site['reason'], site.get('receiver_type')) == (why, receiver_type)
     assert not calls(execution) and not declared(execution, 'TYPED_AS')
-    assert not any('/' in fact['object'] for fact in execution.facts)
+    assert not any('/' in fact.get('object', '') for fact in execution.facts)
 
 
 def test_a_variable_whose_call_is_not_established_writes_no_declaration():
