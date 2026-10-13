@@ -1109,7 +1109,7 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
      empreinte, `resolution: RESOLVED`) des champs **du type courant** que le corps utilise comme **receveurs d'appels**, tels que la règle
      des appels les désigne (un nom masqué par un paramètre ou une variable locale n'en est pas un). La pièce reste
      inchangée ; même fichier, même commit, même protection. Une déclaration qui ne se lit pas en entier n'est pas
-     jointe. Plafond propre de 1 Ko (au-delà, `not_sent` `FIELD_CONTEXT_LIMIT`), puis le budget de l'opération
+     jointe, et elle est comptée (`not_sent` `LIMIT`). Plafond propre de 1 Ko (au-delà, `not_sent` `FIELD_CONTEXT_LIMIT`), puis le budget de l'opération
      (`BUDGET`) ; la pièce passe toujours en premier. `field_context_scope` dit ce qui n'est pas suivi (champs
      hérités, autres usages, lambdas et classes locales) : une liste vide n'est jamais « aucun champ » ;
    - avec un fournisseur distant, le portail avertit que le contenu quittera la machine, et la case n'est

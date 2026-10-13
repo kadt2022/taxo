@@ -119,17 +119,21 @@ class SourceOperation:
         found = source.piece(content, lines.line_start, lines.line_end)
         if found is None:
             return None, source.LIMIT, ()
-        # Un champ n'est joint que si sa déclaration se lit en entier : jamais une déclaration partielle.
+        # Un champ n'est joint que si sa déclaration se lit en entier : une déclaration partielle reste None, comptée.
         fields = ((item.name, source.piece(content, item.line_start, item.line_end))
                   for item in getattr(lines, 'fields', ()))
-        return found, None, tuple((name, piece) for name, piece in fields if piece is not None and not piece.truncated)
+        return found, None, tuple((name, piece if piece is not None and not piece.truncated else None)
+                                  for name, piece in fields)
 
 
 def _field_context(response, reference, fields):
     """Les déclarations des champs utilisés, dans leur section et sous leur plafond ; le reste est compté. Un champ
     est lu dans le fichier de la pièce (`path` de la réponse) : il ne le répète pas."""
     owner, used, refused = reference.split('#', 1)[0], 0, 0
+    partial = sum(1 for _, piece in fields if piece is None)
     for name, piece in fields:
+        if piece is None:
+            continue
         item = {'field': f'{owner}#{name}', 'line_start': piece.line_start, 'line_end': piece.line_end,
                 'content_hash': piece.content_hash, 'resolution': source.RESOLVED, 'text': piece.text}
         cost = len(json.dumps(item, ensure_ascii=False).encode('utf-8'))
@@ -139,5 +143,8 @@ def _field_context(response, reference, fields):
         if not response.add(source.FIELD_CONTEXT, item):
             continue
         used += cost
+    if partial:
+        # Une déclaration plus longue que les limites d'une pièce n'est jamais jointe coupée, ni tue.
+        response.not_sent({'what': source.FIELD_CONTEXT, 'count': partial, 'reason': source.LIMIT})
     if refused:
         response.not_sent({'what': source.FIELD_CONTEXT, 'count': refused, 'reason': source.FIELD_CONTEXT_LIMIT})

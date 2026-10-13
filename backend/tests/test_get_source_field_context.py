@@ -186,3 +186,10 @@ def test_a_secret_in_a_joined_declaration_is_masked_before_the_model_and_says_so
     assert joined['field'] == 'symbol:java:com.example.demo.service.Vault#password'
     assert joined['text'] == '    private final String password = "******";'
     assert 'hunter2-in-field' not in json.dumps(model.calls)
+
+
+def test_a_declaration_longer_than_the_piece_limits_is_counted_never_silent(taxo, monkeypatch):
+    monkeypatch.setattr(policy, 'MAX_SOURCE_LINES', 2)
+    response = read(*taxo, f'{ORDERS}#add(String)')
+    assert context(response) == [(f'{ORDERS}#log', LOG)], 'la déclaration de 3 lignes n’est pas jointe coupée'
+    assert {'what': 'field_context', 'count': 1, 'reason': 'LIMIT'} in response['not_sent']
