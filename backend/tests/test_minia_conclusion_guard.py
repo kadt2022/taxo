@@ -95,3 +95,35 @@ def test_a_fallback_after_the_return_still_says_the_conclusion_was_returned(make
     result = ask(make_repo, tmp_path, model)
     assert result['mode'] == 'paquet'
     assert result['returned'] == [FIND]
+
+
+REPOSITORY = 'symbol:java:com.acme.EnrollmentRepository'
+SAVE, FIND_ALL = f'{REPOSITORY}#save(Long,Long)', f'{REPOSITORY}#findAll()'
+SEARCHED = [{'operation': 'find_references', 'arguments': {'prefix': 'Enrollment'},
+             'response': {'outcome': 'OK', 'items': [{'reference': REPOSITORY}, {'reference': FIND_ALL},
+                                                     {'reference': SAVE}]}}]
+
+
+def unknown(text):
+    return {'type': 'unknown', 'text': text}
+
+
+def test_a_method_named_class_dot_method_is_returned_rather_than_its_class():
+    said = unknown('Le code source de EnrollmentRepository.save n’a pas été examiné.')
+    assert sources.unread([said], SEARCHED) == [SAVE]
+
+
+def test_the_class_is_returned_when_no_method_of_it_is_named():
+    assert sources.unread([unknown('Le code de EnrollmentRepository n’a pas été lu.')], SEARCHED) == [REPOSITORY]
+
+
+def test_a_reference_cited_by_a_claim_comes_before_a_named_method():
+    claim = {'type': 'claim', 'text': 'Le service appelle EnrollmentRepository.save.',
+             'claim': {'subject': 'symbol:java:com.acme.EnrollmentService#enroll()', 'relation': 'CALLS',
+                       'object': FIND_ALL}}
+    assert sources.unread([claim, unknown('Rien sur les doublons.')], SEARCHED) == [FIND_ALL]
+
+
+def test_a_longer_method_name_is_not_the_named_method():
+    said = unknown('Le code de EnrollmentRepository.saveAll n’a pas été lu.')
+    assert sources.unread([said], SEARCHED) == [REPOSITORY]

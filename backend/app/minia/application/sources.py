@@ -176,6 +176,22 @@ def _simple(reference):
     return re.split(r'[.:]', _owner(reference))[-1]
 
 
+def _mentions(name, texts):
+    """Vrai si un des textes écrit `name` comme un nom entier (pas une partie d'un nom plus long)."""
+    return any(re.search(rf'(?<![\w$]){re.escape(name)}(?![\w$])', text) for text in texts)
+
+
+def _rank(reference, texts):
+    """L'ordre de préférence d'une référence pour sa classe : citée telle quelle par une affirmation, puis la méthode
+    nommée `Classe.méthode` dans un texte, puis la classe, puis un autre membre."""
+    if reference in texts:
+        return 0
+    if '#' not in reference:
+        return 2
+    member = reference.split('#', 1)[1].split('(', 1)[0]
+    return 1 if _mentions(f'{_simple(reference)}.{member}', texts) else 3
+
+
 def _cited(statement):
     """Ce qu'un énoncé écrit : son texte et, pour une affirmation, ses références."""
     yield statement['text']
@@ -184,8 +200,8 @@ def _cited(statement):
 
 def unread(statements, exchanged):
     """Pour une conclusion qui porte un « unknown » : les symboles reçus de Taxo dont la classe est citée par un de ses
-    énoncés et dont aucun code n'a été lu dans l'échange (ni la classe, ni un de ses membres). Une référence par classe :
-    celle que la conclusion cite, sinon la classe, sinon le premier membre reçu."""
+    énoncés et dont aucun code n'a été lu dans l'échange (ni la classe, ni un de ses membres). Une référence par classe,
+    la première selon `_rank`."""
     if not any(statement['type'] == UNKNOWN for statement in statements):
         return []
     texts = [text for statement in statements for text in _cited(statement)]
@@ -195,13 +211,10 @@ def unread(statements, exchanged):
     known = {reference for item in exchanged for reference in _discovered(item)
              if reference.startswith('symbol:') and nature(reference) != 'MEMBER'}
     by_owner = {}
-    for reference in sorted(known, key=lambda value: ('#' in value, value)):
+    for reference in sorted(known, key=lambda value: (_rank(value, texts), value)):
         owner = _owner(reference)
-        if owner in read or not any(re.search(rf'(?<![\w$]){re.escape(_simple(reference))}(?![\w$])', text)
-                                    for text in texts):
-            continue
-        if owner not in by_owner or reference in texts:
-            by_owner[owner] = reference
+        if owner not in read and _mentions(_simple(reference), texts):
+            by_owner.setdefault(owner, reference)
     return [by_owner[owner] for owner in sorted(by_owner)][:MAX_RETURNED]
 
 
