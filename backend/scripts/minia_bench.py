@@ -346,6 +346,20 @@ def replay(client, project, bench, repository, recorder, runs, provider, sink=No
     return measured
 
 
+def restitution_lines(described):
+    """Ce que chaque analyseur a restitué de ce qu'il a lu (`describe`), objectif 1 % au plus de non restitué."""
+    lines = []
+    for item in described.get('items', ()):
+        found = item.get('restitution') if item.get('kind') == 'analyzer' else None
+        if not found:
+            continue
+        sites = found['sites_restituted'] + found['sites_not_restituted']
+        rate = f"{100 * found['sites_not_restituted'] / sites:.1f} %" if sites else '—'
+        lines.append(f"restitution {item['analyzer']} : sites restitués {found['sites_restituted']}, non restitués "
+                     f"{found['sites_not_restituted']} ({rate}), sujets non lus {found['subjects_not_read']}")
+    return lines
+
+
 def summary(measured, model):
     """Le resume du banc, en Markdown."""
     total = len(measured)
@@ -454,6 +468,10 @@ def run(database, repository, options, bench, models, recorder):
             project = project.json()['id']
             scanned = client.post(f'/api/projects/{project}/scans', params={'commit': full_sha(repository, bench['commit'])})
             scanned.raise_for_status()
+            described = client.post(f'/api/projects/{project}/taxo-query',
+                                    json={'requests': [{'operation': 'describe', 'arguments': {}, 'max_bytes': 30000}]})
+            for line in restitution_lines(described.json()['responses'][0]):
+                print(line, file=sys.stderr)
             with contextlib.ExitStack() as stack:
                 sink = stack.enter_context(open(options.payloads, 'w', encoding='utf-8')) if options.payloads else None
                 limits = {key: value for key, value in (('max_calls', getattr(options, 'max_calls', None)),

@@ -37,6 +37,19 @@ class EvaluatorExecution:
         return ProducerExecution('EVALUATOR', self.evaluator_id, self.producer_version, self.execution_id,
                                  self.catalog.catalog_id, self.catalog.catalog_version)
 
+    def restitution(self):
+        """Ce que l'analyseur a restitué de ce qu'il a lu (objectif : 1 % au plus de non restitué). Un site d'appel est
+        restitué s'il prouve un fait (`role: call-site`), non restitué s'il n'est que dans un diagnostic de couverture ;
+        un sujet non lu est une couverture illisible, ou non interprétée sans site."""
+        restituted = sum(1 for fact in self.facts for proof in fact.get('evidence', ())
+                         if proof.get('role') == 'call-site')
+        kept = [((fact.get('diagnostic') or {}).get('sites') or ()) for fact in self.coverage
+                if fact['coverage_type'] == 'NOT_INTERPRETED']
+        unread = sum(1 for fact in self.coverage if fact['coverage_type'] == 'READ_ERROR'
+                     or (fact['coverage_type'] == 'NOT_INTERPRETED' and not (fact.get('diagnostic') or {}).get('sites')))
+        return {'sites_restituted': restituted, 'sites_not_restituted': sum(len(sites) for sites in kept),
+                'subjects_not_read': unread}
+
     def summary(self):
         coverage_counts = Counter()
         coverage_subjects = {}
@@ -65,6 +78,7 @@ class EvaluatorExecution:
             'warning_count': len(self.warnings),
             'warnings': list(dict.fromkeys(self.warnings))[:SUMMARY_WARNINGS],
             'relations': dict(sorted(relations.items())),
+            'restitution': self.restitution(),
             'coverage': [
                 {'coverage_type': kind, 'count': coverage_counts[kind], 'subjects': coverage_subjects[kind]}
                 for kind in sorted(coverage_counts)

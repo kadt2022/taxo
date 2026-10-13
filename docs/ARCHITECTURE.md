@@ -1091,6 +1091,10 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   promise avant mesure.
 - La trajectoire (opérations, arguments, tailles, non-transmis, verdicts) est visible en direct ; comme la
   réponse, elle n'est pas conservée.
+- **Restitution** (décision « Taxo témoin », D6) : chaque analyseur dit, dans le résumé de l'analyse et dans
+  `describe` (`restitution`), ce qu'il a restitué de ce qu'il a lu : sites d'appel qui prouvent un fait, sites gardés
+  seulement dans un diagnostic de couverture, sujets non lus. Objectif : 1 % au plus de non restitué. Le banc l'écrit
+  avant ses mesures. Une analyse antérieure à la mesure n'en dit rien (à relancer).
 - **Journal de développement** (`MINIA_TRACE`, `off` par défaut) : `summary` écrit dans la console du serveur chaque
   opération de Taxo et chaque tour du modèle ; `full` y ajoute les réponses de Taxo et les messages complets. Les
   lignes `LLM` montrent le message réellement envoyé, après protection ; les lignes `TAXO`, la réponse locale de Taxo.
