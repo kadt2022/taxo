@@ -1120,6 +1120,11 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
      jointe, et elle est comptée (`not_sent` `LIMIT`). Plafond propre de 1 Ko (au-delà, `not_sent` `FIELD_CONTEXT_LIMIT`), puis le budget de l'opération
      (`BUDGET`) ; la pièce passe toujours en premier. `field_context_scope` dit ce qui n'est pas suivi (champs
      hérités, autres usages, lambdas et classes locales) : une liste vide n'est jamais « aucun champ » ;
+   - **chemins d'une méthode** (`uses`) : pour une méthode ou un constructeur servis, les références que la Maille
+     établit déjà, sans leur code : les méthodes appelées (`CALLS`) et le type des champs utilisés (`TYPED_AS`).
+     Au plus 20 (au-delà, `not_sent` `LIMIT`) ; `uses_scope` dit ce qui n'est pas suivi (appels non résolus, types
+     hors des sources). Minia les reçoit comme des références : elle peut les lire, et la garde les proposer. Premier
+     pas de la navigation inter-classes (§ 12.5), sans nouvelle analyse ;
    - avec un fournisseur distant, le portail avertit que le contenu quittera la machine, et la case n'est
      pas cochée par défaut.
 5. Cloisonnement : un échange ne voit qu'un projet et un instantané.

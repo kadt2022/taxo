@@ -24,7 +24,7 @@ _INVALID = 'INVALID_ARGUMENT'
 NOTE = ('Le code exact d’un symbole déclaré, lu au commit de l’analyse ("commit") : ce n’est pas forcément le dernier '
         'commit qui l’a modifié. Une pièce de code n’est pas un fait de Taxo : une affirmation se vérifie sur les faits '
         '(claim). Ne déduis ni cadre ni base de données d’un nom ou d’un appel ; lis plutôt le code de la méthode '
-        'appelée, avec une référence reçue de Taxo.')
+        'appelée, avec une référence reçue de Taxo : celles de "uses" (appels, types des champs) le sont.')
 
 
 # Une indication courte pour `find_references` : comment lister une famille entière. Elle ne dit que ce que le protocole
