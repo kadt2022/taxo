@@ -314,8 +314,10 @@ def _compacted(exchanged, keep):
     shown = []
     for index, item in enumerate(exchanged):
         response = item.get('response') or {}
+        # Une réponse rendue de nouveau (`_resent`) reste entière tant qu'elle est récente, puis se résume comme les
+        # autres ; un simple renvoi (sans contenu) n'a rien à résumer.
         if (index >= len(exchanged) - keep or item['operation'] in _KEEP_WHOLE or response.get('outcome') != 'OK'
-                or response.get('reused')):
+                or (response.get('reused') and 'items' not in response and 'facts' not in response)):
             shown.append(item)
             continue
         shown.append({'operation': item['operation'], 'arguments': item['arguments'], 'response': {

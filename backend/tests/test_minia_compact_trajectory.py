@@ -75,6 +75,15 @@ def test_asking_again_gives_the_whole_response_without_asking_taxo(make_repo, tm
     assert result['trajectory'][3]['reused'] and result['trajectory'][3]['bytes'] == 0, 'rien redemandé à Taxo'
 
 
+def test_a_response_given_again_is_summarised_once_it_ages_out(make_repo, tmp_path, monkeypatch):
+    monkeypatch.setenv('MINIA_COMPACT_AFTER', '1')
+    model = Scripted(found, call('get_tile', reference=FIND, profile='method-context/1'), found,
+                     call('find_references', analysis='x', prefix='Autre', match='NAME'), DONE)
+    ask(make_repo, tmp_path, model)
+    again = steps(model, 4)[3]
+    assert again['response'].get('compacted'), 'la copie rendue de nouveau ne s’accumule pas'
+
+
 def test_compaction_reduces_what_the_model_receives(make_repo, tmp_path, monkeypatch):
     sizes = {}
     for setting in ('0', '1'):
