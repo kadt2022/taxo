@@ -26,6 +26,8 @@ export type MiniaAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'; question:stri
   not_interpreted:string[]; failures:string[]; facts_not_sent:number; rejected_citations:string[];
   // MINIA-09b : en exploration, des enonces types et la trajectoire ; en repli, le paquet dit pourquoi.
   mode?:'exploration'|'paquet'|'taxo'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string;
+  // La garde de conclusion : les références lisibles renvoyées une fois à Minia.
+  returned?:string[];
   // TAXO-MINIA-SEC-01 : ce que Taxo a retenu avant l'envoi au modele, compte, jamais montre.
   withheld?:Withheld};
 /** Valeurs retenues par Taxo avant l'envoi au modele : identites pseudonymisees, secrets masques, trailers retires. */
@@ -194,7 +196,7 @@ export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
     <p className="minia-question">{answer.question}</p>
     <CommitFacts git={answer.git}/>
     <Statements statements={answer.statements} limits={limits}/>
-    <Trajectory steps={answer.trajectory??[]}/>
+    <Trajectory steps={answer.trajectory??[]} returned={answer.returned}/>
     <footer>Minia a interrogé Taxo opération par opération à partir de ce que Git sait du commit ; Taxo a vérifié chacune de ses affirmations. Le diff n’est lu que sur double accord, jamais le reste du dépôt, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
   return <section className="minia" aria-label="Réponse de Minia">
@@ -225,7 +227,7 @@ export function MiniaView({answer}:Readonly<{answer:MiniaAnswer}>){
         {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée par Taxo.</p>}
       </article>
     </div>
-    <Trajectory steps={answer.trajectory??[]}/>
+    <Trajectory steps={answer.trajectory??[]} returned={answer.returned}/>
     <footer>{diff?'Minia a reçu ce que Git sait du commit, les faits de Taxo, leurs preuves, la couverture et les blocs modifiés du diff, jamais le reste du dépôt.'
       :'Minia ne lit ni le dépôt ni le code : elle ne reçoit que ce que Git sait du commit (sans contenu), les faits de Taxo, leurs preuves et la couverture.'} Sa réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;

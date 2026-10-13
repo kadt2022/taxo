@@ -253,6 +253,9 @@ def _step(operation, arguments, response):
                      not_sent=response.get('not_sent', []))
         if 'verdict' in response:
             entry.update(verdict=response['verdict'], reason=response['reason'])
+        if response.get('field_context'):
+            # Les champs dont la déclaration a été jointe, par référence : jamais leur code dans la trajectoire.
+            entry['fields'] = [item['field'] for item in response['field_context']]
     else:
         entry['error'] = response['error']
     return entry

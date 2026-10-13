@@ -26,6 +26,8 @@ export type SelectionAnswer = {status:'ANSWERED'|'TAXO_KNOWS_NOTHING'|'NEEDS_SEL
   answer:string; unknown:string; not_interpreted:string[]; facts_not_sent:number; rejected_citations:string[];
   // MINIA-09 : en exploration, la reponse est faite d'enonces types ; en repli, le paquet dit pourquoi.
   mode?:'exploration'|'paquet'|'taxo'; statements?:Statement[]; trajectory?:TrajectoryStep[]; fallback?:string;
+  // La garde de conclusion : les références lisibles renvoyées une fois à Minia.
+  returned?:string[];
   withheld?:Withheld;
   // TAXO-MIP-ADT-01 (C2) : ce que la demande permettait du code des symboles (get_source).
   source_reading?:{status:'NOT_REQUESTED'|'DISABLED'|'UNAVAILABLE'|'ON_DEMAND'};
@@ -106,7 +108,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
     <p className="eyebrow">MINIA{modelLabel(answer.model)} · exploration</p>
     <p className="minia-question">{answer.question}</p>
     <Statements statements={answer.statements} limits={[readingNote(answer.source_reading), ...refusals(answer.trajectory), withheldNote(answer.withheld)].filter((item):item is string=>!!item)}/>
-    <Trajectory steps={answer.trajectory??[]}/>
+    <Trajectory steps={answer.trajectory??[]} returned={answer.returned}/>
     <footer>Minia a interrogé Taxo opération par opération ; Taxo a vérifié chacune de ses affirmations. Aucune phrase n’est affichée comme établie sans verdict de Taxo, et la réponse n’est jamais enregistrée comme un fait.</footer>
   </section>;
   // Ce que Taxo constate lui-meme ; ce que Minia dit ne pas savoir reste avec son texte, non verifie (MINIA-11).
@@ -142,7 +144,7 @@ export function SelectionAnswerView({answer}:Readonly<{answer:SelectionAnswer}>)
         {limits.length?<ul>{limits.map(item=><li key={item}>{item}</li>)}</ul>:<p className="muted">Aucune limite signalée par Taxo.</p>}
       </article>
     </div>
-    <Trajectory steps={answer.trajectory??[]}/>
+    <Trajectory steps={answer.trajectory??[]} returned={answer.returned}/>
   </section>;
 }
 
