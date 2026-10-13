@@ -34,6 +34,12 @@ def minia(provider=None, url=None, model=None, claude_model=None, gemini_model=N
             'mistral_tier': os.getenv('MINIA_MISTRAL_TIER', 'free').strip().lower(),
             'mistral_num_ctx': int(os.getenv('MINIA_MISTRAL_NUM_CTX', '32768'))}
 
+def minia_max_calls(value=None):
+    """Le plus d'opérations que Minia choisit dans une exploration (MINIA_MAX_CALLS, défaut 8). Les vérifications
+    d'affirmations viennent en plus, dans la limite de l'échange avec Taxo."""
+    return int(value if value is not None else os.getenv('MINIA_MAX_CALLS', '8'))
+
+
 def minia_source_context(value=None):
     """Code source que Minia peut recevoir : `off` (defaut, aucun) ou `diff` (le diff d'un commit, sur
     accord de chaque demande). Avec un Ollama distant, `diff` fait sortir du code de la machine."""

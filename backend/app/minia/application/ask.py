@@ -38,9 +38,12 @@ from app.projects.domain.project import ProjectError
 
 MAX_QUESTION = 1000
 # Garde-fous de l'exploration (ARCHITECTURE § 12.5), fixes par Taxo : une description, au plus 8 operations
-# choisies par Minia, puis au plus 10 affirmations verifiees ; l'echange en permet 20.
+# choisies par Minia (réglable, MINIA_MAX_CALLS, de 1 à MAX_ALLOWED_CALLS), puis au plus 10 affirmations verifiees ;
+# l'echange en permet 20. Une affirmation qui ne tient plus dans l'échange est dite non vérifiée, jamais tue.
 MAX_CALLS = 8
+MAX_ALLOWED_CALLS = 15
 MAX_CLAIMS = 10
+_EXCHANGE_FULL = 'L’échange avec Taxo a atteint sa limite d’opérations : cette affirmation n’a pas été vérifiée.'
 # Une opération redemandée à l'identique n'est pas rejouée : sa réponse est réutilisée, au plus MAX_REPEATS fois par
 # exploration, et chaque réutilisation compte dans MAX_CALLS (la limite globale reste entière). Au-delà, ou pour une
 # réponse qui dépend du budget, l'exploration s'arrête comme avant.
@@ -327,9 +330,12 @@ class AskMinia:
     """
 
     def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None,
-                 taxo_query=None, mip=None, investigations=None):
+                 taxo_query=None, mip=None, investigations=None, max_calls=MAX_CALLS):
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
+        if not isinstance(max_calls, int) or not 1 <= max_calls <= MAX_ALLOWED_CALLS:
+            raise ValueError(f'MINIA_MAX_CALLS invalide : {max_calls} (de 1 à {MAX_ALLOWED_CALLS}).')
+        self.max_calls = max_calls
         self.history, self.projects, self.query = history, projects, query
         # Protocole Taxo (ARCHITECTURE § 12) : sans lui, Minia recoit toujours un paquet de contexte.
         self.taxo_query = taxo_query
@@ -678,7 +684,7 @@ class AskMinia:
         trajectory, exchanged, seen, operations = [], [], set(), []
         served, repeats = {}, 0
         for operation, arguments in (('describe', {}), *seeds):
-            space = room(operations, exchanged, MAX_CALLS)
+            space = room(operations, exchanged, self.max_calls)
             if space is not None:
                 # Une operation d'ouverture ne prend que la moitie de la place restante : l'autre moitie reste aux
                 # operations que Minia choisira. Pour `describe`, encore la moitie : la liste des operations qu'on
@@ -707,7 +713,7 @@ class AskMinia:
         guarded = []
         try:
             while True:
-                calls_left = MAX_CALLS - (len(trajectory) - opening)
+                calls_left = self.max_calls - (len(trajectory) - opening)
                 space = room(operations, exchanged, calls_left)
                 if space is not None and space < ROOM_TO_CONTINUE:
                     calls_left = 0  # la fenetre est presque pleine : Minia conclut avec ce qu'elle a
@@ -797,6 +803,10 @@ class AskMinia:
             if checked >= MAX_CLAIMS:
                 verified.append({**statement, 'verdict': None, 'error': {
                     'code': 'NOT_VERIFIED', 'message': f'Au-delà de {MAX_CLAIMS} affirmations, Taxo ne vérifie plus.'}})
+                continue
+            if getattr(exchange, 'operations_left', 1) <= 0:
+                verified.append({**statement, 'verdict': None, 'error': {'code': 'NOT_VERIFIED',
+                                                                         'message': _EXCHANGE_FULL}})
                 continue
             checked += 1
             arguments = {name: value for name, value in statement['claim'].items() if value}

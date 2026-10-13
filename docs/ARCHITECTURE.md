@@ -1040,11 +1040,13 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   famille, donne type sans prefix ») : elle ne dit que ce que le protocole accepte (§ 12.3, une famille entière sans
   préfixe) et ne nomme ni famille ni référence du projet. Elle voyage avec l'opération, comme celle de `get_source`.
 - Garde-fous fixés par Taxo : nombre d'opérations, octets, délai. À l'épuisement, Minia conclut avec ce
-  qu'elle a et dit ce qui manque.
+  qu'elle a et dit ce qui manque. Le nombre d'opérations que Minia choisit est réglable (`MINIA_MAX_CALLS`, défaut 8,
+  de 1 à 15) ; les vérifications d'affirmations viennent en plus, dans la limite de 20 opérations de l'échange : une
+  affirmation qui n'y tient plus est rendue `NOT_VERIFIED`, jamais tue ni confirmée.
 - **Répétition bornée.** Une opération redemandée à l'identique n'est pas rejouée : si sa réponse est un
   résultat ou un refus de configuration (`NOT_AVAILABLE`, `NO_CONSENT`), Minia reçoit un renvoi vers le tour
   d'origine (issue, jamais la réponse recopiée), au plus `MAX_REPEATS` (2) fois par exploration. Chaque
-  réutilisation compte dans la limite globale de 8 opérations. Une erreur reste une erreur : un refus réutilisé
+  réutilisation compte dans la limite globale des opérations (`MINIA_MAX_CALLS`). Une erreur reste une erreur : un refus réutilisé
   garde son issue `ERROR` et ne rend jamais une référence « reçue ». Un `INVALID_ARGUMENT` peut dépendre de ce que
   l'échange a reçu depuis (une référence pas encore reçue) : il n'est jamais réutilisé ; la demande est rejouée,
   comme une opération nouvelle, si l'échange a reçu une réponse réussie depuis, sinon l'exploration s'arrête (repli
@@ -1056,7 +1058,7 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   candidates (surcharges, homonymes) : une ambiguïté est montrée, jamais tranchée (entrée `conclusion`, issue
   `RETURNED`). Le modèle lit le code ou
   garde son inconnu. La règle compare des noms à des références reçues : elle ne juge pas la réponse, n'appelle pas
-  Taxo et ne compte pas dans les 8 opérations ; un nom jamais rendu par Taxo ne la déclenche pas. Le résultat le dit
+  Taxo et ne compte pas dans la limite des opérations ; un nom jamais rendu par Taxo ne la déclenche pas. Le résultat le dit
   (`returned`).
 - **Référence `qualifiers.filter_chain`.** Elle ouvre la lecture de la méthode qui construit la chaîne de filtres
   (`get_source`) seulement si le fait qui la porte vient de `taxo.spring-security`, dit `MATCHED_BY`,
