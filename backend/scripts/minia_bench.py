@@ -8,6 +8,11 @@ privée, identifiants dans une adresse). Le diff d'un commit n'est joint qu'aux 
 (accord de la demande) : MINIA_SOURCE_CONTEXT vaut `diff` ici. Le fournisseur rejoué est celui de `--provider`,
 sinon de MINIA_PROVIDER ; il doit être configuré.
 
+Gestes de lecture (lire comme un humain) : `must_read` liste, par question, les symboles dont le code doit avoir été
+lu (`get_source`) pour répondre juste ; la réponse dit ceux qui manquent. Elle compte aussi les affirmations mal formées
+(refusées par Taxo), le renvoi de la garde de conclusion et les opérations choisies par le modèle. `--max-calls` et
+`--max-bytes` fixent la limite d'opérations et le budget de chaque demande (réglages par question).
+
 Mesures par réponse : exactitude (mentions attendues, formulations interdites), fausses confirmations de sécurité
 (verdict `CONFIRMED` d'une affirmation absente de la vérité établie à la main), opérations Taxo, appels au modèle,
 octets envoyés, temps, fuites. Les jetons ne sont comptés que si le fournisseur les rend : sinon `null`.
@@ -175,6 +180,26 @@ def exactness(question, result):
     return {'exact': not missing and not forbidden, 'missing': missing, 'forbidden': forbidden}
 
 
+def reads(question, trajectory):
+    """Les gestes de lecture : les symboles de `must_read` dont aucun code n'a été lu avec succès. Un symbole est lu si
+    une référence lue avec `get_source` le contient (`EnrollmentRepository` couvre la classe et ses méthodes)."""
+    read = [str(step.get('arguments', {}).get('reference', '')) for step in trajectory
+            if step.get('operation') == SOURCE and step.get('outcome') == 'OK']
+    return [name for name in question.get('must_read', ()) if not any(name in reference for reference in read)]
+
+
+def malformed(result):
+    """Les affirmations que Taxo a refusées pour leur forme (sujet, relation ou objet invalides)."""
+    return sum(1 for statement in result.get('statements') or ()
+               if statement.get('type') == 'claim' and statement.get('verdict') is None
+               and (statement.get('error') or {}).get('code') == 'INVALID_ARGUMENT')
+
+
+def chosen(trajectory):
+    """Les opérations choisies par le modèle : ni l'ouverture (`describe`), ni les vérifications de Taxo."""
+    return sum(1 for step in trajectory if step.get('operation') not in ('describe', 'verify_claim'))
+
+
 def is_security(claim, bench):
     if claim.get('relation') in bench['security_relations']:
         return True
@@ -235,10 +260,12 @@ def score(question, result, failure, calls, seconds, bench, known, streamed=()):
              'taxo_operations': len(trajectory),
              'operations': [step['operation'] for step in trajectory],
              'refused_operations': sum(1 for step in trajectory if step.get('outcome') == 'ERROR'),
-             'seconds': round(seconds, 3), 'leaks': found, **contribution(trajectory)}
+             'seconds': round(seconds, 3), 'leaks': found, **contribution(trajectory),
+             'reads_missing': reads(question, trajectory), 'chosen_operations': chosen(trajectory),
+             'returned': bool((result or {}).get('returned'))}
     if result is None:
         return {**entry, 'exact': False, 'missing': [], 'forbidden': [], 'false_confirmations': [],
-                'unjustified': 0, 'displayed': ''}
+                'unjustified': 0, 'malformed': 0, 'displayed': ''}
     checked = exactness(question, result)
     if question.get('direct'):
         # La question d'auteur : Taxo seul, sans modele ; l'identite ne sort jamais.
@@ -246,7 +273,7 @@ def score(question, result, failure, calls, seconds, bench, known, streamed=()):
     if question.get('masked_password'):
         entry['masked_password_kept'] = masked_password_kept(payloads)
     return {**entry, **checked, 'false_confirmations': false_confirmations(result, bench),
-            'unjustified': unjustified(result), 'displayed': displayed(result)}
+            'unjustified': unjustified(result), 'malformed': malformed(result), 'displayed': displayed(result)}
 
 
 # --- Le rejeu --------------------------------------------------------------------------------------------------
@@ -278,8 +305,8 @@ def full_sha(repository, short):
                           capture_output=True, text=True, check=True).stdout.strip()
 
 
-def ask(client, project, question, repository, provider, source=False):
-    body = {'question': question['question'], **({'provider': provider} if provider else {})}
+def ask(client, project, question, repository, provider, source=False, limits=None):
+    body = {'question': question['question'], **({'provider': provider} if provider else {}), **(limits or {})}
     if 'commit' in question:
         sha = full_sha(repository, question['commit'])
         body['source_context'] = bool(question.get('source_context'))
@@ -288,7 +315,7 @@ def ask(client, project, question, repository, provider, source=False):
     return client.post(f'/api/projects/{project}/ask/stream', json={**body, **({'source': True} if source else {})})
 
 
-def replay(client, project, bench, repository, recorder, runs, provider, sink=None, source=False):
+def replay(client, project, bench, repository, recorder, runs, provider, sink=None, source=False, limits=None):
     """Chaque question, `runs` fois ; une ligne de mesure par reponse."""
     known = identities(repository)
     measured = []
@@ -296,7 +323,7 @@ def replay(client, project, bench, repository, recorder, runs, provider, sink=No
         for question in bench['questions']:
             recorder.reset()
             start = time.perf_counter()
-            response = ask(client, project, question, repository, provider, source)
+            response = ask(client, project, question, repository, provider, source, limits)
             seconds = time.perf_counter() - start
             streamed = []
             if response.status_code != 200:
@@ -328,14 +355,19 @@ def summary(measured, model):
              (f"- Opérations Taxo : {sum(item['taxo_operations'] for item in measured)} ; "
               f"appels au modèle : {sum(item['llm_calls'] for item in measured)} ; "
               f"octets envoyés : {sum(item['bytes_sent'] for item in measured)}"),
-             f"- Temps total : {sum(item['seconds'] for item in measured):.1f} s", '',
-             '| Q | Thème | Exactes | Fausses confirmations | Fuites | Appels | Octets | Temps (s) |',
-             '| --- | --- | --- | --- | --- | --- | --- | --- |']
+             f"- Temps total : {sum(item['seconds'] for item in measured):.1f} s",
+             (f"- Gestes de lecture manqués : {sum(len(item.get('reads_missing', ())) for item in measured)} ; "
+              f"affirmations mal formées : {sum(item.get('malformed', 0) for item in measured)} ; "
+              f"conclusions renvoyées par la garde : {sum(item.get('returned', False) for item in measured)}"), '',
+             '| Q | Thème | Exactes | Fausses confirmations | Fuites | Lectures manquées | Mal formées | Appels | Octets | Temps (s) |',
+             '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |']
     for identifier in sorted({item['id'] for item in measured}):
         rows = [item for item in measured if item['id'] == identifier]
         lines.append(f"| {identifier} | {rows[0]['theme']} | {sum(item['exact'] for item in rows)}/{len(rows)} | "
                      f"{sum(len(item['false_confirmations']) for item in rows)} | "
-                     f"{sum(len(item['leaks']) for item in rows)} | {sum(item['llm_calls'] for item in rows)} | "
+                     f"{sum(len(item['leaks']) for item in rows)} | "
+                     f"{', '.join(sorted({name for item in rows for name in item.get('reads_missing', ())})) or '—'} | "
+                     f"{sum(item.get('malformed', 0) for item in rows)} | {sum(item['llm_calls'] for item in rows)} | "
                      f"{sum(item['bytes_sent'] for item in rows)} | {sum(item['seconds'] for item in rows):.1f} |")
     return '\n'.join(lines)
 
@@ -421,8 +453,11 @@ def run(database, repository, options, bench, models, recorder):
             scanned.raise_for_status()
             with contextlib.ExitStack() as stack:
                 sink = stack.enter_context(open(options.payloads, 'w', encoding='utf-8')) if options.payloads else None
+                limits = {key: value for key, value in (('max_calls', getattr(options, 'max_calls', None)),
+                                                        ('max_bytes', getattr(options, 'max_bytes', None)))
+                          if value is not None}
                 return replay(client, project, bench, repository, recorder, options.runs, options.provider, sink,
-                              getattr(options, 'source', False))
+                              getattr(options, 'source', False), limits)
     finally:
         app.state.engine.dispose()
 
@@ -443,6 +478,8 @@ def main():
     parser.add_argument('--compare', type=Path, nargs='+', help='rapports à comparer, dans l’ordre')
     parser.add_argument('--runs', type=int, default=3)
     parser.add_argument('--provider')
+    parser.add_argument('--max-calls', type=int, help='limite d’opérations de chaque demande (réglage par question)')
+    parser.add_argument('--max-bytes', type=int, help='budget de l’échange de chaque demande, en octets')
     parser.add_argument('--questions', type=Path, default=QUESTIONS)
     parser.add_argument('--database')
     parser.add_argument('--out', type=Path, default=Path('banc-minia.json'))

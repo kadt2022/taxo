@@ -22,9 +22,9 @@ def claim(subject, relation, object_=None, verdict='CONFIRMED', text=''):
             'claim': {'subject': subject, 'relation': relation, 'object': object_}}
 
 
-def test_the_reference_bench_has_eighteen_questions_with_their_expected_answers():
+def test_the_reference_bench_has_its_questions_with_their_expected_answers():
     reference = json.loads(bench.QUESTIONS.read_text(encoding='utf-8'))
-    assert [item['id'] for item in reference['questions']] == list(range(1, 19))
+    assert [item['id'] for item in reference['questions']] == list(range(1, 20))
     security = {item['id'] for item in reference['questions'] if item['theme'] == 'sécurité'}
     assert {9, 11, 18} <= security, 'les tests 9, 11 et 18 du récit portent sur la sécurité'
     assert all(item.get('must') or item.get('must_not') or item.get('direct') for item in reference['questions'])
@@ -284,3 +284,29 @@ def test_a_failed_answer_still_counts_the_tiles_and_code_already_streamed():
     entry = bench.score(question, None, 'MINIA_PROVIDER_ERROR : coupé', [], 1.0, TRUTH, [], streamed)
     assert not entry['exact'] and entry['taxo_operations'] == 2
     assert entry['tiles']['served'] == 1 and entry['sources'] == {'served': 1, 'refused': 0, 'bytes': 300}
+
+
+def test_the_reading_question_lists_the_code_a_human_reads_to_answer():
+    reference = json.loads(bench.QUESTIONS.read_text(encoding='utf-8'))
+    reading = next(item for item in reference['questions'] if item['id'] == 19)
+    assert reading['must_read'] == ['EnrollmentService', 'EnrollmentRepository', 'model.Enrollment']
+    assert reading['must'] and reading['must_not'] and reading['truth']
+
+
+def test_a_reading_gesture_is_missed_until_the_code_is_read():
+    question = {'must_read': ['EnrollmentRepository', 'model.Enrollment']}
+    read = [{'operation': 'get_source', 'outcome': 'OK',
+             'arguments': {'reference': 'symbol:java:com.x.repository.EnrollmentRepository#save(Long,Long)'}},
+            {'operation': 'get_source', 'outcome': 'ERROR', 'arguments': {'reference': 'symbol:java:com.x.model.Enrollment'}}]
+    assert bench.reads(question, read) == ['model.Enrollment'], 'une lecture refusée n’est pas une lecture'
+    assert bench.reads(question, []) == ['EnrollmentRepository', 'model.Enrollment']
+
+
+def test_malformed_claims_and_chosen_operations_are_counted():
+    result = {'statements': [{'type': 'claim', 'verdict': None, 'error': {'code': 'INVALID_ARGUMENT'}},
+                             {'type': 'claim', 'verdict': None, 'error': {'code': 'NOT_VERIFIED'}},
+                             {'type': 'claim', 'verdict': 'CONFIRMED'}]}
+    assert bench.malformed(result) == 1
+    steps = [{'operation': 'describe'}, {'operation': 'find_references'}, {'operation': 'get_source'},
+             {'operation': 'verify_claim'}]
+    assert bench.chosen(steps) == 2
