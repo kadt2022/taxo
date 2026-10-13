@@ -73,12 +73,18 @@ def _search(exchange, candidate, trajectory, cancel):
     return anchors.Search(candidate, tuple(found), False)
 
 
+# Les appels tels qu'écrits (D1) sont des constats d'écriture, pas des liens vers un autre élément : ils grossiraient la
+# Tuile de navigation sans y mener nulle part. Ils restent lisibles par `find_facts` ; `CALLS` reste suivi.
+_NOT_FOLLOWED = frozenset({'WRITES_CALL'})
+
+
 def _relations(exchange):
-    """Les relations que l'analyse contient, telles que `describe` les annonce."""
+    """Les relations que l'analyse contient, telles que `describe` les annonce, sauf les constats d'écriture."""
     described = exchange.call({'operation': 'describe'})
     if described['outcome'] != OK:
         return []
-    return [item['relation'] for item in described['items'] if item.get('kind') == 'relation' and item.get('count')]
+    return [item['relation'] for item in described['items'] if item.get('kind') == 'relation' and item.get('count')
+            and item['relation'] not in _NOT_FOLLOWED]
 
 
 def drained(steps):

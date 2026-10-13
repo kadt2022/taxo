@@ -128,8 +128,8 @@ def test_b_to_c_a_rule_changes_and_a_route_disappears(bench):
     assert any(fact['subject'] == 'endpoint:GET /admin/users' for fact in removed)
     assert all(concerns(fact, 'admin/users', 'UserAdminController') for fact in removed), \
         [fact for fact in removed if not concerns(fact, 'admin/users', 'UserAdminController')]
-    modified = {(item['before'][0]['subject'], item['before'][0]['relation'], item['before'][0]['object'],
-                 item['after'][0]['object']) for item in bench.changes(b, c, 'MODIFIED')}
+    modified = {(item['before'][0]['subject'], item['before'][0]['relation'], item['before'][0].get('object'),
+                 item['after'][0].get('object')) for item in bench.changes(b, c, 'MODIFIED')}
     for route in ('endpoint:GET /orders', 'endpoint:GET /status'):
         assert (route, 'PROTECTED_BY', 'policy-rule:authenticated()', 'policy-rule:hasRole("USER")') in modified
     added = [fact for item in bench.changes(b, c, 'ADDED') for fact in item['after']]

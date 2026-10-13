@@ -11,8 +11,10 @@ from app.evaluations.domain.evaluator import EvaluatorCatalog
 # à `Enrollment`), écrits dans le code ; le conteneur n'est jamais interprété.
 CATALOG = EvaluatorCatalog(
     catalog_id='java-calls',
-    catalog_version='3',
-    relations=('ANNOTATED_WITH', 'CALLS', 'CONTAINS', 'EXTENDS', 'IMPLEMENTS', 'TYPED_AS', 'TYPE_ARGUMENT'),
+    # Version 4 (décision « Taxo témoin », D1) : chaque site d'appel restitué tel qu'écrit (WRITES_CALL), sans cible.
+    catalog_version='4',
+    relations=('ANNOTATED_WITH', 'CALLS', 'CONTAINS', 'EXTENDS', 'IMPLEMENTS', 'TYPED_AS', 'TYPE_ARGUMENT',
+               'WRITES_CALL'),
     coverage_types=('ANALYSED', 'NOT_INTERPRETED', 'READ_ERROR'),
     # TAXO-COV-01 : ce catalogue ne lit que les sources Java.
     languages=('Java',),

@@ -17,6 +17,9 @@ RELATIONS = {
     # Appels et declarations Java (ARCHITECTURE § 14, TAXO-01K) : CALLS designe une declaration choisie par une regle
     # nommee, jamais le corps execute ; IMPLEMENTS est ecrit entre types et deduit entre methodes.
     'CALLS': ({'symbol'}, {'symbol'}, {'INFERRED'}),
+    # Un appel tel qu'écrit (décision « Taxo témoin », D1) : la méthode écrit un appel, sans cible ; le nom appelé, la
+    # forme et le receveur écrits sont des qualificatifs, le site la preuve. CALLS s'y ajoute quand la cible est sûre.
+    'WRITES_CALL': ({'symbol'}, set(), {'OBSERVED'}),
     'IMPLEMENTS': ({'symbol'}, {'symbol'}, {'OBSERVED', 'INFERRED'}),
     'EXTENDS': ({'symbol'}, {'symbol'}, {'OBSERVED'}),
     'TYPED_AS': ({'symbol'}, {'symbol'}, {'OBSERVED'}),
@@ -137,7 +140,8 @@ def _check_assertion(fact, reference, reject):
         reject('IMPLEMENTS_FORM', '/status', 'A type implementation is observed; a method implementation is inferred.')
     if fact['relation'] == 'CONTAINS' and fact['status'] == 'INFERRED' and not _implied_member(fact):
         reject('CONTAINS_FORM', '/status', 'Only a member implied by the language is contained by inference.')
-    if fact['relation'] == 'CALLS' and not any(item.get('role') == CALL_SITE for item in fact.get('evidence', [])):
+    if fact['relation'] in _CALL_RELATIONS and not any(item.get('role') == CALL_SITE
+                                                        for item in fact.get('evidence', [])):
         reject('CALL_SITE_REQUIRED', '/evidence', 'A call is proven by at least one call-site evidence.')
 
 
@@ -184,8 +188,11 @@ def _span_issues(span):
         yield 'COLUMNS', 'On one line, the end column must follow the start column.'
 
 
+_CALL_RELATIONS = frozenset({'CALLS', 'WRITES_CALL'})
+
+
 def _call_site_issues(fact, evidence):
-    if fact['kind'] != 'ASSERTION' or fact['relation'] != 'CALLS':
+    if fact['kind'] != 'ASSERTION' or fact['relation'] not in _CALL_RELATIONS:
         yield 'Only a call is proven by a call site.'
     if 'column_start' not in evidence:
         yield 'A call site is located by its lines and columns.'

@@ -7,23 +7,16 @@ from test_java_calls import ORACLE, execution_fixture  # noqa: F401
 from test_get_source import exchange
 
 
-def test_the_summary_counts_restituted_and_kept_sites(execution):
+def test_every_site_is_restituted_once_written(execution):
+    """Avec D1, chaque site est écrit : ceux dont la cible n'est pas établie ne sont plus perdus."""
     restitution = execution.summary()['restitution']
-    proofs = sum(1 for fact in execution.facts for proof in fact['evidence'] if proof.get('role') == 'call-site')
+    sites = {(proof['path'], proof['line_start'], proof['column_start'], proof['line_end'], proof['column_end'])
+             for fact in execution.facts for proof in fact['evidence'] if proof.get('role') == 'call-site'}
     kept = sum(len(fact['diagnostic']['sites']) for fact in execution.coverage
                if fact['coverage_type'] == 'NOT_INTERPRETED' and fact.get('diagnostic'))
-    assert restitution['sites_restituted'] == proofs > 0
-    assert restitution['sites_not_restituted'] == kept > 0
-    assert kept == len(ORACLE['not_interpreted']), 'chaque site que l’oracle dit non interprété est compté'
-
-
-def test_a_truncated_diagnostic_counts_every_site_it_saw(execution):
-    from dataclasses import replace
-    truncated = [{**fact, 'diagnostic': {**fact['diagnostic'], 'sites_seen': len(fact['diagnostic']['sites']) + 3}}
-                 if fact.get('diagnostic') else fact for fact in execution.coverage]
-    before = execution.summary()['restitution']['sites_not_restituted']
-    after = replace(execution, coverage=tuple(truncated)).summary()['restitution']['sites_not_restituted']
-    assert after == before + 3 * sum(1 for fact in execution.coverage if fact.get('diagnostic'))
+    assert kept == len(ORACLE['not_interpreted']), 'les cibles non établies restent dites en diagnostic'
+    assert restitution['sites_restituted'] == len(sites) > kept
+    assert restitution['sites_not_restituted'] == 0, 'objectif : rien de lu qui ne soit restitué'
 
 
 def test_describe_gives_the_measure_of_each_analyzer(taxo):
@@ -34,3 +27,13 @@ def test_describe_gives_the_measure_of_each_analyzer(taxo):
     assert java['sites_restituted'] >= 2, 'enrol appelle check et save'
     assert set(java) == {'sites_restituted', 'sites_not_restituted', 'subjects_not_read'}
     assert all('restitution' in item for item in analyzers.values())
+
+
+def test_a_truncated_diagnostic_counts_every_site_it_could_not_place(execution):
+    """Un diagnostic qui a vu plus de sites qu'il n'en liste : ceux qu'il ne situe pas ne sont pas restitués."""
+    from dataclasses import replace
+    truncated = [{**fact, 'diagnostic': {**fact['diagnostic'], 'sites_seen': len(fact['diagnostic']['sites']) + 3}}
+                 if fact.get('diagnostic') else fact for fact in execution.coverage]
+    before = execution.summary()['restitution']['sites_not_restituted']
+    after = replace(execution, coverage=tuple(truncated)).summary()['restitution']['sites_not_restituted']
+    assert after == before + 3 * sum(1 for fact in execution.coverage if fact.get('diagnostic'))

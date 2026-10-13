@@ -127,7 +127,7 @@ def test_every_relation_has_valid_typed_example(relation):
         fact.pop('object')
     if relation in GIT_RELATIONS:
         fact['evidence'] = [git_evidence(fact)]
-    if relation == 'CALLS':
+    if relation in ('CALLS', 'WRITES_CALL'):
         fact['evidence'] = [call_site(fact)]
     validate_fact(fact)
     fact['subject'] = 'role:R_ADMIN'

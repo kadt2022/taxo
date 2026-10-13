@@ -41,13 +41,26 @@ class EvaluatorExecution:
         """Ce que l'analyseur a restitué de ce qu'il a lu (objectif : 1 % au plus de non restitué). Un site d'appel est
         restitué s'il prouve un fait (`role: call-site`), non restitué s'il n'est que dans un diagnostic de couverture ;
         un sujet non lu est une couverture illisible, ou non interprétée sans site."""
-        restituted = sum(1 for fact in self.facts for proof in fact.get('evidence', ())
-                         if proof.get('role') == 'call-site')
-        # Un diagnostic peut ne lister qu'une partie des sites vus (`sites_seen`) : tous comptent.
-        kept = sum(_seen(fact.get('diagnostic')) for fact in self.coverage if fact['coverage_type'] == 'NOT_INTERPRETED')
+        # Un site est situé par son début et sa fin : des appels chaînés (`a.b().c()`) commencent au même endroit.
+        proven = {_site(proof.get('path'), proof) for fact in self.facts for proof in fact.get('evidence', ())
+                  if proof.get('role') == 'call-site'}
+        restituted = len(proven)
+        # Un site gardé en diagnostic (cible non établie) mais restitué tel qu'écrit n'est pas perdu.
+        # Un diagnostic peut ne lister qu'une partie des sites vus (`sites_seen`) : ceux qu'il ne situe pas comptent
+        # comme non restitués, faute de savoir s'ils sont écrits.
+        kept = 0
+        for fact in self.coverage:
+            diagnostic = fact.get('diagnostic') if fact['coverage_type'] == 'NOT_INTERPRETED' else None
+            if not diagnostic:
+                continue
+            listed = diagnostic.get('sites') or ()
+            path = fact['scope']['include'][0].removeprefix('file:')
+            kept += sum(1 for site in listed if _site(path, site) not in proven)
+            kept += max(diagnostic.get('sites_seen', 0) - len(listed), 0)
         unread = sum(1 for fact in self.coverage if fact['coverage_type'] == 'READ_ERROR'
                      or (fact['coverage_type'] == 'NOT_INTERPRETED' and not (fact.get('diagnostic') or {}).get('sites')))
-        return {'sites_restituted': restituted, 'sites_not_restituted': kept, 'subjects_not_read': unread}
+        return {'sites_restituted': restituted, 'sites_not_restituted': kept,
+                'subjects_not_read': unread}
 
     def summary(self):
         coverage_counts = Counter()
@@ -102,8 +115,7 @@ class EvaluatorExecution:
         }
 
 
-def _seen(diagnostic):
-    """Les sites qu'un diagnostic a vus, listés ou non."""
-    if not diagnostic:
-        return 0
-    return max(diagnostic.get('sites_seen', 0), len(diagnostic.get('sites') or ()))
+def _site(path, located):
+    """Un site d'appel : son fichier, son début et sa fin."""
+    return (path, located.get('line_start'), located.get('column_start'), located.get('line_end'),
+            located.get('column_end'))

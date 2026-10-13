@@ -819,6 +819,11 @@
       "accepted": true
     },
     {
+      "file": "valid-writes-call.json",
+      "submission": true,
+      "accepted": true
+    },
+    {
       "file": "valid-type-argument.json",
       "submission": true,
       "accepted": true
