@@ -56,7 +56,7 @@ describe('carte API (TAXO-04)', ()=>{
     expect(card(spring({relations:{HANDLED_BY:17}}),'api').link?.href).toBe('#/routes');
   });
   it('ne remet pas les réserves dans la carte de synthèse', ()=>{
-    const counts={PROTECTED:3, PERMITS_ALL:1, NOT_INTERPRETED:1, NO_CONCLUSION:0, reserved:2, missing:1};
+    const counts={AUTHORIZED_BY:3, PERMITS_ALL:1, NOT_INTERPRETED:1, NO_RULE_FOUND:0, reserved:2, missing:1};
     const value=overviewCards(spring({relations:{HANDLED_BY:5}}), counts).find(item=>item.id==='api')!;
     expect(value).toMatchObject({value:'5', unit:'routes relevées'});
     expect(value.bar).toBeUndefined();
@@ -89,15 +89,15 @@ describe('carte Architecture (TAXO-E1)', ()=>{
 describe('carte Sécurité (TAXO-05)', ()=>{
   const spring=(extra:Partial<EvaluationSummary>)=>({...scan, evaluations:[inventory, git, summary('taxo.spring-security', extra)]});
   const row=(state:RouteRow['state'], gaps=0):RouteRow=>({endpoint:`endpoint:GET /${state}${gaps}`, verb:'GET', path:`/${state}${gaps}`, state,
-    handlers:[], applications:[], matched:[], rules:[], protections:[],
+    handlers:[], applications:[], matched:[], rules:[], guards:[],
     gaps:Array.from({length:gaps}, ()=>({subject:'s', type:'NOT_INTERPRETED', reason:'r', evaluator:'e'}))});
-  const counts=routeCounts({routes:[row('PROTECTED'), row('PROTECTED', 1), row('PERMITS_ALL'), row('NOT_INTERPRETED', 2), row('NO_CONCLUSION')],
+  const counts=routeCounts({routes:[row('AUTHORIZED_BY'), row('AUTHORIZED_BY', 1), row('PERMITS_ALL'), row('NOT_INTERPRETED', 2), row('NO_RULE_FOUND')],
     unestablished:[{subject:'x', type:'NOT_INTERPRETED', reason:'r', evaluator:'e'}]});
   it('résume les routes examinées sans transformer les limites en résultat principal', ()=>{
-    expect(counts).toEqual({PROTECTED:2, PERMITS_ALL:1, NOT_INTERPRETED:1, NO_CONCLUSION:1, reserved:2, missing:1});
+    expect(counts).toEqual({AUTHORIZED_BY:2, PERMITS_ALL:1, NOT_INTERPRETED:1, NO_RULE_FOUND:1, reserved:2, missing:1});
     const value=overviewCards(spring({}), counts).find(item=>item.id==='security')!;
     expect(value).toMatchObject({value:'5', unit:'routes examinées', state:'known'});
-    expect(value.lines).toEqual(['3 statuts de sécurité établis']);
+    expect(value.lines).toEqual(['3 routes avec une règle écrite trouvée']);
     expect(value.bar).toBeUndefined();
     expect(value.link).toEqual({href:'#/securite', label:'Explorer la sécurité'});
   });

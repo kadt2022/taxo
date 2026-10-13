@@ -83,13 +83,14 @@ ancre d'un type qu'il n'accepte pas, donne `INVALID_ARGUMENT`. `PROJECT` reste r
 | `method-context/1` | `symbol` | `CONTAINS` entrant (`owner`), `ANNOTATED_WITH` sortant (`annotations`), `CALLS` sortant (`callees`) et entrant (`callers`), `IMPLEMENTS` sortant (`implemented-method`) et entrant (`implementations`) | 1 |
 | `calls/1` | `endpoint`, `symbol` | `HANDLED_BY` (`handler`), `CALLS` (`callees`), `DISPATCHES_TO` (`dispatch`), sortants | 2 |
 | `structure/1` | `module`, `application` | `CONTAINS` (`members`), `DEPENDS_ON` (`dependencies`), `BUILT_FROM` (`built-from`), sortants | 1 |
-| `security/1` | `endpoint` | `HANDLED_BY` (`handler`), `SERVED_BY` (`application`), `MATCHED_BY` (`route-rule`), `AUTHORIZED_BY` (`authorization`), `PROTECTED_BY` (`protection`), sortants | 2 |
+| `security/2` | `endpoint` | `HANDLED_BY` (`handler`), `SERVED_BY` (`application`), `MATCHED_BY` (`route-rule`), `AUTHORIZED_BY` (`authorization`), sortants | 2 |
 
 Ce qu'un profil ne peut pas promettre est dit, jamais tu : une relation sans producteur exécuté (`DISPATCHES_TO`
 aujourd'hui) rend la frontière `CONTEXT` `NO_ANALYZER` du moteur ; une relation produite en partie
 (`ANNOTATED_WITH`, relevée sur les types et les méthodes Java mais pas sur leurs paramètres ni leurs champs) est
 déclarée dans `limits`.
-`security/1` est un parcours documentaire : il ne démontre pas qu'une route est protégée.
+`security/2` est un parcours documentaire : il ne démontre pas qu'une route est protégée. Sa version 1 suivait aussi
+`PROTECTED_BY`, que Taxo ne produit plus (décision « Taxo témoin », D5).
 
 ## 3. Réponse : la Tuile
 

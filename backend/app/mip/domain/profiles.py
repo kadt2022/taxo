@@ -57,8 +57,8 @@ class Profile:
                 'evidence': self.evidence, 'limits': list(self.limits)}
 
 
-def _profile(name, anchors, depth, steps, limits=()):
-    return Profile(name, 1, frozenset(anchors), tuple(ProfileStep(*step) for step in steps), depth, tuple(limits))
+def _profile(name, anchors, depth, steps, limits=(), version=1):
+    return Profile(name, version, frozenset(anchors), tuple(ProfileStep(*step) for step in steps), depth, tuple(limits))
 
 
 # Le contexte immédiat d'une méthode. `EXTENDS` et `TYPED_AS` relient des types et des champs, pas une méthode : ils ne
@@ -89,16 +89,17 @@ STRUCTURE = _profile('structure', {'module', 'application'}, 1, (
     ('BUILT_FROM', OUTGOING, 'built-from'),
 ))
 
-# Un parcours documentaire autour d'une route, jamais une conclusion sur sa sécurité effective.
+# Un parcours documentaire autour d'une route, jamais une conclusion sur sa sécurité effective. Version 2 (décision
+# « Taxo témoin », D5) : plus de pas PROTECTED_BY ; les règles écrites se lisent par MATCHED_BY puis AUTHORIZED_BY
+# (règle d'URL) et par HANDLED_BY puis AUTHORIZED_BY (`@PreAuthorize` sur la méthode).
 SECURITY = _profile('security', {'endpoint'}, 2, (
     ('HANDLED_BY', OUTGOING, 'handler'),
     ('SERVED_BY', OUTGOING, 'application'),
     ('MATCHED_BY', OUTGOING, 'route-rule'),
     ('AUTHORIZED_BY', OUTGOING, 'authorization'),
-    ('PROTECTED_BY', OUTGOING, 'protection'),
 ), limits=(
     'Parcours documentaire : il ne démontre pas que la route est protégée.',
     'CONFIGURES et ANNOTATED_WITH ne sont pas suivis par cette version du profil.',
-))
+), version=2)
 
 PROFILES = {profile.identifier: profile for profile in (METHOD_CONTEXT, CALLS, STRUCTURE, SECURITY)}

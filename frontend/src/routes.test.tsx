@@ -1,8 +1,8 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it} from 'vitest';
-import {applicationName, chainName, filterRoutes, loadRoutes, RoutesExplorer, RoutesView, proofText, protectionText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow, type RoutesResult} from './routes';
+import {applicationName, chainName, filterRoutes, loadRoutes, RoutesExplorer, RoutesView, proofText, guardText, RouteDetail, RoutesTable, ruleText, shortSymbol, type RouteRow, type RoutesResult} from './routes';
 
-const admin:RouteRow={endpoint:'endpoint:GET /api/admin/users', verb:'GET', path:'/api/admin/users', state:'PROTECTED',
+const admin:RouteRow={endpoint:'endpoint:GET /api/admin/users', verb:'GET', path:'/api/admin/users', state:'AUTHORIZED_BY',
   handlers:[{subject:'endpoint:GET /api/admin/users', relation:'HANDLED_BY', object:'symbol:java:com.example.adp.test.controller.TestController#adminUsers(Authentication)',
     status:'OBSERVED', evidence:[{path:'TestController.java', line_start:48, line_end:48}]}],
   applications:[{subject:'endpoint:GET /api/admin/users', relation:'SERVED_BY', status:'INFERRED',
@@ -13,13 +13,13 @@ const admin:RouteRow={endpoint:'endpoint:GET /api/admin/users', verb:'GET', path
     derivation:{premises:['SERVED_BY : …'], rule:'spring-security.first-matching-pattern',
       counter_examples_checked:['SecurityConfig : non chargée (hors du classpath)'], known_gaps:[]}}],
   rules:[{subject:'route-pattern:/**', relation:'AUTHORIZED_BY', object:'symbol:java:com.example.adp.test.config.TestSecurityConfig#adpAuthorizationManager()', status:'OBSERVED'}],
-  protections:[{subject:'endpoint:GET /api/admin/users', relation:'PROTECTED_BY', status:'INFERRED',
-    object:'symbol:java:com.example.adp.test.config.TestSecurityConfig#adpAuthorizationManager()'}],
+  guards:[{subject:'symbol:java:com.example.adp.test.controller.TestController#adminUsers(Authentication)', relation:'AUTHORIZED_BY',
+    status:'OBSERVED', object:"hasRole('ADMIN')"}],
   gaps:[]};
 const debug:RouteRow={...admin, endpoint:'endpoint:GET /debug/secure/secret', path:'/debug/secure/secret', state:'NOT_INTERPRETED',
-  applications:[], matched:[], rules:[], protections:[],
+  applications:[], matched:[], rules:[], guards:[],
   gaps:[{subject:'endpoint:GET /debug/secure/secret', type:'NOT_INTERPRETED', evaluator:'taxo.spring-boot', reason:'servie peut-être par DemoApplication (condition @Profile : chargement non établi)'}]};
-const open:RouteRow={...admin, endpoint:'endpoint:GET /api/health', path:'/api/health', state:'PERMITS_ALL', protections:[],
+const open:RouteRow={...admin, endpoint:'endpoint:GET /api/health', path:'/api/health', state:'PERMITS_ALL', guards:[],
   rules:[{subject:'route-pattern:/api/health', relation:'PERMITS_ALL', status:'OBSERVED'}]};
 
 describe('lecture des faits d’une route', ()=>{
@@ -28,8 +28,7 @@ describe('lecture des faits d’une route', ()=>{
     expect(applicationName(admin.applications[0].object)).toBe('AdpTestApplication');
     expect(ruleText(admin.rules[0])).toBe('/** → TestSecurityConfig#adpAuthorizationManager()');
     expect(ruleText(open.rules[0])).toBe('/api/health → permitAll()');
-    expect(protectionText(admin.protections[0])).toBe('TestSecurityConfig#adpAuthorizationManager()');
-    expect(protectionText({subject:'x', relation:'PROTECTED_BY', object:'policy-rule:hasRole("ADMIN")'})).toBe('hasRole("ADMIN")');
+    expect(guardText(admin.guards[0])).toBe("TestController#adminUsers(Authentication) → hasRole('ADMIN')");
     expect(chainName(admin.matched[0])).toBe('TestSecurityConfig#securityFilterChain(HttpSecurity)');
     expect(chainName(admin.handlers[0])).toBe('');
     expect(proofText({path:'A.java', line_start:3, line_end:5})).toBe('A.java:3-5');
@@ -39,7 +38,8 @@ describe('lecture des faits d’une route', ()=>{
     const rows=[admin, debug, open];
     expect(filterRoutes(rows, 'admin', 'ALL')).toEqual([admin]);
     expect(filterRoutes(rows, 'get /debug', 'ALL')).toEqual([debug]);
-    expect(filterRoutes(rows, '', 'PROTECTED')).toEqual([admin]);
+    expect(filterRoutes(rows, '', 'AUTHORIZED_BY')).toEqual([admin]);
+    expect(filterRoutes(rows, '', 'RULES')).toEqual([admin, open]);
     expect(filterRoutes(rows, '', 'PERMITS_ALL')).toEqual([open]);
     expect(filterRoutes(rows, '', 'GAPS')).toEqual([debug]);
   });
@@ -51,8 +51,9 @@ describe('page Routes', ()=>{
     expect(html).toContain('AdpTestApplication');
     expect(html).toContain('TestController.java:48');
     expect(html).toContain('SecurityConfig : non chargée (hors du classpath)');
-    expect(html).toContain('Protégée');
-    expect(html).not.toMatch(/Minia|probablement/);
+    expect(html).toContain('Règle d’autorisation écrite');
+    expect(html).toContain('Garde écrite sur la méthode');
+    expect(html).not.toMatch(/Minia|probablement|Protégée/);
   });
   it('dit exactement pourquoi une route n’est pas interprétée', ()=>{
     const html=renderToStaticMarkup(<RouteDetail row={debug}/>);
@@ -104,9 +105,9 @@ describe('chargement et affichage de la page', ()=>{
 });
 
 describe('réserves', ()=>{
-  it('montre les limites connues d’une déduction et signale une route protégée avec réserve', ()=>{
-    const reserved:RouteRow={...admin, protections:[{...admin.protections[0], derivation:{premises:['MATCHED_BY : …'],
-      rule:'spring-security.route-authorization-applies', counter_examples_checked:[], known_gaps:['la décision du gestionnaire n’est pas lue']}}],
+  it('montre les limites connues d’une déduction et signale une route avec réserve', ()=>{
+    const reserved:RouteRow={...admin, matched:[{...admin.matched[0], derivation:{premises:['MATCHED_BY : …'],
+      rule:'spring-security.first-matching-pattern', counter_examples_checked:[], known_gaps:['antMatchers : variantes non modélisées']}}],
       gaps:[{subject:admin.endpoint, type:'NOT_INTERPRETED', evaluator:'taxo.spring-security', reason:'sécurité de méthode non interprétée (@PreAuthorize)'}]};
     const detail=renderToStaticMarkup(<RouteDetail row={reserved}/>);
     expect(detail).toContain('Limites connues');

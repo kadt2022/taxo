@@ -329,7 +329,7 @@ def test_repeated_request_without_progress_is_signalled_with_open_branches():
 
 def test_a_deliberate_revisit_with_other_parameters_is_not_a_repetition():
     state, _ = opened().record_operation(SNAPSHOT, operation(reference=SERVICE, profile='calls/1'), 100)
-    state, other_profile = state.record_operation(SNAPSHOT, operation(reference=SERVICE, profile='security/1'), 100)
+    state, other_profile = state.record_operation(SNAPSHOT, operation(reference=SERVICE, profile='security/2'), 100)
     state, other_answer = state.record_operation(SNAPSHOT, operation(reference=SERVICE, profile='calls/1',
                                                                      fingerprint='h2'), 100)
 

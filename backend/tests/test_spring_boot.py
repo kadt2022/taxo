@@ -102,8 +102,15 @@ def served(output):
     return {(fact['subject'], fact['object']) for fact in output.facts if fact['relation'] == 'SERVED_BY'}
 
 
-def protected(output):
-    return {fact['subject']: fact['object'] for fact in output.facts if fact['relation'] == 'PROTECTED_BY'}
+def written_rule(output):
+    """La regle ecrite qui couvre chaque route : MATCHED_BY, puis l'AUTHORIZED_BY du motif dans la meme chaine.
+    Taxo ne dit jamais la route protegee (decision D5) ; il dit la regle ecrite qui la capture."""
+    assert not [fact for fact in output.facts if fact['relation'] == 'PROTECTED_BY']
+    rules = {(fact['subject'], fact['qualifiers'].get('filter_chain')): fact['object']
+             for fact in output.facts if fact['relation'] == 'AUTHORIZED_BY'}
+    return {fact['subject']: rules[(fact['object'], fact['qualifiers']['filter_chain'])]
+            for fact in output.facts if fact['relation'] == 'MATCHED_BY'
+            and (fact['object'], fact['qualifiers']['filter_chain']) in rules}
 
 
 def gaps(output):
@@ -132,7 +139,7 @@ def test_root_gradle_application_serves_and_secures_its_routes():
     assert app_ref not in gaps(boot_output)
 
     security_output = secure(files)
-    assert protected(security_output)['endpoint:GET /api/courses'] == 'policy-rule:authenticated()'
+    assert written_rule(security_output)['endpoint:GET /api/courses'] == 'authenticated()'
 
 
 def test_each_application_is_built_from_its_module_and_serves_only_what_its_classpath_and_scan_load():
@@ -149,10 +156,10 @@ def test_each_application_is_built_from_its_module_and_serves_only_what_its_clas
     assert {proof['path'] for proof in fact['evidence']} == {SHOP, 'web/src/main/java/com/acme/web/OrderController.java'}
 
 
-def test_a_route_is_protected_only_by_the_chains_its_application_loads():
+def test_a_route_is_captured_only_by_the_chains_its_application_loads():
     output = secure(repository())
-    assert protected(output) == {'endpoint:GET /orders': 'policy-rule:authenticated()',
-                                 'endpoint:GET /admin/users': 'policy-rule:hasRole("ADMIN")'}
+    assert written_rule(output) == {'endpoint:GET /orders': 'authenticated()',
+                                 'endpoint:GET /admin/users': 'hasRole("ADMIN")'}
     admin = next(fact for fact in output.facts if fact['relation'] == 'MATCHED_BY'
                  and fact['subject'] == 'endpoint:GET /admin/users')
     assert admin['qualifiers']['filter_chain'] == 'symbol:java:com.acme.admin.AdminSecurity#chain(HttpSecurity)'
@@ -171,7 +178,7 @@ def test_a_conditional_controller_or_chain_is_never_attributed():
     assert 'condition @Profile' in reasons(output, 'endpoint:GET /orders')
     chain = security('com.acme.security', 'ShopSecurity', 'authenticated()', bean='    @Profile("prod")\n')
     output = secure(repository(**{'security/src/main/java/com/acme/security/ShopSecurity.java': chain}))
-    assert 'endpoint:GET /orders' not in protected(output)
+    assert 'endpoint:GET /orders' not in written_rule(output)
     assert 'condition @Profile' in reasons(output, 'endpoint:GET /orders'), 'la condition du bean compte aussi'
 
 
@@ -216,7 +223,7 @@ def test_imports_extend_what_is_loaded_and_extra_scans_or_auto_configurations_st
     auto = {'security/src/main/resources/META-INF/spring/'
             'org.springframework.boot.autoconfigure.AutoConfiguration.imports': 'com.acme.security.ShopSecurity\n'}
     output = secure(repository(**auto))
-    assert 'endpoint:GET /orders' not in protected(output)
+    assert 'endpoint:GET /orders' not in written_rule(output)
     assert 'auto-configuration' in reasons(output, 'endpoint:GET /orders')
 
 
@@ -226,7 +233,7 @@ def test_a_route_served_by_two_applications_needs_the_same_chains():
                                   'shop-app/build.gradle': 'dependencies {\n    implementation project(":web")\n'
                                                            '    implementation project(":security")\n'
                                                            '    implementation project(":admin")\n}\n'}))
-    assert 'endpoint:GET /admin/users' not in protected(output)
+    assert 'endpoint:GET /admin/users' not in written_rule(output)
     assert 'chaînes différentes' in reasons(output, 'endpoint:GET /admin/users')
     same = 'dependencies {\n    implementation project(":web")\n    implementation project(":security")\n}\n'
     scan = application('com.acme.adminapp', 'AdminApplication', '(scanBasePackages = "com.acme")')
@@ -282,11 +289,11 @@ public class AdminWeb {
 }
 '''
     output = secure(repository(**{'admin/src/main/java/com/acme/admin/AdminWeb.java': customizer}))
-    assert protected(output)['endpoint:GET /orders'] == 'policy-rule:authenticated()', \
+    assert written_rule(output)['endpoint:GET /orders'] == 'authenticated()', \
         'l exclusion d une application dont le module n est pas sur le classpath ne vise pas la route'
     loaded = repository(**{'web/src/main/java/com/acme/web/WebIgnore.java':
                            customizer.replace('com.acme.admin', 'com.acme.web').replace('AdminWeb', 'WebIgnore')})
-    assert 'endpoint:GET /orders' not in protected(secure(loaded))
+    assert 'endpoint:GET /orders' not in written_rule(secure(loaded))
 
 
 def test_routes_the_endpoint_analysis_could_not_establish_stay_not_interpreted():

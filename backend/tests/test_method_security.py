@@ -1,4 +1,6 @@
-"""TAXO-MINIA-SEC-01, E2 : la securite de methode et CSRF dans la Maille, sans jamais conclure a tort.
+"""TAXO-MINIA-SEC-01, E2 : la securite de methode et CSRF dans la Maille, en constats seulement (decision
+« Taxo temoin », D5) : Taxo restitue `@PreAuthorize`, l'annotation qui l'active et la desactivation de CSRF, tels
+qu'ecrits ; il ne conclut jamais qu'une route est protegee (`PROTECTED_BY` n'est plus produit).
 
 La verite est etablie a la main sur un petit projet Spring synthetique : `GET /api/items` exige une
 authentification par la regle `/api/**` (ligne 20 de SecurityConfig), et `@PreAuthorize` restreint en plus la
@@ -18,7 +20,6 @@ ROLES = "hasAnyRole('ADMIN','EDITOR')"
 ENABLE = 'org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity'
 GLOBAL = 'org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity'
 PRE_AUTHORIZE = 'org.springframework.security.access.prepost.PreAuthorize'
-METHOD_RULE = 'spring-security.method-authorization-applies'
 
 BUILD = """plugins {
     id 'java'
@@ -121,24 +122,13 @@ def reasons(output, subject):
             if item['coverage_type'] == 'NOT_INTERPRETED' and item['subject'] == subject]
 
 
-def method_protection(output):
-    return [fact for fact in found(output, 'PROTECTED_BY', ENDPOINT) if fact['qualifiers'].get('annotation')]
 
-
-def test_pre_authorize_protects_the_endpoint_its_method_handles_beside_the_url_rule():
+def test_pre_authorize_is_restituted_as_written_never_as_a_protection():
     output = evaluate(shop())
     assert output.status == EvaluationStatus.SUCCESS and output.coverage[1:] == ()
-    targets = {fact['object'] for fact in found(output, 'PROTECTED_BY', ENDPOINT)}
-    assert targets == {'policy-rule:authenticated()', f'policy-rule:{ROLES}'}, 'les deux protections sont vraies'
-    [protection] = method_protection(output)
-    assert protection['status'] == 'INFERRED'
-    derivation = protection['derivation']
-    assert derivation['rule'] == METHOD_RULE
-    assert derivation['premises'] == [f'HANDLED_BY : {ENDPOINT} -> {HANDLER}', f'AUTHORIZED_BY : {HANDLER} -> {ROLES}',
-                                      f'ANNOTATED_WITH : {CONFIG} -> annotation:EnableMethodSecurity']
-    assert derivation['known_gaps'], 'les rôles des utilisateurs sont des données'
-    lines = {(item['path'].rsplit('/', 1)[-1], item['line_start']) for item in protection['evidence']}
-    assert lines == {('ItemController.java', 14), ('SecurityConfig.java', 13)}
+    assert found(output, 'PROTECTED_BY') == [], 'Taxo dit ce qui est écrit, jamais que la route est protégée'
+    [guard] = found(output, 'AUTHORIZED_BY', HANDLER)
+    assert (guard['status'], guard['object']) == ('OBSERVED', ROLES)
 
 
 def test_the_written_facts_are_observed_at_their_line():
@@ -155,64 +145,60 @@ def test_the_written_facts_are_observed_at_their_line():
     assert csrf['evidence'][0]['line_start'] == 18
 
 
-def test_method_security_protects_even_a_route_the_url_rules_permit():
+def test_a_permit_all_rule_and_a_method_guard_are_both_restituted():
     output = evaluate(shop(security(rule='permitAll()')))
-    assert [fact['object'] for fact in found(output, 'PROTECTED_BY', ENDPOINT)] == [f'policy-rule:{ROLES}']
+    assert found(output, 'PERMITS_ALL'), 'la règle d’URL écrite'
+    assert found(output, 'AUTHORIZED_BY', HANDLER), 'la garde de la méthode écrite'
+    assert found(output, 'PROTECTED_BY') == [], 'à qui lit de conclure : Taxo ne tranche pas entre les deux'
 
 
-def test_without_enabling_the_guard_is_observed_but_protects_nothing():
+def test_without_enabling_the_guard_is_still_restituted():
     output = evaluate(shop(security(enabling='', annotation='')))
     assert found(output, 'AUTHORIZED_BY', HANDLER), 'l’annotation reste écrite'
-    assert method_protection(output) == []
-    assert any('activation non établie' in reason for reason in reasons(output, ENDPOINT))
-    assert output.status == EvaluationStatus.PARTIAL
+    assert found(output, 'ANNOTATED_WITH') == [] and found(output, 'PROTECTED_BY') == []
 
 
-def test_global_method_security_enables_pre_authorize_only_when_written():
+def test_the_enabling_annotation_is_restituted_with_its_written_attribute():
     imports = f'import {GLOBAL};'
-    off = evaluate(shop(security(imports, '@EnableGlobalMethodSecurity(securedEnabled = true)')))
-    assert method_protection(off) == [] and reasons(off, ENDPOINT)
     on = evaluate(shop(security(imports, '@EnableGlobalMethodSecurity(prePostEnabled = true)')))
-    assert len(method_protection(on)) == 1
     [enabling] = found(on, 'ANNOTATED_WITH')
     assert enabling['qualifiers'] == {'written_name': 'EnableGlobalMethodSecurity', 'resolved_name': GLOBAL,
                                       'prePostEnabled': 'true'}
+    assert found(on, 'PROTECTED_BY') == []
 
 
 def test_an_enabling_attribute_that_is_not_a_literal_is_declared_not_interpreted():
     output = evaluate(shop(security(annotation='@EnableMethodSecurity(prePostEnabled = Flags.ON)')))
-    assert method_protection(output) == []
+    assert found(output, 'PROTECTED_BY') == []
     assert any('prePostEnabled = Flags.ON' in reason for reason in reasons(output, CONFIG))
 
 
 def test_an_aspectj_mode_is_declared_not_interpreted_never_assumed_woven():
     output = evaluate(shop(security(annotation='@EnableMethodSecurity(mode = AdviceMode.ASPECTJ)')))
-    assert method_protection(output) == []
     assert any('mode = AdviceMode.ASPECTJ' in reason for reason in reasons(output, CONFIG))
-    proxy = evaluate(shop(security(annotation='@EnableMethodSecurity(mode = AdviceMode.PROXY)')))
-    assert len(method_protection(proxy)) == 1, 'le proxy par défaut, écrit, reste lu'
+    assert found(output, 'PROTECTED_BY') == []
 
 
 def test_an_expression_that_may_permit_everything_is_observed_never_concluded():
     output = evaluate(shop(web=controller('@PreAuthorize("@guard.check(authentication) or permitAll()")')))
     [guard] = found(output, 'AUTHORIZED_BY', HANDLER)
     assert guard['object'] == '@guard.check(authentication) or permitAll()'
-    assert method_protection(output) == []
-    assert any('expression non évaluée' in reason for reason in reasons(output, ENDPOINT))
+    assert found(output, 'PROTECTED_BY') == []
 
 
-def test_a_type_guard_applies_unless_the_method_has_its_own():
+def test_a_type_guard_is_restituted_on_the_type_and_a_method_guard_on_the_method():
     typed = controller(guard='', type_guard='\n@PreAuthorize("hasRole(\'ADMIN\')")')
     output = evaluate(shop(web=typed))
-    assert found(output, 'AUTHORIZED_BY', 'symbol:java:com.example.shop.web.ItemController'), 'le type porte la garde'
-    assert [fact['object'] for fact in method_protection(output)] == ["policy-rule:hasRole('ADMIN')"]
+    [guard] = found(output, 'AUTHORIZED_BY', 'symbol:java:com.example.shop.web.ItemController')
+    assert guard['object'] == "hasRole('ADMIN')", 'le type porte la garde'
     both = evaluate(shop(web=controller(type_guard='\n@PreAuthorize("hasRole(\'ADMIN\')")')))
-    assert [fact['object'] for fact in method_protection(both)] == [f'policy-rule:{ROLES}'], 'la méthode l’emporte'
+    assert [fact['object'] for fact in found(both, 'AUTHORIZED_BY', HANDLER)] == [ROLES]
+    assert found(both, 'PROTECTED_BY') == []
 
 
 def test_a_homonym_of_pre_authorize_is_never_taken_for_spring():
     output = evaluate(shop(web=controller(imports='import com.example.shop.web.security.PreAuthorize;')))
-    assert found(output, 'AUTHORIZED_BY', HANDLER) == [] and method_protection(output) == []
+    assert found(output, 'AUTHORIZED_BY', HANDLER) == [] and found(output, 'PROTECTED_BY') == []
     assert any('non résolue vers Spring' in reason for reason in reasons(output, ENDPOINT))
 
 
@@ -220,50 +206,46 @@ def test_a_same_package_annotation_wins_over_a_wildcard_import_of_spring():
     local = 'package com.example.shop.web;\n\npublic @interface PreAuthorize {\n    String value();\n}\n'
     output = evaluate(shop(web=controller(imports='import org.springframework.security.access.prepost.*;'),
                            **{'src/main/java/com/example/shop/web/PreAuthorize.java': local}))
-    assert found(output, 'AUTHORIZED_BY', HANDLER) == [] and method_protection(output) == []
+    assert found(output, 'AUTHORIZED_BY', HANDLER) == []
     alone = evaluate(shop(web=controller(imports='import org.springframework.security.access.prepost.*;')))
-    assert len(method_protection(alone)) == 1, 'sans homonyme, l’import du paquetage désigne Spring'
+    assert len(found(alone, 'AUTHORIZED_BY', HANDLER)) == 1, 'sans homonyme, l’import du paquetage désigne Spring'
 
 
 def test_other_method_security_annotations_stay_not_interpreted():
     guard = f'@PreAuthorize("{ROLES}")\n    @Secured("ROLE_ADMIN")'
     imports = f'import {PRE_AUTHORIZE};\nimport org.springframework.security.access.annotation.Secured;'
     output = evaluate(shop(web=controller(guard, imports)))
-    assert len(method_protection(output)) == 1
+    assert len(found(output, 'AUTHORIZED_BY', HANDLER)) == 1
     assert reasons(output, ENDPOINT) == ['sécurité de méthode non interprétée (@Secured)']
 
 
-def test_an_enabling_type_the_application_does_not_load_protects_nothing():
+def test_an_enabling_type_elsewhere_changes_nothing_to_what_is_restituted():
     outside = security(package='com.other.config')
     output = evaluate(shop(security(enabling='', annotation=''),
                            **{'src/main/java/com/other/config/SecurityConfig.java': outside}))
-    assert method_protection(output) == []
-    assert any('activation par application:' in reason for reason in reasons(output, ENDPOINT))
+    assert found(output, 'AUTHORIZED_BY', HANDLER) and found(output, 'PROTECTED_BY') == []
 
 
-def test_a_method_a_spring_proxy_cannot_intercept_is_never_protected():
+def test_a_guard_on_a_final_or_static_method_is_still_restituted_never_concluded():
     for modifier in ('final', 'static'):
         sealed = controller().replace('public List<String> items()', f'public {modifier} List<String> items()')
         output = evaluate(shop(web=sealed))
         assert found(output, 'AUTHORIZED_BY', HANDLER), 'l’annotation reste écrite'
-        assert method_protection(output) == []
-        assert any(f'méthode {modifier}' in reason for reason in reasons(output, ENDPOINT))
+        assert found(output, 'PROTECTED_BY') == []
 
 
-def test_a_final_controller_is_never_assumed_proxied():
+def test_a_final_controller_keeps_its_written_guard():
     sealed = controller().replace('public class ItemController', 'public final class ItemController')
     output = evaluate(shop(web=sealed))
-    assert method_protection(output) == []
-    assert any('classe final' in reason for reason in reasons(output, ENDPOINT))
+    assert found(output, 'AUTHORIZED_BY', HANDLER) and found(output, 'PROTECTED_BY') == []
 
 
-def test_without_a_spring_boot_application_the_enabling_is_never_assumed_to_apply():
+def test_without_a_spring_boot_application_the_written_facts_stay():
     files = shop()
     del files['src/main/java/com/example/shop/ShopApplication.java']
     output = evaluate(files)
     assert found(output, 'ANNOTATED_WITH'), 'l’activation reste écrite'
-    assert method_protection(output) == []
-    assert any('aucune application Spring Boot lue' in reason for reason in reasons(output, ENDPOINT))
+    assert found(output, 'AUTHORIZED_BY', HANDLER) and found(output, 'PROTECTED_BY') == []
 
 
 def test_csrf_is_read_only_when_it_is_disabled():
@@ -292,7 +274,7 @@ public @interface IsAdmin {
 '''
     output = evaluate(shop(web=controller('@IsAdmin', imports=''),
                            **{'src/main/java/com/example/shop/web/IsAdmin.java': meta}))
-    assert method_protection(output) == []
+    assert found(output, 'PROTECTED_BY') == []
     assert reasons(output, ENDPOINT) == ['sécurité de méthode non interprétée (méta-annotation @IsAdmin)']
     api = '''package com.example.shop.web;
 
@@ -306,7 +288,7 @@ public interface ItemApi {
     inherited = controller('', imports='').replace('public class ItemController {',
                                                    'public class ItemController implements ItemApi {')
     output = evaluate(shop(web=inherited, **{'src/main/java/com/example/shop/web/ItemApi.java': api}))
-    assert method_protection(output) == []
+    assert found(output, 'PROTECTED_BY') == []
     assert reasons(output, ENDPOINT) == ['sécurité de méthode non interprétée (héritée de ItemApi)']
 
 
@@ -314,4 +296,4 @@ def test_every_method_security_fact_satisfies_the_contract():
     execution = RunEvaluator()(SpringSecurityEvaluator(), snapshot(shop()))
     assert execution.status == EvaluationStatus.SUCCESS
     relations = {fact['relation'] for fact in execution.facts if fact['kind'] == 'ASSERTION'}
-    assert {'ANNOTATED_WITH', 'AUTHORIZED_BY', 'CONFIGURES', 'PROTECTED_BY'} <= relations
+    assert {'ANNOTATED_WITH', 'AUTHORIZED_BY', 'CONFIGURES'} <= relations and 'PROTECTED_BY' not in relations

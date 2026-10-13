@@ -16,8 +16,8 @@ const SCANS=[
   {id:'old', created_at:'2026-10-01T10:00:00Z', snapshot:snapshot('a'), facts:[], evaluations:[evaluation('taxo.inventory', 'FAILED')]}];
 const CHOICES=SCANS.map(scan=>({id:scan.id, created_at:scan.created_at, snapshot:scan.snapshot, fact_count:20, failed:[],
   commit:{sha:scan.snapshot.commit, subject:`message ${scan.id}`, author:'Amina', authored_at:scan.created_at}}));
-const ROUTES={routes:[{endpoint:'endpoint:GET /orders', verb:'GET', path:'/orders', state:'PROTECTED', handlers:[], applications:[],
-  matched:[], rules:[], protections:[], gaps:[]}], unestablished:[]};
+const ROUTES={routes:[{endpoint:'endpoint:GET /orders', verb:'GET', path:'/orders', state:'AUTHORIZED_BY', handlers:[], applications:[],
+  matched:[], rules:[], guards:[], gaps:[]}], unestablished:[]};
 const STRUCTURE=[{kind:'ASSERTION', subject:'repository:p', relation:'CONTAINS', object:'module:web', status:'OBSERVED', validity:'VALID',
   evidence:[{path:'settings.gradle', line_start:1, line_end:1}]},
   {kind:'ASSERTION', subject:'module:app', relation:'DEPENDS_ON', object:'module:web', status:'OBSERVED', validity:'VALID', evidence:[]}];
@@ -148,8 +148,8 @@ describe('une page par fonction', ()=>{
     expect(text()).toContain('Aucune application reconnue.');
     await visit('#/securite');
     expect(host.querySelector('.routes h2')?.textContent).toBe('Sécurité des routes');
-    expect(text()).toContain('Ce n’est pas encore une analyse de sécurité complète');
-    expect((host.querySelector('.routes select') as HTMLSelectElement).value).toBe('PROTECTED');
+    expect(text()).toContain('Taxo ne conclut pas qu’une route est protégée');
+    expect((host.querySelector('.routes select') as HTMLSelectElement).value).toBe('RULES');
     await visit('#/non-interpretees');
     expect((host.querySelector('.routes select') as HTMLSelectElement).value).toBe('GAPS');
     await visit('#/routes');

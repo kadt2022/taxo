@@ -122,15 +122,16 @@ La section **Routes** du portail montre, pour chaque route HTTP établie, une li
 faits de Taxo :
 - la méthode qui la traite (`HANDLED_BY`) ;
 - l'application qui la sert (`SERVED_BY`) ;
-- la règle qui la capture (`MATCHED_BY`, puis la règle écrite de la même chaîne) ;
-- sa protection (`PROTECTED_BY`) ;
-- son état.
+- la règle d'URL qui la capture (`MATCHED_BY`, puis la règle écrite de la même chaîne) ;
+- la garde écrite sur sa méthode ou son type (`AUTHORIZED_BY` de `@PreAuthorize`) ;
+- ce qui est écrit, en un mot. Taxo ne dit jamais une route « protégée » (décision D5) : à qui lit de conclure.
 
 On filtre par chemin ou verbe, et par état. Un état n'est affiché que si un fait le porte :
-- « Protégée » : un fait `PROTECTED_BY` ;
-- « Règle permitAll() » : la règle qui la capture est `PERMITS_ALL` dans la même chaîne ;
+- « Règle d'autorisation écrite » : la règle d'URL qui la capture est `AUTHORIZED_BY` dans la même chaîne, ou
+  une garde est écrite sur sa méthode ou son type ;
+- « Règle permitAll() écrite » : seule la règle `PERMITS_ALL` de la même chaîne la capture ;
 - « Non interprétée » : une couverture le dit, avec sa raison exacte ;
-- « Sans conclusion » : sinon.
+- « Aucune règle trouvée » : sinon.
 
 Un clic sur une route montre chaque fait, avec ses preuves (fichier et lignes), ses prémisses, ce qui a
 été écarté et ses limites connues. Les zones où des routes ont pu échapper à l'analyse sont listées
@@ -246,8 +247,8 @@ Quatrième évaluateur, `taxo.spring-security` lit les règles `authorizeHttpReq
   pour `access(manager)`) ;
 - `endpoint` `MATCHED_BY` `route-pattern` est une déduction (`INFERRED`) : la première règle qui capture
   **toutes** les requêtes de la route, les règles antérieures en contre-exemples ;
-- `endpoint` `PROTECTED_BY` `policy-rule:authenticated()` (ou `symbol:java:…`) repose sur `MATCHED_BY`
-  puis `AUTHORIZED_BY`, jamais sur `HANDLED_BY`, avec ses limites connues (les rôles sont des données).
+- `PROTECTED_BY` n'est plus produit (décision « Taxo témoin », D5) : Taxo dit les règles écrites, pas
+  qu'une route est protégée.
 
 Critère anti-faux-positif : Taxo ne déclare jamais une route protégée ou publique à tort. Il ne conclut
 pas, et déclare l'endpoint non interprété, quand :
@@ -464,7 +465,7 @@ non vérifiée. Les trois colonnes se répartissent ainsi :
   repli en mode paquet…).
 
 En exploration, Minia peut demander la **Tuile** d'une référence déjà reçue selon un profil déclaré
-(`get_tile` : `method-context/1`, `calls/1`, `structure/1`, `security/1`), sur la même analyse. Une Tuile ne
+(`get_tile` : `method-context/1`, `calls/1`, `structure/1`, `security/2`), sur la même analyse. Une Tuile ne
 contient que des faits. Si `TAXO_SOURCE_READING=symbol` et que la case « Autoriser Minia à lire le code des classes,
 méthodes et constructeurs qu'elle trouve » est cochée (`"source": true` dans `POST /api/projects/{id}/ask/stream`), Minia peut aussi
 lire le **code** d'un symbole déjà reçu de Taxo (`get_source`) : la pièce est lue au commit de l'analyse (pas

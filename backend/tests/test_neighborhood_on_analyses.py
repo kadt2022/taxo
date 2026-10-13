@@ -3,7 +3,8 @@
 La vérité est écrite à la main, à partir des fichiers du dépôt scénarisé (`test_spring_boot.repository`) :
 - `OrderController#get` traite `GET /orders` ;
 - la boutique (`ShopApplication`) balaie `com.acme` et a `web` sur son classpath : elle sert la route ;
-- `ShopSecurity` protège tout (`/**`) par `authenticated()` ; `AdminSecurity` autorise `/**` à `hasRole("ADMIN")`.
+- `ShopSecurity` écrit `/**` → `authenticated()` ; `AdminSecurity` écrit `/**` → `hasRole("ADMIN")` (règles écrites,
+  jamais une conclusion « protégée », D5).
 """
 from test_coverage_bounds import PYTHON, taxo_on_fixture  # noqa: F401  (fixture partagée)
 from test_java_calls import fixture_files
@@ -11,7 +12,7 @@ from test_spring_boot import SHOP_REF, repository
 
 ORDERS = 'endpoint:GET /orders'
 CONTROLLER = 'web/src/main/java/com/acme/web/OrderController.java'
-SECURITY = ('HANDLED_BY', 'SERVED_BY', 'MATCHED_BY', 'AUTHORIZED_BY', 'PROTECTED_BY')
+SECURITY = ('HANDLED_BY', 'SERVED_BY', 'MATCHED_BY', 'AUTHORIZED_BY')
 
 
 def tile(taxo, scan, **arguments):
@@ -38,7 +39,6 @@ def test_from_a_route_to_its_handler_application_and_authorizations(taxo_on):
         (1, ORDERS, 'HANDLED_BY', 'symbol:java:com.acme.web.OrderController#get()'),
         (1, ORDERS, 'SERVED_BY', SHOP_REF),
         (1, ORDERS, 'MATCHED_BY', 'route-pattern:/**'),
-        (1, ORDERS, 'PROTECTED_BY', 'policy-rule:authenticated()'),
         (2, 'route-pattern:/**', 'AUTHORIZED_BY', 'authenticated()'),
         (2, 'route-pattern:/**', 'AUTHORIZED_BY', 'hasRole("ADMIN")')]
     assert found['stop_reason'] == 'ADJACENCY_COMPLETE'

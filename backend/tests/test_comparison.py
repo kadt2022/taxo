@@ -130,8 +130,7 @@ def test_b_to_c_a_rule_changes_and_a_route_disappears(bench):
         [fact for fact in removed if not concerns(fact, 'admin/users', 'UserAdminController')]
     modified = {(item['before'][0]['subject'], item['before'][0]['relation'], item['before'][0].get('object'),
                  item['after'][0].get('object')) for item in bench.changes(b, c, 'MODIFIED')}
-    for route in ('endpoint:GET /orders', 'endpoint:GET /status'):
-        assert (route, 'PROTECTED_BY', 'policy-rule:authenticated()', 'policy-rule:hasRole("USER")') in modified
+    assert ('route-pattern:/**', 'AUTHORIZED_BY', 'authenticated()', 'hasRole("USER")') in modified,         'la regle ecrite qui change, jamais une conclusion « protegee » (D5)'
     added = [fact for item in bench.changes(b, c, 'ADDED') for fact in item['after']]
     assert all(concerns(fact, bench.commits['C'], 'hasRole("USER")', 'ShopSecurity') for fact in added), \
         [fact for fact in added if not concerns(fact, bench.commits['C'], 'hasRole("USER")', 'ShopSecurity')]

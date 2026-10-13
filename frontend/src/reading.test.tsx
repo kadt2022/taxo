@@ -87,8 +87,8 @@ describe('ce que chaque analyseur a lu', ()=>{
 
   it('Routes : aucune route dans ce que Taxo a lu n’est pas « aucune route »', ()=>{
     const view=(routes:number, unread:string[])=>renderToStaticMarkup(<RoutesView result={{routes:Array.from({length:routes}, (_, index)=>({
-      endpoint:`endpoint:GET /r${index}`, verb:'GET', path:`/r${index}`, handlers:[], applications:[], matched:[], rules:[], protections:[],
-      gaps:[], state:'NO_CONCLUSION'})),
+      endpoint:`endpoint:GET /r${index}`, verb:'GET', path:`/r${index}`, handlers:[], applications:[], matched:[], rules:[], guards:[],
+      gaps:[], state:'NO_RULE_FOUND'})),
     unestablished:[]} as never} error="" text="" filter="ALL" selected="" onText={vi.fn()} onFilter={vi.fn()} onSelect={vi.fn()} unread={unread}/>);
     const empty=view(0, ['Python', 'TypeScript']);
     expect(empty).toContain('Aucune route établie dans ce que Taxo a lu. Non analysé : Python, TypeScript');
@@ -137,7 +137,7 @@ describe('ce que chaque analyseur a lu', ()=>{
       summary('taxo.spring-boot'), summary('taxo.structure', {relations:{CONTAINS:2}}));
     expect(card(legacy, 'api', UNKNOWN_COVERAGE)).toMatchObject({value:'Non établi', state:'unknown'});
     expect(card(legacy, 'security', UNKNOWN_COVERAGE)).toMatchObject({value:'Non établi', link:{href:'#/securite'}});
-    expect(overviewCards(legacy, {PROTECTED:0, PERMITS_ALL:0, NOT_INTERPRETED:0, NO_CONCLUSION:0, reserved:0, missing:0}, UNKNOWN_COVERAGE)
+    expect(overviewCards(legacy, {AUTHORIZED_BY:0, PERMITS_ALL:0, NOT_INTERPRETED:0, NO_RULE_FOUND:0, reserved:0, missing:0}, UNKNOWN_COVERAGE)
       .find(item=>item.id==='security')?.value).toBe('Non établi');
     expect(card(legacy, 'architecture', UNKNOWN_COVERAGE).lines).not.toContain('0 application Spring Boot');
     const counted=scanOf(summary('taxo.inventory'), summary('taxo.spring-api', {relations:{HANDLED_BY:3}}));

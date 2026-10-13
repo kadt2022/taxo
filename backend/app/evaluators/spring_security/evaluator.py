@@ -7,16 +7,15 @@ les configurations `authorizeHttpRequests` dans les sources Java. Il produit :
   (`hasRole("ADMIN")`) ou le type qui decide (`access(manager)`) : `OBSERVED`, preuve a la ligne ;
 - pour chaque endpoint dont la regle gagnante est sure, `endpoint` MATCHED_BY `route-pattern` : `INFERRED`,
   premiere regle correspondante dans l'ordre de declaration, les regles anterieures en contre-exemples ;
-- puis, si cette regle exige une autorisation, `endpoint` PROTECTED_BY `policy-rule:<expression>` ou
-  `symbol:java:<type>` : `INFERRED`, sur MATCHED_BY et AUTHORIZED_BY, jamais sur HANDLED_BY.
+- jamais `PROTECTED_BY` (décision « Taxo témoin », D5) : Taxo dit les règles écrites qui concernent une route,
+  jamais qu'elle est protégée.
 
 Securite de methode et CSRF (TAXO-MINIA-SEC-01, E2) :
 
 - le type qui active la securite de methode est ANNOTATED_WITH `annotation:<EnableMethodSecurity>` (`OBSERVED`) ;
 - la methode, ou le type, garde par `@PreAuthorize` est AUTHORIZED_BY l'expression ecrite (`OBSERVED`) ;
-- l'endpoint traite par cette methode est PROTECTED_BY `policy-rule:<expression>` (`INFERRED`, regle
-  `spring-security.method-authorization-applies`) sur HANDLED_BY, AUTHORIZED_BY et ANNOTATED_WITH, si
-  l'application qui sert la route charge le type qui active et si l'expression ne peut que restreindre ;
+- l'endpoint traite par cette methode n'en devient pas « protege » : HANDLED_BY et l'AUTHORIZED_BY de la methode
+  suffisent a qui veut conclure (D5) ;
 - la methode qui desactive CSRF CONFIGURES `policy-rule:csrf.disable()` (`OBSERVED`).
 
 Critere anti-faux-positif : il ne conclut que si la conclusion vaut pour toute requete de la route. Une
@@ -46,10 +45,6 @@ from .catalog import CATALOG
 MATCHER_METHOD = 'java.spring-security.request-matcher'
 ORDER_METHOD = 'java.spring-security.authorize-http-requests'
 FIRST_MATCH = 'spring-security.first-matching-pattern'
-APPLIES = 'spring-security.route-authorization-applies'
-METHOD_APPLIES = 'spring-security.method-authorization-applies'
-# Modificateurs qui soustraient une methode au proxy de la securite de methode.
-UNADVISABLE = frozenset({'final', 'private', 'static'})
 PRE_AUTHORIZE_METHOD = 'java.spring-security.pre-authorize'
 ENABLING_METHOD = 'java.spring-security.enable-method-security'
 CSRF_METHOD = 'java.spring-security.csrf'
@@ -60,13 +55,11 @@ METHOD_SECURITY = {'PreAuthorize', 'PostAuthorize', 'PreFilter', 'PostFilter', '
 PRE_AUTHORIZE = 'PreAuthorize'
 # Supertypes d'un mecanisme maison : filtre de servlet, gestionnaire d'autorisation.
 CUSTOM = {'OncePerRequestFilter', 'GenericFilterBean', 'Filter', 'AuthorizationManager'}
-ROLE_ACTIONS = ('hasRole', 'hasAnyRole', 'hasAuthority', 'hasAnyAuthority')
-DATA_GAP = 'les rôles et autorités des utilisateurs sont des données, hors du code'
 
 
 class SpringSecurityEvaluator:
     evaluator_id = 'taxo.spring-security'
-    producer_version = '0.5.0'
+    producer_version = '0.6.0'
     catalog = CATALOG
 
     def evaluate(self, snapshot, progress=silent):
@@ -83,8 +76,7 @@ class SpringSecurityEvaluator:
             f'{subject} : {" ; ".join(reasons)}' for subject, (_, reasons) in sorted(run.gaps.items())]
         partial = run.gaps or analysis.read_errors
         status = EvaluationStatus.PARTIAL if partial else EvaluationStatus.SUCCESS
-        legacy = {'configurations': len(run.configurations), 'matched': run.matched, 'protected': run.protected,
-                  'method_protected': run.method_protected}
+        legacy = {'configurations': len(run.configurations), 'matched': run.matched}
         return EvaluationOutput(tuple(run.facts.values()), tuple(coverage), status, tuple(warnings), legacy)
 
 
@@ -103,7 +95,7 @@ class _Run:
         self.snapshot, self.analysis, self.deployment = snapshot, analysis, deployment
         self.facts, self.gaps, self.warnings = {}, {}, []
         self.configurations, self.ignored, self.enablings, self.csrf = [], [], [], []
-        self.matched = self.protected = self.method_protected = 0
+        self.matched = 0
         for java_file in analysis.parsed:
             data = analysis.contents[java_file.path]
             if b'authorize' in data or b'ignoring' in data:
@@ -282,72 +274,9 @@ class _Run:
         annotation = guard.annotation
         evidence = [self._evidence(endpoint.path, annotation.line_start, annotation.line_end, PRE_AUTHORIZE_METHOD)]
         qualifiers = {'annotation': PRE_AUTHORIZE}
+        # Témoin (décision D5) : l'annotation et son expression, telles qu'écrites. Taxo ne conclut pas que la route
+        # est protégée : le proxy, l'activation et l'application qui la sert relèvent de l'exécution.
         self._add(_observed(guard.symbol, 'AUTHORIZED_BY', guard.expression, evidence, qualifiers))
-        if not guard.restrictive:
-            self._gap(endpoint.reference, scope,
-                      'sécurité de méthode non interprétée (@PreAuthorize : expression non évaluée)')
-            return
-        sealed = sorted(UNADVISABLE & _modifiers(endpoint.java_type, endpoint.methods[0]))
-        if sealed:
-            # Un proxy Spring (sous-classe CGLIB ou interface) n'intercepte pas une methode final, private ou static.
-            self._gap(endpoint.reference, scope, f'sécurité de méthode non interprétée (méthode {" ".join(sealed)} : '
-                                                 'non interceptée par un proxy Spring)')
-            return
-        if 'final' in endpoint.java_type.modifiers:
-            # Spring Boot proxie par sous-classe : une classe final ne peut pas l'etre.
-            self._gap(endpoint.reference, scope, 'sécurité de méthode non interprétée (classe final : non proxiable '
-                                                 'par sous-classe)')
-            return
-        enabling = self._enabling(endpoint)
-        if enabling is None:
-            return
-        premises = [f'HANDLED_BY : {endpoint.reference} -> {endpoint.handler}',
-                    f'AUTHORIZED_BY : {guard.symbol} -> {guard.expression}', *enabling[0]]
-        # Une liste neuve : les preuves de l'AUTHORIZED_BY observe restent celles de l'annotation seule.
-        evidence = [*evidence, *enabling[1]]
-        gaps = [DATA_GAP] if any(f'{action}(' in guard.expression for action in ROLE_ACTIONS) else []
-        self._add({**_observed(endpoint.reference, 'PROTECTED_BY', f'policy-rule:{guard.expression.strip()}',
-                               evidence, qualifiers), 'status': 'INFERRED',
-                   'derivation': {'premises': premises, 'rule': METHOD_APPLIES, 'counter_examples_checked': [],
-                                  'known_gaps': gaps}})
-        self.method_protected += 1
-
-    def _enabling(self, endpoint):
-        """(premisses, preuves) de l'activation de la securite de methode pour l'application qui sert l'endpoint ;
-        None, la raison declaree, si elle n'est pas etablie."""
-        scope = f'file:{endpoint.path}'
-        enabled = [item for item in self.enablings if item.state == methods.ENABLED]
-        if not enabled:
-            self._gap(endpoint.reference, scope, 'sécurité de méthode : activation non établie (aucune '
-                                                 '@EnableMethodSecurity lue qui active @PreAuthorize)')
-            return None
-        if not self.deployment.applications:
-            # Sans application Spring Boot lue, rien ne dit qu'une activation lue est chargee avec cette route.
-            self._gap(endpoint.reference, scope, 'sécurité de méthode : application qui sert la route non établie '
-                                                 '(aucune application Spring Boot lue)')
-            return None
-        outcomes = [(application, self.deployment.loads(application, endpoint.java_type.qualified_name).outcome)
-                    for application in self.deployment.applications]
-        if any(outcome == UNKNOWN for _, outcome in outcomes):
-            self._gap(endpoint.reference, scope, 'sécurité de méthode : application qui sert la route non établie')
-            return None
-        serving = [application for application, outcome in outcomes if outcome == YES]
-        chosen = []
-        for application in serving:
-            loaded = [item for item in enabled if self.deployment.loads(application, item.owner).outcome == YES]
-            if not loaded:
-                self._gap(endpoint.reference, scope, f'sécurité de méthode : activation par '
-                                                     f'{application.reference} non établie')
-                return None
-            chosen += [item for item in loaded if item not in chosen]
-        if not chosen:
-            self._gap(endpoint.reference, scope, 'sécurité de méthode : aucune application établie ne sert '
-                                                 'cette route')
-            return None
-        premises = [f'ANNOTATED_WITH : {item.symbol} -> {item.reference}' for item in chosen]
-        evidence = [self._evidence(item.path, item.annotation.line_start, item.annotation.line_end, ENABLING_METHOD)
-                    for item in chosen]
-        return premises, evidence
 
     def _endpoint(self, endpoint, configurations, serving):
         """Rattache l'endpoint a sa regle gagnante, ou dit pourquoi il ne le peut pas."""
@@ -417,16 +346,6 @@ class _Run:
             gaps=[*serving.gaps, *([winner.note] if winner.note else [])])
         self._add(matched)
         self.matched += 1
-        if winner.permits:
-            return
-        target = winner.target or f'policy-rule:{winner.expression}'
-        gaps = _protection_gaps(winner)
-        self._add(_inference(
-            endpoint.reference, 'PROTECTED_BY', target, evidence, chain,
-            premises=[f'MATCHED_BY : {endpoint.reference} -> {pattern}',
-                      f'AUTHORIZED_BY : {pattern} -> {winner.target or winner.expression}'],
-            rule=APPLIES, checked=[], gaps=[*serving.gaps, *gaps]))
-        self.protected += 1
 
     def _evidence(self, path, line_start, line_end, method):
         data = self.analysis.contents[path]
@@ -442,16 +361,6 @@ def _merge(first, second):
                     unique(first.gaps + second.gaps), first.applications + second.applications)
 
 
-def _protection_gaps(winner):
-    """Ce que la protection deduite ne dit pas : la decision d'un gestionnaire, les roles effectifs."""
-    if winner.target:
-        return [f'la décision de {winner.target} n’est pas lue']
-    if winner.action in ROLE_ACTIONS:
-        return [DATA_GAP]
-    if winner.action == 'access':
-        return ['l’expression d’autorisation n’est pas évaluée']
-    return []
-
 
 def _assertion(subject, relation, target, evidence, chain):
     """PERMITS_ALL est la seule relation sans objet (ARCHITECTURE § 5). Le qualificatif `filter_chain` nomme la chaine de
@@ -462,11 +371,6 @@ def _assertion(subject, relation, target, evidence, chain):
         fact['object'] = target
     return fact
 
-
-def _modifiers(java_type, method):
-    """Les modificateurs ecrits de la methode, lus sur sa declaration (les methodes annotees n'en portent pas)."""
-    return next((item.modifiers for item in java_type.declarations
-                 if item.signature == method.signature and item.line_start == method.line_start), frozenset())
 
 
 def _observed(subject, relation, target, evidence, qualifiers):

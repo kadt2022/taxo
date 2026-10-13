@@ -1,5 +1,6 @@
-// Routes (TAXO-UI-02) : ce que Taxo prouve de chaque route, lu dans ses seuls faits. Aucune phrase de Minia :
-// un etat n'est affiche que si un fait le porte, et une route non interpretee dit exactement pourquoi.
+// Routes (TAXO-UI-02) : ce qui est ecrit pour chaque route, lu dans les seuls faits de Taxo. Aucune phrase de Minia :
+// un etat n'est affiche que si un fait le porte, et une route non interpretee dit exactement pourquoi. Temoin, jamais
+// juge (decision D5) : aucune route n'est dite « protegee » ; Taxo montre les regles ecrites, a qui lit de conclure.
 import {useState} from 'react';
 import {typed} from './consult';
 import {EVALUATORS, label} from './vocabulary';
@@ -11,17 +12,18 @@ export type RouteFact = {subject:string; relation:string; object?:string; status
   qualifiers?:Record<string,unknown>; evidence?:Proof[]; derivation?:Derivation;
   produced_by?:{producer_id:string}};
 export type Gap = {subject:string; type:string; reason:string; evaluator:string};
-export type RouteState = 'PROTECTED'|'PERMITS_ALL'|'NOT_INTERPRETED'|'NO_CONCLUSION';
+export type RouteState = 'AUTHORIZED_BY'|'PERMITS_ALL'|'NOT_INTERPRETED'|'NO_RULE_FOUND';
 export type RouteRow = {endpoint:string; verb:string; path:string; state:RouteState; handlers:RouteFact[];
-  applications:RouteFact[]; matched:RouteFact[]; rules:RouteFact[]; protections:RouteFact[]; gaps:Gap[]};
+  applications:RouteFact[]; matched:RouteFact[]; rules:RouteFact[]; guards:RouteFact[]; gaps:Gap[]};
 export type RoutesResult = {routes:RouteRow[]; unestablished:Gap[]};
 type Run = <T>(path:string, init?:RequestInit)=>Promise<T>;
 
-/** Ce que dit chaque etat : il vient d'un fait, jamais d'une supposition. */
-export const STATES:Record<RouteState,string>={PROTECTED:'Protégée', PERMITS_ALL:'Règle permitAll()',
-  NOT_INTERPRETED:'Non interprétée', NO_CONCLUSION:'Sans conclusion'};
-export const FILTERS:Record<string,string>={ALL:'Toutes les routes', PROTECTED:'Protégées (PROTECTED_BY)',
-  PERMITS_ALL:'Capturées par permitAll()', GAPS:'Avec une zone non interprétée', NO_CONCLUSION:'Sans conclusion'};
+/** Ce que dit chaque etat : la sorte de regle ecrite que Taxo a trouvee, jamais une conclusion sur la route. */
+export const STATES:Record<RouteState,string>={AUTHORIZED_BY:'Règle d’autorisation écrite', PERMITS_ALL:'Règle permitAll() écrite',
+  NOT_INTERPRETED:'Non interprétée', NO_RULE_FOUND:'Aucune règle trouvée'};
+export const FILTERS:Record<string,string>={ALL:'Toutes les routes', RULES:'Avec une règle écrite',
+  AUTHORIZED_BY:'Règle d’autorisation écrite', PERMITS_ALL:'Seulement permitAll() écrit', GAPS:'Avec une zone non interprétée',
+  NO_RULE_FOUND:'Aucune règle trouvée'};
 
 /** `symbol:java:com.acme.web.OrderController#get()` devient `OrderController#get()`. */
 export function shortSymbol(value?:string){
@@ -46,10 +48,9 @@ export function ruleText(rule:RouteFact){
   return `${pattern} → ${object.startsWith('symbol:')?shortSymbol(object):object}`;
 }
 
-export function protectionText(fact:RouteFact){
-  const object=fact.object??'';
-  if(object.startsWith('policy-rule:'))return object.slice('policy-rule:'.length);
-  return object.startsWith('symbol:')?shortSymbol(object):object;
+/** Une garde ecrite sur la methode ou son type (`@PreAuthorize`) : ou elle est ecrite, puis son expression. */
+export function guardText(fact:RouteFact){
+  return `${shortSymbol(fact.subject)} → ${fact.object??''}`;
 }
 
 /** La chaine de filtres qui porte un fait, par sa methode ; vide si le fait n'en nomme pas. */
@@ -71,6 +72,7 @@ export function filterRoutes(routes:RouteRow[], text:string, filter:string){
     const target=`${row.verb} ${row.path}`.toLowerCase();
     if(!words.every(word=>target.includes(word)))return false;
     if(filter==='GAPS')return row.gaps.length>0;
+    if(filter==='RULES')return row.state==='AUTHORIZED_BY'||row.state==='PERMITS_ALL';
     return filter==='ALL'||row.state===filter;
   });
 }
@@ -96,9 +98,9 @@ export function RouteDetail({row}:Readonly<{row:RouteRow}>){
       <a className="explore-link" href={explorerHref(row.endpoint)}>Explorer depuis cette route</a></h3>
     <Facts title="Traitée par" facts={row.handlers} render={fact=>shortSymbol(fact.object)}/>
     <Facts title="Servie par" facts={row.applications} render={fact=>applicationName(fact.object)}/>
-    <Facts title="Règle qui la capture" facts={row.matched} render={fact=>`${(fact.object??'').replace(/^route-pattern:/, '')} · chaîne ${chainName(fact)}`}/>
-    <Facts title="Règle écrite" facts={row.rules} render={ruleText}/>
-    <Facts title="Protection" facts={row.protections} render={protectionText}/>
+    <Facts title="Règle d’URL qui la capture" facts={row.matched} render={fact=>`${(fact.object??'').replace(/^route-pattern:/, '')} · chaîne ${chainName(fact)}`}/>
+    <Facts title="Règle d’URL écrite" facts={row.rules} render={ruleText}/>
+    <Facts title="Garde écrite sur la méthode" facts={row.guards} render={guardText}/>
     {row.gaps.length>0&&<div className="route-facts"><h4>Ce que Taxo ne sait pas</h4><ul>
       {row.gaps.map(gap=><li key={gap.evaluator+gap.reason}><strong>{label(EVALUATORS, gap.evaluator)}</strong> : {gap.reason||'raison non conservée par cette analyse'}</li>)}
     </ul></div>}
@@ -106,13 +108,13 @@ export function RouteDetail({row}:Readonly<{row:RouteRow}>){
 }
 
 export function RoutesTable({routes, selected, onSelect}:Readonly<{routes:RouteRow[]; selected:string; onSelect:(endpoint:string)=>void}>){
-  return <div className="table-wrap"><table><thead><tr><th>Route</th><th>Traitée par</th><th>Application</th><th>Règle</th><th>Protection</th><th>État</th></tr></thead>
+  return <div className="table-wrap"><table><thead><tr><th>Route</th><th>Traitée par</th><th>Application</th><th>Règle d’URL</th><th>Garde de méthode</th><th>Écrit</th></tr></thead>
     <tbody>{routes.map(row=><tr key={row.endpoint} aria-selected={selected===row.endpoint}>
       <td><button type="button" className="link" onClick={()=>onSelect(row.endpoint)}><code>{row.verb} {row.path}</code></button></td>
       <td>{row.handlers.map(fact=>shortSymbol(fact.object)).join(', ')}</td>
       <td>{row.applications.map(fact=>applicationName(fact.object)).join(', ')||<span className="muted">—</span>}</td>
       <td>{row.rules.map(ruleText).join(', ')||<span className="muted">—</span>}</td>
-      <td>{row.protections.map(protectionText).join(', ')||<span className="muted">—</span>}</td>
+      <td>{row.guards.map(guardText).join(', ')||<span className="muted">—</span>}</td>
       <td><span className={`state state-${row.state.toLowerCase()}`}>{STATES[row.state]}</span>{row.gaps.length>0&&row.state!=='NOT_INTERPRETED'&&<div className="muted">avec réserve</div>}</td>
     </tr>)}</tbody></table></div>;
 }
@@ -131,7 +133,7 @@ type ViewProps = {result:RoutesResult|null; error:string; text:string; filter:st
   onText:(value:string)=>void; onFilter:(value:string)=>void; onSelect:(endpoint:string)=>void; title?:string; intro?:string;
   unread?:string[]; unknown?:boolean};
 
-const INTRO='Ce que Taxo prouve de chaque route HTTP : qui la traite, quelle application la sert, quelle règle la capture et ce qui la protège. Tout vient des faits, avec leurs preuves ; rien n’est rédigé par Minia.';
+const INTRO='Ce qui est écrit pour chaque route HTTP : qui la traite, quelle application la sert, quelle règle d’URL la capture et quelle garde est écrite sur sa méthode. Tout vient des faits, avec leurs preuves ; Taxo ne conclut pas qu’une route est protégée, et rien n’est rédigé par Minia.';
 
 /** Les langages presents que l'analyseur de la page n'a pas lus (TAXO-COV-01) : rien n'y est trouve ni exclu. */
 function Unread({unread, empty}:Readonly<{unread:string[]; empty:boolean}>){
