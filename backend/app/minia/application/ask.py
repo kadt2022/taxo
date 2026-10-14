@@ -185,9 +185,10 @@ def _complete(model, system, user, schema=None, cancel=None):
 _PSEUDONYM_START = re.compile(r'p(?:e(?:r(?:s(?:o(?:n(?:n(?:e(?:-\d*)?)?)?)?)?)?)?)?\Z')
 
 
-def _reported(events, disclosure):
+def _reported(events, disclosure, ledger=None):
     """Les etapes d'une demande ; le texte diffuse a les identites d'origine, comme la reponse finale, qui dit ce
-    que Taxo a retenu avant l'envoi au modele, compte, jamais montre (recit TAXO-MINIA-SEC-01, E4)."""
+    que Taxo a retenu avant l'envoi au modele, compte, jamais montre (recit TAXO-MINIA-SEC-01, E4). La reponse finale
+    porte aussi le releve de la demande (`usage`, R0) : une mesure de diagnostic, jamais un fait."""
     pending = ''
     for event_type, data in events:
         if event_type == DELTA:
@@ -201,11 +202,18 @@ def _reported(events, disclosure):
         if pending:
             yield DELTA, {'text': disclosure.restore(pending)}
             pending = ''
-        if event_type == COMPLETED:
-            data = {**data, 'withheld': disclosure.report()}
-        yield event_type, data
+        yield event_type, (_finished(data, disclosure, ledger) if event_type == COMPLETED else data)
     if pending:
         yield DELTA, {'text': disclosure.restore(pending)}
+
+
+def _finished(data, disclosure, ledger):
+    """La reponse finale : ce que Taxo a retenu avant l'envoi au modele et, si la route ne l'a pas deja donne, le
+    releve de la demande (R0)."""
+    data = {**data, 'withheld': disclosure.report()}
+    if ledger is not None and 'usage' not in data:
+        data['usage'] = ledger.report(data.get('trajectory'))
+    return data
 
 
 def _restored(model, answer):
@@ -542,7 +550,7 @@ class AskMinia:
             return self._commit_author(question, project, commit, base, files)
         model = self._protected(provider, project_id)
         return _reported(self._commit_route(model, question, project, commit, base, files, source, cancel),
-                         model.disclosure)
+                         model.disclosure, getattr(model, 'ledger', None))
 
     def _commit_route(self, model, question, project, commit, base, files, source, cancel):
         project_id = project.id
@@ -654,7 +662,8 @@ class AskMinia:
             # Une réponse directe ne lit jamais de code : elle le dit si l'accord était donné.
             return self._unread_with(self._selection_authors(question, projection), source)
         model = self._protected(provider, project_id)
-        return _reported(self._project_route(model, question, projection, cancel, source), model.disclosure)
+        return _reported(self._project_route(model, question, projection, cancel, source), model.disclosure,
+                         getattr(model, 'ledger', None))
 
     def _project_route(self, model, question, projection, cancel, source=False):
         project_id = projection['project']['id']
@@ -723,7 +732,7 @@ class AskMinia:
                 'source_reading': _source_reading(source, exchange)}
         steps = self.investigations.run(state, question, exchange, tiles.offered() if self.mip else None, turn,
                                         cancel, not_resumable, base)
-        return _guarded(_reported(steps, model.disclosure), cancel)
+        return _guarded(_reported(steps, model.disclosure, getattr(model, 'ledger', None)), cancel)
 
     def investigation(self, project_id, investigation_id):
         """Le carnet d'une enquête, pour l'affichage : état compact et livraisons, jamais un contenu."""
@@ -854,11 +863,14 @@ class AskMinia:
             yield from _completed_with(fallback, {'returned': guarded}) if guarded else fallback
             return
         yield _stage('exploration', 'done', label, len(trajectory))
+        verification_from = len(trajectory)
         statements = yield from self._verified(step.statements, exchange, trajectory, cancel)
         check(cancel)
+        ledger = getattr(model, 'ledger', None)
         yield COMPLETED, {
             **result, 'status': ANSWERED, 'mode': EXPLORATION, 'statements': statements, 'trajectory': trajectory,
             'budget': {'max_bytes': exchange.budget, 'used': exchange.used},
+            **({'usage': ledger.report(trajectory, verification_from)} if ledger is not None else {}),
             **({'returned': guarded} if guarded else {})}
 
     def _served(self, exchange, step, bounded, space, exchanged):

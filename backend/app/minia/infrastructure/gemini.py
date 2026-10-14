@@ -14,6 +14,7 @@ import time
 
 import httpx
 
+from app.minia.domain import usage as metering
 from app.minia.domain.cancellation import check
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
 from app.minia.infrastructure import retrying
@@ -107,11 +108,12 @@ class GeminiModel:
         return retrying.send(client or self._client, url, body, headers, stream, self._sleep,
                              lambda response: _check(response, self.model_name, self.setting), _unreachable, cancel)
 
-    def complete(self, system, user, schema=None, cancel=None):
+    def complete(self, system, user, schema=None, cancel=None, usage=None):
         """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia. Avec
-        un jeton d'arret, la reponse passe par le flux, que l'arret coupe (TAXO-UX-03)."""
+        un jeton d'arret, la reponse passe par le flux, que l'arret coupe (TAXO-UX-03). `usage(compteurs)` recoit
+        ce que l'API rapporte de l'appel (R0 : une mesure, jamais un reglage)."""
         if cancel is not None:
-            return ''.join(self.stream(system, user, schema, cancel))
+            return ''.join(self.stream(system, user, schema, cancel, usage))
         body, headers = self._body(system, user, schema), self._headers()
         response = self._open(self._url('generateContent'), body, headers, stream=False)
         try:
@@ -119,18 +121,20 @@ class GeminiModel:
         except ValueError as exc:
             raise MiniaError(UNAVAILABLE, 'Réponse de Gemini illisible.') from exc
         text, finish = _text(part)
+        if usage is not None:
+            usage(metering.gemini(part.get('usageMetadata'), part.get('modelVersion')))
         _accepted(part, finish)
         return text
 
-    def stream(self, system, user, schema=None, cancel=None):
+    def stream(self, system, user, schema=None, cancel=None, usage=None):
         """Morceaux de la reponse, au fur et a mesure que Gemini les produit ; rend enfin le modele qui a
         repondu (version exacte, quand l'API la donne)."""
         body, headers = self._body(system, user, schema), self._headers()
         with client_for(self._client, self._new_client, cancel) as client:
-            return (yield from self._read(client, body, headers, cancel))
+            return (yield from self._read(client, body, headers, cancel, usage))
 
-    def _read(self, client, body, headers, cancel):
-        served, finish, last = None, None, {}
+    def _read(self, client, body, headers, cancel, usage=None):
+        served, finish, last, metadata = None, None, {}, None
         response = self._open(self._url('streamGenerateContent') + '?alt=sse', body, headers, True, client, cancel)
         try:
             for line in response.iter_lines():
@@ -143,6 +147,8 @@ class GeminiModel:
                     raise MiniaError(UNAVAILABLE, 'Réponse de Gemini illisible.') from exc
                 text, finish = _text(last, finish)
                 served = last.get('modelVersion') or served
+                # Le dernier morceau porte l'usage de tout l'appel ; il est releve meme si la reponse est refusee.
+                metadata = last.get('usageMetadata') or metadata
                 # Le morceau qui porte un refus ou une coupure n'est jamais diffuse. Les morceaux deja
                 # diffuses ne sont qu'un brouillon provisoire, que le portail efface a l'echec.
                 _accepted(last, finish)
@@ -153,6 +159,8 @@ class GeminiModel:
             raise _unreachable() from exc
         finally:
             response.close()
+            if usage is not None and metadata is not None:
+                usage(metering.gemini(metadata, served))
         return served or self.model_name
 
 

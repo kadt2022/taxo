@@ -89,6 +89,19 @@ def sent(model, system, user):
         LOGGER.info('LLM message : %s', user)
 
 
+def usage(model, call):
+    """Ce que le fournisseur rapporte d'un appel (R0) : des compteurs, jamais de contenu."""
+    if not active():
+        return
+    said = lambda key: 'non rapporté' if call.get(key) is None else call[key]
+    LOGGER.info('LLM usage %s/%s : entrée %s · cache lu %s · cache écrit %s · sortie %s · raisonnement %s · '
+                'consignes + message %s octets%s', getattr(model, 'provider', '?'), getattr(model, 'model_name', '?'),
+                said('input'), said('cache_read'), said('cache_write'), said('output'), said('reasoning'),
+                call.get('system_bytes', 0) + call.get('message_bytes', 0), ' (appel échoué)' if call.get('failed') else '')
+    if call.get('model') and call['model'] != getattr(model, 'model_name', None):
+        LOGGER.info('LLM usage : servi par %s', call['model'])
+
+
 def received(model, reply, served=None):
     """La réponse brute du modèle, avant toute restitution des valeurs d'origine. `served` : le modèle qui a
     réellement répondu, quand le fournisseur le dit (un repli côté serveur, une version datée)."""

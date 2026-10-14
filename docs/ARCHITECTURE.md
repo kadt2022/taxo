@@ -1102,6 +1102,15 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   opération de Taxo et chaque tour du modèle ; `full` y ajoute les réponses de Taxo et les messages complets. Les
   lignes `LLM` montrent le message réellement envoyé, après protection ; les lignes `TAXO`, la réponse locale de Taxo.
   Rien n'est conservé par Taxo.
+- **Relevé d'usage** (récit `TAXO-RECIT-REDUCTION-PAYLOAD-MINIA`, R0) : chaque appel au modèle passe par le
+  `ProtectedModel` de la demande, qui note la taille des consignes et du message après protection (`prompt_bytes`,
+  pas la requête HTTP) et les compteurs que le fournisseur
+  rapporte (Claude : `usage` ; Gemini : `usageMetadata`), dans ses propres catégories ; un compteur absent est « non
+  rapporté », jamais zéro. Les tokens sont totalisés par modèle ayant réellement répondu (jamais additionnés entre
+  modèles) ; un appel en erreur sans usage rapporté est compté à part. La réponse finale porte ce relevé en diagnostic
+  (`usage` : appels, `prompt_bytes`, octets de Taxo séparés entre exploration et vérifications, tokens par modèle),
+  jamais comme un fait ; la ligne `LLM usage`
+  du journal le dit sans contenu. Une mesure seulement : la requête envoyée est inchangée et aucun cache n'est demandé.
 - Transport indépendant : appel interne, HTTP (`POST /api/projects/{id}/taxo-query`), et plus tard MCP,
   sans seconde sémantique. Ajouter une opération ou un champ facultatif est compatible ; changer la
   sémantique d'une opération ou d'un verdict crée une nouvelle version.
