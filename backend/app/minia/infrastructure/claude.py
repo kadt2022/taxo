@@ -13,6 +13,7 @@ from contextlib import contextmanager
 import anthropic
 import httpx
 
+from app.minia.domain import usage as metering
 from app.minia.domain.cancellation import check
 from app.minia.domain.errors import CONTEXT_TOO_LARGE, UNAVAILABLE, MiniaError
 
@@ -86,20 +87,22 @@ class ClaudeModel:
             request.update(betas=[_FALLBACK_BETA], fallbacks='default')
         return request
 
-    def complete(self, system, user, schema=None, cancel=None):
+    def complete(self, system, user, schema=None, cancel=None, usage=None):
         """Texte de la reponse, contraint par `schema` (JSON Schema) ; par defaut, la reponse de Minia. Avec
-        un jeton d'arret, la reponse passe par le flux, que l'arret ferme (TAXO-UX-03)."""
+        un jeton d'arret, la reponse passe par le flux, que l'arret ferme (TAXO-UX-03). `usage(compteurs)` recoit
+        ce que l'API rapporte de l'appel (R0 : une mesure, jamais un reglage)."""
         if cancel is not None:
-            return ''.join(self.stream(system, user, schema, cancel))
+            return ''.join(self.stream(system, user, schema, cancel, usage))
         request = self._request(system, user, schema)
         try:
             message = self._messages().create(**request)
         except anthropic.AnthropicError as exc:
             raise _failure(exc, self.model_name, self.setting) from exc
+        _measured(message, usage)
         _accepted(message)
         return ''.join(block.text for block in message.content if block.type == 'text')
 
-    def stream(self, system, user, schema=None, cancel=None):
+    def stream(self, system, user, schema=None, cancel=None, usage=None):
         """Morceaux de la reponse, au fur et a mesure que Claude les produit. Arreter la demande ferme le flux.
 
         Rend enfin le modele qui a reellement repondu : apres un repli cote serveur, ce n'est pas celui demande.
@@ -120,6 +123,7 @@ class ClaudeModel:
         except (anthropic.AnthropicError, httpx.HTTPError) as exc:
             check(cancel)
             raise _failure(exc, self.model_name, self.setting) from exc
+        _measured(message, usage)
         _accepted(message)
         return getattr(message, 'model', None) or self.model_name
 
@@ -129,6 +133,13 @@ def _new_client():
         return anthropic.Anthropic()
     except anthropic.AnthropicError as exc:
         raise _not_configured() from exc
+
+
+def _measured(message, usage):
+    """Les compteurs de l'appel, tels que l'API les rapporte, meme pour une reponse refusee ou coupee : elle est
+    facturee aussi."""
+    if usage is not None:
+        usage(metering.claude(getattr(message, 'usage', None)))
 
 
 def _accepted(message):

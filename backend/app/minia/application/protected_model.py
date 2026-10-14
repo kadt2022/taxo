@@ -9,6 +9,7 @@ ne depend donc ni des consignes du modele, ni de l'endroit ou le message a ete c
 import inspect
 
 from app.minia.application import trace
+from app.minia.domain.usage import Ledger
 
 
 def _accepts(method, name):
@@ -23,6 +24,8 @@ class ProtectedModel:
 
     def __init__(self, model, disclosure):
         self._model, self.disclosure = model, disclosure
+        # Le relevé de la demande (R0) : octets envoyés et compteurs rapportés, appel par appel ; en mémoire seulement.
+        self.ledger = Ledger()
         if callable(getattr(model, 'stream', None)):
             # Un fournisseur sans diffusion reste sans diffusion : Minia le reconnait a l'absence de `stream`.
             self.stream = self._stream
@@ -33,20 +36,38 @@ class ProtectedModel:
             raise AttributeError(name)
         return getattr(self._model, name)
 
-    def _options(self, method, schema, cancel):
+    def _options(self, method, schema, cancel, reported):
         options = {} if schema is None else {'schema': schema}
         if cancel is not None and _accepts(method, 'cancel'):
             options['cancel'] = cancel
+        if _accepts(method, 'usage'):
+            options['usage'] = reported.update
         return options
+
+    def _record(self, system, protected, reported, failed):
+        call = self.ledger.record(self._model, system, protected, reported or None, failed)
+        trace.usage(self._model, call)
 
     def complete(self, system, user, schema=None, cancel=None):
         protected = self.disclosure.protect(user)
         trace.sent(self._model, system, protected)
-        reply = self._model.complete(system, protected, **self._options(self._model.complete, schema, cancel))
+        reported, failed = {}, True
+        try:
+            reply = self._model.complete(system, protected,
+                                         **self._options(self._model.complete, schema, cancel, reported))
+            failed = False
+        finally:
+            self._record(system, protected, reported, failed)
         return trace.received(self._model, reply)
 
     def _stream(self, system, user, schema=None, cancel=None):
         protected = self.disclosure.protect(user)
         trace.sent(self._model, system, protected)
-        return trace.streamed(self._model, self._model.stream(system, protected,
-                                                             **self._options(self._model.stream, schema, cancel)))
+        reported, failed = {}, True
+        try:
+            served = yield from trace.streamed(self._model, self._model.stream(
+                system, protected, **self._options(self._model.stream, schema, cancel, reported)))
+            failed = False
+            return served
+        finally:
+            self._record(system, protected, reported, failed)
