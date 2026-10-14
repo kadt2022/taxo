@@ -35,12 +35,12 @@ describe('commitOf', ()=>{
 });
 
 describe('navItemsOf', ()=>{
-  const counts:RouteCounts={PROTECTED:4, PERMITS_ALL:1, NOT_INTERPRETED:7, NO_CONCLUSION:0, reserved:0, missing:0};
+  const counts:RouteCounts={AUTHORIZED_BY:4, PERMITS_ALL:1, NOT_INTERPRETED:7, NO_RULE_FOUND:0, reserved:0, missing:0};
   const values:Record<string,string>={api:'210', architecture:'5', git:'2 280'};
   it('une entrée par page, groupées, avec un compte seulement quand Taxo en a un', ()=>{
     const items=navItemsOf(11, id=>values[id], counts, 3);
     expect(items.map(item=>[item.id, item.count])).toEqual([['overview',undefined], ['analyses','3'], ['comparaisons',undefined],
-      ['explorer',undefined], ['interroger',undefined], ['technologies','11'], ['routes','210'], ['architecture','5'], ['securite','4'], ['donnees',undefined],
+      ['explorer',undefined], ['interroger',undefined], ['technologies','11'], ['routes','210'], ['architecture','5'], ['securite','5'], ['donnees',undefined],
       ['historique','2 280'], ['limites',undefined], ['non-interpretees','7']]);
     expect(items.filter(item=>item.apart).map(item=>item.id)).toEqual(['analyses', 'technologies', 'historique', 'limites']);
     expect(items.find(item=>item.id==='donnees')?.muted).toBe(true);

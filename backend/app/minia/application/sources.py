@@ -67,6 +67,7 @@ def _references(value, field=None):
 # porte, dans les faits rendus par Taxo) et de son type (une méthode Java). Aucun autre qualificatif n'ouvre la lecture.
 _CHAIN_FIELD = 'filter_chain'
 _CHAIN_PRODUCER = 'taxo.spring-security'
+# PROTECTED_BY n'est plus produit (D5) mais reste lu dans les analyses anciennes qui le portent.
 _CHAIN_RELATIONS = frozenset({'MATCHED_BY', 'PROTECTED_BY', 'AUTHORIZED_BY'})
 _CHAIN_STATUSES = frozenset({'OBSERVED', 'INFERRED'})
 _CHAIN_FACT_LISTS = ('facts', 'items')

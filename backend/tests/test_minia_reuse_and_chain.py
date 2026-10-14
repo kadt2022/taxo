@@ -236,7 +236,7 @@ def find_route(message):
 
 
 def security_tile():
-    return call('get_tile', reference='endpoint:GET /api/items', profile='security/1')
+    return call('get_tile', reference='endpoint:GET /api/items', profile='security/2')
 
 
 def chain_of_the_tile(message):

@@ -35,21 +35,21 @@ def analyse(make_repo, tmp_path):
         return client.get(f'{base}/scans/{scan["id"]}/routes').json(), client.get(f'{base}/scans/inconnue/routes')
 
 
-def test_each_route_carries_its_handler_application_rule_and_protection(make_repo, tmp_path):
+def test_each_route_carries_its_handler_application_and_written_rules(make_repo, tmp_path):
     result, missing = analyse(make_repo, tmp_path)
     assert missing.status_code == 404
     routes = {route['endpoint']: route for route in result['routes']}
     admin = routes['endpoint:GET /admin/users']
-    assert admin['state'] == 'PROTECTED'
+    assert admin['state'] == 'AUTHORIZED_BY', 'une regle d autorisation est ecrite, jamais « protegee » (D5)'
+    assert 'protections' not in admin
     assert [fact['object'] for fact in admin['applications']] == [ADMIN_REF]
-    assert [fact['object'] for fact in admin['protections']] == ['policy-rule:hasRole("ADMIN")']
-    assert [fact['relation'] for fact in admin['rules']] == ['AUTHORIZED_BY']
+    assert [(fact['relation'], fact['object']) for fact in admin['rules']] == [('AUTHORIZED_BY', 'hasRole("ADMIN")')]
     assert admin['handlers'][0]['evidence'], 'chaque fait arrive avec ses preuves'
-    assert admin['protections'][0]['derivation']['premises'], 'et une deduction avec ses premisses'
+    assert admin['matched'][0]['derivation']['premises'], 'et la regle qui capture, avec ses premisses'
     status = routes['endpoint:GET /status']
     assert status['state'] == 'PERMITS_ALL'
     assert [fact['object'] for fact in status['applications']] == [SHOP_REF]
-    assert not status['protections']
+    assert not status['guards']
 
 
 def test_a_route_not_interpreted_says_exactly_why(make_repo, tmp_path):
@@ -72,5 +72,17 @@ def test_the_projection_deduces_nothing_a_fact_does_not_carry():
                'qualifiers': {'filter_chain': 'A'}}
     result = project_routes({'HANDLED_BY': [handled], 'MATCHED_BY': [matched], 'PERMITS_ALL': [other_chain]}, [])
     route = result['routes'][0]
-    assert route['state'] == 'NO_CONCLUSION', 'la regle permitAll d une autre chaine ne vaut pas pour cette route'
+    assert route['state'] == 'NO_RULE_FOUND', 'la regle permitAll d une autre chaine ne vaut pas pour cette route'
     assert route['rules'] == []
+
+
+def test_a_guard_written_on_the_handler_or_its_type_is_shown_as_written():
+    handled = {'subject': 'endpoint:GET /x', 'relation': 'HANDLED_BY', 'object': 'symbol:java:a.X#x()', 'qualifiers': {}}
+    on_type = {'subject': 'symbol:java:a.X', 'relation': 'AUTHORIZED_BY', 'object': "hasRole('ADMIN')", 'qualifiers': {}}
+    on_method = {**on_type, 'subject': 'symbol:java:a.X#x()', 'object': 'isAuthenticated()'}
+    elsewhere = {**on_type, 'subject': 'symbol:java:a.Y#y()'}
+    result = project_routes({'HANDLED_BY': [handled], 'AUTHORIZED_BY': [on_type, on_method, elsewhere]}, [])
+    route = result['routes'][0]
+    assert route['state'] == 'AUTHORIZED_BY'
+    assert [fact['object'] for fact in route['guards']] == ['isAuthenticated()', "hasRole('ADMIN')"], \
+        'les deux gardes ecrites, sans trancher laquelle s applique'

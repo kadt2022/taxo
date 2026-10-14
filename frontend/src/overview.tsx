@@ -78,7 +78,7 @@ function gitCard(git:EvaluationSummary|undefined):Body{
 /** Les routes par etat etabli, et ce qui les rend incompletes : tout vient des faits de la page Routes. */
 export type RouteCounts = Record<RouteState, number> & {reserved:number; missing:number};
 export function routeCounts(result:RoutesResult):RouteCounts{
-  const counts:RouteCounts={PROTECTED:0, PERMITS_ALL:0, NOT_INTERPRETED:0, NO_CONCLUSION:0, reserved:0, missing:result.unestablished.length};
+  const counts:RouteCounts={AUTHORIZED_BY:0, PERMITS_ALL:0, NOT_INTERPRETED:0, NO_RULE_FOUND:0, reserved:0, missing:result.unestablished.length};
   for(const row of result.routes){
     counts[row.state]+=1;
     if(row.gaps.length)counts.reserved+=1;
@@ -139,11 +139,11 @@ function security(spring:EvaluationSummary|undefined, routes:RouteCounts|undefin
     return {value:count(rules), unit:noun(rules, 'règle de sécurité lue', 'règles de sécurité lues'), state:'known', link,
       lines:partly(reading)};
   }
-  const total=routes.PROTECTED+routes.PERMITS_ALL+routes.NOT_INTERPRETED+routes.NO_CONCLUSION;
+  const total=routes.AUTHORIZED_BY+routes.PERMITS_ALL+routes.NOT_INTERPRETED+routes.NO_RULE_FOUND;
   if(isUnknown(coverage)&&total===0)return {...UNCONCLUDED, link};
-  const established=routes.PROTECTED+routes.PERMITS_ALL;
+  const written=routes.AUTHORIZED_BY+routes.PERMITS_ALL;
   return {value:count(total), unit:noun(total, 'route examinée', 'routes examinées'), state:'known', link,
-    lines:[counted(established, 'statut de sécurité établi', 'statuts de sécurité établis'), ...partly(reading)]};
+    lines:[counted(written, 'route avec une règle écrite trouvée', 'routes avec une règle écrite trouvée'), ...partly(reading)]};
 }
 
 /** Les zones que Taxo n'a pas su lire ou interpreter, par analyseur : ce qu'il ne sait pas, dit en clair. */

@@ -25,9 +25,9 @@ def taxo_fixture(make_repo, tmp_path):
         yield client, f'/api/projects/{project["id"]}/taxo-query'
 
 
-def verify(taxo, max_bytes=None, **claim):
+def verify(taxo, max_bytes=None, operation='verify_claim', **claim):
     client, url = taxo
-    request = {'operation': 'verify_claim', 'arguments': claim}
+    request = {'operation': operation, 'arguments': claim}
     if max_bytes is not None:
         request['max_bytes'] = max_bytes
     response = client.post(url, json={'requests': [request]})
@@ -35,12 +35,19 @@ def verify(taxo, max_bytes=None, **claim):
     return response.json()['responses'][0]
 
 
-def test_a_confirmed_url_rule_carries_the_method_security_that_taxo_did_not_read(taxo):
-    response = verify(taxo, subject=ENDPOINT, relation='PROTECTED_BY', object='policy-rule:authenticated()')
-    assert response['verdict'] == 'CONFIRMED', 'la règle d’URL est bien établie'
+def find(taxo, max_bytes=None, **claim):
+    """`find_claim` (D3) : ce que Taxo a trouvé, et ce qu'il n'a pas su lire sur le sujet ou l'objet, toujours."""
+    return verify(taxo, max_bytes, 'find_claim', **claim)
+
+
+# PROTECTED_BY n'est plus produit (D5) : la règle d'URL qui capture la route (MATCHED_BY) porte la limite de la
+# sécurité de méthode non lue sur la même route.
+def test_a_found_url_rule_carries_the_method_security_that_taxo_did_not_read(taxo):
+    response = find(taxo, subject=ENDPOINT, relation='MATCHED_BY', object='route-pattern:/api/**')
+    assert response['found'] is True, 'la règle d’URL qui capture la route est trouvée'
     [limit] = response['limits']
     assert limit['subject'] == ENDPOINT and limit['type'] == 'NOT_INTERPRETED'
-    assert '@Secured' in limit['reason'], 'la confirmation dit ce qu’elle ne couvre pas'
+    assert '@Secured' in limit['reason'], 'ce qui est trouvé dit ce qu’il ne couvre pas'
     assert limit['producer'] == 'taxo.spring-security'
 
 
@@ -79,9 +86,9 @@ def test_a_single_valued_confirmation_keeps_the_limits_of_an_ambiguous_target(ma
         'la cible ambiguë accompagne la confirmation'
 
 
-def test_a_claim_that_is_not_proven_still_says_why_and_what_was_not_read(taxo):
-    response = verify(taxo, subject=ENDPOINT, relation='PROTECTED_BY', object="policy-rule:hasRole('ADMIN')")
-    assert (response['verdict'], response['reason']) == ('NOT_PROVEN', 'NOT_INTERPRETED')
+def test_a_claim_not_found_still_says_what_was_not_read(taxo):
+    response = find(taxo, subject=ENDPOINT, relation='MATCHED_BY', object='route-pattern:/admin/**')
+    assert response['found'] is False and 'verdict' not in response
     assert '@Secured' in response['limits'][0]['reason']
 
 
@@ -91,8 +98,8 @@ def test_minia_shows_the_limits_with_the_verdict_of_her_claim(make_repo, tmp_pat
     from test_minia_explore import answer, statement
     from test_minia_general import Scripted, ask
     repo = make_repo(FILES, 'boutique-minia')
-    claim = statement('claim', 'GET /api/items exige seulement une authentification.', ENDPOINT, 'PROTECTED_BY',
-                      'policy-rule:authenticated()')
+    claim = statement('claim', 'GET /api/items est capturée par la seule règle /api/**.', ENDPOINT, 'MATCHED_BY',
+                      'route-pattern:/api/**')
     result, _, _ = ask(repo, tmp_path, Scripted(answer(claim)), 'Qui peut lire GET /api/items ?')
     [checked] = result['statements']
     assert checked['found'] is True
@@ -113,16 +120,16 @@ def test_facts_that_did_not_fit_are_never_said_unknown(tmp_path, make_repo, monk
     assert 'ne connaît aucun fait' not in result['unknown']
 
 
-def test_limits_that_do_not_fit_are_counted_never_cost_the_verdict(taxo):
-    claim = {'subject': ENDPOINT, 'relation': 'PROTECTED_BY', 'object': 'policy-rule:authenticated()'}
-    full = verify(taxo, **claim)
+def test_limits_that_do_not_fit_are_counted_never_cost_what_was_found(taxo):
+    claim = {'subject': ENDPOINT, 'relation': 'MATCHED_BY', 'object': 'route-pattern:/api/**'}
+    full = find(taxo, **claim)
     # Le plus petit budget qui sert encore la reponse : les faits n'y tiennent plus, la limite non plus.
-    answers = [(budget, verify(taxo, max_bytes=budget, **claim)) for budget in range(full['bytes'], 0, -8)]
+    answers = [(budget, find(taxo, max_bytes=budget, **claim)) for budget in range(full['bytes'], 0, -8)]
     served = [response for _, response in answers if response['outcome'] == 'OK']
     assert all(response['bytes'] <= budget for budget, response in answers if response['outcome'] == 'OK'), \
         'la taille demandée borne toute réponse servie'
     tight = served[-1]
-    assert tight['verdict'] == 'CONFIRMED', 'le verdict reste servi'
+    assert tight['found'] is True, 'ce que Taxo a trouvé reste servi'
     assert tight['limits'] == []
     assert {'what': 'limits', 'count': 1, 'reason': 'BUDGET'} in tight['not_sent'], 'la limite tue est comptée'
 

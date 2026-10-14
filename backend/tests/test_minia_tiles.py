@@ -105,7 +105,7 @@ def test_a_refused_tile_is_said_and_the_exploration_goes_on(make_repo, tmp_path)
         call('get_tile', reference=REGISTER, profile='method-context/1'),
         lambda message: call('find_references', analysis=analysis_of(message), prefix='CourseController.register',
                              match='NAME'),
-        call('get_tile', reference=REGISTER, profile='security/1'),
+        call('get_tile', reference=REGISTER, profile='security/2'),
         call('get_tile', reference=REGISTER, profile='method-context/1', depth=3),
         answer(statement('unknown', 'Aucune Tuile servie.')))
     result = ask(make_repo, tmp_path, model)

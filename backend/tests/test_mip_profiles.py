@@ -50,15 +50,15 @@ def test_a_profile_is_a_closed_manifest_of_the_relation_vocabulary(profile):
     assert len(set(steps)) == len(steps), 'un pas une seule fois : sa règle est sans ambiguïté'
     assert {step.relation for step in profile.steps} <= set(RELATIONS)
     assert len({step.rule for step in profile.steps}) == len(profile.steps)
-    assert profile.version == 1 and profile.identifier == f'{profile.name}/1' and profile.anchors
+    assert profile.identifier == f'{profile.name}/{profile.version}' and profile.anchors
     manifest = profile.manifest()
     assert manifest['id'] == profile.identifier and len(manifest['steps']) == len(profile.steps)
 
 
 def test_the_profiles_documented_by_the_architecture_are_the_served_ones():
-    assert set(PROFILES) == {'method-context/1', 'calls/1', 'structure/1', 'security/1'}
-    assert [step.relation for step in PROFILES['security/1'].steps] == [
-        'HANDLED_BY', 'SERVED_BY', 'MATCHED_BY', 'AUTHORIZED_BY', 'PROTECTED_BY']
+    assert set(PROFILES) == {'method-context/1', 'calls/1', 'structure/1', 'security/2'}
+    assert [step.relation for step in PROFILES['security/2'].steps] == [
+        'HANDLED_BY', 'SERVED_BY', 'MATCHED_BY', 'AUTHORIZED_BY'], 'D5 : aucun pas PROTECTED_BY'
 
 
 # --- La requête : un profil nommé, jamais improvisé -----------------------------------------------------------
@@ -70,7 +70,7 @@ def test_the_profiles_documented_by_the_architecture_are_the_served_ones():
     profiled(REGISTER, ['calls/1']),
     profiled(REGISTER, 'calls/1', relations=['CALLS']),
     profiled(REGISTER, 'calls/1', direction='OUTGOING'),
-    profiled(REGISTER, 'security/1'),
+    profiled(REGISTER, 'security/2'),
     profiled('module:demo', 'method-context/1'),
 ])
 def test_an_unknown_profile_or_anchor_is_refused_never_interpreted(payload):

@@ -9,8 +9,9 @@ from app.evaluations.domain.evaluator import EvaluatorCatalog
 CATALOG = EvaluatorCatalog(
     catalog_id='spring-security',
     # Version 4 (décision « Taxo témoin », D2) : l'annotation d'activation est nommée telle qu'écrite.
-    catalog_version='4',
-    relations=('ANNOTATED_WITH', 'AUTHORIZED_BY', 'CONFIGURES', 'MATCHED_BY', 'PERMITS_ALL', 'PROTECTED_BY'),
+    # Version 5 (D5) : plus aucune conclusion PROTECTED_BY ; seulement les règles écrites et celle qui couvre la route.
+    catalog_version='5',
+    relations=('ANNOTATED_WITH', 'AUTHORIZED_BY', 'CONFIGURES', 'MATCHED_BY', 'PERMITS_ALL'),
     coverage_types=('ANALYSED', 'NOT_INTERPRETED', 'READ_ERROR'),
     # TAXO-COV-01 : ce que ce catalogue a toujours lu ; il ne couvre aucune autre source.
     languages=('Java',),

@@ -68,7 +68,7 @@ export function navItemsOf(technologies:number, counts:(id:string)=>string|undef
     {id:'explorer', label:'Explorer'}, {id:'interroger', label:'Interroger Taxo'},
     {id:'technologies', label:'Technologies', count:technologies?String(technologies):undefined, apart:true},
     {id:'routes', label:'Routes', count:counts('api')}, {id:'architecture', label:'Architecture', count:counts('architecture')},
-    {id:'securite', label:'Sécurité', count:routes?String(routes.PROTECTED):undefined},
+    {id:'securite', label:'Sécurité', count:routes?String(routes.AUTHORIZED_BY+routes.PERMITS_ALL):undefined},
     {id:'donnees', label:'Données et stockage', muted:true},
     {id:'historique', label:'Historique Git', count:counts('git'), apart:true},
     {id:'limites', label:'Limites', apart:true},

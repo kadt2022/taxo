@@ -310,7 +310,7 @@ dans les champs textuels. Tout champ inconnu est refusé, en particulier tout ch
 | `PERMITS_ALL` | route-pattern → (aucun) | `OBSERVED` | Spring Security |
 | `AUTHORIZED_BY` | route-pattern, symbol → symbol ou expression littérale | `OBSERVED` | Spring Security |
 | `MATCHED_BY` | endpoint → route-pattern | `INFERRED` | Spring Security |
-| `PROTECTED_BY` | endpoint → symbol, policy-rule | `INFERRED`, `HUMAN_VALIDATED` | Spring Security |
+| `PROTECTED_BY` | endpoint → symbol, policy-rule | `INFERRED`, `HUMAN_VALIDATED` | plus produit (décision D5) ; lu dans les analyses anciennes |
 | `CONFIGURES` | symbol → policy-rule | `OBSERVED` | Spring Security (`csrf.disable()`) |
 | `ANNOTATED_WITH` | symbol → annotation **telle qu'écrite** (`@PreAuthorize` → `annotation:PreAuthorize`, comme `@Toto` → `annotation:Toto` ; le nom qu'un import désigne reste un constat, `resolved_name`, jamais l'identité — décision « Taxo témoin », D2) | `OBSERVED` | appels Java (toute annotation écrite d'un type ou d'une méthode, sans interprétation, TAXO-MIP-ADT-01) ; Spring Security (activation de la sécurité de méthode) |
 | `CALLS` | symbol → symbol | `INFERRED`, prouvé par ses sites d'appel (§ 14) | appels Java |
@@ -430,10 +430,11 @@ usage. Un manifeste illisible est `NOT_INTERPRETED`.
 - Correspondance à trois issues : `ALL`, `NONE`, `SOME`. **`MATCHED_BY`** (`INFERRED`, règle
   `spring-security.first-matching-pattern`) vient d'une règle `ALL` précédée de règles `NONE`, qui
   deviennent les contre-exemples.
-- **`PROTECTED_BY`** (`INFERRED`, règle `spring-security.route-authorization-applies`) s'appuie sur
-  `MATCHED_BY` puis `AUTHORIZED_BY`, **jamais sur `HANDLED_BY`** : une règle d'URL ne dépend pas de la
-  méthode qui traite la route. Limites dites : les rôles sont des
-  données ; la décision d'un gestionnaire n'est pas lue.
+- **Témoin, jamais juge (décision « Taxo témoin », D5)** : `PROTECTED_BY` n'est plus produit. Taxo dit la
+  règle écrite qui capture la route (`MATCHED_BY`), ce qu'elle exige (`AUTHORIZED_BY`, `PERMITS_ALL`) et la
+  garde écrite sur la méthode (`AUTHORIZED_BY` de `@PreAuthorize`) ; conclure qu'une route est protégée
+  relève de l'exécution (proxy, activation, application qui la sert) et de qui lit. Le contrat garde
+  `PROTECTED_BY` pour les analyses anciennes qui le portent.
 - **Une route n'a pour candidates que les chaînes chargées par l'application qui la sert** (§ 7.6).
   Les chaînes d'une autre application sont écartées en contre-exemples, avec leur raison ; de même pour
   `web.ignoring()`.
@@ -449,16 +450,11 @@ usage. Un manifeste illisible est `NOT_INTERPRETED`.
 - **Sécurité de méthode** (TAXO-MINIA-SEC-01, E2) : le type qui porte `@EnableMethodSecurity`, ou
   `@EnableGlobalMethodSecurity(prePostEnabled = true)`, est `ANNOTATED_WITH` cette annotation (`OBSERVED`,
   qualificatif `prePostEnabled` s'il est écrit). La méthode gardée par `@PreAuthorize`, ou son type à
-  défaut, est `AUTHORIZED_BY` l'expression écrite (`OBSERVED`, qualificatif `annotation`). L'endpoint
-  qu'elle traite est **`PROTECTED_BY` `policy-rule:<expression>`** (`INFERRED`, règle
-  `spring-security.method-authorization-applies`), sur `HANDLED_BY`, `AUTHORIZED_BY` et `ANNOTATED_WITH`.
-  C'est la seule protection déduite via `HANDLED_BY` : la garde est sur la méthode qui traite la route.
-  Conditions : au moins une application Spring Boot est lue, chaque application qui sert la route charge un
-  type qui active `@PreAuthorize` (§ 7.6) par le proxy par défaut (un `mode` AspectJ, dont le tissage n'est
-  pas lu, laisse l'activation non établie), la méthode n'est ni `final`, ni `private`, ni `static`, ni dans une
-  classe `final` (Spring Boot proxie par sous-classe : il ne l'intercepterait pas), et l'expression ne peut que restreindre. Cette protection s'ajoute à celle de la règle d'URL, sans la
-  remplacer. Une annotation qui ne se résout pas vers Spring, une expression non résolue ou qui peut tout
-  permettre, une activation non établie : `NOT_INTERPRETED`, l'`AUTHORIZED_BY` lu restant un fait. Une garde
+  défaut, est `AUTHORIZED_BY` l'expression écrite (`OBSERVED`, qualificatif `annotation`). Taxo s'arrête
+  à ces constats (D5) : il ne déduit pas que l'endpoint traité par cette méthode est protégé (le proxy,
+  l'activation et l'application qui sert la route relèvent de l'exécution). `HANDLED_BY` puis `AUTHORIZED_BY`
+  suffisent à qui veut conclure. Une annotation qui ne se résout pas vers Spring, une expression non résolue,
+  un `mode` AspectJ : `NOT_INTERPRETED`, avec sa raison. Une garde
   portée par une méta-annotation des sources (`@IsAdmin`) ou par un supertype lu (le type, ou la même
   signature) n'est pas lue : `NOT_INTERPRETED`, avec sa raison.
 - **CSRF** : la méthode de la chaîne qui écrit `csrf().disable()`, `csrf(c -> c.disable())` ou
@@ -713,7 +709,7 @@ même Tuile si leurs profils diffèrent : « cette route est-elle protégée ? �
 relations que « de quoi dépend ce module ? ».
 
 ```text
-Minia : TILE(ancre, profil = security/1, budget = 6 000 octets, analyse)
+Minia : TILE(ancre, profil = security/2, budget = 6 000 octets, analyse)
           │
 Taxo  : résout le profil en paramètres explicites (§ 9.1)
           │
@@ -752,12 +748,12 @@ résolus (`steps`, `depth`) et, pour chaque fait, sa règle et son chemin ; le r
 | --- | --- | --- |
 | `method-context/1` | `CONTAINS` entrant, `ANNOTATED_WITH`, `CALLS` dans les deux sens, `IMPLEMENTS` dans les deux sens ; profondeur 1 | une méthode (`symbol`) |
 | `calls/1` | `HANDLED_BY`, `CALLS`, `DISPATCHES_TO` ; profondeur 2 | une route ou une méthode |
-| `security/1` | `HANDLED_BY`, `SERVED_BY`, `MATCHED_BY`, `AUTHORIZED_BY`, `PROTECTED_BY` ; profondeur 2 | une route |
+| `security/2` | `HANDLED_BY`, `SERVED_BY`, `MATCHED_BY`, `AUTHORIZED_BY` ; profondeur 2 (D5 : plus de pas `PROTECTED_BY`) | une route |
 | `structure/1` | `CONTAINS`, `DEPENDS_ON`, `BUILT_FROM` ; profondeur 1 | un module, une application |
 | `commit-impact/1` | `CHANGES` → fichiers → routes traitées → application → protection | un commit ; **proposé, prérequis manquant**, voir ci-dessous |
 
-`security/1` et `structure/1` ne suivent que des relations produites aujourd'hui. `security/1` ne suit pas encore
-`CONFIGURES` ni `ANNOTATED_WITH` (TAXO-MINIA-SEC-01) : les ajouter fera une version 2. `calls/1` déclare
+`security/2` et `structure/1` ne suivent que des relations produites aujourd'hui. `security/2` ne suit pas encore
+`CONFIGURES` ni `ANNOTATED_WITH` (TAXO-MINIA-SEC-01) : les ajouter fera une version 3. `calls/1` déclare
 `DISPATCHES_TO`, qui n'a pas de producteur : la Tuile rend la frontière `CONTEXT` du moteur. `ANNOTATED_WITH` n'est
 pas relevée sur les paramètres ni les champs : `method-context/1` le déclare dans ses `limits`.
 
@@ -805,7 +801,7 @@ utilise deux Forêts explicitement séparées.
 | --- | --- | --- |
 | Structure | `CONTAINS`, `DEPENDS_ON`, `BUILT_FROM` | déclarations reconnues, pas la topologie de production |
 | API | `SERVED_BY` (entrant), puis `HANDLED_BY` | depuis une application, l'expansion vers les méthodes est un parcours sortant distinct |
-| Sécurité | `MATCHED_BY`, `AUTHORIZED_BY`, `PROTECTED_BY` | garder `filter_chain` et l'application ; une chaîne n'explique pas toutes les décisions |
+| Sécurité | `MATCHED_BY`, `AUTHORIZED_BY` | garder `filter_chain` et l'application ; une chaîne n'explique pas toutes les décisions |
 | Git | `HAS_COMMIT`, `CHILD_OF`, `CHANGES` | fichiers changés, pas méthodes modifiées ni impact comportemental |
 | Données | aucune tant qu'aucun évaluateur ne les produit | pas de fausses arêtes `READS` ou `WRITES` |
 
@@ -1078,7 +1074,7 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   (`returned`).
 - **Référence `qualifiers.filter_chain`.** Elle ouvre la lecture de la méthode qui construit la chaîne de filtres
   (`get_source`) seulement si le fait qui la porte vient de `taxo.spring-security`, dit `MATCHED_BY`,
-  `PROTECTED_BY` ou `AUTHORIZED_BY`, est `OBSERVED` ou `INFERRED`, `VALID`, date du commit de la réponse, et si
+  `AUTHORIZED_BY` ou `PROTECTED_BY` (analyses anciennes), est `OBSERVED` ou `INFERRED`, `VALID`, date du commit de la réponse, et si
   la valeur est une méthode Java (type et origine validés de façon déterministe, jamais par le modèle). Toute
   autre valeur reste refusée.
 - **Une Tuile tronquée n'est jamais une absence de faits.** Sans fait envoyé, une Tuile coupée, refusée ou dont
