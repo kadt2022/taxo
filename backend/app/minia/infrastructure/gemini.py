@@ -122,7 +122,7 @@ class GeminiModel:
             raise MiniaError(UNAVAILABLE, 'Réponse de Gemini illisible.') from exc
         text, finish = _text(part)
         if usage is not None:
-            usage(metering.gemini(part.get('usageMetadata')))
+            usage(metering.gemini(part.get('usageMetadata'), part.get('modelVersion')))
         _accepted(part, finish)
         return text
 
@@ -160,7 +160,7 @@ class GeminiModel:
         finally:
             response.close()
             if usage is not None and metadata is not None:
-                usage(metering.gemini(metadata))
+                usage(metering.gemini(metadata, served))
         return served or self.model_name
 
 

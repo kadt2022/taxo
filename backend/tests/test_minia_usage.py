@@ -28,6 +28,7 @@ GEMINI_USAGE = {'promptTokenCount': 900, 'cachedContentTokenCount': 300, 'candid
 def test_claude_counters_are_read_as_reported_and_reasoning_is_not_invented():
     assert usage.claude(CLAUDE_USAGE) == {'input': 1200, 'cache_read': 0, 'cache_write': 0, 'output': 80,
                                           'reasoning': None}
+    assert usage.claude(CLAUDE_USAGE, 'claude-opus-5-5')['served'] == 'claude-opus-5-5'
     assert usage.claude(None) == dict.fromkeys(usage.KEYS), 'sans usage, rien n est rapporté'
 
 
@@ -44,11 +45,33 @@ def test_a_total_is_given_only_when_every_call_reported_it():
     ledger.record(model, 'consignes', 'message', usage.counters(input=10, output=2))
     ledger.record(model, 'consignes', 'un autre message', usage.counters(input=5))
     report = ledger.report()
-    assert report['tokens']['input'] == 15
-    assert report['tokens']['output'] is None and report['unreported']['output'] == 1, \
+    totals = report['by_model']['claude/claude-test']
+    assert totals['tokens']['input'] == 15 and totals['input_excludes_cache'] is True
+    assert totals['tokens']['output'] is None and totals['unreported']['output'] == 1, \
         'un compteur manquant sur un appel : non rapporté, jamais additionné comme zéro'
-    assert report['sent_bytes'] == len('consignes') * 2 + len('message') + len('un autre message')
-    assert report['input_excludes_cache'] == {'claude': True}
+    assert report['prompt_bytes'] == len('consignes') * 2 + len('message') + len('un autre message')
+
+
+def test_tokens_are_never_summed_across_models_and_go_to_the_model_that_served():
+    ledger = usage.Ledger()
+    model = SimpleNamespace(provider='claude', model_name='claude-sonnet-5-5')
+    ledger.record(model, 's', 'm', usage.counters(input=10, output=1))
+    ledger.record(model, 's', 'm', {**usage.counters(input=7, output=1), 'served': 'claude-opus-5-5'})
+    by_model = ledger.report()['by_model']
+    assert by_model['claude/claude-sonnet-5-5']['tokens']['input'] == 10
+    assert by_model['claude/claude-opus-5-5']['tokens']['input'] == 7, 'le repli est compté au modèle qui a répondu'
+
+
+def test_a_call_rejected_before_any_report_is_counted_apart_but_a_billed_refusal_is_counted():
+    ledger = usage.Ledger()
+    model = SimpleNamespace(provider='claude', model_name='claude-test')
+    ledger.record(model, 'consignes', 'trop grand', None, failed=True)
+    ledger.record(model, 'consignes', 'refusé', usage.counters(input=4, output=0), failed=True)
+    report = ledger.report()
+    assert (report['calls'], report['failed_calls']) == (1, 1)
+    assert report['prompt_bytes'] == len('consignes') + len('refusé'.encode()), \
+        'un appel jamais rapporté ne gonfle ni les octets ni les totaux'
+    assert report['by_model']['claude/claude-test']['tokens']['input'] == 4
 
 
 def test_taxo_bytes_separate_the_exploration_from_the_verifications_minia_runs_after_the_answer():
@@ -56,7 +79,7 @@ def test_taxo_bytes_separate_the_exploration_from_the_verifications_minia_runs_a
                   {'operation': 'find_claim', 'bytes': 30}, {'operation': 'find_claim', 'bytes': 20}]
     report = usage.Ledger().report(trajectory, verification_from=2)
     assert report['taxo_bytes'] == {'exploration': 150, 'verification': 50}
-    assert report['calls'] == 0 and report['tokens'] == dict.fromkeys(usage.KEYS)
+    assert report['calls'] == 0 and report['by_model'] == {}
 
 
 # --- Les adaptateurs rapportent sans rien changer à la requête -------------------------------------------------
@@ -67,7 +90,7 @@ def test_claude_reports_the_usage_of_a_call_and_sends_the_same_request():
                                           SimpleNamespace(**vars(text_message(ANSWER)), usage=CLAUDE_USAGE))[1]
     reported = {}
     claude(messages).complete('consignes', 'faits', usage=reported.update)
-    assert reported == usage.claude(CLAUDE_USAGE)
+    assert reported == usage.claude(CLAUDE_USAGE, 'claude-opus-5')
     assert 'cache_control' not in json.dumps(messages.calls[0], default=str), 'R0 ne demande aucun cache'
 
 
@@ -117,7 +140,8 @@ def test_the_protected_passage_records_each_call_with_the_protected_size_and_no_
     first = report['per_call'][0]
     assert first['message_bytes'] == len(model.calls[0][1].encode('utf-8')), \
         'les octets comptés sont ceux du message protégé, réellement envoyé'
-    assert report['tokens'] == dict.fromkeys(usage.KEYS) and report['unreported']['input'] == 2, \
+    totals = report['by_model']['scripted/scripted-1']
+    assert totals['tokens'] == dict.fromkeys(usage.KEYS) and totals['unreported']['input'] == 2, \
         'un fournisseur qui ne rapporte rien : non rapporté'
     assert 'secret.author' not in json.dumps(report), 'le relevé ne garde aucun contenu'
 
@@ -132,7 +156,8 @@ def test_a_failed_call_is_still_recorded_because_it_was_sent():
         protected.complete('consignes', json.dumps({'question': 'message'}))
     except RuntimeError:
         pass
-    assert protected.ledger.report()['per_call'][0]['failed'] is True
+    report = protected.ledger.report()
+    assert report['per_call'][0]['failed'] is True and (report['calls'], report['failed_calls']) == (0, 1)
 
 
 # --- La réponse finale porte le relevé ; le journal le dit sans contenu ----------------------------------------
@@ -150,7 +175,7 @@ def test_an_exploration_answer_carries_its_measurement(repo, tmp_path):
     assert measured['taxo_bytes']['verification'] == sum(step['bytes'] for step in verifications)
     assert measured['taxo_bytes']['exploration'] == sum(step['bytes'] for step in trajectory) - \
         measured['taxo_bytes']['verification']
-    assert measured['sent_bytes'] == sum(len(system.encode()) + len(user.encode()) for system, user, _ in model.calls)
+    assert measured['prompt_bytes'] == sum(len(system.encode()) + len(user.encode()) for system, user, _ in model.calls)
 
 
 def test_the_journal_says_the_counters_and_never_the_content():
@@ -162,4 +187,4 @@ def test_the_journal_says_the_counters_and_never_the_content():
     finally:
         trace.configure(trace.OFF)
     line = journal.getvalue()
-    assert 'entrée 1200' in line and 'raisonnement non rapporté' in line and 'envoyé 30 octets' in line
+    assert 'entrée 1200' in line and 'raisonnement non rapporté' in line and 'consignes + message 30 octets' in line

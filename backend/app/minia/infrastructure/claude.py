@@ -139,7 +139,7 @@ def _measured(message, usage):
     """Les compteurs de l'appel, tels que l'API les rapporte, meme pour une reponse refusee ou coupee : elle est
     facturee aussi."""
     if usage is not None:
-        usage(metering.claude(getattr(message, 'usage', None)))
+        usage(metering.claude(getattr(message, 'usage', None), getattr(message, 'model', None)))
 
 
 def _accepted(message):

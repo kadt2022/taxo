@@ -95,9 +95,11 @@ def usage(model, call):
         return
     said = lambda key: 'non rapporté' if call.get(key) is None else call[key]
     LOGGER.info('LLM usage %s/%s : entrée %s · cache lu %s · cache écrit %s · sortie %s · raisonnement %s · '
-                'envoyé %s octets%s', getattr(model, 'provider', '?'), getattr(model, 'model_name', '?'),
+                'consignes + message %s octets%s', getattr(model, 'provider', '?'), getattr(model, 'model_name', '?'),
                 said('input'), said('cache_read'), said('cache_write'), said('output'), said('reasoning'),
                 call.get('system_bytes', 0) + call.get('message_bytes', 0), ' (appel échoué)' if call.get('failed') else '')
+    if call.get('model') and call['model'] != getattr(model, 'model_name', None):
+        LOGGER.info('LLM usage : servi par %s', call['model'])
 
 
 def received(model, reply, served=None):
