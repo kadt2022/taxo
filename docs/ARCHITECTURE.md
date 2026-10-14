@@ -1111,6 +1111,15 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   (`usage` : appels, `prompt_bytes`, octets de Taxo séparés entre exploration et vérifications, tokens par modèle),
   jamais comme un fait ; la ligne `LLM usage`
   du journal le dit sans contenu. Une mesure seulement : la requête envoyée est inchangée et aucun cache n'est demandé.
+- **Vue des Tuiles pour le modèle** (même récit, R2 ; `MINIA_TILE_PROJECTION`, `off` par défaut) : quand elle est
+  active, le message envoyé au modèle porte chaque Tuile dans une vue condensée, déterministe et versionnée
+  (`vue-minia/1`) ; Taxo la sert et Minia la garde entière (trajectoire, garde de conclusion, vérification, preuves).
+  Liste blanche par champ (transmis, condensé, gardé) : `identity`, `occurrence`, `produced_by`, l'instantané de chaque
+  fait, la classification et la provenance restent hors du prompt ; les références `F…`, le triplet, ses qualificatifs,
+  le statut, la dérivation d'un fait déduit (règle, prémisses, limites connues), les preuves en une ligne, la couverture,
+  la frontière, `not_sent`, la troncature et les limites du profil sont transmis. Un champ non classé n'est jamais
+  transmis et son nom est signalé (`projection.withheld`) ; un test de contrat échoue sur tout champ que Taxo rend sans
+  classement. La vue est construite avant la protection de la demande, qui contrôle le message entier.
 - Transport indépendant : appel interne, HTTP (`POST /api/projects/{id}/taxo-query`), et plus tard MCP,
   sans seconde sémantique. Ajouter une opération ou un champ facultatif est compatible ; changer la
   sémantique d'une opération ou d'un verdict crée une nouvelle version.

@@ -64,6 +64,15 @@ def minia_compact_after(value=None):
     return int(value if value is not None else os.getenv('MINIA_COMPACT_AFTER', '0'))
 
 
+def minia_tile_projection(value=None):
+    """La vue condensée des Tuiles envoyée au modèle (MINIA_TILE_PROJECTION, récit TAXO-RECIT-REDUCTION-PAYLOAD-MINIA,
+    R2) : `off` (défaut) ou `on`. Taxo et Minia gardent toujours la Tuile entière."""
+    chosen = (value or os.getenv('MINIA_TILE_PROJECTION', 'off')).strip().lower()
+    if chosen not in ('on', 'off'):
+        raise ValueError(f'MINIA_TILE_PROJECTION invalide : {chosen} (on ou off).')
+    return chosen == 'on'
+
+
 def minia_source_context(value=None):
     """Code source que Minia peut recevoir : `off` (defaut, aucun) ou `diff` (le diff d'un commit, sur
     accord de chaque demande). Avec un Ollama distant, `diff` fait sortir du code de la machine."""

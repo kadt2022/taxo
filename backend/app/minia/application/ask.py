@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
-from app.minia.application import anchoring, investigation, sources, tiles, trace
+from app.minia.application import anchoring, investigation, sources, tile_view, tiles, trace
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
 from app.minia.domain.investigation import conversation
@@ -393,7 +393,7 @@ class AskMinia:
 
     def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None,
                  taxo_query=None, mip=None, investigations=None, max_calls=MAX_CALLS, exchange_bytes=EXCHANGE_BYTES,
-                 compact_after=0):
+                 compact_after=0, tile_projection=False):
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
         if not _within(max_calls, 1, MAX_ALLOWED_CALLS):
@@ -404,6 +404,8 @@ class AskMinia:
         if not _within(compact_after, 0, MAX_COMPACT_AFTER):
             raise ValueError(f'MINIA_COMPACT_AFTER invalide : {compact_after} (de 0, désactivé, à {MAX_COMPACT_AFTER}).')
         self.max_calls, self.exchange_bytes, self.compact_after = max_calls, exchange_bytes, compact_after
+        # La vue condensée des Tuiles pour le modèle (R2, `vue-minia/1`) ; la trajectoire garde la Tuile entière.
+        self.tile_projection = tile_projection
         self.history, self.projects, self.query = history, projects, query
         # Protocole Taxo (ARCHITECTURE § 12) : sans lui, Minia recoit toujours un paquet de contexte.
         self.taxo_query = taxo_query
@@ -762,7 +764,7 @@ class AskMinia:
             """Octets qu'une reponse de Taxo peut encore occuper sans depasser la fenetre du modele."""
             if capacity is None:
                 return None
-            text = exploration.message(question, operations, _compacted(exchanged, self.compact_after), calls_left,
+            text = exploration.message(question, operations, self._shown(exchanged), calls_left,
                                        context)
             return capacity - len(text.encode('utf-8')) - TURN_MARGIN
 
@@ -806,7 +808,7 @@ class AskMinia:
                 space = room(operations, exchanged, calls_left)
                 if space is not None and space < ROOM_TO_CONTINUE:
                     calls_left = 0  # la fenetre est presque pleine : Minia conclut avec ce qu'elle a
-                text = exploration.message(question, operations, _compacted(exchanged, self.compact_after),
+                text = exploration.message(question, operations, self._shown(exchanged),
                                            calls_left, context)
                 check(cancel)
                 raw = yield from _waiting(
@@ -870,8 +872,20 @@ class AskMinia:
         yield COMPLETED, {
             **result, 'status': ANSWERED, 'mode': EXPLORATION, 'statements': statements, 'trajectory': trajectory,
             'budget': {'max_bytes': exchange.budget, 'used': exchange.used},
-            **({'usage': ledger.report(trajectory, verification_from)} if ledger is not None else {}),
+            **({'usage': {**ledger.report(trajectory, verification_from),
+                          'projection': tile_view.VERSION if self.tile_projection else None}}
+               if ledger is not None else {}),
             **({'returned': guarded} if guarded else {})}
+
+    def _shown(self, exchanged):
+        """Ce que le modèle reçoit de la trajectoire : compactée si le réglage le demande, et chaque Tuile dans sa vue
+        condensée si la projection est active. `exchanged` reste entier : garde, vérification et preuves le lisent."""
+        shown = _compacted(exchanged, self.compact_after)
+        if not self.tile_projection:
+            return shown
+        return [{**item, 'response': tile_view.project(item['response'])}
+                if item.get('operation') == tiles.OPERATION and isinstance(item.get('response'), dict) else item
+                for item in shown]
 
     def _served(self, exchange, step, bounded, space, exchanged):
         """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, comptée dans
