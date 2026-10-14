@@ -73,6 +73,8 @@ class Ledger:
 
     def __init__(self):
         self.calls = []
+        # La vue appliquée aux réponses envoyées au modèle (R2, par exemple `vue-minia/1`) ; None : réponses entières.
+        self.projection = None
 
     def record(self, model, system, message, reported=None, failed=False):
         reported = dict(reported or {})
@@ -106,6 +108,7 @@ class Ledger:
             'prompt_bytes': sum(call['system_bytes'] + call['message_bytes'] for call in counted),
             'taxo_bytes': {'exploration': taxo_bytes(steps[:cut]), 'verification': taxo_bytes(steps[cut:])},
             'by_model': {name: _totals(calls) for name, calls in sorted(by_model.items())},
+            'projection': self.projection,
             'per_call': [dict(call) for call in self.calls],
         }
 

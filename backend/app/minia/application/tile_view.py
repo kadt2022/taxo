@@ -31,6 +31,8 @@ TILE_FIELDS = {
     'facts': CONDENSED, 'coverage': SENT, 'frontier': SENT, 'bounds': RETAINED, 'stop_reason': SENT,
     'truncated': SENT, 'not_sent': SENT, 'continuation': RETAINED, 'wire': RETAINED, 'profile': CONDENSED,
     'classification': RETAINED, 'disclosure': CONDENSED, 'bytes': RETAINED, 'error': SENT,
+    # Ajoutés par Minia à une Tuile redonnée (trajectoire compacte) : le renvoi vers le tour d'origine.
+    'reused': SENT, 'note': SENT,
 }
 # Un fait de la Tuile. `identity` et `occurrence` : poignées internes, retrouvées par la réponse complète (SEC-04).
 ITEM_FIELDS = {
@@ -47,12 +49,23 @@ _DERIVATION = ('rule', 'premises', 'known_gaps')
 _PROFILE = ('id', 'limits')
 
 
+def projectable(response):
+    """Une réponse qui porte une Tuile (servie ou refusée) ; pas un résumé de trajectoire compacte ni un simple renvoi,
+    qui ne contiennent que des références et une note de Minia."""
+    if not isinstance(response, dict) or response.get('compacted'):
+        return False
+    return not (response.get('reused') and 'facts' not in response and 'error' not in response)
+
+
 def project(response):
-    """La vue de la Tuile pour le modèle ; un refus passe tel quel, il ne porte que son erreur."""
-    if not isinstance(response, dict) or response.get('outcome') != 'OK':
+    """La vue de la Tuile pour le modèle. Un refus passe par la même liste blanche : son issue, son erreur et
+    l'instantané, jamais la provenance ni un champ inconnu."""
+    if not isinstance(response, dict):
         return response
     withheld = sorted(name for name in response if name not in TILE_FIELDS)
     shown = {name: value for name, value in response.items() if TILE_FIELDS.get(name) == SENT}
+    if response.get('outcome') != 'OK':
+        return {**shown, **({'projection': {'version': VERSION, 'withheld': withheld}} if withheld else {})}
     if 'nodes' in response:
         shown['nodes'] = _nodes(response['nodes'])
     if 'profile' in response:
@@ -110,7 +123,9 @@ def _item(item):
 def _proof(proof):
     """Une preuve en une ligne : fichier, lignes et méthode de lecture."""
     path, start, end = proof.get('path', ''), proof.get('line_start'), proof.get('line_end')
-    lines = '' if start is None else f':{start}' if end in (None, start) else f':{start}-{end}'
+    lines = ''
+    if start is not None:
+        lines = f':{start}' if end in (None, start) else f':{start}-{end}'
     method = f' ({proof["method"]})' if proof.get('method') else ''
     return f'{path}{lines}{method}'
 

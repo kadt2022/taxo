@@ -759,6 +759,9 @@ class AskMinia:
         label = 'Minia interroge Taxo'
         yield _stage('exploration', 'running', label, 0)
         capacity = self._capacity(model, exploration.SYSTEM)
+        if self.tile_projection and getattr(model, 'ledger', None) is not None:
+            # Dit dans le relevé, même si l'exploration se replie ensuite en mode paquet.
+            model.ledger.projection = tile_view.VERSION
 
         def room(operations, exchanged, calls_left):
             """Octets qu'une reponse de Taxo peut encore occuper sans depasser la fenetre du modele."""
@@ -869,12 +872,10 @@ class AskMinia:
         statements = yield from self._verified(step.statements, exchange, trajectory, cancel)
         check(cancel)
         ledger = getattr(model, 'ledger', None)
+        usage = {} if ledger is None else {'usage': ledger.report(trajectory, verification_from)}
         yield COMPLETED, {
             **result, 'status': ANSWERED, 'mode': EXPLORATION, 'statements': statements, 'trajectory': trajectory,
-            'budget': {'max_bytes': exchange.budget, 'used': exchange.used},
-            **({'usage': {**ledger.report(trajectory, verification_from),
-                          'projection': tile_view.VERSION if self.tile_projection else None}}
-               if ledger is not None else {}),
+            'budget': {'max_bytes': exchange.budget, 'used': exchange.used}, **usage,
             **({'returned': guarded} if guarded else {})}
 
     def _shown(self, exchanged):
@@ -884,7 +885,7 @@ class AskMinia:
         if not self.tile_projection:
             return shown
         return [{**item, 'response': tile_view.project(item['response'])}
-                if item.get('operation') == tiles.OPERATION and isinstance(item.get('response'), dict) else item
+                if item.get('operation') == tiles.OPERATION and tile_view.projectable(item.get('response')) else item
                 for item in shown]
 
     def _served(self, exchange, step, bounded, space, exchanged):

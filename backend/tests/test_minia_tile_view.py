@@ -93,9 +93,26 @@ def test_coverage_frontier_truncation_and_profile_limits_are_kept():
     assert view['snapshot'] == TILE['snapshot'], 'l’analyse sert d’argument aux opérations suivantes'
 
 
-def test_a_refused_tile_is_passed_as_it_is():
-    refusal = {'outcome': 'ERROR', 'error': {'code': 'INVALID_ARGUMENT', 'message': 'référence non reçue'}}
-    assert tile_view.project(refusal) == refusal
+def test_a_refused_tile_goes_through_the_same_whitelist():
+    error = {'code': 'INVALID_ARGUMENT', 'message': 'référence non reçue'}
+    refusal = {'mip': 'mip/0.1', 'expression': 'EXPAND', 'outcome': 'ERROR', 'snapshot': {'analysis': 'an-1'},
+               'error': error, 'bytes': 120, 'inattendu': 'x'}
+    view = tile_view.project(refusal)
+    assert view['error'] == error
+    assert view['outcome'] == 'ERROR'
+    assert 'mip' not in view
+    assert 'bytes' not in view
+    assert view['projection']['withheld'] == ['inattendu']
+
+
+def test_a_compacted_summary_or_a_bare_resend_is_left_to_the_trajectory():
+    assert not tile_view.projectable({'outcome': 'OK', 'compacted': True, 'references': ['symbol:java:a.B']})
+    assert not tile_view.projectable({'outcome': 'OK', 'reused': True, 'note': 'tour 3'})
+    resent = {**copy.deepcopy(TILE), 'reused': True, 'note': 'redonnée'}
+    assert tile_view.projectable(resent)
+    view = tile_view.project(resent)
+    assert (view['reused'], view['note']) == (True, 'redonnée')
+    assert 'withheld' not in view['projection']
 
 
 # --- SEC-02 / SEC-08 : liste blanche, échec sûr ----------------------------------------------------------------
@@ -107,7 +124,9 @@ def test_an_unknown_field_is_never_sent_and_is_named_as_withheld():
     tile['facts'][0]['fact']['secret_audit'] = 'xyz'
     view = tile_view.project(tile)
     text = json.dumps(view, ensure_ascii=False)
-    assert 'valeur-inconnue' not in text and 'interne' not in text and 'xyz' not in text
+    assert 'valeur-inconnue' not in text
+    assert 'interne' not in text
+    assert 'xyz' not in text
     assert view['projection']['withheld'] == ['facts.fact.secret_audit', 'facts.marque', 'nouveau_champ']
     assert view['projection']['version'] == tile_view.VERSION
 
@@ -173,7 +192,8 @@ def test_without_the_setting_the_model_reads_the_whole_tile(make_repo, tmp_path,
         answer(statement('unknown', 'Rien de plus.')))
     result = ask(make_repo, tmp_path, model)
     tile = sent(model, 2)['trajectory'][2]['response']
-    assert 'projection' not in tile and all('occurrence' in item for item in tile['facts'])
+    assert 'projection' not in tile
+    assert all('occurrence' in item for item in tile['facts'])
     assert result['usage']['projection'] is None
 
 
@@ -188,3 +208,17 @@ def test_the_setting_accepts_only_on_or_off(monkeypatch):
 def test_the_view_is_smaller_than_the_tile():
     full = len(json.dumps(TILE, ensure_ascii=False))
     assert len(shown()) < full
+
+
+def test_a_fallback_after_a_projected_tile_still_says_the_projection(make_repo, tmp_path, monkeypatch):
+    """L'exploration se replie (réponse illisible) après une Tuile projetée : le relevé dit toujours la vue appliquée."""
+    from test_minia_general import packet_answer
+    monkeypatch.setenv('MINIA_TILE_PROJECTION', 'on')
+    model = Scripted(
+        lambda message: call('find_references', analysis=analysis_of(message), prefix='CourseController.register',
+                             match='NAME'),
+        call('get_tile', reference=REGISTER, profile='method-context/1'),
+        'pas du json', packet_answer())
+    result = ask(make_repo, tmp_path, model)
+    assert result['mode'] == 'paquet'
+    assert result['usage']['projection'] == tile_view.VERSION
