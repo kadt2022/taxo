@@ -202,13 +202,18 @@ def _reported(events, disclosure, ledger=None):
         if pending:
             yield DELTA, {'text': disclosure.restore(pending)}
             pending = ''
-        if event_type == COMPLETED:
-            data = {**data, 'withheld': disclosure.report()}
-            if ledger is not None and 'usage' not in data:
-                data['usage'] = ledger.report(data.get('trajectory'))
-        yield event_type, data
+        yield event_type, (_finished(data, disclosure, ledger) if event_type == COMPLETED else data)
     if pending:
         yield DELTA, {'text': disclosure.restore(pending)}
+
+
+def _finished(data, disclosure, ledger):
+    """La reponse finale : ce que Taxo a retenu avant l'envoi au modele et, si la route ne l'a pas deja donne, le
+    releve de la demande (R0)."""
+    data = {**data, 'withheld': disclosure.report()}
+    if ledger is not None and 'usage' not in data:
+        data['usage'] = ledger.report(data.get('trajectory'))
+    return data
 
 
 def _restored(model, answer):

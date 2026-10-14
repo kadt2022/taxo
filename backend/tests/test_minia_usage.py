@@ -46,9 +46,10 @@ def test_a_total_is_given_only_when_every_call_reported_it():
     ledger.record(model, 'consignes', 'un autre message', usage.counters(input=5))
     report = ledger.report()
     totals = report['by_model']['claude/claude-test']
-    assert totals['tokens']['input'] == 15 and totals['input_excludes_cache'] is True
-    assert totals['tokens']['output'] is None and totals['unreported']['output'] == 1, \
-        'un compteur manquant sur un appel : non rapporté, jamais additionné comme zéro'
+    assert totals['tokens']['input'] == 15
+    assert totals['input_excludes_cache'] is True
+    assert totals['tokens']['output'] is None, 'un compteur manquant sur un appel : non rapporté, jamais zéro'
+    assert totals['unreported']['output'] == 1
     assert report['prompt_bytes'] == len('consignes') * 2 + len('message') + len('un autre message')
 
 
@@ -79,7 +80,8 @@ def test_taxo_bytes_separate_the_exploration_from_the_verifications_minia_runs_a
                   {'operation': 'find_claim', 'bytes': 30}, {'operation': 'find_claim', 'bytes': 20}]
     report = usage.Ledger().report(trajectory, verification_from=2)
     assert report['taxo_bytes'] == {'exploration': 150, 'verification': 50}
-    assert report['calls'] == 0 and report['by_model'] == {}
+    assert report['calls'] == 0
+    assert report['by_model'] == {}
 
 
 # --- Les adaptateurs rapportent sans rien changer à la requête -------------------------------------------------
@@ -103,7 +105,8 @@ def test_claude_reports_the_usage_of_a_streamed_call():
     messages.stream = lambda **request: (messages.calls.append(request), Measured([ANSWER]))[1]
     reported = {}
     assert ''.join(claude(messages).stream('consignes', 'faits', usage=reported.update)) == ANSWER
-    assert reported['input'] == 1200 and reported['reasoning'] is None
+    assert reported['input'] == 1200
+    assert reported['reasoning'] is None
 
 
 def test_gemini_reports_the_usage_carried_by_the_last_streamed_piece():
@@ -141,8 +144,8 @@ def test_the_protected_passage_records_each_call_with_the_protected_size_and_no_
     assert first['message_bytes'] == len(model.calls[0][1].encode('utf-8')), \
         'les octets comptés sont ceux du message protégé, réellement envoyé'
     totals = report['by_model']['scripted/scripted-1']
-    assert totals['tokens'] == dict.fromkeys(usage.KEYS) and totals['unreported']['input'] == 2, \
-        'un fournisseur qui ne rapporte rien : non rapporté'
+    assert totals['tokens'] == dict.fromkeys(usage.KEYS), 'un fournisseur qui ne rapporte rien : non rapporté'
+    assert totals['unreported']['input'] == 2
     assert 'secret.author' not in json.dumps(report), 'le relevé ne garde aucun contenu'
 
 
@@ -157,7 +160,8 @@ def test_a_failed_call_is_still_recorded_because_it_was_sent():
     except RuntimeError:
         pass
     report = protected.ledger.report()
-    assert report['per_call'][0]['failed'] is True and (report['calls'], report['failed_calls']) == (0, 1)
+    assert report['per_call'][0]['failed'] is True
+    assert (report['calls'], report['failed_calls']) == (0, 1)
 
 
 # --- La réponse finale porte le relevé ; le journal le dit sans contenu ----------------------------------------
@@ -187,4 +191,6 @@ def test_the_journal_says_the_counters_and_never_the_content():
     finally:
         trace.configure(trace.OFF)
     line = journal.getvalue()
-    assert 'entrée 1200' in line and 'raisonnement non rapporté' in line and 'consignes + message 30 octets' in line
+    assert 'entrée 1200' in line
+    assert 'raisonnement non rapporté' in line
+    assert 'consignes + message 30 octets' in line
