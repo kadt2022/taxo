@@ -73,6 +73,15 @@ def minia_tile_projection(value=None):
     return chosen == 'on'
 
 
+def minia_exchange_projection(value=None):
+    """La vue condensée de `describe` et des voisinages envoyée au modèle (MINIA_EXCHANGE_PROJECTION, récit
+    TAXO-RECIT-REDUCTION-PAYLOAD-MINIA, R4) : `off` (défaut) ou `on`. Taxo et Minia gardent toujours la réponse entière."""
+    chosen = (value or os.getenv('MINIA_EXCHANGE_PROJECTION', 'off')).strip().lower()
+    if chosen not in ('on', 'off'):
+        raise ValueError(f'MINIA_EXCHANGE_PROJECTION invalide : {chosen} (on ou off).')
+    return chosen == 'on'
+
+
 def minia_source_context(value=None):
     """Code source que Minia peut recevoir : `off` (defaut, aucun) ou `diff` (le diff d'un commit, sur
     accord de chaque demande). Avec un Ollama distant, `diff` fait sortir du code de la machine."""

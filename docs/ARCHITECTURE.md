@@ -1120,6 +1120,14 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   la frontière, `not_sent`, la troncature et les limites du profil sont transmis. Un champ non classé n'est jamais
   transmis et son nom est signalé (`projection.withheld`) ; un test de contrat échoue sur tout champ que Taxo rend sans
   classement. La vue est construite avant la protection de la demande, qui contrôle le message entier.
+- **Vue de `describe` et des voisinages** (même récit, R4 ; `MINIA_EXCHANGE_PROJECTION`, `off` par défaut) : même
+  principe, la plus petite représentation **suffisante**. `describe` perd ses éléments `operation` (déjà envoyés à part
+  dans `operations`) et dit le reste en forme courte (familles, relations, analyseurs, langages ; couverture,
+  consentement, instantané et `not_sent` tels quels) ; un voisinage est projeté comme une Tuile (faits condensés,
+  ancre, nœuds non développés ou inconnus, frontière, suite de page, couverture). Avec elle, les Tuiles prennent la vue
+  stricte `vue-minia/2`, qui retire en plus les seuls doublons prouvés (`via`, nœuds déjà cités, ancre connue, commit,
+  note répétée) et garde le chemin de sélection. Le module `sufficiency` dit, pour une réponse et sa vue, ce qui
+  servirait à décider et manquerait : les tests et le rejeu sans modèle exigent qu'il ne manque rien.
 - Transport indépendant : appel interne, HTTP (`POST /api/projects/{id}/taxo-query`), et plus tard MCP,
   sans seconde sémantique. Ajouter une opération ou un champ facultatif est compatible ; changer la
   sémantique d'une opération ou d'un verdict crée une nouvelle version.
