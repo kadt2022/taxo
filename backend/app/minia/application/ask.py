@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
-from app.minia.application import anchoring, investigation, sources, tile_view, tiles, trace
+from app.minia.application import anchoring, exchange_view, investigation, sources, tile_view, tiles, trace
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
 from app.minia.domain.investigation import conversation
@@ -393,7 +393,7 @@ class AskMinia:
 
     def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None,
                  taxo_query=None, mip=None, investigations=None, max_calls=MAX_CALLS, exchange_bytes=EXCHANGE_BYTES,
-                 compact_after=0, tile_projection=False):
+                 compact_after=0, tile_projection=False, exchange_projection=False):
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
         if not _within(max_calls, 1, MAX_ALLOWED_CALLS):
@@ -406,6 +406,8 @@ class AskMinia:
         self.max_calls, self.exchange_bytes, self.compact_after = max_calls, exchange_bytes, compact_after
         # La vue condensée des Tuiles pour le modèle (R2, `vue-minia/1`) ; la trajectoire garde la Tuile entière.
         self.tile_projection = tile_projection
+        # La vue condensée de `describe` et des voisinages (R4, `vue-minia/2`) ; la trajectoire les garde entiers.
+        self.exchange_projection = exchange_projection
         self.history, self.projects, self.query = history, projects, query
         # Protocole Taxo (ARCHITECTURE § 12) : sans lui, Minia recoit toujours un paquet de contexte.
         self.taxo_query = taxo_query
@@ -759,9 +761,9 @@ class AskMinia:
         label = 'Minia interroge Taxo'
         yield _stage('exploration', 'running', label, 0)
         capacity = self._capacity(model, exploration.SYSTEM)
-        if self.tile_projection and getattr(model, 'ledger', None) is not None:
+        if getattr(model, 'ledger', None) is not None:
             # Dit dans le relevé, même si l'exploration se replie ensuite en mode paquet.
-            model.ledger.projection = tile_view.VERSION
+            model.ledger.projection = self._projection()
 
         def room(operations, exchanged, calls_left):
             """Octets qu'une reponse de Taxo peut encore occuper sans depasser la fenetre du modele."""
@@ -882,11 +884,27 @@ class AskMinia:
         """Ce que le modèle reçoit de la trajectoire : compactée si le réglage le demande, et chaque Tuile dans sa vue
         condensée si la projection est active. `exchanged` reste entier : garde, vérification et preuves le lisent."""
         shown = _compacted(exchanged, self.compact_after)
-        if not self.tile_projection:
+        views = {}
+        if self.tile_projection:
+            # Avec la vue R4, la Tuile prend aussi la vue stricte (étape E) ; sinon, celle de R2 inchangée.
+            strict = self.exchange_projection
+            views[tiles.OPERATION] = lambda response: tile_view.project(response, strict=strict)
+        if self.exchange_projection:
+            views.update(describe=exchange_view.describe_view, get_neighborhood=exchange_view.neighborhood_view)
+        if not views:
             return shown
-        return [{**item, 'response': tile_view.project(item['response'])}
-                if item.get('operation') == tiles.OPERATION and tile_view.projectable(item.get('response')) else item
+        return [{**item, 'response': views[item['operation']](item['response'])}
+                if item.get('operation') in views and tile_view.projectable(item.get('response')) else item
                 for item in shown]
+
+    def _projection(self):
+        """Les vues appliquées aux réponses envoyées au modèle, pour le relevé ; None : réponses entières."""
+        tiles_version = tile_view.STRICT_VERSION if self.exchange_projection else tile_view.VERSION
+        applied = [*([f'{tiles_version} (Tuiles)'] if self.tile_projection else []),
+                   *([f'{exchange_view.VERSION} (describe, voisinages)'] if self.exchange_projection else [])]
+        if applied == [f'{tile_view.VERSION} (Tuiles)']:
+            return tile_view.VERSION
+        return ', '.join(applied) or None
 
     def _served(self, exchange, step, bounded, space, exchanged):
         """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, comptée dans

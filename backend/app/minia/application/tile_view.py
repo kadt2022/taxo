@@ -21,6 +21,10 @@ références courtes `F…` sont celles de l'échange : elles désignent sans am
 résout tout fait par sa réponse complète, jamais par cette vue.
 """
 VERSION = 'vue-minia/1'
+# La vue stricte (R4, étape E) : en plus, les seuls doublons prouvés retirés — `via` (redit le fait), les nœuds déjà
+# sujets ou objets d'un fait, `root.known` vrai, le commit (dit par `describe`), la note répétée. Jamais les preuves,
+# la dérivation, les qualificatifs, la frontière, la couverture, ni le chemin de sélection.
+STRICT_VERSION = 'vue-minia/2'
 SENT, CONDENSED, RETAINED = 'SENT', 'CONDENSED', 'RETAINED'
 
 # La Tuile. `mip`, `expression`, `wire`, `classification` : provenance et audit ; `bounds` : redit en `truncated`,
@@ -57,15 +61,16 @@ def projectable(response):
     return not (response.get('reused') and 'facts' not in response and 'error' not in response)
 
 
-def project(response):
+def project(response, strict=False):
     """La vue de la Tuile pour le modèle. Un refus passe par la même liste blanche : son issue, son erreur et
-    l'instantané, jamais la provenance ni un champ inconnu."""
+    l'instantané, jamais la provenance ni un champ inconnu. `strict` : la vue de l'étape E (R4)."""
     if not isinstance(response, dict):
         return response
+    version = STRICT_VERSION if strict else VERSION
     withheld = sorted(name for name in response if name not in TILE_FIELDS)
     shown = {name: value for name, value in response.items() if TILE_FIELDS.get(name) == SENT}
     if response.get('outcome') != 'OK':
-        return {**shown, **({'projection': {'version': VERSION, 'withheld': withheld}} if withheld else {})}
+        return {**shown, **({'projection': {'version': version, 'withheld': withheld}} if withheld else {})}
     if 'nodes' in response:
         shown['nodes'] = _nodes(response['nodes'])
     if 'profile' in response:
@@ -75,15 +80,43 @@ def project(response):
         shown['disclosure'] = {'restrictions': restrictions}
     facts = []
     for item in response.get('facts') or ():
-        fact, unknown = _item(item)
+        fact, unknown = item_view(item, strict=strict)
         facts.append(fact)
         withheld.extend(unknown)
     shown['facts'] = facts
-    shown['projection'] = {'version': VERSION, 'note': 'Vue condensée : identité, occurrence, provenance et preuves '
-                                                       'détaillées restent dans Taxo, retrouvées par la référence F….'}
+    if strict:
+        _slimmed(shown, 'root', facts)
+    shown['projection'] = {'version': version}
+    if not strict:
+        shown['projection']['note'] = ('Vue condensée : identité, occurrence, provenance et preuves détaillées restent '
+                                       'dans Taxo, retrouvées par la référence F….')
     if withheld:
         shown['projection']['withheld'] = sorted(set(withheld))
     return shown
+
+
+def _slimmed(shown, anchor, facts):
+    """Les doublons prouvés de la vue stricte : le commit (dit par `describe`), l'ancre connue, les nœuds déjà sujets
+    ou objets d'un fait. Un nœud sans fait, un nœud non développé ou une ancre inconnue restent dits."""
+    if isinstance(shown.get('snapshot'), dict):
+        shown['snapshot'] = {name: value for name, value in shown['snapshot'].items() if name != 'commit'}
+    if isinstance(shown.get(anchor), dict) and shown[anchor].get('known') is True:
+        shown[anchor] = {name: value for name, value in shown[anchor].items() if name != 'known'}
+    cited = {value for item in facts for value in (item['fact'].get('subject'), item['fact'].get('object'))}
+    cited.add((shown.get(anchor) or {}).get('reference'))
+    nodes = shown.get('nodes')
+    if isinstance(nodes, dict):
+        rest = [reference for reference in nodes.get('references') or () if reference not in cited]
+        shown['nodes'] = {**({'references': rest} if rest else {}),
+                          **({'not_expanded': nodes['not_expanded']} if nodes.get('not_expanded') else {})}
+        if not shown['nodes']:
+            del shown['nodes']
+    elif isinstance(nodes, list):
+        rest = [reference for reference in nodes if reference not in cited]
+        if rest:
+            shown['nodes'] = rest
+        else:
+            del shown['nodes']
 
 
 def _nodes(nodes):
@@ -93,12 +126,13 @@ def _nodes(nodes):
     return {'references': seen, **({'not_expanded': closed} if closed else {})}
 
 
-def _item(item):
-    """Un fait de la Tuile et les noms des champs inconnus, jamais transmis."""
-    unknown = [f'facts.{name}' for name in item if name not in ITEM_FIELDS]
+def item_view(item, prefix='facts', strict=False):
+    """Un fait servi (Tuile, voisinage) et les noms des champs inconnus, jamais transmis. `strict` : sans `via`, qui
+    redit le sujet, la relation et l'objet du fait."""
+    unknown = [f'{prefix}.{name}' for name in item if name not in ITEM_FIELDS]
     shown = {name: item[name] for name in item if ITEM_FIELDS.get(name) == SENT}
     fact = item.get('fact') or {}
-    unknown += [f'facts.fact.{name}' for name in fact if name not in FACT_FIELDS]
+    unknown += [f'{prefix}.fact.{name}' for name in fact if name not in FACT_FIELDS]
     inner = {name: fact[name] for name in fact if FACT_FIELDS.get(name) == SENT and fact[name] not in ({}, None)}
     if fact.get('kind') not in (None, 'ASSERTION'):
         inner['kind'] = fact['kind']
@@ -111,7 +145,7 @@ def _item(item):
             inner['derivation']['counter_examples'] = len(derivation['counter_examples_checked'])
     shown['fact'] = inner
     via = item.get('via')
-    if isinstance(via, dict):
+    if isinstance(via, dict) and not strict:
         shown['via'] = f'{via.get("direction", "")} {via.get("relation", "")} depuis {via.get("from", "")}'.strip()
     if item.get('revisit'):
         shown['revisit'] = True
