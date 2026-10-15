@@ -164,6 +164,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
     api.state.minia = AskMinia(history, models, projects, query, source, default, taxo_query=api.state.taxo_query,
                                mip=mip, investigations=minia_investigations(investigations_path),
                                max_calls=settings.minia_max_calls(), exchange_bytes=settings.minia_exchange_bytes(),
-                               compact_after=settings.minia_compact_after())
+                               compact_after=settings.minia_compact_after(),
+                               tile_projection=settings.minia_tile_projection())
     api.include_router(minia_router(api.state.minia))
     return api
