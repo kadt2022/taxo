@@ -63,7 +63,8 @@ _REUSED_NOTE = ('Même opération, mêmes arguments : la réponse du tour {} res
 # qui redemande la même opération la reçoit de nouveau en entier, sans rien redemander à Taxo.
 MAX_COMPACT_AFTER = 15
 MAX_COMPACT_REFERENCES = 30
-_KEEP_WHOLE = frozenset({sources.OPERATION})
+# Le code lu reste entier pendant la compaction : une pièce source, le chemin et ses tuiles.
+_KEEP_WHOLE = frozenset({sources.OPERATION, paths.OPERATION, paths.READ})
 _COMPACT_NOTE = ('Réponse résumée pour la place : ses références restent reçues. Redemande la même opération pour la '
                  'relire en entier.')
 _RESENT_NOTE = 'Même opération, mêmes arguments : la réponse du tour {}, rendue de nouveau en entier.'
@@ -818,7 +819,8 @@ class AskMinia:
         guarded = []
         try:
             while True:
-                calls_left = self.max_calls - (len(trajectory) - opening)
+                # Jamais plus que ce que l'échange peut encore servir : l'ouverture (ancrage, chemin) l'a déjà entamé.
+                calls_left = min(self.max_calls - (len(trajectory) - opening), exchange.operations_left)
                 space = room(operations, exchanged, calls_left)
                 if space is not None and space < ROOM_TO_CONTINUE:
                     calls_left = 0  # la fenetre est presque pleine : Minia conclut avec ce qu'elle a

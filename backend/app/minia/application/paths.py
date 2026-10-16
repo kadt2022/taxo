@@ -64,6 +64,11 @@ def _short(reference):
     return f'{name}.{member}' if member else name
 
 
+# Les règles d'URL écrites pour une chaîne : validées comme elle (producteur, statut, commit, syntaxe), y compris
+# l'accès public (`PERMITS_ALL`), que la validation d'ouverture de source ne couvre pas.
+_RULE_RELATIONS = frozenset({'AUTHORIZED_BY', 'PERMITS_ALL'})
+
+
 def walk(exchange, reference):
     """Les méthodes du chemin dans l'ordre (largeur d'abord), leurs appels, la chaîne de filtres et les règles d'URL,
     et les appels connus non suivis (bornes)."""
@@ -71,7 +76,10 @@ def walk(exchange, reference):
     starts = sorted(fact['object'] for fact in _facts(exchange, subject=reference, relation='HANDLED_BY')) \
         if route else [reference]
     matched = _facts(exchange, subject=reference, relation='MATCHED_BY') if route else []
-    chains = sorted({fact.get('qualifiers', {}).get('filter_chain') for fact in matched} - {None})
+    # Une chaîne de filtres n'ouvre du code que validée comme partout ailleurs (producteur, statut, commit, syntaxe).
+    commit = (exchange.snapshot or {}).get('commit')
+    valid = {id(fact): sources.chain_of(fact, commit) for fact in matched}
+    chains = sorted(set(valid.values()) - {None})
     order, calls, seen, beyond = [], {}, set(), []
     queue = [(start, 0) for start in starts]
     while queue:
@@ -95,11 +103,12 @@ def walk(exchange, reference):
             calls.setdefault(chain, [])
     rules = []
     for fact in matched:
-        chain = fact.get('qualifiers', {}).get('filter_chain')
+        chain = valid[id(fact)]
+        if chain is None:
+            continue  # un rattachement non validé ne porte aucune règle : deux refus ne font pas une correspondance
         written = [f'{rule["relation"]} {rule.get("object", "")}'.strip()
                    for rule in _facts(exchange, subject=fact['object'])
-                   if rule['relation'] in ('AUTHORIZED_BY', 'PERMITS_ALL')
-                   and rule.get('qualifiers', {}).get('filter_chain') == chain]
+                   if sources.chain_of(rule, commit, _RULE_RELATIONS) == chain]
         rules.append({'pattern': fact['object'], 'filter_chain': chain, 'rules': written})
     beyond = sorted(set(beyond) - seen)
     return order, calls, chains, rules, beyond
@@ -155,10 +164,13 @@ def _project_types(exchange):
 
 
 def _tile(exchange, number, method, context, given):
-    """La tuile d'une méthode : sa classe, son code, ses champs et ses types, sans redonner ce qui l'a déjà été."""
+    """La tuile d'une méthode : sa classe, son code, ses champs et ses types, sans redonner ce qui l'a déjà été.
+
+    Déduplication transactionnelle : rend aussi les classes et types que la tuile donnerait, sans toucher `given` ; ils
+    ne sont tenus pour donnés que si la tuile part. Un en-tête illisible est dit (`unavailable`), jamais tu."""
     response, reason = _piece(exchange, method)
     if response is None:
-        return None, reason
+        return None, reason, set(), []
     item = response['items'][0]
     owner = method.split('#', 1)[0]
     fields = [entry['text'].strip() for entry in response.get('field_context') or () if entry.get('text')]
@@ -169,23 +181,30 @@ def _tile(exchange, number, method, context, given):
     tile = {'number': number, 'reference': method, 'path': item['path'], 'line_start': item['line_start'],
             'line_end': item['line_end'], 'truncated': item.get('truncated', False), 'fields': fields,
             'code': item['text']}
+    adds, unavailable = set(), []
     if owner not in given:
         header = _header(exchange, owner, context['headers'])
         if header:
             tile['class'] = header
-        given.add(owner)
+            adds.add(owner)
+        else:
+            unavailable.append({'what': 'class_header', 'number': number, 'reference': owner,
+                                'reason': 'NOT_AVAILABLE'})
     types = []
     for reference, resolution in [*((ref, 'RESOLVED') for ref in sorted(resolved)),
                                   *((ref, 'NAMED') for ref in sorted(named))]:
-        if reference in given:
+        if reference in given or reference in adds:
             continue
         header = _header(exchange, reference, context['headers'])
         if header:
             types.append({**header, 'resolution': resolution})
-            given.add(reference)
+            adds.add(reference)
+        else:
+            unavailable.append({'what': 'type_header', 'number': number, 'reference': reference,
+                                'reason': 'NOT_AVAILABLE'})
     if types:
         tile['types'] = types
-    return tile, None
+    return tile, None, adds, unavailable
 
 
 def _given(exchanged):
@@ -194,26 +213,29 @@ def _given(exchanged):
     for item in exchanged:
         if item.get('operation') in (OPERATION, READ):
             for tile in item['response'].get('tiles') or ():
-                given.add(tile['reference'].split('#', 1)[0])
+                if 'class' in tile:
+                    given.add(tile['class']['reference'])
                 given.update(entry['reference'] for entry in tile.get('types') or ())
     return given
 
 
-def _fill(exchange, response, numbered, wanted, given, max_bytes):
-    """Ajoute les tuiles voulues, dans l'ordre, tant qu'elles tiennent ; le reste est dit dans `not_sent`."""
+def _fill(exchange, response, numbered, wanted, given, max_bytes, missing):
+    """Ajoute les tuiles voulues, dans l'ordre de la carte, tant que la réponse tient ; les autres sont rangées dans
+    `missing` par raison. Une tuile refusée ne laisse rien derrière elle : ni classe ni type tenus pour donnés."""
     context = {'headers': {}, 'types': _project_types(exchange)}
-    missing = {}
     for number in wanted:
-        tile, reason = _tile(exchange, number, numbered[number], context, given)
+        tile, reason, adds, unavailable = _tile(exchange, number, numbered[number], context, given)
         if tile is None:
             missing.setdefault(reason, []).append(number)
             continue
         response['tiles'].append(tile)
+        response['not_sent'].extend(unavailable)
         if size(response) > max_bytes:
             response['tiles'].pop()
+            del response['not_sent'][len(response['not_sent']) - len(unavailable):]
             missing.setdefault('BUDGET', []).append(number)
-    for reason, numbers in missing.items():
-        response['not_sent'].append({'what': 'tiles', 'numbers': numbers, 'reason': reason})
+            continue
+        given |= adds
 
 
 def _sized(response):
@@ -221,6 +243,56 @@ def _sized(response):
     while sized['bytes'] != size(sized):
         sized['bytes'] = size(sized)
     return sized
+
+
+def _finish(response, numbered, missing, max_bytes):
+    """Dit ce qui manque, puis vérifie la réponse entière (carte, tuiles, signalements) : tant qu'elle dépasse le budget,
+    la dernière tuile retenue est retirée et dite. Le chemin incomplet est annoncé en clair."""
+    while True:
+        shown = {**response, 'not_sent': [*response['not_sent'], *(
+            {'what': 'tiles', 'numbers': sorted(numbers), 'reason': reason} for reason, numbers in missing.items())]}
+        sent = {tile['number'] for tile in response['tiles']}
+        absent = [index for index in numbered if index not in sent]
+        withheld = {number for numbers in missing.values() for number in numbers}
+        if 'map' in response:
+            # `all_tiles_sent` dit seulement que chaque méthode numérotée a sa tuile ; les autres limites sont à part.
+            shown['all_tiles_sent'] = not absent
+            limits = _limits(response)
+            if limits:
+                shown['limits'] = limits
+            if 'NO_CONSENT' not in missing:
+                shown['to_read'] = absent
+            if absent:
+                said = [f'méthodes {_numbers(index for index in absent if index in withheld)} non transmises '
+                        '(raison dans not_sent)'] if withheld & set(absent) else []
+                rest = [index for index in absent if index not in withheld]
+                if rest:
+                    said.append(f'méthodes {_numbers(rest)} à lire avec read_tiles(numbers)')
+                shown['incomplete'] = (f'Code du chemin incomplet : {" ; ".join(said)}. La carte suit le graphe, pas '
+                                       'l’ordre d’exécution.')
+        if size(_sized(shown)) <= max_bytes or not response['tiles']:
+            return shown
+        dropped = response['tiles'].pop()
+        response['not_sent'] = [item for item in response['not_sent'] if item.get('number') != dropped['number']]
+        missing.setdefault('BUDGET', []).append(dropped['number'])
+
+
+def _numbers(numbers):
+    return ', '.join(f'#{number}' for number in numbers)
+
+
+def _limits(response):
+    """Ce que les tuiles envoyées ne disent pas entièrement : code tronqué, en-têtes indisponibles, appels non suivis."""
+    limits = {}
+    truncated = [tile['number'] for tile in response['tiles'] if tile.get('truncated')]
+    if truncated:
+        limits['truncated_tiles'] = truncated
+    headers = sorted({item['reference'] for item in response['not_sent'] if item.get('reason') == 'NOT_AVAILABLE'})
+    if headers:
+        limits['unavailable_headers'] = headers
+    if response.get('not_followed'):
+        limits['not_followed'] = response['not_followed']['count']
+    return limits
 
 
 def _path(exchange, reference, mode, max_bytes, exchanged):
@@ -247,15 +319,16 @@ def _path(exchange, reference, mode, max_bytes, exchanged):
     if beyond:
         response['not_followed'] = {'count': len(beyond), 'references': beyond[:MAX_NOT_FOLLOWED]}
     wanted = list(numbered) if mode == FULL else [1]
+    missing = {}
     if sources.OPERATION not in exchange.available():
-        response['not_sent'].append({'what': 'tiles', 'numbers': wanted, 'reason': 'NO_CONSENT'})
+        missing['NO_CONSENT'] = wanted
     else:
-        _fill(exchange, response, numbered, wanted, _given(exchanged), max_bytes)
-    if mode == FULL:
-        sent = {tile['number'] for tile in response['tiles']}
-        missing = [index for index in numbered if index not in sent]
-        response['to_read'] = missing
-    return response
+        _fill(exchange, response, numbered, wanted, _given(exchanged), max_bytes, missing)
+    finished = _finish(response, numbered, missing, max_bytes)
+    if size(_sized(finished)) > max_bytes:
+        return error(OPERATION, exchange.snapshot, 'BUDGET_EXHAUSTED',
+                     'La carte du chemin ne tient pas dans le budget de l’échange.')
+    return finished
 
 
 def _read(exchange, arguments, max_bytes, exchanged):
@@ -267,16 +340,20 @@ def _read(exchange, arguments, max_bytes, exchanged):
     if not paths:
         return error(READ, exchange.snapshot, _INVALID, 'Aucune carte reçue dans cet échange : demande d’abord get_path.')
     numbered = {entry['number']: entry['reference'] for entry in paths[-1]['map']}
-    unknown = sorted({value for value in numbers if value not in numbered})
     response = {'operation': READ, 'outcome': 'OK', 'snapshot': exchange.snapshot, 'tiles': [], 'not_sent': []}
+    missing = {}
+    unknown = sorted({value for value in numbers if value not in numbered})
     if unknown:
-        response['not_sent'].append({'what': 'tiles', 'numbers': unknown, 'reason': 'UNKNOWN_NUMBER'})
+        missing['UNKNOWN_NUMBER'] = unknown
     wanted = [value for value in dict.fromkeys(numbers) if value in numbered]
     if sources.OPERATION not in exchange.available():
-        response['not_sent'].append({'what': 'tiles', 'numbers': wanted, 'reason': 'NO_CONSENT'})
+        missing.setdefault('NO_CONSENT', []).extend(wanted)
     elif wanted:
-        _fill(exchange, response, numbered, wanted, _given(exchanged), max_bytes)
-    return response
+        _fill(exchange, response, numbered, wanted, _given(exchanged), max_bytes, missing)
+    finished = _finish(response, {value: numbered[value] for value in wanted}, missing, max_bytes)
+    if size(_sized(finished)) > max_bytes:
+        return error(READ, exchange.snapshot, 'BUDGET_EXHAUSTED', 'Ces tuiles ne tiennent pas dans le budget.')
+    return finished
 
 
 def request(exchange, step, space, exchanged, mode, trusted=False):

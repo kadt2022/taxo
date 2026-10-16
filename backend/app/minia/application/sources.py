@@ -76,7 +76,7 @@ _JAVA_METHOD = re.compile(
     r'symbol:java:[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*#[A-Za-z_$][\w$]*\([\w$.<>\[\],?]*\)')
 
 
-def _chain(fact, commit):
+def chain_of(fact, commit, relations=_CHAIN_RELATIONS):
     """La chaîne de filtres que ce fait porte légitimement, ou None : le fait vient du producteur de sécurité, dit une
     relation de sécurité, est valide, et date du commit de la réponse ; la valeur est une méthode Java."""
     if not isinstance(fact, dict) or commit is None:
@@ -84,7 +84,7 @@ def _chain(fact, commit):
     qualifiers, produced, snapshot = fact.get('qualifiers'), fact.get('produced_by'), fact.get('snapshot')
     chain = qualifiers.get(_CHAIN_FIELD) if isinstance(qualifiers, dict) else None
     if (not isinstance(chain, str) or len(chain) > MAX_CHAIN or not _JAVA_METHOD.fullmatch(chain)
-            or fact.get('relation') not in _CHAIN_RELATIONS or fact.get('status') not in _CHAIN_STATUSES
+            or fact.get('relation') not in relations or fact.get('status') not in _CHAIN_STATUSES
             or fact.get('validity') != 'VALID' or not isinstance(produced, dict)
             or produced.get('producer_id') != _CHAIN_PRODUCER or not isinstance(snapshot, dict)
             or snapshot.get('commit') != commit):
@@ -102,7 +102,7 @@ def _chains(item):
     commit = snapshot.get('commit') if isinstance(snapshot, dict) else None
     for name in _CHAIN_FACT_LISTS:
         for entry in response.get(name) or []:
-            chain = _chain(entry.get('fact') if isinstance(entry, dict) else None, commit)
+            chain = chain_of(entry.get('fact') if isinstance(entry, dict) else None, commit)
             if chain is not None:
                 yield chain
 
