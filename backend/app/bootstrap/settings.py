@@ -75,11 +75,11 @@ def minia_tile_projection(value=None):
 
 def minia_path_mode(value=None):
     """Le chemin d'une route et ses tuiles de méthode (MINIA_PATH_MODE) : `off` (défaut), `full` (A : la carte et
-    toutes les tuiles qui tiennent, en une réponse) ou `map` (B : la carte et la tuile d'entrée, puis les tuiles demandées
-    par numéro)."""
+    toutes les tuiles qui tiennent, en une réponse), `map` (B : la carte et la tuile d'entrée, puis les tuiles demandées
+    par numéro) ou `target` (cible B : le LLM désigne sa cible, Minia ne lui envoie que le code du parcours)."""
     chosen = (value or os.getenv('MINIA_PATH_MODE', 'off')).strip().lower()
-    if chosen not in ('off', 'full', 'map'):
-        raise ValueError(f'MINIA_PATH_MODE invalide : {chosen} (off, full ou map).')
+    if chosen not in ('off', 'full', 'map', 'target'):
+        raise ValueError(f'MINIA_PATH_MODE invalide : {chosen} (off, full, map ou target).')
     return chosen
 
 

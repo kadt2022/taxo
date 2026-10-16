@@ -28,7 +28,10 @@ from app.protocol.domain.envelope import error, size
 
 OPERATION, READ = 'get_path', 'read_tiles'
 OFF, FULL, MAP = 'off', 'full', 'map'
-MODES = (OFF, FULL, MAP)
+# La cible B (`targeting`) : le LLM désigne sa cible, Minia sert ce chemin (FULL) et ses tuiles, en texte.
+TARGET = 'target'
+MODES = (OFF, FULL, MAP, TARGET)
+EXPLORED = (FULL, MAP)  # les modes où le chemin est une opération de l'exploration classique
 DEPTH, MAX_METHODS = 4, 30
 MAX_PATH_BYTES = 24_000
 PIECE_BYTES = 16_000
