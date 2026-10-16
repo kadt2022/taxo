@@ -73,6 +73,16 @@ def minia_tile_projection(value=None):
     return chosen == 'on'
 
 
+def minia_path_mode(value=None):
+    """Le chemin d'une route et ses tuiles de méthode (MINIA_PATH_MODE) : `off` (défaut), `full` (A : la carte et
+    toutes les tuiles qui tiennent, en une réponse) ou `map` (B : la carte et la tuile d'entrée, puis les tuiles demandées
+    par numéro)."""
+    chosen = (value or os.getenv('MINIA_PATH_MODE', 'off')).strip().lower()
+    if chosen not in ('off', 'full', 'map'):
+        raise ValueError(f'MINIA_PATH_MODE invalide : {chosen} (off, full ou map).')
+    return chosen
+
+
 def minia_source_context(value=None):
     """Code source que Minia peut recevoir : `off` (defaut, aucun) ou `diff` (le diff d'un commit, sur
     accord de chaque demande). Avec un Ollama distant, `diff` fait sortir du code de la machine."""

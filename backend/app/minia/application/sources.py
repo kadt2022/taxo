@@ -223,6 +223,9 @@ def unread(statements, exchanged):
     texts = [text for statement in statements for text in _cited(statement)]
     read = {_owner(item['arguments'].get('reference', '')) for item in exchanged
             if item['operation'] == OPERATION and item['response'].get('outcome') == 'OK'}
+    # Les tuiles du chemin (`get_path`, `read_tiles`) sont du code lu, comme une pièce `get_source`.
+    read |= {_owner(tile['reference']) for item in exchanged if item['operation'] in ('get_path', 'read_tiles')
+             for tile in item['response'].get('tiles') or () if isinstance(tile.get('reference'), str)}
     # Seuls une classe, une méthode ou un constructeur ont un code que `get_source` sert : jamais un champ.
     known = {reference for item in exchanged for reference in _discovered(item)
              if reference.startswith('symbol:') and nature(reference) != 'MEMBER'}
