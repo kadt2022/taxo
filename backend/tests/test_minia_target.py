@@ -141,3 +141,13 @@ def test_the_setting_accepts_target(monkeypatch):
     assert settings.minia_path_mode('target') == 'target'
     with pytest.raises(ValueError, match='target'):
         settings.minia_path_mode('cible')
+
+
+def test_the_guard_never_recalls_a_tile_without_readable_code():
+    from app.minia.application import targeting
+    path = {'outcome': 'OK', 'reference': 'endpoint:POST /api/courses', 'tiles': [{'number': 1}, {'number': 4}],
+            'map': [{'number': 1, 'calls': [2, 3, 4]}, {'number': 2}, {'number': 3}, {'number': 4}],
+            'not_sent': [{'what': 'tiles', 'numbers': [2], 'reason': 'NOT_AVAILABLE'},
+                         {'what': 'tiles', 'numbers': [3], 'reason': 'BUDGET'}]}
+    exchanged = [{'operation': paths.OPERATION, 'arguments': {}, 'response': path}]
+    assert targeting.unread(exchanged) == [3], 'un accesseur implicite de record n’a pas de code ; le budget, si'

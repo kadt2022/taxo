@@ -255,4 +255,10 @@ def unread(exchanged):
     formal = {number for number in entry.get('calls') or () if isinstance(number, int)}
     if path['reference'].startswith('endpoint:'):
         formal |= {item['number'] for item in path['map'] if item.get('role') == 'filter_chain'}
-    return sorted(formal - read)
+    # Une tuile sans code lisible (accesseur implicite d'un record, source illisible) ne peut pas être lue : la garde
+    # ne la rappelle pas. Seule une tuile retenue par le budget reste à lire.
+    unreadable = {number for item in exchanged[position:] if item['operation'] in (paths.OPERATION, paths.READ)
+                  for missing in item['response'].get('not_sent') or ()
+                  if missing.get('what') == 'tiles' and missing.get('reason') != 'BUDGET'
+                  for number in missing.get('numbers') or ()}
+    return sorted(formal - read - unreadable)
