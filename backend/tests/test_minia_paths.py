@@ -123,7 +123,8 @@ def test_a_the_route_of_the_question_brings_its_whole_path_before_the_first_turn
     path = path_of(sent(model, 0))
     names = [entry['name'] for entry in path['map']]
     assert names == ['ItemController.add(Long)', 'ItemService.add(Long)', 'ItemRepository.save(Long)']
-    assert [tile['number'] for tile in path['tiles']] == [1, 2, 3] and path['to_read'] == []
+    assert [tile['number'] for tile in path['tiles']] == [1, 2, 3]
+    assert path['to_read'] == []
     first, _, last = path['tiles']
     assert '@PreAuthorize("hasRole(\'ADMIN\')")' in first['code'], 'la méthode complète, avec ses annotations'
     assert '@RequestMapping("/api/items")' in first['class']['text'], 'les annotations de sa classe'
@@ -131,10 +132,12 @@ def test_a_the_route_of_the_question_brings_its_whole_path_before_the_first_turn
     assert 'Item item = new Item(id);' in last['code'], 'ses variables locales, dans son code'
     item = next(entry for tile in path['tiles'] for entry in tile.get('types', ())
                 if entry['reference'] == 'symbol:java:com.acme.model.Item')
-    assert item['text'].startswith('public record Item(Long id)') and item['resolution'] == 'NAMED'
+    assert item['text'].startswith('public record Item(Long id)')
+    assert item['resolution'] == 'NAMED'
     assert result['statements'][0]['found'] is True, 'la vérification lit toujours Taxo'
     operation = next(step for step in result['trajectory'] if step['operation'] == paths.OPERATION)
-    assert operation['outcome'] == 'OK' and operation['bytes'] > 0, 'le chemin compte comme une opération'
+    assert operation['outcome'] == 'OK'
+    assert operation['bytes'] > 0, 'le chemin compte comme une opération'
 
 
 def test_a_a_class_or_type_already_given_is_never_given_twice(make_repo, tmp_path, monkeypatch):
@@ -152,7 +155,8 @@ def test_b_the_map_comes_with_the_entry_tile_and_the_model_reads_the_others_by_n
     model = Scripted(call(paths.READ, numbers=[2, 3, 9]), answer(CLAIM))
     result = run(make_repo, tmp_path, monkeypatch, model, 'map')
     path = path_of(sent(model, 0))
-    assert len(path['map']) == 3 and [tile['number'] for tile in path['tiles']] == [1]
+    assert len(path['map']) == 3
+    assert [tile['number'] for tile in path['tiles']] == [1]
     read = sent(model, 1)['trajectory'][-1]['response']
     assert [tile['number'] for tile in read['tiles']] == [2, 3]
     assert read['not_sent'] == [{'what': 'tiles', 'numbers': [9], 'reason': 'UNKNOWN_NUMBER'}], \
@@ -165,7 +169,8 @@ def test_b_read_tiles_without_a_map_is_refused():
     exchange = type('Exchange', (), {'snapshot': {'analysis': 'a', 'commit': None},
                                      'accounted': lambda self, serve, requested=None: serve(requested)})()
     response = paths.request(exchange, Call(paths.READ, {'numbers': [1]}), None, [], paths.MAP)
-    assert response['outcome'] == 'ERROR' and 'get_path' in response['error']['message']
+    assert response['outcome'] == 'ERROR'
+    assert 'get_path' in response['error']['message']
 
 
 # --- Consentement, références, budget, garde -------------------------------------------------------------------------
@@ -193,7 +198,8 @@ def test_what_does_not_fit_the_budget_is_said_never_dropped(make_repo, tmp_path,
     path = path_of(sent(model, 0))
     sent_numbers = [tile['number'] for tile in path['tiles']]
     budget = [item for item in path['not_sent'] if item['reason'] == 'BUDGET']
-    assert budget and sorted(sent_numbers + budget[0]['numbers']) == [1, 2, 3]
+    assert budget
+    assert sorted(sent_numbers + budget[0]['numbers']) == [1, 2, 3]
     assert path['to_read'] == budget[0]['numbers'], 'le modèle sait quelles tuiles lire ensuite'
 
 
@@ -201,7 +207,8 @@ def test_the_conclusion_guard_counts_the_tiles_as_code_read(make_repo, tmp_path,
     unknown = statement('unknown', 'Je ne sais pas si ItemRepository rejette un doublon.')
     model = Scripted(answer(CLAIM, unknown))
     result = run(make_repo, tmp_path, monkeypatch, model, 'full')
-    assert len(model.calls) == 1 and 'returned' not in result, 'le code d’ItemRepository a été lu par sa tuile'
+    assert len(model.calls) == 1
+    assert 'returned' not in result, 'le code d’ItemRepository a été lu par sa tuile'
 
 
 # --- Réglage et non-régression ---------------------------------------------------------------------------------------
@@ -235,7 +242,8 @@ def test_a_dropped_tile_takes_nothing_with_it_and_the_whole_response_fits(make_r
     model = Scripted(answer(CLAIM))
     run(make_repo, tmp_path, monkeypatch, model, 'full')
     path = path_of(sent(model, 0))
-    assert path['bytes'] <= budget and size(path) <= budget, \
+    assert path['bytes'] <= budget
+    assert size(path) <= budget, \
         'la réponse entière, carte et signalements compris, tient dans le budget'
     given = _sent_types(path)
     for tile in path['tiles']:
@@ -251,7 +259,8 @@ def test_an_incomplete_path_is_announced_with_its_missing_methods(make_repo, tmp
     model = Scripted(answer(CLAIM))
     run(make_repo, tmp_path, monkeypatch, model, 'full')
     path = path_of(sent(model, 0))
-    assert path['all_tiles_sent'] is False and path['to_read']
+    assert path['all_tiles_sent'] is False
+    assert path['to_read']
     assert all(f'#{number}' in path['incomplete'] for number in path['to_read'])
 
 
@@ -259,7 +268,8 @@ def test_a_path_with_all_its_tiles_says_so(make_repo, tmp_path, monkeypatch):
     model = Scripted(answer(CLAIM))
     run(make_repo, tmp_path, monkeypatch, model, 'full')
     path = path_of(sent(model, 0))
-    assert path['all_tiles_sent'] is True and 'incomplete' not in path
+    assert path['all_tiles_sent'] is True
+    assert 'incomplete' not in path
     assert 'limits' not in path, 'rien de tronqué, aucun en-tête manquant, aucun appel non suivi'
 
 
@@ -283,7 +293,8 @@ def test_compaction_keeps_the_path_and_its_tiles_whole():
                  for name in (paths.OPERATION, paths.READ)]
     exchanged += [{'operation': 'find_references', 'arguments': {}, 'response': {'outcome': 'OK', 'items': []}}] * 3
     shown = ask._compacted(exchanged, keep=1)
-    assert shown[0] is exchanged[0] and shown[1] is exchanged[1], 'le code du chemin n’est jamais résumé'
+    assert shown[0] is exchanged[0]
+    assert shown[1] is exchanged[1], 'le code du chemin n’est jamais résumé'
 
 
 def test_all_tiles_sent_does_not_hide_the_other_limits(make_repo, tmp_path, monkeypatch):
@@ -301,7 +312,8 @@ def test_b_the_tiles_left_to_read_are_announced_as_such(make_repo, tmp_path, mon
     model = Scripted(answer(CLAIM))
     run(make_repo, tmp_path, monkeypatch, model, 'map')
     path = path_of(sent(model, 0))
-    assert path['not_sent'] == [] and path['to_read'] == [2, 3]
+    assert path['not_sent'] == []
+    assert path['to_read'] == [2, 3]
     assert 'méthodes #2, #3 à lire avec read_tiles(numbers)' in path['incomplete']
     assert 'not_sent' not in path['incomplete'], 'aucune raison à chercher là où il n’y en a pas'
 
@@ -340,13 +352,15 @@ def _matched(**change):
 ])
 def test_a_filter_chain_opens_code_only_once_validated(fact):
     order, _, chains, rules, _ = paths.walk(_Facts(fact), 'endpoint:GET /x')
-    assert chains == [] and order == ['symbol:java:a.B#c()']
+    assert chains == []
+    assert order == ['symbol:java:a.B#c()']
     assert rules == [], 'un rattachement non validé ne porte aucune règle'
 
 
 def test_a_validated_filter_chain_joins_the_path():
     order, _, chains, _, _ = paths.walk(_Facts(_matched()), 'endpoint:GET /x')
-    assert chains == ['symbol:java:a.Security#filterChain(HttpSecurity)'] and order[-1] == chains[0]
+    assert chains == ['symbol:java:a.Security#filterChain(HttpSecurity)']
+    assert order[-1] == chains[0]
 
 
 def test_calls_left_never_exceeds_what_the_exchange_can_still_serve(make_repo, tmp_path, monkeypatch):

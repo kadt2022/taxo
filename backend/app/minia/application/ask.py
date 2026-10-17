@@ -14,6 +14,7 @@ interpretation. Quand le fournisseur sait diffuser sa reponse, le texte provisoi
 la reponse definitive, citations validees, n'est rendue qu'a la fin.
 """
 import copy
+from dataclasses import dataclass
 import inspect
 import re
 import threading
@@ -385,6 +386,14 @@ def _unanchored(resolution):
     return _AMBIGUOUS.format(shown + (f' et {more} autre(s)' if more > 0 else ''))
 
 
+@dataclass(frozen=True)
+class Views:
+    """Ce que le modèle voit des réponses de Taxo : la vue condensée des Tuiles (R2, `vue-minia/1`) et le chemin d'une
+    route avec ses tuiles de méthode (`MINIA_PATH_MODE`)."""
+    tile_projection: bool = False
+    path_mode: str = paths.OFF
+
+
 class AskMinia:
     """Minia, servie par un ou plusieurs fournisseurs (Ollama, Claude...) : chaque demande peut choisir le sien.
 
@@ -394,7 +403,7 @@ class AskMinia:
 
     def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None,
                  taxo_query=None, mip=None, investigations=None, max_calls=MAX_CALLS, exchange_bytes=EXCHANGE_BYTES,
-                 compact_after=0, tile_projection=False, path_mode=paths.OFF):
+                 compact_after=0, views=Views()):
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
         if not _within(max_calls, 1, MAX_ALLOWED_CALLS):
@@ -406,11 +415,11 @@ class AskMinia:
             raise ValueError(f'MINIA_COMPACT_AFTER invalide : {compact_after} (de 0, désactivé, à {MAX_COMPACT_AFTER}).')
         self.max_calls, self.exchange_bytes, self.compact_after = max_calls, exchange_bytes, compact_after
         # La vue condensée des Tuiles pour le modèle (R2, `vue-minia/1`) ; la trajectoire garde la Tuile entière.
-        self.tile_projection = tile_projection
-        if path_mode not in paths.MODES:
-            raise ValueError(f'MINIA_PATH_MODE invalide : {path_mode} (off, full ou map).')
+        self.tile_projection = views.tile_projection
+        if views.path_mode not in paths.MODES:
+            raise ValueError(f'MINIA_PATH_MODE invalide : {views.path_mode} (off, full ou map).')
         # Le chemin d'une route et ses tuiles de méthode (A : `full`, B : `map`) ; `off` : l'exploration d'avant.
-        self.path_mode = path_mode
+        self.path_mode = views.path_mode
         self.history, self.projects, self.query = history, projects, query
         # Protocole Taxo (ARCHITECTURE § 12) : sans lui, Minia recoit toujours un paquet de contexte.
         self.taxo_query = taxo_query

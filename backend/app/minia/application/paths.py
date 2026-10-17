@@ -80,6 +80,19 @@ def walk(exchange, reference):
     commit = (exchange.snapshot or {}).get('commit')
     valid = {id(fact): sources.chain_of(fact, commit) for fact in matched}
     chains = sorted(set(valid.values()) - {None})
+    order, calls, seen, beyond = _breadth_first(exchange, starts)
+    for chain in chains:
+        if chain not in seen and len(order) < MAX_METHODS:
+            order.append(chain)
+            calls.setdefault(chain, [])
+    rules = _url_rules(exchange, matched, valid, commit)
+    beyond = sorted(set(beyond) - seen)
+    return order, calls, chains, rules, beyond
+
+
+def _breadth_first(exchange, starts):
+    """Les méthodes atteintes par `CALLS` depuis `starts`, largeur d'abord, dans les bornes ; et celles laissées
+    au-delà."""
     order, calls, seen, beyond = [], {}, set(), []
     queue = [(start, 0) for start in starts]
     while queue:
@@ -92,26 +105,26 @@ def walk(exchange, reference):
         seen.add(method)
         order.append(method)
         calls[method] = sorted({fact['object'] for fact in _facts(exchange, subject=method, relation='CALLS')})
-        for callee in calls[method]:
-            if level < DEPTH:
-                queue.append((callee, level + 1))
-            elif callee not in seen:
-                beyond.append(callee)
-    for chain in chains:
-        if chain not in seen and len(order) < MAX_METHODS:
-            order.append(chain)
-            calls.setdefault(chain, [])
+        if level < DEPTH:
+            queue += [(callee, level + 1) for callee in calls[method]]
+        else:
+            beyond += [callee for callee in calls[method] if callee not in seen]
+    return order, calls, seen, beyond
+
+
+def _url_rules(exchange, matched, valid, commit):
+    """Les règles d'URL écrites pour chaque rattachement validé ; un rattachement non validé ne porte aucune règle :
+    deux refus ne font pas une correspondance."""
     rules = []
     for fact in matched:
         chain = valid[id(fact)]
         if chain is None:
-            continue  # un rattachement non validé ne porte aucune règle : deux refus ne font pas une correspondance
+            continue
         written = [f'{rule["relation"]} {rule.get("object", "")}'.strip()
                    for rule in _facts(exchange, subject=fact['object'])
                    if sources.chain_of(rule, commit, _RULE_RELATIONS) == chain]
         rules.append({'pattern': fact['object'], 'filter_chain': chain, 'rules': written})
-    beyond = sorted(set(beyond) - seen)
-    return order, calls, chains, rules, beyond
+    return rules
 
 
 def _frontier(exchange, method):
@@ -125,7 +138,8 @@ def _piece(exchange, reference):
     """Le code d'un symbole par `get_source` de l'échange (consentement, refus, classification) ; sinon la raison."""
     try:
         response = exchange.get_source({'reference': reference}, PIECE_BYTES).close()
-    except Exception as exc:  # noqa: BLE001 - un refus du protocole (consentement, référence) devient une raison dite
+    # Un refus du protocole (consentement, référence) devient une raison dite.
+    except Exception as exc:  # noqa: BLE001
         return None, getattr(exc, 'code', 'NOT_AVAILABLE')
     if response.get('outcome') != 'OK' or not response.get('items'):
         reasons = [item.get('reason') for item in response.get('not_sent') or () if item.get('reason')]
@@ -137,20 +151,25 @@ def _header(exchange, reference, headers):
     """L'en-tête d'un type : ses annotations et sa déclaration, jusqu'à la première accolade."""
     if reference not in headers:
         response, _ = _piece(exchange, reference)
-        if response is None:
-            headers[reference] = None
-        else:
-            item = response['items'][0]
-            lines, kept = item['text'].splitlines(), []
-            for line in lines:
-                kept.append(line)
-                if '{' in line and not line.lstrip().startswith('@'):
-                    break
-            rest = lines[len(kept):]
-            closing = '\n    …\n}' if any(line.strip() not in ('', '}') for line in rest) else ('\n}' if rest else '')
-            headers[reference] = {'reference': reference, 'path': item['path'], 'line_start': item['line_start'],
-                                  'text': '\n'.join(kept) + closing}
+        item = response['items'][0] if response is not None else None
+        headers[reference] = None if item is None else {
+            'reference': reference, 'path': item['path'], 'line_start': item['line_start'], 'text': _head(item['text'])}
     return headers[reference]
+
+
+def _head(text):
+    """Les annotations et la déclaration d'un type, jusqu'à la première accolade ; un corps omis est signalé."""
+    lines, kept = text.splitlines(), []
+    for line in lines:
+        kept.append(line)
+        if '{' in line and not line.lstrip().startswith('@'):
+            break
+    rest = lines[len(kept):]
+    if any(line.strip() not in ('', '}') for line in rest):
+        return '\n'.join(kept) + '\n    …\n}'
+    if rest:
+        return '\n'.join(kept) + '\n}'
+    return '\n'.join(kept)
 
 
 def _project_types(exchange):
@@ -176,7 +195,7 @@ def _tile(exchange, number, method, context, given):
     fields = [entry['text'].strip() for entry in response.get('field_context') or () if entry.get('text')]
     resolved = {use['reference'] for use in response.get('uses') or ()
                 if '#' not in use['reference'] and use['reference'] != owner}
-    names = set(re.findall(r'\b([A-Z][A-Za-z0-9_]*)\b', item['text'] + '\n' + '\n'.join(fields)))
+    names = set(re.findall(r'\b([A-Z]\w*)\b', item['text'] + '\n' + '\n'.join(fields), re.ASCII))
     named = {context['types'][name] for name in names if name in context['types']} - resolved - {owner}
     tile = {'number': number, 'reference': method, 'path': item['path'], 'line_start': item['line_start'],
             'line_end': item['line_end'], 'truncated': item.get('truncated', False), 'fields': fields,
@@ -188,23 +207,32 @@ def _tile(exchange, number, method, context, given):
             tile['class'] = header
             adds.add(owner)
         else:
-            unavailable.append({'what': 'class_header', 'number': number, 'reference': owner,
-                                'reason': 'NOT_AVAILABLE'})
+            unavailable.append(_unavailable('class_header', number, owner))
+    wanted = [*((ref, 'RESOLVED') for ref in sorted(resolved)), *((ref, 'NAMED') for ref in sorted(named))]
+    types = _type_headers(exchange, number, wanted, given, adds, unavailable, context['headers'])
+    if types:
+        tile['types'] = types
+    return tile, None, adds, unavailable
+
+
+def _unavailable(what, number, reference):
+    return {'what': what, 'number': number, 'reference': reference, 'reason': 'NOT_AVAILABLE'}
+
+
+def _type_headers(exchange, number, wanted, given, adds, unavailable, headers):
+    """Les en-têtes des types que la tuile donnerait (ajoutés à `adds`), sauf ceux déjà donnés ; un en-tête illisible
+    est rangé dans `unavailable`."""
     types = []
-    for reference, resolution in [*((ref, 'RESOLVED') for ref in sorted(resolved)),
-                                  *((ref, 'NAMED') for ref in sorted(named))]:
+    for reference, resolution in wanted:
         if reference in given or reference in adds:
             continue
-        header = _header(exchange, reference, context['headers'])
+        header = _header(exchange, reference, headers)
         if header:
             types.append({**header, 'resolution': resolution})
             adds.add(reference)
         else:
-            unavailable.append({'what': 'type_header', 'number': number, 'reference': reference,
-                                'reason': 'NOT_AVAILABLE'})
-    if types:
-        tile['types'] = types
-    return tile, None, adds, unavailable
+            unavailable.append(_unavailable('type_header', number, reference))
+    return types
 
 
 def _given(exchanged):
@@ -251,30 +279,36 @@ def _finish(response, numbered, missing, max_bytes):
     while True:
         shown = {**response, 'not_sent': [*response['not_sent'], *(
             {'what': 'tiles', 'numbers': sorted(numbers), 'reason': reason} for reason, numbers in missing.items())]}
-        sent = {tile['number'] for tile in response['tiles']}
-        absent = [index for index in numbered if index not in sent]
-        withheld = {number for numbers in missing.values() for number in numbers}
         if 'map' in response:
-            # `all_tiles_sent` dit seulement que chaque méthode numérotée a sa tuile ; les autres limites sont à part.
-            shown['all_tiles_sent'] = not absent
-            limits = _limits(response)
-            if limits:
-                shown['limits'] = limits
-            if 'NO_CONSENT' not in missing:
-                shown['to_read'] = absent
-            if absent:
-                said = [f'méthodes {_numbers(index for index in absent if index in withheld)} non transmises '
-                        '(raison dans not_sent)'] if withheld & set(absent) else []
-                rest = [index for index in absent if index not in withheld]
-                if rest:
-                    said.append(f'méthodes {_numbers(rest)} à lire avec read_tiles(numbers)')
-                shown['incomplete'] = (f'Code du chemin incomplet : {" ; ".join(said)}. La carte suit le graphe, pas '
-                                       'l’ordre d’exécution.')
+            _announce(shown, response, numbered, missing)
         if size(_sized(shown)) <= max_bytes or not response['tiles']:
             return shown
         dropped = response['tiles'].pop()
         response['not_sent'] = [item for item in response['not_sent'] if item.get('number') != dropped['number']]
         missing.setdefault('BUDGET', []).append(dropped['number'])
+
+
+def _announce(shown, response, numbered, missing):
+    """Ce qu'une réponse de chemin dit de sa complétude : `all_tiles_sent` (chaque méthode numérotée a sa tuile, rien
+    de plus), les autres limites à part, ce qui reste à lire, et le chemin incomplet en clair."""
+    sent = {tile['number'] for tile in response['tiles']}
+    absent = [index for index in numbered if index not in sent]
+    withheld = {number for numbers in missing.values() for number in numbers}
+    shown['all_tiles_sent'] = not absent
+    limits = _limits(response)
+    if limits:
+        shown['limits'] = limits
+    if 'NO_CONSENT' not in missing:
+        shown['to_read'] = absent
+    if not absent:
+        return
+    said = [f'méthodes {_numbers(index for index in absent if index in withheld)} non transmises '
+            '(raison dans not_sent)'] if withheld & set(absent) else []
+    rest = [index for index in absent if index not in withheld]
+    if rest:
+        said.append(f'méthodes {_numbers(rest)} à lire avec read_tiles(numbers)')
+    shown['incomplete'] = (f'Code du chemin incomplet : {" ; ".join(said)}. La carte suit le graphe, pas '
+                           'l’ordre d’exécution.')
 
 
 def _numbers(numbers):
