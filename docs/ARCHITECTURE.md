@@ -1131,6 +1131,16 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   ou une méthode unique, le chemin est servi d'office à l'ouverture, sans tour du modèle. Le chemin et chaque lecture
   comptent pour une opération de l'échange ; frontières, méthodes non suivies (bornes), tuiles non transmises (budget,
   consentement, numéro inconnu) sont dites. Les tuiles comptent comme du code lu pour la garde de conclusion.
+- **Cible B** (`MINIA_PATH_MODE=target`, vision du Capitaine Pi du 2026-10-16 ; module `targeting`) : le LLM désigne ce
+  qu'il veut examiner, Taxo calcule le parcours, Minia ne lui envoie que du code. Le LLM reçoit la question et le menu
+  des points de départ que le graphe connaît (endpoints `HANDLED_BY`, méthodes annotées d'entrée, `main`) ; il désigne
+  une cible (entrée du menu, nom de méthode ou de classe résolu par `find_references`, candidats `C1, C2` quand le nom
+  est ambigu), ou dit qu'aucun code n'est utile (l'exploration classique reprend). Minia sert le chemin de cette cible
+  (`get_path` en `full`) en texte : carte et tuiles qui tiennent, puis les numéros restants à lire (`read`). Aucun fait
+  de Taxo n'est transmis au LLM (ni relations, ni règles d'URL), ni `describe`, ni les opérations du protocole ; sa
+  réponse est un texte libre. Garde formelle : si la chaîne de filtres d'une route ou une méthode appelée directement
+  par l'entrée n'a pas été lue, la conclusion revient une fois au LLM, puis la réponse le dit. Au plus 6 appels au LLM ;
+  une forme invalide ou une boucle sans progrès repart en mode paquet.
 - Transport indépendant : appel interne, HTTP (`POST /api/projects/{id}/taxo-query`), et plus tard MCP,
   sans seconde sémantique. Ajouter une opération ou un champ facultatif est compatible ; changer la
   sémantique d'une opération ou d'un verdict crée une nouvelle version.

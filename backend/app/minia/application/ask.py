@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
-from app.minia.application import anchoring, investigation, paths, sources, tile_view, tiles, trace
+from app.minia.application import anchoring, investigation, paths, sources, targeting, tile_view, tiles, trace
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
 from app.minia.domain.investigation import conversation
@@ -88,6 +88,8 @@ HEARTBEAT_SECONDS = 15.0
 # Frequence a laquelle l'attente du modele regarde si la demande a ete arretee (TAXO-UX-03).
 CANCEL_POLL_SECONDS = 0.25
 EXPLORATION, PACKET = 'exploration', 'paquet'
+# L'événement d'une opération de Taxo, tel que le flux le diffuse.
+OPERATION_EVENT = 'minia.operation'
 # Reponse donnee par Taxo seul, sans modele (recit TAXO-MINIA-SEC-01, E3) : l'auteur d'un commit, par exemple.
 DIRECT = 'taxo'
 ANSWERED, NOTHING_KNOWN, NEEDS_SELECTION = 'ANSWERED', 'TAXO_KNOWS_NOTHING', 'NEEDS_SELECTION'
@@ -321,6 +323,11 @@ def _reused(step, prior):
     return {'operation': step.operation, 'arguments': step.arguments, 'response': entry}
 
 
+# Une réponse d'une phase précédente du même échange (la cible B avant sa bascule) : déjà reçue par le modèle, elle
+# reste dans l'échange pour la garde et la vérification, mais n'est plus renvoyée.
+_EARLIER = 'earlier'
+
+
 def _compacted(exchanged, keep):
     """Ce que le modèle voit de la trajectoire : les `keep` dernières réponses entières, les plus anciennes
     résumées, sauf le code lu et ce qui n'est pas une réponse réussie de Taxo. `keep` à 0 : tout entier."""
@@ -394,6 +401,125 @@ class Views:
     path_mode: str = paths.OFF
 
 
+class _Targeting:
+    """Un dialogue de la cible B sur un échange : ce que Taxo a servi (trajectoire, échange), ce que le LLM a reçu
+    (tours), les candidats en attente, la garde. Chaque action du LLM y est servie, dans les opérations qui restent."""
+
+    def __init__(self, exchange):
+        self.exchange = exchange
+        self.menu, self.known = targeting.menu(exchange)
+        self.trajectory, self.exchanged, self.turns, self.pending, self.guarded = [], [], [], [], []
+        self.calls, self.premature = 0, False
+
+    def message(self, question):
+        calls_left = targeting.MAX_TURNS - self.calls
+        if calls_left <= 0:
+            raise MiniaError(INVALID_ANSWER, STALLED)
+        if self.exchange.operations_left <= 0:
+            calls_left = 1  # l'échange ne sert plus rien : le LLM conclut avec ce qu'il a reçu
+        return targeting.message(question, self.menu, self.turns, calls_left)
+
+    def turn(self, model, question, cancel):
+        """Un tour du LLM : (action, valeur, message envoyé) ; la valeur a les identités d'origine (le LLM n'a vu que
+        des pseudonymes)."""
+        text = self.message(question)
+        check(cancel)
+        raw = yield from _waiting(
+            lambda: _complete(model, targeting.SYSTEM, text, targeting.SCHEMA, cancel), cancel)
+        self.calls += 1
+        action, value = targeting.parse(raw)
+        if isinstance(value, str):
+            value = model.disclosure.restore(value)
+        return action, value, text
+
+    def serve(self, action, value, space, cancel):
+        if action == targeting.READ:
+            yield from self.read(value, space)
+        else:
+            yield from self.target(value, space, cancel)
+
+    def taxo(self, operation, arguments, response):
+        self.exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
+        self.trajectory.append(_step(operation, arguments, response))
+        return OPERATION_EVENT, self.trajectory[-1]
+
+    def served(self):
+        return any(item['operation'] == paths.OPERATION and item['response'].get('outcome') == 'OK'
+                   for item in self.exchanged)
+
+    def concluded(self):
+        """Une conclusion acceptée, ou renvoyée une fois : avant tout parcours servi, ou si une dépendance formelle du
+        parcours n'a pas été lue. Une seconde conclusion sans aucun parcours n'est pas une réponse."""
+        if not self.served():
+            if self.premature:
+                raise MiniaError(INVALID_ANSWER, STALLED)
+            self.premature = True
+            self.turns.append(('ta conclusion', targeting.NO_CODE_YET))
+            return False
+        missed = targeting.unread(self.exchanged)
+        if missed and not self.guarded:
+            self.guarded = missed
+            trace.note(f'GARDE cible B : non lus {missed}')
+            self.turns.append(('ta conclusion', targeting.recall(missed)))
+            return False
+        return True
+
+    def read(self, numbers, space):
+        asked = f'lire {", ".join(f"#{n}" for n in numbers)}'
+        if not self.served():
+            self.turns.append((asked, 'Aucune carte reçue : désigne d’abord une cible.'))
+            return
+        if self.exchange.operations_left < 1:
+            self.turns.append((asked, targeting.EXHAUSTED))
+            return
+        step = exploration.Call(paths.READ, {'numbers': numbers})
+        response = paths.request(self.exchange, step, space, self.exchanged, paths.FULL)
+        yield self.taxo(paths.READ, step.arguments, response)
+        self.turns.append((asked, targeting.render_read(response)))
+
+    def target(self, value, space, cancel):
+        """Une cible : sa résolution par Taxo, puis le chemin de chaque départ ; jamais plus d'opérations que l'échange
+        n'en sert encore (une recherche et un chemin par nom)."""
+        asked = f'cible {value}'
+        allowed = self.exchange.operations_left // 2
+        if allowed < 1:
+            self.turns.append((asked, targeting.EXHAUSTED))
+            return
+        outcome, found, steps = targeting.resolve(self.exchange, value, self.known, self.pending, allowed)
+        for operation, arguments, response in steps:
+            yield self.taxo(operation, arguments, response)
+        if outcome == 'path':
+            self.pending, served = [], []
+            for start in found[:self.exchange.operations_left]:
+                check(cancel)
+                step = exploration.Call(paths.OPERATION, {'reference': start})
+                response = paths.request(self.exchange, step, space, self.exchanged, paths.FULL, trusted=True)
+                yield self.taxo(paths.OPERATION, step.arguments, response)
+                served.append(targeting.render_path(response))
+            if len(served) > 1:
+                served.append(targeting.SEVERAL)
+            self.turns.append((asked, '\n\n'.join(served)))
+        elif outcome == 'candidates':
+            self.pending = found
+            self.turns.append((asked, targeting.render_candidates(found)))
+        elif outcome == 'too_many':
+            self.turns.append((asked, f'{found} candidats : précise ta cible (classe, méthode ou URL).'))
+        else:
+            self.turns.append((asked, f'Aucune référence connue de Taxo pour « {value} ».'))
+
+    def completed(self, model, result, answer):
+        statements = [{'type': exploration.INTERPRETATION, 'text': answer}]
+        missed = targeting.unread(self.exchanged)
+        if missed:
+            statements.append({'type': exploration.UNKNOWN, 'text': 'Réponse établie sans avoir lu : '
+                               + ', '.join(missed) + ' (dépendances directes du parcours).'})
+        ledger = getattr(model, 'ledger', None)
+        usage = {} if ledger is None else {'usage': ledger.report(self.trajectory)}
+        return {**result, 'status': ANSWERED, 'mode': EXPLORATION, 'path_mode': paths.TARGET, 'statements': statements,
+                'trajectory': self.trajectory, 'budget': {'max_bytes': self.exchange.budget, 'used': self.exchange.used},
+                **usage, **({'returned': self.guarded} if self.guarded else {})}
+
+
 class AskMinia:
     """Minia, servie par un ou plusieurs fournisseurs (Ollama, Claude...) : chaque demande peut choisir le sien.
 
@@ -417,7 +543,7 @@ class AskMinia:
         # La vue condensée des Tuiles pour le modèle (R2, `vue-minia/1`) ; la trajectoire garde la Tuile entière.
         self.tile_projection = views.tile_projection
         if views.path_mode not in paths.MODES:
-            raise ValueError(f'MINIA_PATH_MODE invalide : {views.path_mode} (off, full ou map).')
+            raise ValueError(f'MINIA_PATH_MODE invalide : {views.path_mode} (off, full, map ou target).')
         # Le chemin d'une route et ses tuiles de méthode (A : `full`, B : `map`) ; `off` : l'exploration d'avant.
         self.path_mode = views.path_mode
         self.history, self.projects, self.query = history, projects, query
@@ -694,6 +820,8 @@ class AskMinia:
                 return _completed_with(self._project_steps(model, question, projection, fallback=reason,
                                                            trajectory=trajectory, cancel=cancel), reading)
             result = {**self._project_result(model, question, projection), **reading}
+            if self.path_mode == paths.TARGET:
+                return self._target(model, question, exchange, result, packet, cancel)
             return self._explore(model, question, exchange, [], None, result, packet, cancel)
         steps = self._project_steps(model, question, projection, cancel=cancel)
         # Un modèle qui ne demande pas d'opérations ne lit jamais de code : la réponse le dit si l'accord était donné.
@@ -767,9 +895,13 @@ class AskMinia:
                 raise
             return None
 
-    def _explore(self, model, question, exchange, seeds, context, result, packet, cancel=None):
+    def _explore(self, model, question, exchange, seeds, context, result, packet, cancel=None, prior=None):
         """Mode exploration : Taxo ouvre avec `describe` et les operations de depart (`seeds`), Minia demande
-        les suivantes, puis Taxo verifie ses affirmations. `packet(raison, trajectoire)` rend le repli."""
+        les suivantes, puis Taxo verifie ses affirmations. `packet(raison, trajectoire)` rend le repli.
+
+        `prior` : (trajectoire, échange) d'une phase précédente sur le même échange (la cible B qui bascule). La
+        trajectoire continue dans l'ordre réel ; ce qui a été lu reste lu pour la garde et la vérification, sans être
+        renvoyé au modèle, qui l'a déjà reçu."""
         label = 'Minia interroge Taxo'
         yield _stage('exploration', 'running', label, 0)
         capacity = self._capacity(model, exploration.SYSTEM)
@@ -789,7 +921,8 @@ class AskMinia:
             request = {'operation': operation, 'arguments': arguments}
             return request if space is None else {**request, 'max_bytes': max(space, 1)}
 
-        trajectory, exchanged, seen, operations = [], [], set(), []
+        trajectory, exchanged = ([*prior[0]], [{**item, _EARLIER: True} for item in prior[1]]) if prior else ([], [])
+        seen, operations = set(), []
         served, repeats = {}, 0
         for operation, arguments in (('describe', {}), *seeds):
             space = room(operations, exchanged, self.max_calls)
@@ -802,7 +935,7 @@ class AskMinia:
             response = exchange.call(bounded(operation, arguments, space))
             exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
             trajectory.append(_step(operation, arguments, response))
-            yield 'minia.operation', trajectory[-1]
+            yield OPERATION_EVENT, trajectory[-1]
             if response['outcome'] != 'OK':
                 # Sans ce point de depart (par exemple un commit absent de la derniere analyse), l'exploration
                 # n'a rien sur quoi s'appuyer : Taxo repond en mode paquet.
@@ -815,9 +948,9 @@ class AskMinia:
                 if self.mip is not None:
                     # Les Tuiles adaptatives (TAXO-MIP-ADT-01, PR C) : un profil déclaré, sur la même analyse.
                     operations.append(tiles.offered())
-                if self.path_mode != paths.OFF:
+                if self.path_mode in paths.EXPLORED:
                     operations.extend(paths.offered())
-        if self.path_mode != paths.OFF:
+        if self.path_mode in paths.EXPLORED:
             # Taxo connaît le chemin : si la question cite une route (ou une méthode) unique, son chemin est servi d'office,
             # sans tour du modèle. Sinon, le modèle peut le demander (`get_path`) avec une référence reçue.
             yield from self._opened_path(exchange, question, trajectory, exchanged, room(operations, exchanged,
@@ -867,7 +1000,7 @@ class AskMinia:
                     repeats += 1
                     exchanged.append(_resent(step, prior) if self.compact_after else _reused(step, prior))
                     trajectory.append({**prior['step'], 'bytes': 0, 'reused': True})
-                    yield 'minia.operation', trajectory[-1]
+                    yield OPERATION_EVENT, trajectory[-1]
                     yield _stage('exploration', 'running', label, len(trajectory))
                     continue
                 seen.add(key)
@@ -877,7 +1010,7 @@ class AskMinia:
                 trajectory.append(_step(step.operation, step.arguments, response))
                 served[key] = {'response': response, 'step': trajectory[-1], 'turn': len(trajectory),
                                'learned': _learned(exchanged)}
-                yield 'minia.operation', trajectory[-1]
+                yield OPERATION_EVENT, trajectory[-1]
                 yield _stage('exploration', 'running', label, len(trajectory))
         except MiniaError as exc:
             if exc.code not in _EXPLORATION_FAILURES:
@@ -903,7 +1036,7 @@ class AskMinia:
     def _shown(self, exchanged):
         """Ce que le modèle reçoit de la trajectoire : compactée si le réglage le demande, et chaque Tuile dans sa vue
         condensée si la projection est active. `exchanged` reste entier : garde, vérification et preuves le lisent."""
-        shown = _compacted(exchanged, self.compact_after)
+        shown = _compacted([item for item in exchanged if not item.get(_EARLIER)], self.compact_after)
         if not self.tile_projection:
             return shown
         return [{**item, 'response': tile_view.project(item['response'])}
@@ -921,13 +1054,45 @@ class AskMinia:
         response = paths.request(exchange, step, space, exchanged, self.path_mode, trusted=True)
         exchanged.append({'operation': paths.OPERATION, 'arguments': step.arguments, 'response': response})
         trajectory.append(_step(paths.OPERATION, step.arguments, response))
-        yield 'minia.operation', trajectory[-1]
+        yield OPERATION_EVENT, trajectory[-1]
+
+    def _target(self, model, question, exchange, result, packet, cancel=None):
+        """La cible B (`targeting`) : le LLM désigne sa cible, Taxo calcule le parcours, Minia ne lui envoie que le
+        code (carte et tuiles, en texte). Une question sans code à lire repart vers l'exploration classique ; une forme
+        invalide ou une boucle sans progrès, vers le mode paquet."""
+        label = 'Minia interroge Taxo'
+        yield _stage('exploration', 'running', label, 0)
+        capacity = self._capacity(model, targeting.SYSTEM)
+        state = _Targeting(exchange)
+        try:
+            while True:
+                action, value, text = yield from state.turn(model, question, cancel)
+                if action == targeting.NONE:
+                    # Aucun code à lire (historique, couverture…) : l'exploration classique, sur le même échange.
+                    yield _stage('exploration', 'done', label, len(state.trajectory))
+                    yield from self._explore(model, question, exchange, [], None, result, packet, cancel,
+                                             prior=(state.trajectory, state.exchanged))
+                    return
+                if action == targeting.ANSWER:
+                    if state.concluded():
+                        break
+                    continue
+                space = None if capacity is None else max(capacity - len(text.encode('utf-8')) - TURN_MARGIN, 1)
+                yield from state.serve(action, value, space, cancel)
+        except MiniaError as exc:
+            if exc.code not in _EXPLORATION_FAILURES:
+                raise
+            yield _stage('exploration', 'done', label, len(state.trajectory))
+            yield from packet(str(exc), state.trajectory)
+            return
+        yield _stage('exploration', 'done', label, len(state.trajectory))
+        yield COMPLETED, state.completed(model, result, value)
 
     def _served(self, exchange, step, bounded, space, exchanged):
         """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, comptée dans
         le budget de l'échange ; le code d'un symbole déjà reçu ; toute autre opération par l'échange (qui refuse ce
         qu'il ne propose pas)."""
-        if step.operation in (paths.OPERATION, paths.READ) and self.path_mode != paths.OFF:
+        if step.operation in (paths.OPERATION, paths.READ) and self.path_mode in paths.EXPLORED:
             return paths.request(exchange, step, space, exchanged, self.path_mode)
         if step.operation == tiles.OPERATION and self.mip is not None:
             return tiles.request(self.mip, exchange, step.arguments, space, exchanged)
@@ -960,7 +1125,7 @@ class AskMinia:
             check(cancel)
             response = exchange.call({'operation': 'find_claim', 'arguments': arguments})
             trajectory.append(_step('find_claim', arguments, response))
-            yield 'minia.operation', trajectory[-1]
+            yield OPERATION_EVENT, trajectory[-1]
             if response['outcome'] != 'OK':
                 verified.append({**statement, 'found': None, 'error': response['error']})
                 continue

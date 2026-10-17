@@ -628,7 +628,7 @@ $env:MINIA_CLAUDE_MODEL = 'claude-opus-5'     # Minia Claude : distant, activée
 $env:MINIA_CLAUDE_SONNET_MODEL = 'claude-sonnet-5-5'  # facultatif : second modèle Claude, « Claude Sonnet »
 $env:MINIA_TRACE = 'summary'                 # essais : journal des échanges Taxo/Minia/modèle dans la console (off, summary, full)
 $env:MINIA_TILE_PROJECTION = 'on'            # essais : Tuiles envoyées au modèle en vue condensée vue-minia/1 (off par défaut)
-$env:MINIA_PATH_MODE = 'full'                # chemin d'une route et tuiles de méthode : off, full (tout le chemin) ou map (carte puis tuiles)
+$env:MINIA_PATH_MODE = 'full'                # chemin et tuiles de méthode : off, full (tout le chemin), map (carte puis tuiles) ou target (cible B : le LLM désigne sa cible, ne reçoit que le code)
 $env:ANTHROPIC_API_KEY  = '…'                 # identifiants de l'API Claude (jamais dans le dépôt)
 $env:MINIA_PROVIDER     = 'ollama'            # fournisseur proposé par défaut
 ```
