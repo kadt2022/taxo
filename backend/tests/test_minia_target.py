@@ -9,7 +9,7 @@ from app.bootstrap import settings
 from app.bootstrap.database import Base
 from app.main import create_app
 from app.minia.application import paths
-from test_minia_explore import answer, completed, statement
+from test_minia_explore import answer, call, completed, statement
 from test_minia_general import Scripted
 from test_minia_paths import FILES, ROUTE
 
@@ -151,3 +151,59 @@ def test_the_guard_never_recalls_a_tile_without_readable_code():
                          {'what': 'tiles', 'numbers': [3], 'reason': 'BUDGET'}]}
     exchanged = [{'operation': paths.OPERATION, 'arguments': {}, 'response': path}]
     assert targeting.unread(exchanged) == [3], 'un accesseur implicite de record n’a pas de code ; le budget, si'
+
+
+# --- La bascule vers l'exploration classique : continuité et traçabilité (autorisé par le Capitaine, 2026-10-16) ---
+
+UNKNOWN_REPOSITORY = answer(statement('unknown', 'Je ne sais pas si ItemRepository rejette un doublon.'))
+
+
+def test_the_switch_keeps_every_operation_in_its_real_order(make_repo, tmp_path, monkeypatch):
+    model = Scripted(target('ItemRepository.save'), NONE, answer(statement('interpretation', 'Rien à lire de plus.')))
+    result = run(make_repo, tmp_path, monkeypatch, model, question='Quelles parties du projet Taxo n’a-t-il pas analysées ?')
+    operations = [step['operation'] for step in result['trajectory']]
+    assert operations[:3] == ['find_references', paths.OPERATION, 'describe'], 'la phase cible B, puis l’exploration'
+
+
+def test_what_the_llm_already_received_is_not_sent_again(make_repo, tmp_path, monkeypatch):
+    model = Scripted(target(ROUTE), NONE, answer(statement('interpretation', 'Rien de plus.')))
+    run(make_repo, tmp_path, monkeypatch, model, question='Quelles parties du projet Taxo n’a-t-il pas analysées ?')
+    classic = json.loads(model.calls[2][1])
+    assert [item['operation'] for item in classic['trajectory']] == ['describe'], 'le chemin n’est pas renvoyé'
+
+
+def _find_repository(message):
+    """L'exploration classique retrouve ItemRepository : la garde le connaît, lu ou non."""
+    analysis = message['trajectory'][0]['response']['snapshot']['analysis']
+    return call('find_references', analysis=analysis, prefix='ItemRepository', match='NAME')
+
+
+def test_code_read_before_the_switch_counts_as_read_for_the_guard(make_repo, tmp_path, monkeypatch):
+    model = Scripted(target(ROUTE), NONE, _find_repository, UNKNOWN_REPOSITORY)
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    assert len(model.calls) == 4 and 'returned' not in result, 'la tuile d’ItemRepository a été lue avant la bascule'
+
+
+def test_without_the_target_phase_the_same_conclusion_is_returned(make_repo, tmp_path, monkeypatch):
+    model = Scripted(NONE, _find_repository, UNKNOWN_REPOSITORY, answer(statement('interpretation', 'Je maintiens.')))
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    assert result['returned'], 'témoin : sans lecture préalable, la garde rappelle ItemRepository'
+
+
+def test_a_tile_only_listed_on_the_map_is_not_counted_as_read(make_repo, tmp_path, monkeypatch):
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    model = Scripted(target(ROUTE), NONE, UNKNOWN_REPOSITORY, answer(statement('interpretation', 'Je maintiens.')))
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    sent_tiles = next(step for step in result['trajectory'] if step['operation'] == paths.OPERATION)
+    assert any(item.get('reason') == 'BUDGET' for item in sent_tiles['not_sent']), 'ItemRepository n’est pas parti'
+    assert result['returned'] == ['symbol:java:com.acme.repository.ItemRepository#save(Long)'], \
+        'une méthode seulement proposée sur la carte n’est pas du code lu : la garde la rappelle'
+
+
+def test_the_usage_counts_every_model_call_once(make_repo, tmp_path, monkeypatch):
+    model = Scripted(target(ROUTE), NONE, answer(statement('interpretation', 'Rien de plus.')))
+    result = run(make_repo, tmp_path, monkeypatch, model, question='Quelles parties du projet Taxo n’a-t-il pas analysées ?')
+    assert result['usage']['calls'] == len(model.calls) == 3
+    assert {step['operation'] for step in result['trajectory']} >= {paths.OPERATION, 'describe'}
+    assert result['usage']['taxo_bytes'] == {'exploration': sum(step['bytes'] for step in result['trajectory']),
+                                             'verification': 0}, 'les octets de Taxo des deux phases, une fois chacun'

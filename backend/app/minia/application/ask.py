@@ -321,6 +321,11 @@ def _reused(step, prior):
     return {'operation': step.operation, 'arguments': step.arguments, 'response': entry}
 
 
+# Une réponse d'une phase précédente du même échange (la cible B avant sa bascule) : déjà reçue par le modèle, elle
+# reste dans l'échange pour la garde et la vérification, mais n'est plus renvoyée.
+_EARLIER = 'earlier'
+
+
 def _compacted(exchanged, keep):
     """Ce que le modèle voit de la trajectoire : les `keep` dernières réponses entières, les plus anciennes
     résumées, sauf le code lu et ce qui n'est pas une réponse réussie de Taxo. `keep` à 0 : tout entier."""
@@ -769,9 +774,13 @@ class AskMinia:
                 raise
             return None
 
-    def _explore(self, model, question, exchange, seeds, context, result, packet, cancel=None):
+    def _explore(self, model, question, exchange, seeds, context, result, packet, cancel=None, prior=None):
         """Mode exploration : Taxo ouvre avec `describe` et les operations de depart (`seeds`), Minia demande
-        les suivantes, puis Taxo verifie ses affirmations. `packet(raison, trajectoire)` rend le repli."""
+        les suivantes, puis Taxo verifie ses affirmations. `packet(raison, trajectoire)` rend le repli.
+
+        `prior` : (trajectoire, échange) d'une phase précédente sur le même échange (la cible B qui bascule). La
+        trajectoire continue dans l'ordre réel ; ce qui a été lu reste lu pour la garde et la vérification, sans être
+        renvoyé au modèle, qui l'a déjà reçu."""
         label = 'Minia interroge Taxo'
         yield _stage('exploration', 'running', label, 0)
         capacity = self._capacity(model, exploration.SYSTEM)
@@ -791,7 +800,8 @@ class AskMinia:
             request = {'operation': operation, 'arguments': arguments}
             return request if space is None else {**request, 'max_bytes': max(space, 1)}
 
-        trajectory, exchanged, seen, operations = [], [], set(), []
+        trajectory, exchanged = ([*prior[0]], [{**item, _EARLIER: True} for item in prior[1]]) if prior else ([], [])
+        seen, operations = set(), []
         served, repeats = {}, 0
         for operation, arguments in (('describe', {}), *seeds):
             space = room(operations, exchanged, self.max_calls)
@@ -905,7 +915,7 @@ class AskMinia:
     def _shown(self, exchanged):
         """Ce que le modèle reçoit de la trajectoire : compactée si le réglage le demande, et chaque Tuile dans sa vue
         condensée si la projection est active. `exchanged` reste entier : garde, vérification et preuves le lisent."""
-        shown = _compacted(exchanged, self.compact_after)
+        shown = _compacted([item for item in exchanged if not item.get(_EARLIER)], self.compact_after)
         if not self.tile_projection:
             return shown
         return [{**item, 'response': tile_view.project(item['response'])}
@@ -959,7 +969,8 @@ class AskMinia:
                 if action == targeting.NONE:
                     # Aucun code à lire (historique, couverture…) : l'exploration classique, sur le même échange.
                     yield _stage('exploration', 'done', label, len(trajectory))
-                    yield from self._explore(model, question, exchange, [], None, result, packet, cancel)
+                    yield from self._explore(model, question, exchange, [], None, result, packet, cancel,
+                                             prior=(trajectory, exchanged))
                     return
                 if action == targeting.ANSWER:
                     missed = targeting.unread(exchanged)
