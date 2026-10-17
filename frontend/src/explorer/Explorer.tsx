@@ -83,16 +83,16 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
   const busy=state.pending!==null;
   const named=useMemo(()=>naming(project), [project]);
   return <NamingContext.Provider value={named}><section className="page explorer" aria-label="Explorer">
-    <div className="page-intro"><h1>Explorer</h1><p>Choisissez un point de départ : Taxo montre ce qui le relie au reste, niveau par niveau, avec la preuve de chaque lien et ce qu’il ne montre pas.</p></div>
-    <div className="explorer-toolbar">
-      <AnalysisChoice base={base} request={request} revision={revision} value={analysis} onChange={value=>navigate({analysis:value, root:undefined})}/>
+    <div className="page-intro explorer-head">
+      <div><h1>Explorer</h1><p>Choisissez un point de départ : Taxo montre ce qui le relie au reste, niveau par niveau, avec la preuve de chaque lien et ce qu’il ne montre pas.</p></div>
       <nav aria-label="Parcours des ancres" className="explorer-trail">
         <button type="button" className="ghost" disabled={!canGoBack(trail)} onClick={()=>globalThis.history.back()}>← Précédent</button>
         <button type="button" className="ghost" disabled={!canGoForward(trail)} onClick={()=>globalThis.history.forward()}>Suivant →</button>
       </nav>
     </div>
     {describeError&&<p role="alert" className="error">{describeError}</p>}
-    <AnchorSearch query={query} types={described?.types??NO_TYPES} onPick={root=>navigate({root})}/>
+    <AnchorSearch query={query} types={described?.types??NO_TYPES} onPick={root=>navigate({root})}
+      lead={<AnalysisChoice base={base} request={request} revision={revision} value={analysis} onChange={value=>navigate({analysis:value, root:undefined})}/>}/>
     {described&&<details className="explorer-settings-box"><summary>Réglages du parcours</summary>
       <Settings key={opening} choices={choices} settings={settings} relations={relations} onApply={chosen=>navigate(chosen)}/></details>}
     {settings.root&&<p className="explorer-scope">{scopeText(relations, settings.direction, settings.depth)}</p>}
@@ -116,6 +116,9 @@ type BodyProps={view:View; selected:Selected; dispatch:(action:Action)=>void; co
 function Body({view, selected, dispatch, commands, busy, query, shape, onShape, onReload, choices, followed}:Readonly<BodyProps>){
   const named=useNaming();
   const links=useMemo(()=>linksOf(view), [view]);
+  // Le panneau latéral se masque à la demande ; choisir un nœud ou un lien le rouvre : preuves et détails restent accessibles.
+  const [side,setSide]=useState(true);
+  useEffect(()=>{if(selected)setSide(true);},[selected]);
   if(!view.known)return <output className="explorer-empty">« {named(view.anchor)} » n’apparaît dans aucun fait de cette analyse : Taxo n’en sait rien ici, ni présence ni absence de liens.</output>;
   const link=selected?.kind==='link'?links.find(item=>item.identity===selected.identity):undefined;
   const node=selected?.kind==='node'?view.nodes.find(item=>item.reference===selected.reference):undefined;
@@ -125,19 +128,23 @@ function Body({view, selected, dispatch, commands, busy, query, shape, onShape, 
       <button type="button" className="link" onClick={onReload}>Recharger la vue</button></p>}
     <p className="explorer-stop">{viewText(view)}</p>
     {view.elements.length===0&&<output className="explorer-empty">Aucun lien pour les relations suivies depuis cette ancre, dans ce que l’analyse a enregistré. Ce que Taxo ne sait pas est dit plus bas.</output>}
-    <fieldset className="explorer-tabs"><legend className="explorer-hidden">Forme de la vue</legend>
-      <button type="button" aria-pressed={shape==='appels'} onClick={()=>onShape('appels')}>Appels</button>
-      <button type="button" aria-pressed={shape==='chaine'} onClick={()=>onShape('chaine')}>Chaîne</button>
-      <button type="button" aria-pressed={shape==='couches'} onClick={()=>onShape('couches')}>Couches</button>
-      <button type="button" aria-pressed={shape==='liste'} onClick={()=>onShape('liste')}>Liste</button></fieldset>
-    <div className="explorer-body">
+    <div className="explorer-bar">
+      <fieldset className="explorer-tabs"><legend className="explorer-hidden">Forme de la vue</legend>
+        <button type="button" aria-pressed={shape==='appels'} onClick={()=>onShape('appels')}>Appels</button>
+        <button type="button" aria-pressed={shape==='chaine'} onClick={()=>onShape('chaine')}>Chaîne</button>
+        <button type="button" aria-pressed={shape==='couches'} onClick={()=>onShape('couches')}>Couches</button>
+        <button type="button" aria-pressed={shape==='liste'} onClick={()=>onShape('liste')}>Liste</button></fieldset>
+      <button type="button" className="ghost explorer-side-toggle" aria-expanded={side} aria-controls="explorer-side"
+        onClick={()=>setSide(!side)}>{side?'Masquer le panneau ›':'‹ Afficher le panneau'}</button>
+    </div>
+    <div className={side?'explorer-body':'explorer-body alone'}>
       {shape==='appels'&&<CallsView view={view} links={links} selected={selected} onSelect={select}
         commands={commands} busy={busy} choices={choices} followed={followed}/>}
       {shape==='chaine'&&<ChainView view={view} links={links} selected={selected} onSelect={select}
         commands={commands} busy={busy}/>}
       {shape==='couches'&&<LayerView view={view} links={links} selected={selected} onSelect={select}/>}
       {shape==='liste'&&<ListView view={view} links={links} commands={commands} busy={busy} onSelect={identity=>select({kind:'link', identity})}/>}
-      <div className="explorer-side">
+      <div className="explorer-side" id="explorer-side" hidden={!side}>
         {link&&<LinkPanel key={link.identity} link={link} query={query} onClose={()=>select(null)}/>}
         {node&&<section className="explorer-panel" aria-label="Nœud choisi"><h3>{named(node.reference)}</h3><code>{node.reference}</code>
           <p className="muted">Niveau {node.level}{nodeMarks(node, view.selection[node.reference], view.knowledge).map(mark=>` · ${mark}`).join('')}</p>

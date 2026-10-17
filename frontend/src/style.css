@@ -886,20 +886,26 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .unread-languages caption{caption-side:top;text-align:left;padding:0 0 8px;color:var(--text-2);font-size:13px}
 
 /* ——— TAXO-01J : l'explorateur de la Maille ——— */
-.explorer-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
-.explorer-analysis{min-width:280px;max-width:520px;flex:1}
-.explorer-analysis select{margin-bottom:0}
-.explorer-trail{display:flex;gap:8px}
+.explorer{--explorer-control-height:42px}
+.explorer-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px 24px}
+.explorer-head>div{min-width:0;flex:1 1 360px}
+.explorer-trail{display:flex;flex:none;gap:8px}
+.explorer-trail .ghost{justify-content:center;min-height:var(--explorer-control-height);white-space:nowrap}
 .explorer-trail .ghost:disabled,.explorer-actions .ghost:disabled{opacity:.45;cursor:default}
-.explorer-search{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--shadow-sm)}
-.explorer-search-fields{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:12px}
-.explorer-search-fields input,.explorer-search-fields select{margin-bottom:4px}
+.explorer-search{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 16px;box-shadow:var(--shadow-sm)}
+/* Les trois champs partagent une rangée, à la même hauteur ; un intitulé ou une valeur trop long se coupe, jamais ne déborde. */
+.explorer-search-fields{display:grid;grid-template-columns:minmax(200px,1fr) minmax(0,1.4fr) minmax(150px,200px);gap:12px 16px;align-items:end}
+.explorer-search-fields>label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.explorer-search-fields input,.explorer-search-fields select{height:var(--explorer-control-height);margin:6px 0 0;text-overflow:ellipsis}
+.explorer-analysis{min-width:0}
 .explorer-suggestions{list-style:none;margin:6px 0 8px;padding:0;display:grid;gap:4px;max-height:260px;overflow:auto}
 .explorer-suggestions .link{text-align:left;font-size:14px;color:var(--text)}
 .explorer-suggestions .link:hover{color:var(--brand-3)}
 .explorer-type{display:inline-block;min-width:64px;margin-right:6px;padding:0 7px;border-radius:var(--r-pill);background:var(--surface-3);color:var(--muted);font-size:11.5px;font-weight:600;text-align:center}
-.explorer-settings-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:10px 16px}
-.explorer-settings-box summary{cursor:pointer;font-weight:600;color:var(--brand)}
+.explorer-settings-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:0 16px}
+.explorer-settings-box summary{cursor:pointer;font-weight:600;color:var(--brand);display:flex;align-items:center;min-height:var(--explorer-control-height)}
+.explorer-settings-box summary:focus-visible,.explorer-tabs button:focus-visible{outline:none;box-shadow:var(--ring)}
+.explorer-settings-box[open]{padding-bottom:12px}
 .explorer-settings fieldset{border:0;padding:0;margin:12px 0}
 .explorer-settings legend{font-weight:600;color:var(--text-2);margin-bottom:6px}
 .explorer-settings label{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-weight:400;margin:3px 0}
@@ -909,16 +915,27 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .explorer-reason{flex-basis:100%;margin-left:22px;font-size:12.5px;color:var(--muted)}
 .explorer-settings-row{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
 .explorer-settings-row select{width:auto;min-width:120px}
-.explorer-scope{margin:0;padding:10px 12px;border-radius:var(--r);background:var(--info-soft);color:var(--info);font-size:13.5px}
+.explorer-scope{margin:0;padding:8px 12px;border-radius:var(--r);background:var(--info-soft);color:var(--info);font-size:13.5px;overflow-wrap:anywhere}
 .explorer-pending{display:block;color:var(--muted);font-size:14px}
 .explorer-stop{margin:0;color:var(--text-2);font-size:14px}
 .explorer-empty{display:block;margin:0;padding:14px 16px;border-radius:var(--r);background:var(--surface-2);border:1px dashed var(--border-strong);color:var(--text-2)}
 .explorer-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.explorer-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px}
+.explorer-side-toggle{min-height:38px;justify-content:center;white-space:nowrap}
 .explorer-tabs{margin:0;padding:0;min-inline-size:0;display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r-sm);overflow:hidden;align-self:flex-start}
-.explorer-tabs button{border:0;background:var(--surface);padding:7px 16px;font-weight:600;color:var(--text-2);cursor:pointer}
-.explorer-tabs button[aria-pressed=true]{background:var(--brand);color:#f4ffe8}
+.explorer-tabs button{border:0;border-left:1px solid var(--border);background:var(--surface);padding:0 18px;min-height:38px;font-weight:600;color:var(--text-2);cursor:pointer}
+.explorer-tabs button:first-of-type{border-left:0}
+.explorer-tabs button:hover{background:var(--surface-3);color:var(--text)}
+.explorer-tabs button[aria-pressed=true]{background:var(--brand);color:#f4ffe8;box-shadow:inset 0 -3px 0 var(--accent)}
+.explorer-tabs button:focus-visible{position:relative;z-index:1}
 .explorer-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:16px;align-items:start}
-.explorer-layers{overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);max-height:72vh}
+.explorer-body.alone{grid-template-columns:minmax(0,1fr)}
+.explorer-side[hidden]{display:none}
+/* La zone du graphe suit la taille de la maille affichée : sa hauteur vient du contenu (le dessin calculé par le moteur de
+   disposition, jamais modifié ici) jusqu'à `--explorer-graph-max-height`. Au-delà, et seulement alors, un ascenseur
+   vertical apparaît dans la zone ; il disparaît dès que le contenu repasse sous la limite. */
+:root{--explorer-graph-max-height:120vh}
+.explorer-layers{overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);max-height:var(--explorer-graph-max-height)}
 .explorer-canvas{position:relative}
 .explorer-canvas svg{position:absolute;inset:0}
 .explorer-edge{fill:none;stroke:#8aa597;stroke-width:1.6}
@@ -945,7 +962,9 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .tone-file{--tone:var(--tone-file)}.tone-app{--tone:var(--tone-app)}.tone-policy{--tone:var(--tone-policy)}
 .tone-history{--tone:var(--tone-history)}.tone-tech{--tone:var(--tone-tech)}.tone-neutral{--tone:var(--tone-neutral)}
 .chain{display:flex;flex-direction:column;gap:10px;min-width:0}
-.chain-tools{display:flex;align-items:center;justify-content:flex-end;gap:10px}
+.chain-tools{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px 10px;min-width:0}
+.chain-tools .ghost{justify-content:center;min-height:var(--explorer-control-height,42px)}
+.chain-tools [role=alert]{margin:0;overflow-wrap:anywhere}
 .calls{display:flex;flex-direction:column;gap:10px;min-width:0}
 .calls-question{margin:0;font-size:13.5px;color:var(--text-2)}
 .calls-limits{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:10px 14px}
@@ -1042,7 +1061,9 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .explorer-boundaries h4{margin:12px 0 4px;font-size:13px;color:var(--text-2)}
 .explorer-boundaries ul{margin:0;padding-left:18px;display:grid;gap:6px;font-size:13px}
 .explorer-not-sent{color:var(--warn)}
-@media(max-width:1100px){.explorer-body{grid-template-columns:minmax(0,1fr)}.explorer-side{position:static;max-height:none;overflow:visible}.explorer-search-fields{grid-template-columns:1fr}}
+@media(max-width:1100px){.explorer-body{grid-template-columns:minmax(0,1fr)}.explorer-side{position:static;max-height:none;overflow:visible}}
+@media(max-width:900px){.explorer-search-fields{grid-template-columns:minmax(0,1fr) minmax(150px,200px)}.explorer-search-fields>label:first-child{grid-column:1/-1}}
+@media(max-width:560px){.explorer-search-fields{grid-template-columns:minmax(0,1fr)}.explorer-trail{width:100%}.explorer-trail .ghost{flex:1}}
 .explore-link{margin-left:8px;font-size:12.5px;font-weight:600;white-space:nowrap}
 .explorer-node.explorer-value{border-style:dashed;background:var(--surface-2)}
 .explorer-value .explorer-node-mark{color:var(--muted)}

@@ -1,6 +1,6 @@
 // Choisir le point de départ (TAXO-01J § 9) : les références de l'analyse qui commencent par la saisie, par
 // `find_references`. La demande part après une courte pause ; seule la dernière compte ; la page suivante sur demande.
-import {useEffect, useId, useRef, useState} from 'react';
+import {useEffect, useId, useRef, useState, type ReactNode} from 'react';
 import {findReferences, type Query, type ReferencePage} from './protocol';
 import {searchOf} from './relations';
 import {useNaming} from './Naming';
@@ -9,7 +9,9 @@ export const PAUSE=250;
 
 type Found={page:ReferencePage; type?:string; prefix:string};
 
-export function AnchorSearch({query, types, onPick}:Readonly<{query:Query; types:string[]; onPick:(reference:string)=>void}>){
+/** `lead` : un champ posé avant le point de départ, sur la même rangée (l'analyse explorée). */
+export function AnchorSearch({query, types, onPick, lead}:Readonly<{query:Query; types:string[]; onPick:(reference:string)=>void;
+  lead?:ReactNode}>){
   const id=useId(), named=useNaming();
   const [text,setText]=useState(''), [type,setType]=useState('');
   const [found,setFound]=useState<Found|null>(null), [error,setError]=useState(''), [more,setMore]=useState(false);
@@ -39,6 +41,7 @@ export function AnchorSearch({query, types, onPick}:Readonly<{query:Query; types
   }
   return <section className="explorer-search" aria-label="Choisir le point de départ">
     <div className="explorer-search-fields">
+      {lead}
       <label htmlFor={`${id}-text`}>Point de départ<input id={`${id}-text`} value={text} maxLength={200} autoComplete="off"
         placeholder="Début d’une référence : GET /orders, OrderController…" onChange={event=>setText(event.target.value)}/></label>
       <label htmlFor={`${id}-type`}>Type<select id={`${id}-type`} value={type} onChange={event=>setType(event.target.value)}>
