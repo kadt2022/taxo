@@ -13,13 +13,11 @@ import {compartments, factText, knowledgeText, linkMarks, nodeMarks, selectionTe
 import {useNaming} from './Naming';
 import {DownloadIcon, ExpandIcon, FitIcon, LocateIcon, MinusIcon, MoonIcon, PlusIcon, ShrinkIcon, SunIcon} from './icons';
 import {useGraphTheme} from './graphTheme';
+import {ZOOM_MAX, ZOOM_MIN, fitScale, zoomIn, zoomOut} from './zoom';
 import type {NodeCommands} from './NodeActions';
 
 const classes=(...names:(string|false|undefined)[])=>names.filter(Boolean).join(' ');
 const formOf=(relation:string):Form=>FORMS[relation]??'CHAIN';
-// Le zoom met à l'échelle le dessin calculé : il ne le recalcule jamais.
-const ZOOM_MIN=0.4, ZOOM_MAX=2, ZOOM_STEP=1.25;
-const clampZoom=(value:number)=>Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
 
 export function ChainView({view, links, selected, onSelect, commands, busy, viewName='Chaîne'}:Readonly<{view:View; links:Link[];
   selected:Selected; onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean; viewName?:string}>){
@@ -37,7 +35,7 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
   const marks=[...new Set(drawn.arrows.flatMap(item=>linkMarks(item.link)))];
   const frame=useRef<HTMLDivElement>(null), [saving,setSaving]=useState(false), [failure,setFailure]=useState('');
   const [zoom,setZoom]=useState(1), [grown,setGrown]=useState(false), {theme, toggle}=useGraphTheme();
-  const fit=()=>setZoom(clampZoom(Math.min(1, (frame.current!.clientWidth-2)/drawn.width)));
+  const fit=()=>setZoom(fitScale(frame.current!.clientWidth, drawn.width));
   /** L'ancre au centre de la zone visible. */
   const recenter=()=>{
     const area=frame.current!, anchor=area.querySelector<HTMLElement>('.chain-node.anchor');
@@ -63,9 +61,9 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
     <div className="chain-tools" role="toolbar" aria-label="Commandes du graphe">
       <div className="chain-zoom">
         <button type="button" className="tool" aria-label="Zoom avant" title="Zoom avant" disabled={zoom>=ZOOM_MAX}
-          onClick={()=>setZoom(clampZoom(zoom*ZOOM_STEP))}><PlusIcon/></button>
+          onClick={()=>setZoom(zoomIn(zoom))}><PlusIcon/></button>
         <button type="button" className="tool" aria-label="Zoom arrière" title="Zoom arrière" disabled={zoom<=ZOOM_MIN}
-          onClick={()=>setZoom(clampZoom(zoom/ZOOM_STEP))}><MinusIcon/></button>
+          onClick={()=>setZoom(zoomOut(zoom))}><MinusIcon/></button>
         <button type="button" className="tool" aria-label="Ajuster à la largeur" title="Ajuster à la largeur" onClick={fit}><FitIcon/></button>
         <button type="button" className="tool" aria-label="Recentrer sur l’ancre" title="Recentrer sur l’ancre" onClick={recenter}><LocateIcon/></button>
         <button type="button" className="tool" aria-label={grown?'Réduire la zone':'Agrandir la zone'} aria-pressed={grown}

@@ -200,3 +200,14 @@ for(const device of ['dark', 'light'] as const){
     await expect(page.locator('.chain-frame').first(), 'le choix est retenu au rechargement').toHaveAttribute('data-theme', other);
   });
 }
+
+// L'ajustement à la largeur fait tenir le dessin dans la zone, même sur un écran étroit : son plancher n'est pas celui du zoom manuel.
+test('ajuster à la largeur fait tenir le dessin sur un écran étroit', async({page})=>{
+  await page.setViewportSize({width:420, height:900});
+  await openRoute(page);
+  const canvas=page.locator('.explorer-canvas').first(), zone=page.locator('.explorer-layers').first();
+  await page.getByRole('button', {name:'Ajuster à la largeur'}).click();
+  const [shown, available]=[await canvas.evaluate(node=>node.getBoundingClientRect().width), await zone.evaluate(node=>node.clientWidth)];
+  expect(shown, 'le dessin tient dans la largeur de la zone').toBeLessThanOrEqual(available);
+  expect(await zone.evaluate(node=>node.scrollWidth<=node.clientWidth+1), 'aucun défilement horizontal après l’ajustement').toBe(true);
+});
