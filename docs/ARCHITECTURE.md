@@ -1120,6 +1120,17 @@ Dans les deux modes, **aucune phrase ne peut apparaître comme établie sans ver
   la frontière, `not_sent`, la troncature et les limites du profil sont transmis. Un champ non classé n'est jamais
   transmis et son nom est signalé (`projection.withheld`) ; un test de contrat échoue sur tout champ que Taxo rend sans
   classement. La vue est construite avant la protection de la demande, qui contrôle le message entier.
+- **Chemin et tuiles de méthode** (`MINIA_PATH_MODE`, `off` par défaut ; essai A/B du 2026-10-15) : Taxo connaît le
+  chemin, Minia le sert, le modèle raisonne. Depuis une route (ou une méthode), Minia suit les faits de la Maille
+  (`HANDLED_BY`, puis `CALLS` jusqu'à 4 niveaux et 30 méthodes, et la chaîne de filtres de `MATCHED_BY` avec sa règle
+  d'URL écrite), numérote chaque méthode sur une carte, et sert sa **tuile** par `get_source` (même consentement, mêmes
+  refus) : l'en-tête de sa classe avec ses annotations, la méthode complète, la déclaration des champs utilisés et
+  l'en-tête des types du projet dont elle dépend (`RESOLVED` quand la Maille les relie, `NAMED` quand le nom écrit désigne
+  un seul type du projet ; jamais un nom ambigu). `full` (A) : la carte et toutes les tuiles qui tiennent, en une
+  réponse ; `map` (B) : la carte et la tuile d'entrée, puis `read_tiles(numbers)` en lot. Quand la question cite une route
+  ou une méthode unique, le chemin est servi d'office à l'ouverture, sans tour du modèle. Le chemin et chaque lecture
+  comptent pour une opération de l'échange ; frontières, méthodes non suivies (bornes), tuiles non transmises (budget,
+  consentement, numéro inconnu) sont dites. Les tuiles comptent comme du code lu pour la garde de conclusion.
 - Transport indépendant : appel interne, HTTP (`POST /api/projects/{id}/taxo-query`), et plus tard MCP,
   sans seconde sémantique. Ajouter une opération ou un champ facultatif est compatible ; changer la
   sémantique d'une opération ou d'un verdict crée une nouvelle version.

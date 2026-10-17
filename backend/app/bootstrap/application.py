@@ -35,7 +35,7 @@ from app.history.application.recorded import RecordedImpact
 from app.history.infrastructure.git_history import GitHistoryReader
 from app.history.api.router import create_router as history_router
 from app.minia.application import trace
-from app.minia.application.ask import AskMinia
+from app.minia.application.ask import AskMinia, Views
 from app.minia.application.investigation import Investigations, InvestigationSettings
 from app.minia.domain.investigation.identity import ExpiryPolicy
 from app.minia.infrastructure.investigation_store import SqliteParcoursMemoryStore
@@ -165,6 +165,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
                                mip=mip, investigations=minia_investigations(investigations_path),
                                max_calls=settings.minia_max_calls(), exchange_bytes=settings.minia_exchange_bytes(),
                                compact_after=settings.minia_compact_after(),
-                               tile_projection=settings.minia_tile_projection())
+                               views=Views(tile_projection=settings.minia_tile_projection(),
+                                           path_mode=settings.minia_path_mode()))
     api.include_router(minia_router(api.state.minia))
     return api

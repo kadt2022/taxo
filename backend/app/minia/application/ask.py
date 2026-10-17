@@ -14,6 +14,7 @@ interpretation. Quand le fournisseur sait diffuser sa reponse, le texte provisoi
 la reponse definitive, citations validees, n'est rendue qu'a la fin.
 """
 import copy
+from dataclasses import dataclass
 import inspect
 import re
 import threading
@@ -22,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as StillWaiting
 
 from app.history.domain.errors import NOT_A_GIT_REPOSITORY, HistoryError
-from app.minia.application import anchoring, investigation, sources, tile_view, tiles, trace
+from app.minia.application import anchoring, investigation, paths, sources, tile_view, tiles, trace
 from app.minia.application.protected_model import ProtectedModel
 from app.minia.domain import anchors, authorship, briefing, exploration, source_context
 from app.minia.domain.investigation import conversation
@@ -63,7 +64,8 @@ _REUSED_NOTE = ('Même opération, mêmes arguments : la réponse du tour {} res
 # qui redemande la même opération la reçoit de nouveau en entier, sans rien redemander à Taxo.
 MAX_COMPACT_AFTER = 15
 MAX_COMPACT_REFERENCES = 30
-_KEEP_WHOLE = frozenset({sources.OPERATION})
+# Le code lu reste entier pendant la compaction : une pièce source, le chemin et ses tuiles.
+_KEEP_WHOLE = frozenset({sources.OPERATION, paths.OPERATION, paths.READ})
 _COMPACT_NOTE = ('Réponse résumée pour la place : ses références restent reçues. Redemande la même opération pour la '
                  'relire en entier.')
 _RESENT_NOTE = 'Même opération, mêmes arguments : la réponse du tour {}, rendue de nouveau en entier.'
@@ -384,6 +386,14 @@ def _unanchored(resolution):
     return _AMBIGUOUS.format(shown + (f' et {more} autre(s)' if more > 0 else ''))
 
 
+@dataclass(frozen=True)
+class Views:
+    """Ce que le modèle voit des réponses de Taxo : la vue condensée des Tuiles (R2, `vue-minia/1`) et le chemin d'une
+    route avec ses tuiles de méthode (`MINIA_PATH_MODE`)."""
+    tile_projection: bool = False
+    path_mode: str = paths.OFF
+
+
 class AskMinia:
     """Minia, servie par un ou plusieurs fournisseurs (Ollama, Claude...) : chaque demande peut choisir le sien.
 
@@ -393,7 +403,7 @@ class AskMinia:
 
     def __init__(self, history, models, projects, query=None, source=source_context.OFF, default=None,
                  taxo_query=None, mip=None, investigations=None, max_calls=MAX_CALLS, exchange_bytes=EXCHANGE_BYTES,
-                 compact_after=0, tile_projection=False):
+                 compact_after=0, views=Views()):
         if source not in source_context.MODES:
             raise ValueError(f'MINIA_SOURCE_CONTEXT invalide : {source} (off ou diff).')
         if not _within(max_calls, 1, MAX_ALLOWED_CALLS):
@@ -405,7 +415,11 @@ class AskMinia:
             raise ValueError(f'MINIA_COMPACT_AFTER invalide : {compact_after} (de 0, désactivé, à {MAX_COMPACT_AFTER}).')
         self.max_calls, self.exchange_bytes, self.compact_after = max_calls, exchange_bytes, compact_after
         # La vue condensée des Tuiles pour le modèle (R2, `vue-minia/1`) ; la trajectoire garde la Tuile entière.
-        self.tile_projection = tile_projection
+        self.tile_projection = views.tile_projection
+        if views.path_mode not in paths.MODES:
+            raise ValueError(f'MINIA_PATH_MODE invalide : {views.path_mode} (off, full ou map).')
+        # Le chemin d'une route et ses tuiles de méthode (A : `full`, B : `map`) ; `off` : l'exploration d'avant.
+        self.path_mode = views.path_mode
         self.history, self.projects, self.query = history, projects, query
         # Protocole Taxo (ARCHITECTURE § 12) : sans lui, Minia recoit toujours un paquet de contexte.
         self.taxo_query = taxo_query
@@ -801,13 +815,21 @@ class AskMinia:
                 if self.mip is not None:
                     # Les Tuiles adaptatives (TAXO-MIP-ADT-01, PR C) : un profil déclaré, sur la même analyse.
                     operations.append(tiles.offered())
+                if self.path_mode != paths.OFF:
+                    operations.extend(paths.offered())
+        if self.path_mode != paths.OFF:
+            # Taxo connaît le chemin : si la question cite une route (ou une méthode) unique, son chemin est servi d'office,
+            # sans tour du modèle. Sinon, le modèle peut le demander (`get_path`) avec une référence reçue.
+            yield from self._opened_path(exchange, question, trajectory, exchanged, room(operations, exchanged,
+                                                                                          self.max_calls), cancel)
         opening = len(trajectory)
         # La garde de conclusion (ARCHITECTURE § 12.5) : seulement si le code est lisible dans cet échange, une fois.
         readable = any(item.get('operation') == sources.OPERATION for item in operations)
         guarded = []
         try:
             while True:
-                calls_left = self.max_calls - (len(trajectory) - opening)
+                # Jamais plus que ce que l'échange peut encore servir : l'ouverture (ancrage, chemin) l'a déjà entamé.
+                calls_left = min(self.max_calls - (len(trajectory) - opening), exchange.operations_left)
                 space = room(operations, exchanged, calls_left)
                 if space is not None and space < ROOM_TO_CONTINUE:
                     calls_left = 0  # la fenetre est presque pleine : Minia conclut avec ce qu'elle a
@@ -888,10 +910,25 @@ class AskMinia:
                 if item.get('operation') == tiles.OPERATION and tile_view.projectable(item.get('response')) else item
                 for item in shown]
 
+    def _opened_path(self, exchange, question, trajectory, exchanged, space, cancel):
+        """Le chemin de l'ancre unique de la question (une route ou une méthode), dans l'échange."""
+        resolution = yield from anchoring.locate(exchange, question, trajectory, cancel)
+        anchor = resolution.anchor if resolution.status == anchors.FOUND else None
+        if not anchor or not (anchor.startswith('endpoint:') or '#' in anchor):
+            return
+        check(cancel)
+        step = exploration.Call(paths.OPERATION, {'reference': anchor})
+        response = paths.request(exchange, step, space, exchanged, self.path_mode, trusted=True)
+        exchanged.append({'operation': paths.OPERATION, 'arguments': step.arguments, 'response': response})
+        trajectory.append(_step(paths.OPERATION, step.arguments, response))
+        yield 'minia.operation', trajectory[-1]
+
     def _served(self, exchange, step, bounded, space, exchanged):
         """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, comptée dans
         le budget de l'échange ; le code d'un symbole déjà reçu ; toute autre opération par l'échange (qui refuse ce
         qu'il ne propose pas)."""
+        if step.operation in (paths.OPERATION, paths.READ) and self.path_mode != paths.OFF:
+            return paths.request(exchange, step, space, exchanged, self.path_mode)
         if step.operation == tiles.OPERATION and self.mip is not None:
             return tiles.request(self.mip, exchange, step.arguments, space, exchanged)
         if step.operation == sources.OPERATION:
