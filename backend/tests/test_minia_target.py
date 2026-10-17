@@ -58,14 +58,17 @@ def test_the_llm_names_a_route_and_receives_only_the_code_of_its_path(make_repo,
     model = Scripted(target(ROUTE), conclude())
     result = run(make_repo, tmp_path, monkeypatch, model)
     first, second = sent(model, 0), sent(model, 1)
-    assert 'Points de départ connus de Taxo' in first and f'- {ROUTE}' in first and QUESTION in first
+    assert 'Points de départ connus de Taxo' in first
+    assert f'- {ROUTE}' in first
+    assert QUESTION in first
     assert set(json.loads(model.calls[0][1])) == {'question', 'menu', 'turns', 'calls_left'}, 'ni describe ni opérations'
     assert '@RequestMapping("/api/items")' in second, 'la classe et ses annotations'
     assert '@PreAuthorize("hasRole(\'ADMIN\')")' in second, 'la méthode complète, annotations comprises'
     assert 'private final Set<Item> items = ConcurrentHashMap.newKeySet();' in second, 'les champs utilisés'
     assert 'public record Item(Long id)' in second, 'les types nécessaires'
     assert not any(fact in sent(model, turn) for turn in range(len(model.calls)) for fact in FACTS), 'aucun fait de Taxo'
-    assert result['path_mode'] == 'target' and result['mode'] == 'exploration'
+    assert result['path_mode'] == 'target'
+    assert result['mode'] == 'exploration'
     assert result['statements'] == [{'type': 'interpretation', 'text': 'Le doublon est ajouté au Set ; Item est un record.'}]
     assert [step['operation'] for step in result['trajectory']] == [paths.OPERATION]
 
@@ -73,14 +76,16 @@ def test_the_llm_names_a_route_and_receives_only_the_code_of_its_path(make_repo,
 def test_a_method_named_without_route_is_resolved_by_taxo(make_repo, tmp_path, monkeypatch):
     model = Scripted(target('ItemRepository.save'), conclude())
     result = run(make_repo, tmp_path, monkeypatch, model, question='Comment ItemRepository enregistre-t-il un article ?')
-    assert 'Parcours depuis ItemRepository.save(Long)' in sent(model, 1) and 'items.add(item);' in sent(model, 1)
+    assert 'Parcours depuis ItemRepository.save(Long)' in sent(model, 1)
+    assert 'items.add(item);' in sent(model, 1)
     assert [step['operation'] for step in result['trajectory']] == ['find_references', paths.OPERATION]
 
 
 def test_an_ambiguous_name_brings_candidates_and_the_llm_can_read_several(make_repo, tmp_path, monkeypatch):
     model = Scripted(target('add'), target('C1, C2'), conclude())
     result = run(make_repo, tmp_path, monkeypatch, model)
-    assert 'C1 ItemController.add(Long)' in sent(model, 1) and 'C2 ItemService.add(Long)' in sent(model, 1)
+    assert 'C1 ItemController.add(Long)' in sent(model, 1)
+    assert 'C2 ItemService.add(Long)' in sent(model, 1)
     assert sent(model, 2).count('Parcours depuis') == 2
     assert [step['operation'] for step in result['trajectory']].count(paths.OPERATION) == 2
 
@@ -104,7 +109,8 @@ def test_what_does_not_fit_is_listed_and_read_by_number(make_repo, tmp_path, mon
     monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
     model = Scripted(target(ROUTE), read(2, 3), conclude())
     result = run(make_repo, tmp_path, monkeypatch, model)
-    assert 'Code du parcours non encore transmis' in sent(model, 1) and 'action "read"' in sent(model, 1)
+    assert 'Code du parcours non encore transmis' in sent(model, 1)
+    assert 'action "read"' in sent(model, 1)
     assert 'items.add(item);' in sent(model, 2)
     assert [step['operation'] for step in result['trajectory']] == [paths.OPERATION, paths.READ]
 
@@ -121,13 +127,15 @@ def test_a_conclusion_without_the_direct_calls_is_returned_once(make_repo, tmp_p
     result = run(make_repo, tmp_path, monkeypatch, model)
     assert 'Non lus : #2' in sent(model, 2), 'la méthode appelée par l’entrée n’a pas été lue'
     assert result['returned'] == ['#2']
-    assert result['statements'][-1]['type'] == 'unknown' and '#2' in result['statements'][-1]['text']
+    assert result['statements'][-1]['type'] == 'unknown'
+    assert '#2' in result['statements'][-1]['text']
 
 
 def test_without_consent_the_map_goes_alone(make_repo, tmp_path, monkeypatch):
     model = Scripted(target(ROUTE), conclude('Sans code.'))
     result = run(make_repo, tmp_path, monkeypatch, model, source=False)
-    assert 'Code non autorisé' in sent(model, 1) and 'items.add' not in sent(model, 1)
+    assert 'Code non autorisé' in sent(model, 1)
+    assert 'items.add' not in sent(model, 1)
     assert 'returned' not in result, 'sans code lu, rien à rappeler'
 
 
@@ -150,7 +158,7 @@ def test_the_guard_never_recalls_a_tile_without_readable_code():
             'not_sent': [{'what': 'tiles', 'numbers': [2], 'reason': 'NOT_AVAILABLE'},
                          {'what': 'tiles', 'numbers': [3], 'reason': 'BUDGET'}]}
     exchanged = [{'operation': paths.OPERATION, 'arguments': {}, 'response': path}]
-    assert targeting.unread(exchanged) == [3], 'un accesseur implicite de record n’a pas de code ; le budget, si'
+    assert targeting.unread(exchanged) == ['#3'], 'un accesseur implicite de record n’a pas de code ; le budget, si'
 
 
 # --- La bascule vers l'exploration classique : continuité et traçabilité (autorisé par le Capitaine, 2026-10-16) ---
@@ -181,7 +189,8 @@ def _find_repository(message):
 def test_code_read_before_the_switch_counts_as_read_for_the_guard(make_repo, tmp_path, monkeypatch):
     model = Scripted(target(ROUTE), NONE, _find_repository, UNKNOWN_REPOSITORY)
     result = run(make_repo, tmp_path, monkeypatch, model)
-    assert len(model.calls) == 4 and 'returned' not in result, 'la tuile d’ItemRepository a été lue avant la bascule'
+    assert len(model.calls) == 4
+    assert 'returned' not in result, 'la tuile d’ItemRepository a été lue avant la bascule'
 
 
 def test_without_the_target_phase_the_same_conclusion_is_returned(make_repo, tmp_path, monkeypatch):
@@ -207,3 +216,46 @@ def test_the_usage_counts_every_model_call_once(make_repo, tmp_path, monkeypatch
     assert {step['operation'] for step in result['trajectory']} >= {paths.OPERATION, 'describe'}
     assert result['usage']['taxo_bytes'] == {'exploration': sum(step['bytes'] for step in result['trajectory']),
                                              'verification': 0}, 'les octets de Taxo des deux phases, une fois chacun'
+
+
+# --- Remarques de revue de la PR #169 (Codex) ----------------------------------------------------------------------
+
+def test_an_answer_before_any_path_is_returned_once(make_repo, tmp_path, monkeypatch):
+    model = Scripted(conclude('Sans rien lire.'), target(ROUTE), conclude())
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    assert 'Aucun code reçu' in sent(model, 1)
+    assert result['statements'][0]['text'] == 'Le doublon est ajouté au Set ; Item est un record.'
+
+
+def test_a_second_answer_without_any_path_falls_back_to_the_packet(make_repo, tmp_path, monkeypatch):
+    model = Scripted(conclude('a'), conclude('b'), json.dumps({'cited': [], 'answer': 'Repli.', 'unknown': ''}))
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    assert result['mode'] == 'paquet', 'une réponse sans aucun code lu n’est jamais la réponse finale'
+
+
+def test_targeting_stops_before_the_exchange_runs_out_of_operations(make_repo, tmp_path, monkeypatch):
+    from app.protocol.application import exchange
+    monkeypatch.setattr(exchange, 'MAX_OPERATIONS', 2)
+    model = Scripted(target('ItemRepository.save'), target(ROUTE), conclude())
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    assert 'L’échange avec Taxo est épuisé' in sent(model, 2)
+    assert result['mode'] == 'exploration', 'la requête aboutit, sans erreur d’échange'
+    assert [step['operation'] for step in result['trajectory']] == ['find_references', paths.OPERATION]
+
+
+def test_the_guard_covers_every_map_served_and_names_the_earlier_ones():
+    from app.minia.application import targeting
+
+    def path(reference, sent_numbers, withheld):
+        return {'operation': paths.OPERATION, 'arguments': {}, 'response': {
+            'outcome': 'OK', 'reference': reference, 'tiles': [{'number': n} for n in sent_numbers],
+            'map': [{'number': 1, 'calls': [2]}, {'number': 2}],
+            'not_sent': [{'what': 'tiles', 'numbers': withheld, 'reason': 'BUDGET'}] if withheld else []}}
+    exchanged = [path('symbol:java:a.B#first()', [1], [2]), path('symbol:java:a.B#second()', [1], [2])]
+    assert targeting.unread(exchanged) == ['B.first() #2', '#2'], 'la carte précédente n’est plus oubliée'
+
+
+def test_several_paths_say_that_read_applies_to_the_last(make_repo, tmp_path, monkeypatch):
+    model = Scripted(target('add'), target('C1, C2'), conclude())
+    run(make_repo, tmp_path, monkeypatch, model)
+    assert 'l’action "read" porte sur le dernier' in sent(model, 2)

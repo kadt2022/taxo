@@ -399,6 +399,106 @@ class Views:
     path_mode: str = paths.OFF
 
 
+class _Targeting:
+    """Un dialogue de la cible B sur un échange : ce que Taxo a servi (trajectoire, échange), ce que le LLM a reçu
+    (tours), les candidats en attente, la garde. Chaque action du LLM y est servie, dans les opérations qui restent."""
+
+    def __init__(self, exchange):
+        self.exchange = exchange
+        self.menu, self.known = targeting.menu(exchange)
+        self.trajectory, self.exchanged, self.turns, self.pending, self.guarded = [], [], [], [], []
+        self.calls, self.premature = 0, False
+
+    def message(self, question):
+        calls_left = targeting.MAX_TURNS - self.calls
+        if calls_left <= 0:
+            raise MiniaError(INVALID_ANSWER, STALLED)
+        if self.exchange.operations_left <= 0:
+            calls_left = 1  # l'échange ne sert plus rien : le LLM conclut avec ce qu'il a reçu
+        return targeting.message(question, self.menu, self.turns, calls_left)
+
+    def taxo(self, operation, arguments, response):
+        self.exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
+        self.trajectory.append(_step(operation, arguments, response))
+        return 'minia.operation', self.trajectory[-1]
+
+    def served(self):
+        return any(item['operation'] == paths.OPERATION and item['response'].get('outcome') == 'OK'
+                   for item in self.exchanged)
+
+    def concluded(self):
+        """Une conclusion acceptée, ou renvoyée une fois : avant tout parcours servi, ou si une dépendance formelle du
+        parcours n'a pas été lue. Une seconde conclusion sans aucun parcours n'est pas une réponse."""
+        if not self.served():
+            if self.premature:
+                raise MiniaError(INVALID_ANSWER, STALLED)
+            self.premature = True
+            self.turns.append(('ta conclusion', targeting.NO_CODE_YET))
+            return False
+        missed = targeting.unread(self.exchanged)
+        if missed and not self.guarded:
+            self.guarded = missed
+            trace.note(f'GARDE cible B : non lus {missed}')
+            self.turns.append(('ta conclusion', targeting.recall(missed)))
+            return False
+        return True
+
+    def read(self, numbers, space):
+        asked = f'lire {", ".join(f"#{n}" for n in numbers)}'
+        if not self.served():
+            self.turns.append((asked, 'Aucune carte reçue : désigne d’abord une cible.'))
+            return
+        if self.exchange.operations_left < 1:
+            self.turns.append((asked, targeting.EXHAUSTED))
+            return
+        step = exploration.Call(paths.READ, {'numbers': numbers})
+        response = paths.request(self.exchange, step, space, self.exchanged, paths.FULL)
+        yield self.taxo(paths.READ, step.arguments, response)
+        self.turns.append((asked, targeting.render_read(response)))
+
+    def target(self, value, space, cancel):
+        """Une cible : sa résolution par Taxo, puis le chemin de chaque départ ; jamais plus d'opérations que l'échange
+        n'en sert encore (une recherche et un chemin par nom)."""
+        asked = f'cible {value}'
+        allowed = self.exchange.operations_left // 2
+        if allowed < 1:
+            self.turns.append((asked, targeting.EXHAUSTED))
+            return
+        outcome, found, steps = targeting.resolve(self.exchange, value, self.known, self.pending, allowed)
+        for operation, arguments, response in steps:
+            yield self.taxo(operation, arguments, response)
+        if outcome == 'path':
+            self.pending, served = [], []
+            for start in found[:self.exchange.operations_left]:
+                check(cancel)
+                step = exploration.Call(paths.OPERATION, {'reference': start})
+                response = paths.request(self.exchange, step, space, self.exchanged, paths.FULL, trusted=True)
+                yield self.taxo(paths.OPERATION, step.arguments, response)
+                served.append(targeting.render_path(response))
+            if len(served) > 1:
+                served.append(targeting.SEVERAL)
+            self.turns.append((asked, '\n\n'.join(served)))
+        elif outcome == 'candidates':
+            self.pending = found
+            self.turns.append((asked, targeting.render_candidates(found)))
+        elif outcome == 'too_many':
+            self.turns.append((asked, f'{found} candidats : précise ta cible (classe, méthode ou URL).'))
+        else:
+            self.turns.append((asked, f'Aucune référence connue de Taxo pour « {value} ».'))
+
+    def completed(self, model, result, answer):
+        statements = [{'type': exploration.INTERPRETATION, 'text': answer}]
+        missed = targeting.unread(self.exchanged)
+        if missed:
+            statements.append({'type': exploration.UNKNOWN, 'text': 'Réponse établie sans avoir lu : '
+                               + ', '.join(missed) + ' (dépendances directes du parcours).'})
+        ledger = getattr(model, 'ledger', None)
+        usage = {} if ledger is None else {'usage': ledger.report(self.trajectory)}
+        return {**result, 'status': ANSWERED, 'mode': EXPLORATION, 'path_mode': paths.TARGET, 'statements': statements,
+                'trajectory': self.trajectory, 'budget': {'max_bytes': self.exchange.budget, 'used': self.exchange.used},
+                **usage, **({'returned': self.guarded} if self.guarded else {})}
+
+
 class AskMinia:
     """Minia, servie par un ou plusieurs fournisseurs (Ollama, Claude...) : chaque demande peut choisir le sien.
 
@@ -942,93 +1042,40 @@ class AskMinia:
         label = 'Minia interroge Taxo'
         yield _stage('exploration', 'running', label, 0)
         capacity = self._capacity(model, targeting.SYSTEM)
-        menu_text, known = targeting.menu(exchange)
-        trajectory, exchanged, turns, pending, guarded, calls = [], [], [], [], [], 0
-
-        def taxo(operation, arguments, response):
-            exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
-            trajectory.append(_step(operation, arguments, response))
-            return 'minia.operation', trajectory[-1]
-
-        def space(text):
-            return None if capacity is None else max(capacity - len(text.encode('utf-8')) - TURN_MARGIN, 1)
-
+        state = _Targeting(exchange)
         try:
             while True:
-                calls_left = targeting.MAX_TURNS - calls
-                if calls_left <= 0:
-                    raise MiniaError(INVALID_ANSWER, STALLED)
-                text = targeting.message(question, menu_text, turns, calls_left)
+                text = state.message(question)
                 check(cancel)
                 raw = yield from _waiting(
-                    lambda: _complete(model, targeting.SYSTEM, text, targeting.SCHEMA, cancel), cancel)
-                calls += 1
+                    lambda text=text: _complete(model, targeting.SYSTEM, text, targeting.SCHEMA, cancel), cancel)
+                state.calls += 1
                 action, value = targeting.parse(raw)
                 if isinstance(value, str):
                     value = model.disclosure.restore(value)  # le LLM n'a vu que des pseudonymes
                 if action == targeting.NONE:
                     # Aucun code à lire (historique, couverture…) : l'exploration classique, sur le même échange.
-                    yield _stage('exploration', 'done', label, len(trajectory))
+                    yield _stage('exploration', 'done', label, len(state.trajectory))
                     yield from self._explore(model, question, exchange, [], None, result, packet, cancel,
-                                             prior=(trajectory, exchanged))
+                                             prior=(state.trajectory, state.exchanged))
                     return
                 if action == targeting.ANSWER:
-                    missed = targeting.unread(exchanged)
-                    if missed and not guarded:
-                        # Une dépendance formelle du parcours non lue : la conclusion revient une fois au LLM.
-                        guarded = missed
-                        trace.note(f'GARDE cible B : non lus {missed}')
-                        turns.append(('ta conclusion', 'Non lus : ' + ', '.join(f'#{n}' for n in missed)
-                                      + ' (dépendances directes du parcours). Lis-les (action "read") ou redonne ta '
-                                      'conclusion telle quelle.'))
-                        continue
-                    break
-                if action == targeting.READ:
-                    if not any(item['operation'] == paths.OPERATION for item in exchanged):
-                        turns.append((f'lire {value}', 'Aucune carte reçue : désigne d’abord une cible.'))
-                        continue
-                    step = exploration.Call(paths.READ, {'numbers': value})
-                    response = paths.request(exchange, step, space(text), exchanged, paths.FULL)
-                    yield taxo(paths.READ, step.arguments, response)
-                    turns.append((f'lire {", ".join(f"#{n}" for n in value)}', targeting.render_read(response)))
+                    if state.concluded():
+                        break
                     continue
-                outcome, found, steps = targeting.resolve(exchange, value, known, pending)
-                for operation, arguments, response in steps:
-                    yield taxo(operation, arguments, response)
-                if outcome == 'path':
-                    pending, served = [], []
-                    for start in found:
-                        check(cancel)
-                        step = exploration.Call(paths.OPERATION, {'reference': start})
-                        response = paths.request(exchange, step, space(text), exchanged, paths.FULL, trusted=True)
-                        yield taxo(paths.OPERATION, step.arguments, response)
-                        served.append(targeting.render_path(response))
-                    turns.append((f'cible {value}', '\n\n'.join(served)))
-                elif outcome == 'candidates':
-                    pending = found
-                    turns.append((f'cible {value}', targeting.render_candidates(found)))
-                elif outcome == 'too_many':
-                    turns.append((f'cible {value}', f'{found} candidats : précise ta cible (classe, méthode ou URL).'))
+                space = None if capacity is None else max(capacity - len(text.encode('utf-8')) - TURN_MARGIN, 1)
+                if action == targeting.READ:
+                    yield from state.read(value, space)
                 else:
-                    turns.append((f'cible {value}', f'Aucune référence connue de Taxo pour « {value} ».'))
+                    yield from state.target(value, space, cancel)
         except MiniaError as exc:
             if exc.code not in _EXPLORATION_FAILURES:
                 raise
-            yield _stage('exploration', 'done', label, len(trajectory))
-            yield from packet(str(exc), trajectory)
+            yield _stage('exploration', 'done', label, len(state.trajectory))
+            yield from packet(str(exc), state.trajectory)
             return
-        yield _stage('exploration', 'done', label, len(trajectory))
-        statements = [{'type': exploration.INTERPRETATION, 'text': value}]
-        missed = targeting.unread(exchanged)
-        if missed:
-            statements.append({'type': exploration.UNKNOWN, 'text': 'Réponse établie sans avoir lu : '
-                               + ', '.join(f'#{n}' for n in missed) + ' (dépendances directes du parcours).'})
-        ledger = getattr(model, 'ledger', None)
-        usage = {} if ledger is None else {'usage': ledger.report(trajectory)}
-        yield COMPLETED, {
-            **result, 'status': ANSWERED, 'mode': EXPLORATION, 'path_mode': paths.TARGET, 'statements': statements,
-            'trajectory': trajectory, 'budget': {'max_bytes': exchange.budget, 'used': exchange.used}, **usage,
-            **({'returned': [f'#{number}' for number in guarded]} if guarded else {})}
+        yield _stage('exploration', 'done', label, len(state.trajectory))
+        yield COMPLETED, state.completed(model, result, value)
 
     def _served(self, exchange, step, bounded, space, exchanged):
         """La réponse de Taxo à une opération demandée par Minia : une Tuile adaptative par le service MIP, comptée dans

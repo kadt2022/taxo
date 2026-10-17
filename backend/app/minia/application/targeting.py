@@ -24,6 +24,11 @@ MAX_ANSWER = 20_000
 ENTRY_ANNOTATIONS = frozenset({'Scheduled', 'KafkaListener', 'JmsListener', 'RabbitListener', 'EventListener',
                                'SqsListener'})
 _ROUTE = re.compile(r'(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) /')
+ENDPOINT = 'endpoint:'
+NO_CODE_YET = 'Aucun code reçu : désigne d’abord une cible (action "target") ou réponds "none".'
+EXHAUSTED = 'L’échange avec Taxo est épuisé : conclus avec le code déjà reçu (action "answer").'
+SEVERAL = ('Plusieurs parcours : l’action "read" porte sur le dernier ; pour lire une tuile d’un autre parcours, '
+           'redésigne sa cible seule.')
 _CANDIDATE = re.compile(r'[Cc](\d+)')
 
 SYSTEM = (
@@ -117,7 +122,7 @@ def _starts(exchange, item, known_endpoints, pending):
     if chosen:
         index = int(chosen.group(1))
         return ([pending[index - 1]], [], []) if 1 <= index <= len(pending) else ([], [], [])
-    route = item if item.startswith('endpoint:') else f'endpoint:{item}' if _ROUTE.match(item) else None
+    route = _route(item)
     if route:
         return ([route], [], []) if route in known_endpoints else ([], [], [])
     name = item.removeprefix('symbol:java:')
@@ -131,9 +136,19 @@ def _starts(exchange, item, known_endpoints, pending):
     return [], methods, [step]
 
 
-def resolve(exchange, target, known_endpoints, pending):
-    """('path', [départs], étapes) | ('candidates', [références], étapes) | ('too_many', n, étapes) | ('none', [], étapes)."""
-    items = [part.strip().strip('`"«» ') for part in target.split(',') if part.strip()][:MAX_TARGETS]
+def _route(item):
+    """La référence d'un endpoint écrit tel quel (`endpoint:GET /x`) ou par sa seule route (`GET /x`), sinon None."""
+    if item.startswith(ENDPOINT):
+        return item
+    if _ROUTE.match(item):
+        return f'{ENDPOINT}{item}'
+    return None
+
+
+def resolve(exchange, target, known_endpoints, pending, limit=MAX_TARGETS):
+    """('path', [départs], étapes) | ('candidates', [références], étapes) | ('too_many', n, étapes) | ('none', [], étapes).
+    Au plus `limit` cibles : ce que l'échange peut encore servir."""
+    items = [part.strip().strip('`"«» ') for part in target.split(',') if part.strip()][:min(MAX_TARGETS, limit)]
     starts, candidates, steps = [], [], []
     for item in items:
         found, ambiguous, taken = _starts(exchange, item, known_endpoints, pending)
@@ -151,10 +166,13 @@ def resolve(exchange, target, known_endpoints, pending):
 
 
 def short(reference):
-    key = reference.removeprefix('symbol:java:').removeprefix('endpoint:')
+    key = reference.removeprefix('symbol:java:').removeprefix(ENDPOINT)
     owner, _, member = key.partition('#')
-    return f'{owner.rsplit(".", 1)[-1]}.{member}' if member else owner if reference.startswith('endpoint:') \
-        else owner.rsplit('.', 1)[-1]
+    if member:
+        return f'{owner.rsplit(".", 1)[-1]}.{member}'
+    if reference.startswith(ENDPOINT):
+        return owner
+    return owner.rsplit('.', 1)[-1]
 
 
 # --- Ce que le LLM reçoit : du code, et la carte pour choisir ---------------------------------------------------------
@@ -240,25 +258,45 @@ def message(question, menu_text, turns, calls_left):
 # --- La garde : les dépendances formelles du parcours, jamais la pertinence ------------------------------------------
 
 def unread(exchanged):
-    """Les numéros de la dernière carte qui sont des dépendances formelles non lues : la chaîne de filtres de la route
-    et les méthodes appelées directement par l'entrée."""
-    maps = [item for item in exchanged if item['operation'] == paths.OPERATION and item['response'].get('outcome') == 'OK']
-    if not maps:
-        return []
-    path = maps[-1]['response']
-    position = exchanged.index(maps[-1])
-    read = {tile['number'] for item in exchanged[position:] if item['operation'] in (paths.OPERATION, paths.READ)
-            for tile in item['response'].get('tiles') or ()}
-    if not read:
-        return []  # aucun code lu (consentement absent) : rien à rappeler
+    """Les dépendances formelles non lues de chaque carte servie : la chaîne de filtres d'une route et les méthodes
+    appelées directement par l'entrée. Une lecture (`read`) porte sur la dernière carte reçue ; une tuile sans code
+    lisible n'est jamais rappelée, seule une tuile retenue par le budget l'est. Les numéros d'une carte précédente
+    portent le nom de son départ (« ItemService.add(Long) #2 »)."""
+    maps = []
+    for item in exchanged:
+        response = item['response']
+        if item['operation'] == paths.OPERATION and response.get('outcome') == 'OK':
+            maps.append((response, set(), set()))
+        elif item['operation'] != paths.READ or not maps:
+            continue
+        _, read, unreadable = maps[-1]
+        read |= {tile['number'] for tile in response.get('tiles') or ()}
+        unreadable |= _unreadable(response)
+    missed = []
+    for position, (path, read, unreadable) in enumerate(maps):
+        if not read:
+            continue  # aucun code lu (consentement absent) : rien à rappeler
+        prefix = '' if position == len(maps) - 1 else f'{short(path["reference"])} '
+        missed += [f'{prefix}#{number}' for number in sorted(_formal(path) - read - unreadable)]
+    return missed
+
+
+def _formal(path):
     entry = path['map'][0]
     formal = {number for number in entry.get('calls') or () if isinstance(number, int)}
-    if path['reference'].startswith('endpoint:'):
+    if path['reference'].startswith(ENDPOINT):
         formal |= {item['number'] for item in path['map'] if item.get('role') == 'filter_chain'}
-    # Une tuile sans code lisible (accesseur implicite d'un record, source illisible) ne peut pas être lue : la garde
-    # ne la rappelle pas. Seule une tuile retenue par le budget reste à lire.
-    unreadable = {number for item in exchanged[position:] if item['operation'] in (paths.OPERATION, paths.READ)
-                  for missing in item['response'].get('not_sent') or ()
-                  if missing.get('what') == 'tiles' and missing.get('reason') != 'BUDGET'
-                  for number in missing.get('numbers') or ()}
-    return sorted(formal - read - unreadable)
+    return formal
+
+
+def _unreadable(response):
+    """Les numéros dont le code n'est pas lisible (accesseur implicite de record, source illisible) : tout ce qui n'est
+    pas parti pour une autre raison que le budget."""
+    return {number for missing in response.get('not_sent') or ()
+            if missing.get('what') == 'tiles' and missing.get('reason') != 'BUDGET'
+            for number in missing.get('numbers') or ()}
+
+
+def recall(missed):
+    return ('Non lus : ' + ', '.join(missed) + ' (dépendances directes du parcours). Lis-les (action "read" ; pour un '
+            'parcours précédent, redésigne sa cible seule) ou redonne ta conclusion telle quelle.')
