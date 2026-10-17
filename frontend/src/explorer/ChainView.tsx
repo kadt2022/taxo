@@ -11,7 +11,8 @@ import type {Link, View} from './graph';
 import type {Selected} from './state';
 import {compartments, factText, knowledgeText, linkMarks, nodeMarks, selectionText, toneOf, typeText, verb} from './sentences';
 import {useNaming} from './Naming';
-import {DownloadIcon, ExpandIcon, FitIcon, LocateIcon, MinusIcon, PlusIcon, ShrinkIcon} from './icons';
+import {DownloadIcon, ExpandIcon, FitIcon, LocateIcon, MinusIcon, MoonIcon, PlusIcon, ShrinkIcon, SunIcon} from './icons';
+import {useGraphTheme} from './graphTheme';
 import type {NodeCommands} from './NodeActions';
 
 const classes=(...names:(string|false|undefined)[])=>names.filter(Boolean).join(' ');
@@ -35,7 +36,7 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
   const kinds=new Set(drawn.boxes.map(box=>box.kind));
   const marks=[...new Set(drawn.arrows.flatMap(item=>linkMarks(item.link)))];
   const frame=useRef<HTMLDivElement>(null), [saving,setSaving]=useState(false), [failure,setFailure]=useState('');
-  const [zoom,setZoom]=useState(1), [grown,setGrown]=useState(false);
+  const [zoom,setZoom]=useState(1), [grown,setGrown]=useState(false), {theme, toggle}=useGraphTheme();
   const fit=()=>setZoom(clampZoom(Math.min(1, (frame.current!.clientWidth-2)/drawn.width)));
   /** L'ancre au centre de la zone visible. */
   const recenter=()=>{
@@ -58,7 +59,7 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
     finally{setSaving(false);}
   };
   return <div className="chain">
-    <div className="chain-frame">
+    <div className="chain-frame" data-theme={theme}>
     <div className="chain-tools" role="toolbar" aria-label="Commandes du graphe">
       <div className="chain-zoom">
         <button type="button" className="tool" aria-label="Zoom avant" title="Zoom avant" disabled={zoom>=ZOOM_MAX}
@@ -73,6 +74,8 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
       </div>
       <span className="chain-sep" aria-hidden="true"/>
       <button type="button" className="tool tool-text" onClick={()=>{void save();}} disabled={saving}><DownloadIcon/>{saving?'Création de l’image…':'Exporter en image (PNG)'}</button>
+      <button type="button" className="tool" aria-label={theme==='dark'?'Passer le graphe en clair':'Passer le graphe en sombre'}
+        title={theme==='dark'?'Fond clair':'Fond sombre'} onClick={toggle}>{theme==='dark'?<SunIcon/>:<MoonIcon/>}</button>
       {failure&&<span role="alert" className="error">{failure}</span>}
       <div className="chain-legend" role="group" aria-label="Légende">
         <ul className="chain-tones">

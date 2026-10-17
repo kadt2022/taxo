@@ -177,3 +177,26 @@ test('la barre d’outils du graphe : zoom, ajustement, recentrage, agrandisseme
   await page.getByRole('button', {name:'Masquer le panneau'}).click();
   await expect(side).toBeHidden();
 });
+
+// Le bouton de thème du cadre : il part du thème de l'appareil, bascule le cadre (barre d'outils, légende, tracé) entre sombre
+// et clair, et le choix est retenu au rechargement. Dans les deux fonds, le texte reste lisible (WCAG AA).
+for(const device of ['dark', 'light'] as const){
+  test(`le bouton de thème bascule le cadre du graphe, parti du thème ${device==='dark'?'sombre':'clair'} de l’appareil`, async({page})=>{
+    await page.emulateMedia({colorScheme:device});
+    await openRoute(page);
+    const frame=page.locator('.chain-frame').first();
+    const background=()=>frame.locator('.chain-scroll').evaluate(node=>getComputedStyle(node).backgroundImage);
+    const dark=(css:string)=>/rgb\(23, 32, 29\)/.test(css);
+    await expect(frame).toHaveAttribute('data-theme', device);
+    expect(dark(await background()), 'fond de départ').toBe(device==='dark');
+    const other=device==='dark'?'light':'dark';
+    await page.getByRole('button', {name:other==='light'?'Passer le graphe en clair':'Passer le graphe en sombre'}).click();
+    await expect(frame).toHaveAttribute('data-theme', other);
+    expect(dark(await background()), 'fond après bascule').toBe(other==='dark');
+    const exporter=page.getByRole('button', {name:'Exporter en image (PNG)'});
+    await expect.poll(()=>contrast(exporter), {message:'export lisible après bascule'}).toBeGreaterThanOrEqual(4.5);
+    await page.reload();
+    await page.locator('.explorer-canvas').first().waitFor();
+    await expect(page.locator('.chain-frame').first(), 'le choix est retenu au rechargement').toHaveAttribute('data-theme', other);
+  });
+}

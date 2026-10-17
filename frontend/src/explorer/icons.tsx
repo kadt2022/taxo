@@ -28,4 +28,6 @@ export const FitIcon=()=><Icon size={20}><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a
 export const LocateIcon=()=><Icon size={20}><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></Icon>;
 export const ExpandIcon=()=><Icon size={20}><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></Icon>;
 export const ShrinkIcon=()=><Icon size={20}><path d="M20 10h-6V4M4 14h6v6M14 10l7-7M3 21l7-7"/></Icon>;
+export const SunIcon=()=><Icon size={20}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></Icon>;
+export const MoonIcon=()=><Icon size={20}><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5z"/></Icon>;
 export const DownloadIcon=()=><Icon size={20}><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></Icon>;

@@ -6,6 +6,7 @@ import {createRoot, type Root} from 'react-dom/client';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {useRoute} from '../nav';
 import {ExplorerPage} from './Explorer';
+import {resetGraphTheme} from './graphTheme';
 import type {Boundary, CompactTile, Element as Item, Tile} from './protocol';
 import {depthCut, edgesCut, element, tile} from './__fixtures__/tiles';
 
@@ -95,7 +96,7 @@ function Harness(){
 }
 
 let host:HTMLElement, root:Root;
-beforeEach(()=>{calls=[];paths=[];held=new Map();holding=new Set();host=document.createElement('div');document.body.append(host);root=createRoot(host);});
+beforeEach(()=>{resetGraphTheme();calls=[];paths=[];held=new Map();holding=new Set();host=document.createElement('div');document.body.append(host);root=createRoot(host);});
 afterEach(()=>{act(()=>root.unmount());host.remove();globalThis.location.hash='';});
 
 const wait=(ms=0)=>act(async()=>{await new Promise(resolve=>setTimeout(resolve, ms));});
@@ -377,6 +378,25 @@ describe('l’explorateur', ()=>{
     expect(named('Zoom avant')!.hasAttribute('disabled'), 'borné vers le haut').toBe(true);
     await click(named('Ajuster à la largeur'));
     expect(canvas().style.transform===''||/^scale\(/.test(canvas().style.transform), 'ajuster remet le zoom à l’échelle de la zone').toBe(true);
+  });
+
+  it('bascule le cadre du graphe entre sombre et clair, avec l’encadré de limites, et se souvient du choix', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    await click(named('Appels'));
+    const frame=()=>host.querySelector('.chain-frame') as HTMLElement;
+    const limits=()=>host.querySelector('.calls-limits') as HTMLElement;
+    expect(frame().dataset.theme, 'part du thème de l’appareil (clair ici)').toBe('light');
+    expect(named('Passer le graphe en sombre')).toBeTruthy();
+    await click(named('Passer le graphe en sombre'));
+    expect(frame().dataset.theme).toBe('dark');
+    expect(limits().dataset.theme, 'l’encadré de limites change avec le cadre').toBe('dark');
+    expect(named('Passer le graphe en clair'), 'le bouton propose l’autre fond').toBeTruthy();
+    expect(globalThis.localStorage.getItem('taxo.explorer.graph-theme')).toBe('dark');
+    await click(named('Chaîne'));
+    expect(frame().dataset.theme, 'le choix suit d’une vue à l’autre').toBe('dark');
+    await click(named('Passer le graphe en clair'));
+    expect(frame().dataset.theme).toBe('light');
+    expect(globalThis.localStorage.getItem('taxo.explorer.graph-theme')).toBe('light');
   });
 
   it('lève la hauteur maximale à la demande, et la rétablit', async()=>{
