@@ -307,6 +307,34 @@ describe('l’explorateur', ()=>{
     expect(reads.textContent).toContain('Aucun analyseur exécuté dans cette analyse ne la produit');
   });
 
+  it('range l’analyse sur la rangée du point de départ, et le parcours des ancres à côté du titre', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    const row=host.querySelector('.explorer-search-fields') as HTMLElement;
+    expect(Array.from(row.children).map(item=>item.tagName+':'+(item.textContent??'').slice(0, 12))[0], 'l’analyse ouvre la rangée').toMatch(/^LABEL:Analyse/);
+    expect(row.querySelectorAll('label')).toHaveLength(3);
+    expect(host.querySelector('.explorer-head nav[aria-label="Parcours des ancres"]')?.querySelectorAll('button')).toHaveLength(2);
+  });
+
+  it('masque le panneau latéral à la demande, sans rien retirer, et le rouvre quand on choisit un nœud', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    const panel=()=>host.querySelector('#explorer-side') as HTMLElement;
+    const toggle=()=>named(/panneau/)!;
+    expect(panel().hidden).toBe(false);
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('.explorer-body.alone')).toBeNull();
+    await click(toggle());
+    expect(panel().hidden, 'le panneau disparaît').toBe(true);
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(host.querySelector('.explorer-body.alone'), 'le graphe prend toute la largeur').not.toBeNull();
+    expect(panel().textContent, 'rien n’est retiré du panneau').toContain('Ce que la vue ne montre pas');
+    await click(toggle());
+    expect(panel().hidden).toBe(false);
+    await click(toggle());
+    await click(host.querySelector('.chain-node'));
+    expect(panel().hidden, 'choisir un nœud rouvre le panneau : le détail reste accessible').toBe(false);
+    expect(host.querySelector('[aria-label="Nœud choisi"]')).not.toBeNull();
+  });
+
   it('n’appelle jamais Minia : seulement le protocole et la liste des analyses', async()=>{
     await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
     await list();
