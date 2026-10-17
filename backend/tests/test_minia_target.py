@@ -259,3 +259,23 @@ def test_several_paths_say_that_read_applies_to_the_last(make_repo, tmp_path, mo
     model = Scripted(target('add'), target('C1, C2'), conclude())
     run(make_repo, tmp_path, monkeypatch, model)
     assert 'l’action "read" porte sur le dernier' in sent(model, 2)
+
+
+# --- Le schéma de réponse : strict, accepté par chaque fournisseur ------------------------------------------------------
+
+def test_the_response_schema_is_strict_for_every_provider():
+    from app.minia.application import targeting
+    from app.minia.infrastructure.gemini import gemini_schema
+    schema = targeting.SCHEMA
+    assert schema['additionalProperties'] is False, 'Claude refuse un objet sans additionalProperties: false'
+    assert set(schema['required']) == set(schema['properties']), 'Mistral strict exige chaque champ'
+    assert 'additionalProperties' not in json.dumps(gemini_schema(schema)), 'Gemini reçoit le schéma sans ce champ'
+
+
+def test_a_turn_with_its_unused_fields_left_empty_is_read():
+    from app.minia.application import targeting
+    turn = lambda **fields: json.dumps({'action': 'answer', 'target': '', 'numbers': [], 'text': '', **fields})
+    assert targeting.parse(turn(action='target', target=ROUTE)) == ('target', ROUTE)
+    assert targeting.parse(turn(action='read', numbers=[2, 3])) == ('read', [2, 3])
+    assert targeting.parse(turn(action='none')) == ('none', None)
+    assert targeting.parse(turn(text='Réponse.')) == ('answer', 'Réponse.')

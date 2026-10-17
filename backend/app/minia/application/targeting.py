@@ -41,12 +41,15 @@ SYSTEM = (
     "- \"none\" : la question ne porte sur aucun code à lire (historique, couverture…) ;\n"
     "- \"answer\" et \"text\" : ta réponse, à partir du code reçu ; cite fichier:ligne, et sépare ce que le code "
     "établit, ce qui est une hypothèse et ce que le code reçu ne permet pas de savoir.\n"
-    "Commence par \"target\" ou \"none\".")
+    "Commence par \"target\" ou \"none\". Remplis toujours les quatre champs ; ceux qui ne servent pas restent vides "
+    "(\"\" ou []).")
 
+# Un schéma strict, comme celui de l'exploration : chaque champ requis (vide s'il ne sert pas), aucun autre champ. Claude
+# exige `additionalProperties: false` et Mistral en mode strict des champs tous requis ; Gemini retire le premier.
 SCHEMA = {'type': 'object', 'properties': {
     'action': {'type': 'string', 'enum': [TARGET, READ, NONE, ANSWER]},
     'target': {'type': 'string'}, 'numbers': {'type': 'array', 'items': {'type': 'integer'}},
-    'text': {'type': 'string'}}, 'required': ['action']}
+    'text': {'type': 'string'}}, 'required': ['action', 'target', 'numbers', 'text'], 'additionalProperties': False}
 
 
 def parse(raw):
