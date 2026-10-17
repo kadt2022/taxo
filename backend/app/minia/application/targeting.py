@@ -11,12 +11,14 @@ ceux de `paths` (budget, déduplication, consentement) : tout le code s'il tient
 """
 import json
 import re
+from dataclasses import dataclass, field
 
 from app.minia.application import paths
 from app.minia.domain.errors import INVALID_ANSWER, MiniaError
 
 TARGET, READ, NONE, ANSWER = 'target', 'read', 'none', 'answer'
-MAX_TURNS = 6                 # appels au LLM : identification, choix, lecture, conclusion, garde, marge
+MAX_TURNS = 6                 # appels au LLM par défaut (MINIA_TARGET_TURNS) : identification, choix, lecture, conclusion, garde
+MIN_TURNS, MAX_ALLOWED_TURNS = 2, 20
 MAX_CANDIDATES = 10
 MENU_MAX = 30                 # au-delà, le menu est résumé et le LLM désigne sa cible par un nom
 MAX_TARGETS = 4               # cibles désignées ensemble (« A, B »)
@@ -27,6 +29,8 @@ _ROUTE = re.compile(r'(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) /')
 ENDPOINT = 'endpoint:'
 NO_CODE_YET = 'Aucun code reçu : désigne d’abord une cible (action "target") ou réponds "none".'
 EXHAUSTED = 'L’échange avec Taxo est épuisé : conclus avec le code déjà reçu (action "answer").'
+ALREADY = 'Déjà transmis plus haut dans ce dialogue : {}.'
+PARTIAL = 'Réponse partielle, non vérifiée : établie sans avoir lu {} (dépendances directes du parcours).'
 SEVERAL = ('Plusieurs parcours : l’action "read" porte sur le dernier ; pour lire une tuile d’un autre parcours, '
            'redésigne sa cible seule.')
 _CANDIDATE = re.compile(r'[Cc](\d+)')
@@ -111,32 +115,25 @@ def menu(exchange):
 
 # --- La résolution d'une cible -----------------------------------------------------------------------------------------
 
-def _search(exchange, name):
-    """Les références dont le nom est `name` (index des noms de l'analyse), et la réponse de Taxo pour la trajectoire."""
+def _search(exchange, name, cache):
+    """Les références dont le nom est `name` (index des noms de l'analyse), et la réponse de Taxo pour la trajectoire ; une
+    recherche déjà faite dans ce dialogue n'est pas refaite (aucune étape)."""
+    if name in cache:
+        return cache[name], None
     arguments = {'analysis': exchange.snapshot['analysis'], 'prefix': name[:200], 'match': 'NAME', 'limit': 50}
     response = exchange.call({'operation': 'find_references', 'arguments': arguments})
     found = [item['reference'] for item in response.get('items') or ()] if response['outcome'] == 'OK' else []
+    cache[name] = found
     return found, ('find_references', arguments, response)
 
 
-def _starts(exchange, item, known_endpoints, pending):
-    """Une cible : ([départs], [candidats], [étapes Taxo])."""
-    chosen = _CANDIDATE.fullmatch(item)
-    if chosen:
-        index = int(chosen.group(1))
-        return ([pending[index - 1]], [], []) if 1 <= index <= len(pending) else ([], [], [])
-    route = _route(item)
-    if route:
-        return ([route], [], []) if route in known_endpoints else ([], [], [])
-    name = item.removeprefix('symbol:java:')
-    found, step = _search(exchange, name)
+def _methods_named(exchange, name, cache):
+    """Les méthodes que désigne un nom : la méthode elle-même, ou celles de la classe nommée."""
+    found, step = _search(exchange, name, cache)
     methods = [reference for reference in found if '#' in reference and '(' in reference]
-    classes = [reference for reference in found if '#' not in reference]
-    for owner in classes:
+    for owner in (reference for reference in found if '#' not in reference):
         methods += [method for method in _methods_of(exchange, owner) if method not in methods]
-    if len(methods) == 1:
-        return methods, [], [step]
-    return [], methods, [step]
+    return methods, step
 
 
 def _route(item):
@@ -148,24 +145,63 @@ def _route(item):
     return None
 
 
-def resolve(exchange, target, known_endpoints, pending, limit=MAX_TARGETS):
-    """('path', [départs], étapes) | ('candidates', [références], étapes) | ('too_many', n, étapes) | ('none', [], étapes).
-    Au plus `limit` cibles : ce que l'échange peut encore servir."""
-    items = [part.strip().strip('`"«» ') for part in target.split(',') if part.strip()][:min(MAX_TARGETS, limit)]
-    starts, candidates, steps = [], [], []
-    for item in items:
-        found, ambiguous, taken = _starts(exchange, item, known_endpoints, pending)
-        starts += [start for start in found if start not in starts]
-        candidates += [candidate for candidate in ambiguous if candidate not in candidates]
-        steps += taken
-    if candidates:
-        candidates = [*starts, *(item for item in candidates if item not in starts)]
-        if len(candidates) > MAX_CANDIDATES:
-            return 'too_many', len(candidates), steps
-        return 'candidates', candidates, steps
-    if starts:
-        return 'path', starts, steps
-    return 'none', [], steps
+def split(target):
+    """Les cibles d'une demande, séparées par des virgules hors parenthèses : une signature Java
+    (`PolicyEvaluator.evaluate(Subject,Resource)`) reste entière."""
+    items, depth, current = [], 0, ''
+    for char in target:
+        depth += (char == '(') - (char == ')')
+        if char == ',' and depth <= 0:
+            items.append(current)
+            current, depth = '', 0
+        else:
+            current += char
+    items.append(current)
+    return [item.strip().strip('`"«» ') for item in items if item.strip().strip('`"«» ')]
+
+
+@dataclass
+class Resolution:
+    """Ce que Taxo trouve pour une demande : les départs servis tout de suite, les candidats des seuls noms ambigus, les
+    noms trop larges (nom, nombre) et les noms inconnus, et les étapes Taxo faites pour le savoir."""
+    starts:list=field(default_factory=list)
+    candidates:list=field(default_factory=list)
+    too_many:list=field(default_factory=list)
+    unknown:list=field(default_factory=list)
+    steps:list=field(default_factory=list)
+
+
+def resolve(exchange, target, known_endpoints, pending, limit=MAX_TARGETS, cache=None):
+    """Chaque cible de la demande, résolue à part : un départ unique est servi, plusieurs départs deviennent des candidats
+    (sans y mêler ce qui est résolu), aucun est dit. Au plus `limit` cibles : ce que l'échange peut encore servir."""
+    cache = {} if cache is None else cache
+    found = Resolution()
+    for item in split(target)[:min(MAX_TARGETS, limit)]:
+        starts, ambiguous = _starts(exchange, item, known_endpoints, pending, cache, found.steps)
+        if starts:
+            found.starts += [start for start in starts if start not in found.starts]
+        elif len(ambiguous) > MAX_CANDIDATES:
+            found.too_many.append((item, len(ambiguous)))
+        elif ambiguous:
+            found.candidates += [candidate for candidate in ambiguous if candidate not in found.candidates]
+        else:
+            found.unknown.append(item)
+    return found
+
+
+def _starts(exchange, item, known_endpoints, pending, cache, steps):
+    """Une cible : ([départ], [candidats]) ; ([], []) si rien ne lui répond."""
+    chosen = _CANDIDATE.fullmatch(item)
+    if chosen:
+        index = int(chosen.group(1))
+        return ([pending[index - 1]], []) if 1 <= index <= len(pending) else ([], [])
+    route = _route(item)
+    if route:
+        return ([route], []) if route in known_endpoints else ([], [])
+    methods, step = _methods_named(exchange, item.removeprefix('symbol:java:'), cache)
+    if step:
+        steps.append(step)
+    return (methods, []) if len(methods) == 1 else ([], methods)
 
 
 def short(reference):

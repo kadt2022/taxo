@@ -399,22 +399,25 @@ class Views:
     route avec ses tuiles de méthode (`MINIA_PATH_MODE`)."""
     tile_projection: bool = False
     path_mode: str = paths.OFF
+    # Les appels au LLM d'un dialogue de la cible B (`MINIA_TARGET_TURNS`).
+    target_turns: int = targeting.MAX_TURNS
 
 
 class _Targeting:
     """Un dialogue de la cible B sur un échange : ce que Taxo a servi (trajectoire, échange), ce que le LLM a reçu
     (tours), les candidats en attente, la garde. Chaque action du LLM y est servie, dans les opérations qui restent."""
 
-    def __init__(self, exchange):
-        self.exchange = exchange
+    def __init__(self, exchange, turns=targeting.MAX_TURNS):
+        self.exchange, self.max_turns = exchange, turns
         self.menu, self.known = targeting.menu(exchange)
         self.trajectory, self.exchanged, self.turns, self.pending, self.guarded = [], [], [], [], []
-        self.calls, self.premature = 0, False
+        self.calls, self.premature, self.answer, self.searches = 0, False, None, {}
+
+    def left(self):
+        return self.max_turns - self.calls
 
     def message(self, question):
-        calls_left = targeting.MAX_TURNS - self.calls
-        if calls_left <= 0:
-            raise MiniaError(INVALID_ANSWER, STALLED)
+        calls_left = self.left()
         if self.exchange.operations_left <= 0:
             calls_left = 1  # l'échange ne sert plus rien : le LLM conclut avec ce qu'il a reçu
         return targeting.message(question, self.menu, self.turns, calls_left)
@@ -447,17 +450,20 @@ class _Targeting:
         return any(item['operation'] == paths.OPERATION and item['response'].get('outcome') == 'OK'
                    for item in self.exchanged)
 
-    def concluded(self):
+    def concluded(self, answer):
         """Une conclusion acceptée, ou renvoyée une fois : avant tout parcours servi, ou si une dépendance formelle du
-        parcours n'a pas été lue. Une seconde conclusion sans aucun parcours n'est pas une réponse."""
+        parcours n'a pas été lue. Une seconde conclusion sans aucun parcours n'est pas une réponse. Une réponse n'est jamais
+        perdue : sans appel restant, elle est acceptée (partielle si une dépendance manque), et une réponse renvoyée reste
+        la réponse si les appels s'épuisent ensuite."""
         if not self.served():
             if self.premature:
                 raise MiniaError(INVALID_ANSWER, STALLED)
             self.premature = True
             self.turns.append(('ta conclusion', targeting.NO_CODE_YET))
             return False
+        self.answer = answer
         missed = targeting.unread(self.exchanged)
-        if missed and not self.guarded:
+        if missed and not self.guarded and self.left() > 0:
             self.guarded = missed
             trace.note(f'GARDE cible B : non lus {missed}')
             self.turns.append(('ta conclusion', targeting.recall(missed)))
@@ -485,39 +491,44 @@ class _Targeting:
         if allowed < 1:
             self.turns.append((asked, targeting.EXHAUSTED))
             return
-        outcome, found, steps = targeting.resolve(self.exchange, value, self.known, self.pending, allowed)
-        for operation, arguments, response in steps:
+        found = targeting.resolve(self.exchange, value, self.known, self.pending, allowed, self.searches)
+        for operation, arguments, response in found.steps:
             yield self.taxo(operation, arguments, response)
-        if outcome == 'path':
-            self.pending, served = [], []
-            for start in found[:self.exchange.operations_left]:
-                check(cancel)
-                step = exploration.Call(paths.OPERATION, {'reference': start})
-                response = paths.request(self.exchange, step, space, self.exchanged, paths.FULL, trusted=True)
-                yield self.taxo(paths.OPERATION, step.arguments, response)
-                served.append(targeting.render_path(response))
-            if len(served) > 1:
-                served.append(targeting.SEVERAL)
-            self.turns.append((asked, '\n\n'.join(served)))
-        elif outcome == 'candidates':
-            self.pending = found
-            self.turns.append((asked, targeting.render_candidates(found)))
-        elif outcome == 'too_many':
-            self.turns.append((asked, f'{found} candidats : précise ta cible (classe, méthode ou URL).'))
-        else:
-            self.turns.append((asked, f'Aucune référence connue de Taxo pour « {value} ».'))
+        fresh = [start for start in found.starts if not self.has_path(start)]
+        said = []
+        for start in fresh[:self.exchange.operations_left]:
+            check(cancel)
+            step = exploration.Call(paths.OPERATION, {'reference': start})
+            response = paths.request(self.exchange, step, space, self.exchanged, paths.FULL, trusted=True)
+            yield self.taxo(paths.OPERATION, step.arguments, response)
+            said.append(targeting.render_path(response))
+        if len(said) > 1:
+            said.append(targeting.SEVERAL)
+        again = [start for start in found.starts if start not in fresh]
+        if again:
+            said.append(targeting.ALREADY.format(', '.join(targeting.short(start) for start in again)))
+        if found.candidates:
+            self.pending = found.candidates
+            said.append(targeting.render_candidates(found.candidates))
+        said += [f'{count} candidats pour « {name} » : précise ta cible (classe, méthode ou URL).' for name, count in found.too_many]
+        if found.unknown:
+            said.append('Aucune référence connue de Taxo pour ' + ', '.join(f'« {name} »' for name in found.unknown) + '.')
+        self.turns.append((asked, '\n\n'.join(said)))
+
+    def has_path(self, start):
+        return any(item['operation'] == paths.OPERATION and item['arguments'].get('reference') == start
+                   and item['response'].get('outcome') == 'OK' for item in self.exchanged)
 
     def completed(self, model, result, answer):
         statements = [{'type': exploration.INTERPRETATION, 'text': answer}]
         missed = targeting.unread(self.exchanged)
         if missed:
-            statements.append({'type': exploration.UNKNOWN, 'text': 'Réponse établie sans avoir lu : '
-                               + ', '.join(missed) + ' (dépendances directes du parcours).'})
+            statements.append({'type': exploration.UNKNOWN, 'text': targeting.PARTIAL.format(', '.join(missed))})
         ledger = getattr(model, 'ledger', None)
         usage = {} if ledger is None else {'usage': ledger.report(self.trajectory)}
         return {**result, 'status': ANSWERED, 'mode': EXPLORATION, 'path_mode': paths.TARGET, 'statements': statements,
                 'trajectory': self.trajectory, 'budget': {'max_bytes': self.exchange.budget, 'used': self.exchange.used},
-                **usage, **({'returned': self.guarded} if self.guarded else {})}
+                **usage, **({'returned': self.guarded} if self.guarded else {}), **({'partial': True} if missed else {})}
 
 
 class AskMinia:
@@ -546,6 +557,10 @@ class AskMinia:
             raise ValueError(f'MINIA_PATH_MODE invalide : {views.path_mode} (off, full, map ou target).')
         # Le chemin d'une route et ses tuiles de méthode (A : `full`, B : `map`) ; `off` : l'exploration d'avant.
         self.path_mode = views.path_mode
+        if not _within(views.target_turns, targeting.MIN_TURNS, targeting.MAX_ALLOWED_TURNS):
+            raise ValueError(f'MINIA_TARGET_TURNS invalide : {views.target_turns} '
+                             f'(de {targeting.MIN_TURNS} à {targeting.MAX_ALLOWED_TURNS}).')
+        self.target_turns = views.target_turns
         self.history, self.projects, self.query = history, projects, query
         # Protocole Taxo (ARCHITECTURE § 12) : sans lui, Minia recoit toujours un paquet de contexte.
         self.taxo_query = taxo_query
@@ -1063,9 +1078,14 @@ class AskMinia:
         label = 'Minia interroge Taxo'
         yield _stage('exploration', 'running', label, 0)
         capacity = self._capacity(model, targeting.SYSTEM)
-        state = _Targeting(exchange)
+        state = _Targeting(exchange, self.target_turns)
         try:
             while True:
+                if state.left() <= 0:
+                    if state.answer is None:
+                        raise MiniaError(INVALID_ANSWER, STALLED)
+                    value = state.answer  # la réponse déjà rendue reste la réponse : jamais perdue
+                    break
                 action, value, text = yield from state.turn(model, question, cancel)
                 if action == targeting.NONE:
                     # Aucun code à lire (historique, couverture…) : l'exploration classique, sur le même échange.
@@ -1074,7 +1094,7 @@ class AskMinia:
                                              prior=(state.trajectory, state.exchanged))
                     return
                 if action == targeting.ANSWER:
-                    if state.concluded():
+                    if state.concluded(value):
                         break
                     continue
                 space = None if capacity is None else max(capacity - len(text.encode('utf-8')) - TURN_MARGIN, 1)

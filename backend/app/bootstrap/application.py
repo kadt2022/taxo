@@ -166,6 +166,7 @@ def create_app(database_url=None, allowed_roots=None, hypotheses=None, model_sto
                                max_calls=settings.minia_max_calls(), exchange_bytes=settings.minia_exchange_bytes(),
                                compact_after=settings.minia_compact_after(),
                                views=Views(tile_projection=settings.minia_tile_projection(),
-                                           path_mode=settings.minia_path_mode()))
+                                           path_mode=settings.minia_path_mode(),
+                                           target_turns=settings.minia_target_turns()))
     api.include_router(minia_router(api.state.minia))
     return api
