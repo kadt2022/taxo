@@ -88,6 +88,8 @@ HEARTBEAT_SECONDS = 15.0
 # Frequence a laquelle l'attente du modele regarde si la demande a ete arretee (TAXO-UX-03).
 CANCEL_POLL_SECONDS = 0.25
 EXPLORATION, PACKET = 'exploration', 'paquet'
+# L'événement d'une opération de Taxo, tel que le flux le diffuse.
+OPERATION_EVENT = 'minia.operation'
 # Reponse donnee par Taxo seul, sans modele (recit TAXO-MINIA-SEC-01, E3) : l'auteur d'un commit, par exemple.
 DIRECT = 'taxo'
 ANSWERED, NOTHING_KNOWN, NEEDS_SELECTION = 'ANSWERED', 'TAXO_KNOWS_NOTHING', 'NEEDS_SELECTION'
@@ -417,10 +419,29 @@ class _Targeting:
             calls_left = 1  # l'échange ne sert plus rien : le LLM conclut avec ce qu'il a reçu
         return targeting.message(question, self.menu, self.turns, calls_left)
 
+    def turn(self, model, question, cancel):
+        """Un tour du LLM : (action, valeur, message envoyé) ; la valeur a les identités d'origine (le LLM n'a vu que
+        des pseudonymes)."""
+        text = self.message(question)
+        check(cancel)
+        raw = yield from _waiting(
+            lambda: _complete(model, targeting.SYSTEM, text, targeting.SCHEMA, cancel), cancel)
+        self.calls += 1
+        action, value = targeting.parse(raw)
+        if isinstance(value, str):
+            value = model.disclosure.restore(value)
+        return action, value, text
+
+    def serve(self, action, value, space, cancel):
+        if action == targeting.READ:
+            yield from self.read(value, space)
+        else:
+            yield from self.target(value, space, cancel)
+
     def taxo(self, operation, arguments, response):
         self.exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
         self.trajectory.append(_step(operation, arguments, response))
-        return 'minia.operation', self.trajectory[-1]
+        return OPERATION_EVENT, self.trajectory[-1]
 
     def served(self):
         return any(item['operation'] == paths.OPERATION and item['response'].get('outcome') == 'OK'
@@ -914,7 +935,7 @@ class AskMinia:
             response = exchange.call(bounded(operation, arguments, space))
             exchanged.append({'operation': operation, 'arguments': arguments, 'response': response})
             trajectory.append(_step(operation, arguments, response))
-            yield 'minia.operation', trajectory[-1]
+            yield OPERATION_EVENT, trajectory[-1]
             if response['outcome'] != 'OK':
                 # Sans ce point de depart (par exemple un commit absent de la derniere analyse), l'exploration
                 # n'a rien sur quoi s'appuyer : Taxo repond en mode paquet.
@@ -979,7 +1000,7 @@ class AskMinia:
                     repeats += 1
                     exchanged.append(_resent(step, prior) if self.compact_after else _reused(step, prior))
                     trajectory.append({**prior['step'], 'bytes': 0, 'reused': True})
-                    yield 'minia.operation', trajectory[-1]
+                    yield OPERATION_EVENT, trajectory[-1]
                     yield _stage('exploration', 'running', label, len(trajectory))
                     continue
                 seen.add(key)
@@ -989,7 +1010,7 @@ class AskMinia:
                 trajectory.append(_step(step.operation, step.arguments, response))
                 served[key] = {'response': response, 'step': trajectory[-1], 'turn': len(trajectory),
                                'learned': _learned(exchanged)}
-                yield 'minia.operation', trajectory[-1]
+                yield OPERATION_EVENT, trajectory[-1]
                 yield _stage('exploration', 'running', label, len(trajectory))
         except MiniaError as exc:
             if exc.code not in _EXPLORATION_FAILURES:
@@ -1033,7 +1054,7 @@ class AskMinia:
         response = paths.request(exchange, step, space, exchanged, self.path_mode, trusted=True)
         exchanged.append({'operation': paths.OPERATION, 'arguments': step.arguments, 'response': response})
         trajectory.append(_step(paths.OPERATION, step.arguments, response))
-        yield 'minia.operation', trajectory[-1]
+        yield OPERATION_EVENT, trajectory[-1]
 
     def _target(self, model, question, exchange, result, packet, cancel=None):
         """La cible B (`targeting`) : le LLM désigne sa cible, Taxo calcule le parcours, Minia ne lui envoie que le
@@ -1045,14 +1066,7 @@ class AskMinia:
         state = _Targeting(exchange)
         try:
             while True:
-                text = state.message(question)
-                check(cancel)
-                raw = yield from _waiting(
-                    lambda text=text: _complete(model, targeting.SYSTEM, text, targeting.SCHEMA, cancel), cancel)
-                state.calls += 1
-                action, value = targeting.parse(raw)
-                if isinstance(value, str):
-                    value = model.disclosure.restore(value)  # le LLM n'a vu que des pseudonymes
+                action, value, text = yield from state.turn(model, question, cancel)
                 if action == targeting.NONE:
                     # Aucun code à lire (historique, couverture…) : l'exploration classique, sur le même échange.
                     yield _stage('exploration', 'done', label, len(state.trajectory))
@@ -1064,10 +1078,7 @@ class AskMinia:
                         break
                     continue
                 space = None if capacity is None else max(capacity - len(text.encode('utf-8')) - TURN_MARGIN, 1)
-                if action == targeting.READ:
-                    yield from state.read(value, space)
-                else:
-                    yield from state.target(value, space, cancel)
+                yield from state.serve(action, value, space, cancel)
         except MiniaError as exc:
             if exc.code not in _EXPLORATION_FAILURES:
                 raise
@@ -1114,7 +1125,7 @@ class AskMinia:
             check(cancel)
             response = exchange.call({'operation': 'find_claim', 'arguments': arguments})
             trajectory.append(_step('find_claim', arguments, response))
-            yield 'minia.operation', trajectory[-1]
+            yield OPERATION_EVENT, trajectory[-1]
             if response['outcome'] != 'OK':
                 verified.append({**statement, 'found': None, 'error': response['error']})
                 continue
