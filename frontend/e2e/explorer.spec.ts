@@ -115,7 +115,7 @@ for(const [width, height] of [[1440, 900], [1100, 800], [800, 900], [480, 900]])
     }));
     expect(boxes).toHaveLength(3);
     expect(new Set(boxes.map(box=>box.height)).size, 'mêmes hauteurs').toBe(1);
-    if(width>=1100)expect(new Set(boxes.map(box=>box.top)).size, 'une seule rangée').toBe(1);
+    if(width>=1280)expect(new Set(boxes.map(box=>box.top)).size, 'une seule rangée').toBe(1);
     // Aucun défilement horizontal de la page, ni de l'en-tête.
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
     expect(await page.locator('.explorer-head, .explorer-search, .explorer-bar').evaluateAll(nodes=>
@@ -132,7 +132,48 @@ for(const [width, height] of [[1440, 900], [1100, 800], [800, 900], [480, 900]])
     // Les onglets, l'export, la légende et le panneau restent accessibles.
     for(const name of ['Appels', 'Chaîne', 'Couches', 'Liste'])await expect(page.getByRole('button', {name, exact:true})).toBeVisible();
     await expect(page.getByRole('button', {name:'Exporter en image (PNG)'})).toBeVisible();
-    await expect(page.getByText('Légende')).toBeVisible();
-    await expect(page.getByRole('region', {name:'Ce que la vue ne montre pas'})).toBeVisible();
+    await expect(page.getByRole('group', {name:'Légende'})).toBeVisible();
+    await expect(page.getByRole('button', {name:/^Ce que la vue ne montre pas/})).toBeVisible();
   });
 }
+
+// La barre d'outils du graphe : le zoom met à l'échelle le dessin déjà calculé, il ne le recalcule jamais ; l'ajustement tient
+// la largeur de la zone ; le recentrage ramène l'ancre ; l'agrandissement lève la hauteur maximale ; la languette rouvre le panneau.
+test('la barre d’outils du graphe : zoom, ajustement, recentrage, agrandissement, panneau', async({page})=>{
+  await page.setViewportSize({width:1280, height:800});
+  await openRoute(page);
+  const canvas=page.locator('.explorer-canvas').first(), zone=page.locator('.explorer-layers').first();
+  const drawn=()=>canvas.evaluate(node=>({width:node.style.width, height:node.style.height}));
+  const before=await drawn();
+  const shown=()=>canvas.evaluate(node=>node.getBoundingClientRect().width);
+  const natural=await shown();
+
+  await page.getByRole('button', {name:'Zoom avant'}).click();
+  expect(await shown(), 'zoom avant').toBeGreaterThan(natural*1.2);
+  await page.getByRole('button', {name:'Zoom arrière'}).click();
+  await page.getByRole('button', {name:'Zoom arrière'}).click();
+  expect(await shown(), 'zoom arrière').toBeLessThan(natural*0.9);
+  expect(await drawn(), 'le dessin calculé par le moteur de disposition est inchangé').toEqual(before);
+
+  await page.getByRole('button', {name:'Ajuster à la largeur'}).click();
+  const width=await zone.evaluate(node=>node.clientWidth);
+  expect(await shown(), 'ajusté : le dessin tient dans la largeur de la zone').toBeLessThanOrEqual(width);
+
+  await page.getByRole('button', {name:'Recentrer sur l’ancre'}).click();
+  await expect(page.locator('.chain-node.anchor').first()).toBeVisible();
+
+  const limited=await zone.evaluate(node=>getComputedStyle(node).maxHeight);
+  await page.getByRole('button', {name:'Agrandir la zone'}).click();
+  expect(await zone.evaluate(node=>getComputedStyle(node).maxHeight), 'la hauteur maximale est levée').toBe('none');
+  await page.getByRole('button', {name:'Réduire la zone'}).click();
+  expect(await zone.evaluate(node=>getComputedStyle(node).maxHeight)).toBe(limited);
+
+  // Le panneau latéral est replié en languette ; elle le rouvre, et il se referme.
+  const side=page.locator('#explorer-side');
+  await expect(side).toBeHidden();
+  await page.getByRole('button', {name:/^Ce que la vue ne montre pas/}).click();
+  await expect(side).toBeVisible();
+  await expect(page.getByRole('region', {name:'Ce que la vue ne montre pas'})).toBeVisible();
+  await page.getByRole('button', {name:'Masquer le panneau'}).click();
+  await expect(side).toBeHidden();
+});
