@@ -1047,7 +1047,7 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .status-D{background:color-mix(in srgb,var(--tone-route) 14%,var(--surface));color:var(--tone-route)}
 .status-V{background:color-mix(in srgb,var(--tone-module) 14%,var(--surface));color:var(--tone-module)}
 .chain-count{font-size:11px;color:var(--muted);padding-right:4px}
-.chain-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-left:auto;padding:8px 14px;background:var(--surface);
+.chain-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;min-inline-size:0;margin:0 0 0 auto;padding:8px 14px;background:var(--surface);
   border:1px solid var(--border-strong);border-radius:var(--r);font-size:12.5px;color:var(--text-2)}
 .chain-legend ul{list-style:none;margin:0;padding:0}
 .chain-tones{display:flex;flex-wrap:wrap;gap:6px 16px}

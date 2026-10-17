@@ -354,7 +354,8 @@ describe('l’explorateur', ()=>{
     expect(bar.getAttribute('aria-label')).toBe('Commandes du graphe');
     for(const name of ['Zoom avant', 'Zoom arrière', 'Ajuster à la largeur', 'Recentrer sur l’ancre', 'Agrandir la zone', 'Exporter en image (PNG)'])
       expect(bar.contains(named(name)??null), name).toBe(true);
-    const legend=host.querySelector('.chain-tools [role=group][aria-label="Légende"]') as HTMLElement;
+    const legend=host.querySelector('.chain-tools fieldset.chain-legend') as HTMLElement;
+    expect(legend.querySelector('legend')?.textContent, 'la légende a son nom').toBe('Légende');
     expect(Array.from(legend.querySelectorAll('li')).map(item=>item.textContent)).toContain('route');
     expect(legend.querySelector('details.chain-notation summary')?.textContent, 'la notation reste à un clic').toBe('Notation');
   });

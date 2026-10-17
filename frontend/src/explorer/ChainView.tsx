@@ -75,7 +75,7 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
       <button type="button" className="tool" aria-label={theme==='dark'?'Passer le graphe en clair':'Passer le graphe en sombre'}
         title={theme==='dark'?'Fond clair':'Fond sombre'} onClick={toggle}>{theme==='dark'?<SunIcon/>:<MoonIcon/>}</button>
       {failure&&<span role="alert" className="error">{failure}</span>}
-      <div className="chain-legend" role="group" aria-label="Légende">
+      <fieldset className="chain-legend"><legend className="explorer-hidden">Légende</legend>
         <ul className="chain-tones">
           {tones.map(tone=><li key={tone}><span className={`chain-swatch tone-${tone}`}/>{label(TONE_NAMES, tone)}</li>)}</ul>
         <details className="chain-notation"><summary>Notation</summary>
@@ -89,7 +89,7 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
             {kinds.has('leaf')&&<li><span className="chain-swatch leaf"/>valeur ou aucun objet : pas un nœud</li>}
             {marks.map(mark=><li key={mark}><span className={`chain-status status-${mark}`}>{mark}</span>{MARK_NAMES[mark]??mark}</li>)}
           </ul></details>
-      </div>
+      </fieldset>
     </div>
     <div className={classes('explorer-layers chain-scroll', grown&&'grown')} ref={frame}>
     <div className="chain-zoomed" style={{width:drawn.width*zoom, height:drawn.height*zoom}}>
