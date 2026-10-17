@@ -115,7 +115,7 @@ for(const [width, height] of [[1440, 900], [1100, 800], [800, 900], [480, 900]])
     }));
     expect(boxes).toHaveLength(3);
     expect(new Set(boxes.map(box=>box.height)).size, 'mêmes hauteurs').toBe(1);
-    if(width>=1100)expect(new Set(boxes.map(box=>box.top)).size, 'une seule rangée').toBe(1);
+    if(width>=1280)expect(new Set(boxes.map(box=>box.top)).size, 'une seule rangée').toBe(1);
     // Aucun défilement horizontal de la page, ni de l'en-tête.
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
     expect(await page.locator('.explorer-head, .explorer-search, .explorer-bar').evaluateAll(nodes=>
@@ -132,7 +132,82 @@ for(const [width, height] of [[1440, 900], [1100, 800], [800, 900], [480, 900]])
     // Les onglets, l'export, la légende et le panneau restent accessibles.
     for(const name of ['Appels', 'Chaîne', 'Couches', 'Liste'])await expect(page.getByRole('button', {name, exact:true})).toBeVisible();
     await expect(page.getByRole('button', {name:'Exporter en image (PNG)'})).toBeVisible();
-    await expect(page.getByText('Légende')).toBeVisible();
-    await expect(page.getByRole('region', {name:'Ce que la vue ne montre pas'})).toBeVisible();
+    await expect(page.getByRole('group', {name:'Légende'})).toBeVisible();
+    await expect(page.getByRole('button', {name:/^Ce que la vue ne montre pas/})).toBeVisible();
   });
 }
+
+// La barre d'outils du graphe : le zoom met à l'échelle le dessin déjà calculé, il ne le recalcule jamais ; l'ajustement tient
+// la largeur de la zone ; le recentrage ramène l'ancre ; l'agrandissement lève la hauteur maximale ; la languette rouvre le panneau.
+test('la barre d’outils du graphe : zoom, ajustement, recentrage, agrandissement, panneau', async({page})=>{
+  await page.setViewportSize({width:1280, height:800});
+  await openRoute(page);
+  const canvas=page.locator('.explorer-canvas').first(), zone=page.locator('.explorer-layers').first();
+  const drawn=()=>canvas.evaluate(node=>({width:node.style.width, height:node.style.height}));
+  const before=await drawn();
+  const shown=()=>canvas.evaluate(node=>node.getBoundingClientRect().width);
+  const natural=await shown();
+
+  await page.getByRole('button', {name:'Zoom avant'}).click();
+  expect(await shown(), 'zoom avant').toBeGreaterThan(natural*1.2);
+  await page.getByRole('button', {name:'Zoom arrière'}).click();
+  await page.getByRole('button', {name:'Zoom arrière'}).click();
+  expect(await shown(), 'zoom arrière').toBeLessThan(natural*0.9);
+  expect(await drawn(), 'le dessin calculé par le moteur de disposition est inchangé').toEqual(before);
+
+  await page.getByRole('button', {name:'Ajuster à la largeur'}).click();
+  const width=await zone.evaluate(node=>node.clientWidth);
+  expect(await shown(), 'ajusté : le dessin tient dans la largeur de la zone').toBeLessThanOrEqual(width);
+
+  await page.getByRole('button', {name:'Recentrer sur l’ancre'}).click();
+  await expect(page.locator('.chain-node.anchor').first()).toBeVisible();
+
+  const limited=await zone.evaluate(node=>getComputedStyle(node).maxHeight);
+  await page.getByRole('button', {name:'Agrandir la zone'}).click();
+  expect(await zone.evaluate(node=>getComputedStyle(node).maxHeight), 'la hauteur maximale est levée').toBe('none');
+  await page.getByRole('button', {name:'Réduire la zone'}).click();
+  expect(await zone.evaluate(node=>getComputedStyle(node).maxHeight)).toBe(limited);
+
+  // Le panneau latéral est replié en languette ; elle le rouvre, et il se referme.
+  const side=page.locator('#explorer-side');
+  await expect(side).toBeHidden();
+  await page.getByRole('button', {name:/^Ce que la vue ne montre pas/}).click();
+  await expect(side).toBeVisible();
+  await expect(page.getByRole('region', {name:'Ce que la vue ne montre pas'})).toBeVisible();
+  await page.getByRole('button', {name:'Masquer le panneau'}).click();
+  await expect(side).toBeHidden();
+});
+
+// Le bouton de thème du cadre : il part du thème de l'appareil, bascule le cadre (barre d'outils, légende, tracé) entre sombre
+// et clair, et le choix est retenu au rechargement. Dans les deux fonds, le texte reste lisible (WCAG AA).
+for(const device of ['dark', 'light'] as const){
+  test(`le bouton de thème bascule le cadre du graphe, parti du thème ${device==='dark'?'sombre':'clair'} de l’appareil`, async({page})=>{
+    await page.emulateMedia({colorScheme:device});
+    await openRoute(page);
+    const frame=page.locator('.chain-frame').first();
+    const background=()=>frame.locator('.chain-scroll').evaluate(node=>getComputedStyle(node).backgroundImage);
+    const dark=(css:string)=>/rgb\(23, 32, 29\)/.test(css);
+    await expect(frame).toHaveAttribute('data-theme', device);
+    expect(dark(await background()), 'fond de départ').toBe(device==='dark');
+    const other=device==='dark'?'light':'dark';
+    await page.getByRole('button', {name:other==='light'?'Passer le graphe en clair':'Passer le graphe en sombre'}).click();
+    await expect(frame).toHaveAttribute('data-theme', other);
+    expect(dark(await background()), 'fond après bascule').toBe(other==='dark');
+    const exporter=page.getByRole('button', {name:'Exporter en image (PNG)'});
+    await expect.poll(()=>contrast(exporter), {message:'export lisible après bascule'}).toBeGreaterThanOrEqual(4.5);
+    await page.reload();
+    await page.locator('.explorer-canvas').first().waitFor();
+    await expect(page.locator('.chain-frame').first(), 'le choix est retenu au rechargement').toHaveAttribute('data-theme', other);
+  });
+}
+
+// L'ajustement à la largeur fait tenir le dessin dans la zone, même sur un écran étroit : son plancher n'est pas celui du zoom manuel.
+test('ajuster à la largeur fait tenir le dessin sur un écran étroit', async({page})=>{
+  await page.setViewportSize({width:420, height:900});
+  await openRoute(page);
+  const canvas=page.locator('.explorer-canvas').first(), zone=page.locator('.explorer-layers').first();
+  await page.getByRole('button', {name:'Ajuster à la largeur'}).click();
+  const [shown, available]=[await canvas.evaluate(node=>node.getBoundingClientRect().width), await zone.evaluate(node=>node.clientWidth)];
+  expect(shown, 'le dessin tient dans la largeur de la zone').toBeLessThanOrEqual(available);
+  expect(await zone.evaluate(node=>node.scrollWidth<=node.clientWidth+1), 'aucun défilement horizontal après l’ajustement').toBe(true);
+});

@@ -6,6 +6,7 @@ import {createRoot, type Root} from 'react-dom/client';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {useRoute} from '../nav';
 import {ExplorerPage} from './Explorer';
+import {resetGraphTheme} from './graphTheme';
 import type {Boundary, CompactTile, Element as Item, Tile} from './protocol';
 import {depthCut, edgesCut, element, tile} from './__fixtures__/tiles';
 
@@ -95,7 +96,7 @@ function Harness(){
 }
 
 let host:HTMLElement, root:Root;
-beforeEach(()=>{calls=[];paths=[];held=new Map();holding=new Set();host=document.createElement('div');document.body.append(host);root=createRoot(host);});
+beforeEach(()=>{resetGraphTheme();calls=[];paths=[];held=new Map();holding=new Set();host=document.createElement('div');document.body.append(host);root=createRoot(host);});
 afterEach(()=>{act(()=>root.unmount());host.remove();globalThis.location.hash='';});
 
 const wait=(ms=0)=>act(async()=>{await new Promise(resolve=>setTimeout(resolve, ms));});
@@ -307,32 +308,107 @@ describe('l’explorateur', ()=>{
     expect(reads.textContent).toContain('Aucun analyseur exécuté dans cette analyse ne la produit');
   });
 
-  it('range l’analyse sur la rangée du point de départ, et le parcours des ancres à côté du titre', async()=>{
+  it('range l’analyse, le point de départ, le type et les réglages en cartes sur une même rangée', async()=>{
     await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
     const row=host.querySelector('.explorer-search-fields') as HTMLElement;
-    expect(Array.from(row.children).map(item=>item.tagName+':'+(item.textContent??'').slice(0, 12))[0], 'l’analyse ouvre la rangée').toMatch(/^LABEL:Analyse/);
-    expect(row.querySelectorAll('label')).toHaveLength(3);
+    const cells=Array.from(row.children);
+    expect(cells.map(item=>item.className.includes('explorer-card')), 'quatre cartes').toEqual([true, true, true, true]);
+    expect(cells[0].textContent, 'l’analyse ouvre la rangée').toMatch(/^Analyse/);
+    expect(cells[3].matches('details.explorer-settings-box'), 'les réglages ferment la rangée').toBe(true);
+    expect(row.querySelectorAll(':scope > label')).toHaveLength(3);
+    expect(row.querySelectorAll('.explorer-input .icon').length, 'une icône par champ').toBe(3);
     expect(host.querySelector('.explorer-head nav[aria-label="Parcours des ancres"]')?.querySelectorAll('button')).toHaveLength(2);
   });
 
-  it('masque le panneau latéral à la demande, sans rien retirer, et le rouvre quand on choisit un nœud', async()=>{
+  it('a des onglets à icônes, dont le texte reste Appels, Chaîne, Couches et Liste', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    const tabs=Array.from(host.querySelectorAll('.explorer-tabs button'));
+    expect(tabs.map(item=>item.textContent)).toEqual(['Appels', 'Chaîne', 'Couches', 'Liste']);
+    expect(tabs.every(item=>item.querySelector('svg.icon'))).toBe(true);
+    expect(host.querySelector('.explorer-bar .explorer-stop')?.textContent, 'les compteurs partagent la ligne des onglets').toMatch(/nœuds?/);
+  });
+
+  it('replie le panneau latéral en languette, sans rien retirer, et le rouvre quand on choisit un nœud', async()=>{
     await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
     const panel=()=>host.querySelector('#explorer-side') as HTMLElement;
-    const toggle=()=>named(/panneau/)!;
-    expect(panel().hidden).toBe(false);
-    expect(toggle().getAttribute('aria-expanded')).toBe('true');
-    expect(host.querySelector('.explorer-body.alone')).toBeNull();
-    await click(toggle());
-    expect(panel().hidden, 'le panneau disparaît').toBe(true);
-    expect(toggle().getAttribute('aria-expanded')).toBe('false');
-    expect(host.querySelector('.explorer-body.alone'), 'le graphe prend toute la largeur').not.toBeNull();
+    const tab=()=>host.querySelector('.explorer-side-tab') as HTMLElement|null;
+    expect(panel().hidden, 'replié au départ').toBe(true);
+    expect(tab()?.getAttribute('aria-expanded')).toBe('false');
+    expect(tab()?.getAttribute('aria-label'), 'la languette dit combien de points la vue ne montre pas').toMatch(/^Ce que la vue ne montre pas : \d+ points?$/);
+    expect(host.querySelector('.explorer-body.closed'), 'le graphe prend la largeur').not.toBeNull();
     expect(panel().textContent, 'rien n’est retiré du panneau').toContain('Ce que la vue ne montre pas');
-    await click(toggle());
+    await click(tab());
     expect(panel().hidden).toBe(false);
-    await click(toggle());
+    expect(tab(), 'la languette cède la place au panneau').toBeNull();
+    expect(host.querySelector('.explorer-body.closed')).toBeNull();
+    await click(named('Masquer le panneau'));
+    expect(panel().hidden).toBe(true);
     await click(host.querySelector('.chain-node'));
     expect(panel().hidden, 'choisir un nœud rouvre le panneau : le détail reste accessible').toBe(false);
     expect(host.querySelector('[aria-label="Nœud choisi"]')).not.toBeNull();
+  });
+
+  it('range export, zoom et légende dans une barre d’outils au sommet du cadre du graphe', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    const bar=host.querySelector('.chain-frame .chain-tools[role=toolbar]') as HTMLElement;
+    expect(bar.getAttribute('aria-label')).toBe('Commandes du graphe');
+    for(const name of ['Zoom avant', 'Zoom arrière', 'Ajuster à la largeur', 'Recentrer sur l’ancre', 'Agrandir la zone', 'Exporter en image (PNG)'])
+      expect(bar.contains(named(name)??null), name).toBe(true);
+    const legend=host.querySelector('.chain-tools fieldset.chain-legend') as HTMLElement;
+    expect(legend.querySelector('legend')?.textContent, 'la légende a son nom').toBe('Légende');
+    expect(Array.from(legend.querySelectorAll('li')).map(item=>item.textContent)).toContain('route');
+    expect(legend.querySelector('details.chain-notation summary')?.textContent, 'la notation reste à un clic').toBe('Notation');
+  });
+
+  it('zoome le dessin sans jamais le recalculer : les dimensions et les nœuds restent ceux du moteur', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    const canvas=()=>host.querySelector('.explorer-canvas') as HTMLElement;
+    const zoomed=()=>host.querySelector('.chain-zoomed') as HTMLElement;
+    const drawn={width:canvas().style.width, height:canvas().style.height};
+    const nodes=Array.from(host.querySelectorAll('.chain-node')).map(item=>item.getAttribute('title'));
+    await click(named('Zoom avant'));
+    expect(canvas().style.transform).toBe('scale(1.25)');
+    expect(parseFloat(zoomed().style.width)).toBeCloseTo(parseFloat(drawn.width)*1.25, 1);
+    await click(named('Zoom arrière'));await click(named('Zoom arrière'));
+    expect(canvas().style.transform).toBe('scale(0.8)');
+    expect({width:canvas().style.width, height:canvas().style.height}, 'le dessin calculé est inchangé').toEqual(drawn);
+    expect(Array.from(host.querySelectorAll('.chain-node')).map(item=>item.getAttribute('title')), 'mêmes nœuds').toEqual(nodes);
+    for(let step=0;step<8;step++)await click(named('Zoom arrière'));
+    expect(named('Zoom arrière')!.hasAttribute('disabled'), 'borné vers le bas').toBe(true);
+    for(let step=0;step<12;step++)await click(named('Zoom avant'));
+    expect(named('Zoom avant')!.hasAttribute('disabled'), 'borné vers le haut').toBe(true);
+    await click(named('Ajuster à la largeur'));
+    expect(canvas().style.transform===''||/^scale\(/.test(canvas().style.transform), 'ajuster remet le zoom à l’échelle de la zone').toBe(true);
+  });
+
+  it('bascule le cadre du graphe entre sombre et clair, avec l’encadré de limites, et se souvient du choix', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    await click(named('Appels'));
+    const frame=()=>host.querySelector('.chain-frame') as HTMLElement;
+    const limits=()=>host.querySelector('.calls-limits') as HTMLElement;
+    expect(frame().dataset.theme, 'part du thème de l’appareil (clair ici)').toBe('light');
+    expect(named('Passer le graphe en sombre')).toBeTruthy();
+    await click(named('Passer le graphe en sombre'));
+    expect(frame().dataset.theme).toBe('dark');
+    expect(limits().dataset.theme, 'l’encadré de limites change avec le cadre').toBe('dark');
+    expect(named('Passer le graphe en clair'), 'le bouton propose l’autre fond').toBeTruthy();
+    expect(globalThis.localStorage.getItem('taxo.explorer.graph-theme')).toBe('dark');
+    await click(named('Chaîne'));
+    expect(frame().dataset.theme, 'le choix suit d’une vue à l’autre').toBe('dark');
+    await click(named('Passer le graphe en clair'));
+    expect(frame().dataset.theme).toBe('light');
+    expect(globalThis.localStorage.getItem('taxo.explorer.graph-theme')).toBe('light');
+  });
+
+  it('lève la hauteur maximale à la demande, et la rétablit', async()=>{
+    await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+    const zone=()=>host.querySelector('.chain-scroll') as HTMLElement;
+    expect(zone().classList.contains('grown')).toBe(false);
+    await click(named('Agrandir la zone'));
+    expect(zone().classList.contains('grown')).toBe(true);
+    expect(named('Réduire la zone')?.getAttribute('aria-pressed')).toBe('true');
+    await click(named('Réduire la zone'));
+    expect(zone().classList.contains('grown')).toBe(false);
   });
 
   it('n’appelle jamais Minia : seulement le protocole et la liste des analyses', async()=>{

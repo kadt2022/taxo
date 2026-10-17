@@ -11,6 +11,9 @@ import type {Link, View} from './graph';
 import type {Selected} from './state';
 import {compartments, factText, knowledgeText, linkMarks, nodeMarks, selectionText, toneOf, typeText, verb} from './sentences';
 import {useNaming} from './Naming';
+import {DownloadIcon, ExpandIcon, FitIcon, LocateIcon, MinusIcon, MoonIcon, PlusIcon, ShrinkIcon, SunIcon} from './icons';
+import {useGraphTheme} from './graphTheme';
+import {ZOOM_MAX, ZOOM_MIN, fitScale, zoomIn, zoomOut} from './zoom';
 import type {NodeCommands} from './NodeActions';
 
 const classes=(...names:(string|false|undefined)[])=>names.filter(Boolean).join(' ');
@@ -31,6 +34,16 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
   const kinds=new Set(drawn.boxes.map(box=>box.kind));
   const marks=[...new Set(drawn.arrows.flatMap(item=>linkMarks(item.link)))];
   const frame=useRef<HTMLDivElement>(null), [saving,setSaving]=useState(false), [failure,setFailure]=useState('');
+  const [zoom,setZoom]=useState(1), [grown,setGrown]=useState(false), {theme, toggle}=useGraphTheme();
+  const fit=()=>setZoom(fitScale(frame.current!.clientWidth, drawn.width));
+  /** L'ancre au centre de la zone visible. */
+  const recenter=()=>{
+    const area=frame.current!, anchor=area.querySelector<HTMLElement>('.chain-node.anchor');
+    if(!anchor)return;
+    const here=anchor.getBoundingClientRect(), there=area.getBoundingClientRect();
+    area.scrollTo?.({left:area.scrollLeft+(here.left-there.left)-(area.clientWidth-here.width)/2,
+      top:area.scrollTop+(here.top-there.top)-(area.clientHeight-here.height)/2});
+  };
   const save=async()=>{
     const style=getComputedStyle(frame.current!), read=(name:string)=>style.getPropertyValue(name).trim();
     const palette:Palette={surface:read('--surface')||'#ffffff', text:read('--text')||'#142b25', muted:read('--muted')||'#6a7a71',
@@ -44,10 +57,43 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
     finally{setSaving(false);}
   };
   return <div className="chain">
-    <div className="chain-tools">
-      <button type="button" className="ghost" onClick={()=>{void save();}} disabled={saving}>{saving?'Création de l’image…':'Exporter en image (PNG)'}</button>
-      {failure&&<span role="alert" className="error">{failure}</span>}</div>
-    <div className="explorer-layers chain-scroll" ref={frame}><div className="explorer-canvas" style={{width:drawn.width, height:drawn.height}}>
+    <div className="chain-frame" data-theme={theme}>
+    <div className="chain-tools" role="toolbar" aria-label="Commandes du graphe">
+      <div className="chain-zoom">
+        <button type="button" className="tool" aria-label="Zoom avant" title="Zoom avant" disabled={zoom>=ZOOM_MAX}
+          onClick={()=>setZoom(zoomIn(zoom))}><PlusIcon/></button>
+        <button type="button" className="tool" aria-label="Zoom arrière" title="Zoom arrière" disabled={zoom<=ZOOM_MIN}
+          onClick={()=>setZoom(zoomOut(zoom))}><MinusIcon/></button>
+        <button type="button" className="tool" aria-label="Ajuster à la largeur" title="Ajuster à la largeur" onClick={fit}><FitIcon/></button>
+        <button type="button" className="tool" aria-label="Recentrer sur l’ancre" title="Recentrer sur l’ancre" onClick={recenter}><LocateIcon/></button>
+        <button type="button" className="tool" aria-label={grown?'Réduire la zone':'Agrandir la zone'} aria-pressed={grown}
+          title={grown?'Rétablir la hauteur maximale':'Lever la hauteur maximale : toute la hauteur du graphe'}
+          onClick={()=>setGrown(!grown)}>{grown?<ShrinkIcon/>:<ExpandIcon/>}</button>
+      </div>
+      <span className="chain-sep" aria-hidden="true"/>
+      <button type="button" className="tool tool-text" onClick={()=>{void save();}} disabled={saving}><DownloadIcon/>{saving?'Création de l’image…':'Exporter en image (PNG)'}</button>
+      <button type="button" className="tool" aria-label={theme==='dark'?'Passer le graphe en clair':'Passer le graphe en sombre'}
+        title={theme==='dark'?'Fond clair':'Fond sombre'} onClick={toggle}>{theme==='dark'?<SunIcon/>:<MoonIcon/>}</button>
+      {failure&&<span role="alert" className="error">{failure}</span>}
+      <fieldset className="chain-legend"><legend className="explorer-hidden">Légende</legend>
+        <ul className="chain-tones">
+          {tones.map(tone=><li key={tone}><span className={`chain-swatch tone-${tone}`}/>{label(TONE_NAMES, tone)}</li>)}</ul>
+        <details className="chain-notation"><summary>Notation</summary>
+          <ul>
+            {forms.has('CHAIN')&&<li><svg className="chain-key" viewBox="0 0 40 12" aria-hidden="true"><path className="chain-arrow" d="M2 6H32"/>
+              <path className="chain-head" d="M30 1L39 6L30 11z"/></svg>relation de la chaîne, nommée sur sa flèche</li>}
+            {forms.has('SIDE')&&<li><svg className="chain-key" viewBox="0 0 40 12" aria-hidden="true"><path className="chain-arrow side" d="M2 6H29"/>
+              <path className="chain-hollow" d="M29 1L39 6L29 11z"/></svg>à côté de la chaîne, comme une réalisation UML</li>}
+            {kinds.has('note')&&<li><span className="chain-swatch note"/>frontière : ce que Taxo ne sait pas</li>}
+            {kinds.has('cut')&&<li><span className="chain-swatch cut"/>coupure de la vue : la suite se reprend</li>}
+            {kinds.has('leaf')&&<li><span className="chain-swatch leaf"/>valeur ou aucun objet : pas un nœud</li>}
+            {marks.map(mark=><li key={mark}><span className={`chain-status status-${mark}`}>{mark}</span>{MARK_NAMES[mark]??mark}</li>)}
+          </ul></details>
+      </fieldset>
+    </div>
+    <div className={classes('explorer-layers chain-scroll', grown&&'grown')} ref={frame}>
+    <div className="chain-zoomed" style={{width:drawn.width*zoom, height:drawn.height*zoom}}>
+    <div className="explorer-canvas" style={{width:drawn.width, height:drawn.height, transform:zoom===1?undefined:`scale(${zoom})`, transformOrigin:'0 0'}}>
       <svg width={drawn.width} height={drawn.height} aria-hidden="true">
         <defs>
           <marker id={`${id}-flow`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
@@ -71,20 +117,8 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
       })}
       {drawn.boxes.map(box=><Shape key={box.key} box={box} view={view} nodes={nodes} selected={selected} onSelect={onSelect} commands={commands}
         busy={busy} viewName={viewName}/>)}
-    </div></div>
-    <details className="chain-legend" open><summary>Légende</summary>
-      <ul>
-        {tones.map(tone=><li key={tone}><span className={`chain-swatch tone-${tone}`}/>{label(TONE_NAMES, tone)}</li>)}
-        {forms.has('CHAIN')&&<li><svg className="chain-key" viewBox="0 0 40 12" aria-hidden="true"><path className="chain-arrow" d="M2 6H32"/>
-          <path className="chain-head" d="M30 1L39 6L30 11z"/></svg>relation de la chaîne, nommée sur sa flèche</li>}
-        {forms.has('SIDE')&&<li><svg className="chain-key" viewBox="0 0 40 12" aria-hidden="true"><path className="chain-arrow side" d="M2 6H29"/>
-          <path className="chain-hollow" d="M29 1L39 6L29 11z"/></svg>à côté de la chaîne, comme une réalisation UML</li>}
-        {kinds.has('note')&&<li><span className="chain-swatch note"/>frontière : ce que Taxo ne sait pas</li>}
-        {kinds.has('cut')&&<li><span className="chain-swatch cut"/>coupure de la vue : la suite se reprend</li>}
-        {kinds.has('leaf')&&<li><span className="chain-swatch leaf"/>valeur ou aucun objet : pas un nœud</li>}
-        {marks.map(mark=><li key={mark}><span className={`chain-status status-${mark}`}>{mark}</span>{MARK_NAMES[mark]??mark}</li>)}
-      </ul>
-    </details>
+    </div></div></div>
+    </div>
   </div>;
 }
 

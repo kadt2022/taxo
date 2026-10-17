@@ -12,13 +12,14 @@ import {NO_PRODUCER, type RelationChoice} from './relations';
 import type {Selected} from './state';
 import {verb} from './sentences';
 import {useNaming} from './Naming';
+import {useGraphTheme} from './graphTheme';
 
 const onAxis=(relation:string)=>CALL_AXIS.includes(relation);
 
 export function CallsView({view, links, selected, onSelect, commands, busy, choices, followed}:Readonly<{view:View; links:Link[];
   selected:Selected; onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean; choices:RelationChoice[];
   followed:string[]}>){
-  const named=useNaming();
+  const named=useNaming(), {theme}=useGraphTheme();
   const projected=useMemo(()=>calls(view, links, onAxis), [view, links]);
   const gaps=CALL_AXIS.flatMap(relation=>{
     const choice=choices.find(item=>item.relation===relation);
@@ -33,7 +34,7 @@ export function CallsView({view, links, selected, onSelect, commands, busy, choi
       dans la vue reçue.</output>}
     <ChainView view={projected.view} links={projected.links} selected={selected} onSelect={onSelect} commands={commands} busy={busy}
       viewName="Appels"/>
-    <section className="calls-limits" aria-label="Où s’arrête la vue Appels">
+    <section className="calls-limits" data-theme={theme} aria-label="Où s’arrête la vue Appels">
       <h3>Où s’arrête la vue Appels</h3>
       <ul>
         {gaps.map(gap=><li key={gap.relation}><strong>« {verb(gap.relation)} »</strong> : {gap.said}</li>)}

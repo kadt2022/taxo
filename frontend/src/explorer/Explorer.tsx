@@ -6,6 +6,7 @@ import {day, sideLabel} from '../comparison';
 import {href, go, type Route} from '../nav';
 import {useChoices} from '../pages';
 import {AnchorSearch} from './AnchorSearch';
+import {CalendarIcon, CallsIcon, ChainIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GearIcon, ListIcon, StackIcon} from './icons';
 import {Boundaries} from './Boundaries';
 import {CallsView} from './CallsView';
 import {ChainView} from './ChainView';
@@ -92,9 +93,9 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
     </div>
     {describeError&&<p role="alert" className="error">{describeError}</p>}
     <AnchorSearch query={query} types={described?.types??NO_TYPES} onPick={root=>navigate({root})}
-      lead={<AnalysisChoice base={base} request={request} revision={revision} value={analysis} onChange={value=>navigate({analysis:value, root:undefined})}/>}/>
-    {described&&<details className="explorer-settings-box"><summary>Réglages du parcours</summary>
-      <Settings key={opening} choices={choices} settings={settings} relations={relations} onApply={chosen=>navigate(chosen)}/></details>}
+      lead={<AnalysisChoice base={base} request={request} revision={revision} value={analysis} onChange={value=>navigate({analysis:value, root:undefined})}/>}
+      tail={described&&<details className="explorer-settings-box explorer-card"><summary><GearIcon/><span>Réglages du parcours</span><ChevronDownIcon/></summary>
+        <Settings key={opening} choices={choices} settings={settings} relations={relations} onApply={chosen=>navigate(chosen)}/></details>}/>
     {settings.root&&<p className="explorer-scope">{scopeText(relations, settings.direction, settings.depth)}</p>}
     {busy&&<output className="explorer-pending">{ACTIONS[state.pending!.action]} <button type="button" className="link" onClick={cancel}>Annuler</button></output>}
     {state.error&&<p role="alert" className="error">{state.error}</p>}
@@ -116,9 +117,11 @@ type BodyProps={view:View; selected:Selected; dispatch:(action:Action)=>void; co
 function Body({view, selected, dispatch, commands, busy, query, shape, onShape, onReload, choices, followed}:Readonly<BodyProps>){
   const named=useNaming();
   const links=useMemo(()=>linksOf(view), [view]);
-  // Le panneau latéral se masque à la demande ; choisir un nœud ou un lien le rouvre : preuves et détails restent accessibles.
-  const [side,setSide]=useState(true);
+  // Le panneau latéral est replié en languette (avec le nombre de coupures et de lacunes) ; choisir un nœud ou un lien le
+  // rouvre : preuves et détails restent accessibles.
+  const [side,setSide]=useState(false);
   useEffect(()=>{if(selected)setSide(true);},[selected]);
+  const gaps=view.nodes.filter(item=>view.selection[item.reference]).length+view.knowledge.length;
   if(!view.known)return <output className="explorer-empty">« {named(view.anchor)} » n’apparaît dans aucun fait de cette analyse : Taxo n’en sait rien ici, ni présence ni absence de liens.</output>;
   const link=selected?.kind==='link'?links.find(item=>item.identity===selected.identity):undefined;
   const node=selected?.kind==='node'?view.nodes.find(item=>item.reference===selected.reference):undefined;
@@ -126,25 +129,28 @@ function Body({view, selected, dispatch, commands, busy, query, shape, onShape, 
   return <>
     {view.stale&&<p role="alert" className="error">Les faits de cette analyse ont changé depuis l’ouverture de la vue : la réponse reçue n’y a pas été mêlée.{' '}
       <button type="button" className="link" onClick={onReload}>Recharger la vue</button></p>}
-    <p className="explorer-stop">{viewText(view)}</p>
     {view.elements.length===0&&<output className="explorer-empty">Aucun lien pour les relations suivies depuis cette ancre, dans ce que l’analyse a enregistré. Ce que Taxo ne sait pas est dit plus bas.</output>}
     <div className="explorer-bar">
       <fieldset className="explorer-tabs"><legend className="explorer-hidden">Forme de la vue</legend>
-        <button type="button" aria-pressed={shape==='appels'} onClick={()=>onShape('appels')}>Appels</button>
-        <button type="button" aria-pressed={shape==='chaine'} onClick={()=>onShape('chaine')}>Chaîne</button>
-        <button type="button" aria-pressed={shape==='couches'} onClick={()=>onShape('couches')}>Couches</button>
-        <button type="button" aria-pressed={shape==='liste'} onClick={()=>onShape('liste')}>Liste</button></fieldset>
-      <button type="button" className="ghost explorer-side-toggle" aria-expanded={side} aria-controls="explorer-side"
-        onClick={()=>setSide(!side)}>{side?'Masquer le panneau ›':'‹ Afficher le panneau'}</button>
+        <button type="button" aria-pressed={shape==='appels'} onClick={()=>onShape('appels')}><CallsIcon/>Appels</button>
+        <button type="button" aria-pressed={shape==='chaine'} onClick={()=>onShape('chaine')}><ChainIcon/>Chaîne</button>
+        <button type="button" aria-pressed={shape==='couches'} onClick={()=>onShape('couches')}><StackIcon/>Couches</button>
+        <button type="button" aria-pressed={shape==='liste'} onClick={()=>onShape('liste')}><ListIcon/>Liste</button></fieldset>
+      <p className="explorer-stop">{viewText(view)}</p>
     </div>
-    <div className={side?'explorer-body':'explorer-body alone'}>
+    <div className={side?'explorer-body':'explorer-body closed'}>
       {shape==='appels'&&<CallsView view={view} links={links} selected={selected} onSelect={select}
         commands={commands} busy={busy} choices={choices} followed={followed}/>}
       {shape==='chaine'&&<ChainView view={view} links={links} selected={selected} onSelect={select}
         commands={commands} busy={busy}/>}
       {shape==='couches'&&<LayerView view={view} links={links} selected={selected} onSelect={select}/>}
       {shape==='liste'&&<ListView view={view} links={links} commands={commands} busy={busy} onSelect={identity=>select({kind:'link', identity})}/>}
+      {!side&&<button type="button" className="explorer-side-tab" aria-expanded="false" aria-controls="explorer-side"
+        aria-label={`Ce que la vue ne montre pas : ${gaps} point${gaps>1?'s':''}`} onClick={()=>setSide(true)}>
+        <ChevronLeftIcon/><span className="explorer-side-label">Ce que la vue ne montre pas</span><span className="count-pill">{gaps}</span></button>}
       <div className="explorer-side" id="explorer-side" hidden={!side}>
+        <button type="button" className="ghost explorer-side-close" aria-expanded="true" aria-controls="explorer-side"
+          onClick={()=>setSide(false)}>Masquer le panneau<ChevronRightIcon/></button>
         {link&&<LinkPanel key={link.identity} link={link} query={query} onClose={()=>select(null)}/>}
         {node&&<section className="explorer-panel" aria-label="Nœud choisi"><h3>{named(node.reference)}</h3><code>{node.reference}</code>
           <p className="muted">Niveau {node.level}{nodeMarks(node, view.selection[node.reference], view.knowledge).map(mark=>` · ${mark}`).join('')}</p>
@@ -159,8 +165,9 @@ function Body({view, selected, dispatch, commands, busy, query, shape, onShape, 
 function AnalysisChoice({base, request, revision, value, onChange}:Readonly<{base:string; request:Request; revision:string; value:string;
   onChange:(value:string)=>void}>){
   const {choices}=useChoices(base, request, revision);
-  return <label className="explorer-analysis">Analyse<select value={value} onChange={event=>onChange(event.target.value)}>
+  return <label className="explorer-analysis explorer-card">Analyse<span className="explorer-input"><CalendarIcon/>
+    <select value={value} onChange={event=>onChange(event.target.value)}>
     {(choices??[]).map(choice=><option key={choice.id} value={choice.id}>{day(choice.created_at)} · {sideLabel(choice)}</option>)}
     {!(choices??[]).some(choice=>choice.id===value)&&<option value={value}>Analyse {value.slice(0, 8)}</option>}
-  </select></label>;
+  </select></span></label>;
 }
