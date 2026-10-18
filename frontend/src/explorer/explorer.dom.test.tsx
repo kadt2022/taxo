@@ -57,13 +57,18 @@ function compact(full:Tile):CompactTile{
 }
 
 type Call={operation:string; arguments:Record<string, unknown>};
-let calls:Call[], paths:string[], held:Map<string, ()=>void>, holding:Set<string>;
+let calls:Call[], consents:unknown[], paths:string[], held:Map<string, ()=>void>, holding:Set<string>, source:Record<string, object>;
+
+const CLASS_LINES=['public class A {', '  private int x;', '  public String get() {', '    return B.run();', '  }', '}'];
+const piece=(reference:string, from:number, lines:string[])=>({kind:'source', reference, path:'src/A.java', line_start:from,
+  line_end:from+lines.length-1, truncated:false, declared:{line_start:from, line_end:from+lines.length-1}, text:`${lines.join('\n')}\n`});
 
 async function answer(path:string, init?:RequestInit):Promise<unknown>{
   paths.push(path);
   if(path.endsWith('/comparisons/analyses'))return [{id:'scan-1', created_at:'2026-10-03T10:00:00Z', snapshot:{commit:'a'.repeat(40)}}];
-  const {requests:[call]}=JSON.parse(init!.body as string) as {requests:Call[]};
+  const {requests:[call], consent}=JSON.parse(init!.body as string) as {requests:Call[]; consent?:unknown};
   calls.push(call);
+  consents.push(consent);
   const reply=(value:object)=>({responses:[{outcome:'OK', ...value}]});
   switch(call.operation){
   case 'describe':return reply({items:[
@@ -85,6 +90,11 @@ async function answer(path:string, init?:RequestInit):Promise<unknown>{
     if(holding.has(at))return new Promise(resolve=>held.set(at, ()=>resolve(response)));
     return response;
   }
+  case 'get_source':{
+    const found=source[String(call.arguments.reference)];
+    const error=found&&'error' in found?found.error:{code:'NOT_AVAILABLE', message:'Aucune déclaration écrite de ce symbole dans cette analyse.'};
+    return found&&!('error' in found)?reply(found):{responses:[{outcome:'ERROR', error}]};
+  }
   default:throw new Error(`inattendu : ${call.operation}`);
   }
 }
@@ -96,7 +106,7 @@ function Harness(){
 }
 
 let host:HTMLElement, root:Root;
-beforeEach(()=>{resetGraphTheme();calls=[];paths=[];held=new Map();holding=new Set();host=document.createElement('div');document.body.append(host);root=createRoot(host);});
+beforeEach(()=>{resetGraphTheme();calls=[];consents=[];source={};paths=[];held=new Map();holding=new Set();host=document.createElement('div');document.body.append(host);root=createRoot(host);});
 afterEach(()=>{act(()=>root.unmount());host.remove();globalThis.location.hash='';});
 
 const wait=(ms=0)=>act(async()=>{await new Promise(resolve=>setTimeout(resolve, ms));});
@@ -418,5 +428,103 @@ describe('l’explorateur', ()=>{
     await click(named('Charger les preuves (2)'));
     expect(paths.every(path=>path==='/projects/p/taxo-query'||path==='/projects/p/comparisons/analyses')).toBe(true);
     expect(new Set(calls.map(call=>call.operation))).toEqual(new Set(['describe', 'get_neighborhood', 'get_evidence']));
+  });
+
+  describe('la tuile de code du nœud choisi', ()=>{
+    const picked=async()=>{
+      await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+      await click(named(/^symbole java:A#get\(\)/));
+      await wait();
+      return host.querySelector('[aria-label="Nœud choisi"]') as HTMLElement;
+    };
+    const serving=()=>{
+      source={'symbol:java:A':{reference:'symbol:java:A', commit:'c', path:'src/A.java', items:[piece('symbol:java:A', 1, CLASS_LINES)]},
+        [HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[piece(HANDLER, 3, CLASS_LINES.slice(2, 5))]}};
+    };
+
+    it('montre le code du type, la méthode choisie surlignée, avec le chemin et le type du nœud', async()=>{
+      serving();
+      const panel=await picked();
+      const reads=calls.filter(call=>call.operation==='get_source');
+      expect(reads.map(call=>String(call.arguments.reference)).sort((a, b)=>a.localeCompare(b)), 'la méthode et son type').toEqual(['symbol:java:A', HANDLER]);
+      expect(consents.filter(Boolean), 'chaque lecture de code porte son consentement, et seule elle').toEqual([{source:true}, {source:true}]);
+      expect(panel.querySelector('.type-pill')?.textContent).toBe('symbole');
+      const tile=panel.querySelector('[aria-label="Tuile de code"]') as HTMLElement;
+      expect(tile.querySelector('.code-head code')?.textContent).toBe('src/A.java');
+      expect(Array.from(tile.querySelectorAll('.code-number')).map(item=>item.textContent)).toEqual(['1', '2', '3', '4', '5', '6']);
+      expect(Array.from(tile.querySelectorAll('.code-line.selected .code-number')).map(item=>item.textContent)).toEqual(['3', '4', '5']);
+      expect(tile.textContent).toContain('méthode sélectionnée');
+      expect(tile.textContent).toContain('return B.run();');
+    });
+
+    it('garde les actions du nœud, copie la référence, et replie ce que la vue ne montre pas sous la tuile', async()=>{
+      serving();
+      const written:string[]=[];
+      Object.defineProperty(globalThis.navigator, 'clipboard', {configurable:true, value:{writeText:async(text:string)=>{written.push(text);}}});
+      const panel=await picked();
+      expect(Array.from(panel.querySelectorAll('button')).map(item=>item.textContent)).toEqual(expect.arrayContaining(['Développer', 'Recentrer', 'Copier la référence']));
+      await click(named(`Copier la référence ${HANDLER}`));
+      expect(written).toEqual([HANDLER]);
+      expect(panel.textContent).toContain('Référence copiée.');
+      const gaps=host.querySelector('details.explorer-gaps') as HTMLDetailsElement;
+      expect(gaps.open, 'replié avec un nœud choisi').toBe(false);
+      expect(gaps.querySelector('[aria-label="Ce que la vue ne montre pas"]'), 'rien n’est retiré').not.toBeNull();
+    });
+
+    it('dit le refus de Taxo tel quel, sans code inventé ni tuile vide', async()=>{
+      const panel=await picked();
+      expect(panel.querySelector('[aria-label="Tuile de code"]')).toBeNull();
+      expect(panel.querySelector('[role=alert]')?.textContent).toContain('Aucune déclaration écrite de ce symbole');
+    });
+
+    it('garde la méthode seule si son type est illisible, et dit ce que Taxo n’a pas transmis', async()=>{
+      source={[HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[piece(HANDLER, 3, CLASS_LINES.slice(2, 5))]}};
+      const panel=await picked();
+      const lines=Array.from(panel.querySelectorAll('.code-line')) as HTMLElement[];
+      expect(lines, 'le type refusé n’empêche pas la méthode').toHaveLength(3);
+      expect(lines.every(line=>line.classList.contains('selected'))).toBe(true);
+    });
+
+    it('dit pourquoi Taxo n’a pas transmis le code', async()=>{
+      source={[HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[], not_sent:[{what:'source', reason:'CONFIDENTIAL'}]}};
+      const panel=await picked();
+      expect(panel.textContent).toContain('le fichier est confidentiel');
+      expect(panel.querySelector('.code-line')).toBeNull();
+    });
+
+    it('dit quand la copie échoue, sans la supposer faite', async()=>{
+      serving();
+      Object.defineProperty(globalThis.navigator, 'clipboard', {configurable:true, value:{writeText:async()=>{throw new Error('refusé');}}});
+      const panel=await picked();
+      await click(named(`Copier la référence ${HANDLER}`));
+      expect(panel.textContent).toContain('Copie impossible');
+      expect(panel.textContent).not.toContain('Référence copiée.');
+    });
+
+    it('dit quand le consentement manque, et ce qui le lève sur le serveur', async()=>{
+      source={[HANDLER]:{error:{code:'NO_CONSENT', message:'La lecture du code n’a pas été autorisée pour cet échange.'}}};
+      const panel=await picked();
+      expect(panel.querySelector('[role=alert]')?.textContent).toContain('TAXO_SOURCE_READING=symbol');
+    });
+
+    it('dit un code coupé par Taxo, et un affichage borné autour de la méthode', async()=>{
+      const body=Array.from({length:200}, (_, index)=>`  line ${index+1};`);
+      source={'symbol:java:A':{reference:'symbol:java:A', commit:'c', path:'src/A.java', items:[{...piece('symbol:java:A', 1, body), truncated:true}]},
+        [HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[piece(HANDLER, 150, body.slice(149, 153))]}};
+      const panel=await picked();
+      expect(panel.querySelectorAll('.code-line')).toHaveLength(120);
+      expect(panel.textContent).toContain('Taxo a coupé le code à la limite de lecture');
+      expect(panel.textContent).toContain('Affichage borné à 120 lignes');
+      expect(panel.querySelector('.code-head .count-pill')?.textContent).toMatch(/^lignes \d+–\d+ sur 200$/);
+      expect(panel.querySelector('.code-line.selected')?.textContent).toContain('150');
+    });
+
+    it('ne demande aucun code pour un nœud qui n’est pas un symbole, et le dit', async()=>{
+      await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+      await click(host.querySelector('.chain-node.anchor'));
+      await wait();
+      expect(calls.filter(call=>call.operation==='get_source')).toHaveLength(0);
+      expect(host.querySelector('[aria-label="Nœud choisi"]')?.textContent).toContain('n’a pas de code propre');
+    });
   });
 });

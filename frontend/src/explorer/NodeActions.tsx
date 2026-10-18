@@ -1,5 +1,6 @@
 // Les actions sur un nœud de la vue : développer, voir la suite d'une adjacence coupée, recentrer. Aucune règle ici :
 // la coupure du nœud dit ce qui est possible.
+import {useState} from 'react';
 import type {Boundary} from './protocol';
 import {useNaming} from './Naming';
 
@@ -16,4 +17,19 @@ export function NodeActions({reference, boundary, commands, busy, anchor=false}:
     {!anchor&&<button type="button" className="ghost" disabled={busy} aria-label={`Recentrer sur ${name}`}
       onClick={()=>commands.recenter(reference)}>Recentrer</button>}
   </span>;
+}
+
+/** Copier la référence complète d'un nœud ; dit si la copie a eu lieu, sans jamais la supposer. */
+export function CopyReference({reference}:Readonly<{reference:string}>){
+  const [said,setSaid]=useState('');
+  async function copy(){
+    try{
+      await navigator.clipboard.writeText(reference);
+      setSaid('Référence copiée.');
+    }catch{setSaid('Copie impossible : sélectionnez la référence.');}
+  }
+  return <>
+    <button type="button" className="ghost" aria-label={`Copier la référence ${reference}`} onClick={copy}>Copier la référence</button>
+    <output className="explorer-said">{said}</output>
+  </>;
 }

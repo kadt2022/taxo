@@ -31,6 +31,25 @@ test('rechercher une ancre, développer, consulter une preuve', async({page})=>{
   expect(called.filter(path=>path.startsWith('/api/')&&!path.endsWith('/taxo-query'))).toEqual([]);
 });
 
+// Choisir un symbole du graphe ouvre sa tuile de code dans le panneau : le code lu au commit de l'analyse, la méthode choisie
+// surlignée dans son type. Le dessin du graphe n'est pas touché.
+test('choisir un symbole montre son code, la méthode surlignée', async({page})=>{
+  await page.goto('/#/explorer');
+  await page.getByRole('textbox', {name:'Point de départ'}).fill('GET /ad');
+  await page.getByRole('button', {name:/route GET \/admin\/users/}).click();
+  await expect(page.getByText(/éléments?, \d+ nœuds?\./)).toBeVisible();
+  await page.locator('.chain-node.tone-symbol').first().click();
+  const panel=page.getByRole('region', {name:'Nœud choisi'});
+  await expect(panel.locator('.type-pill')).toHaveText('symbole');
+  const tile=panel.getByRole('region', {name:'Tuile de code'});
+  await expect(tile).toBeVisible();
+  await expect(tile.locator('.code-head code')).toContainText('.java');
+  await expect(tile.locator('.code-line.selected').first()).toBeVisible();
+  await expect(tile.locator('.code-text').first()).not.toHaveText('');
+  await expect(panel.getByRole('button', {name:/^Copier la référence/})).toBeVisible();
+  await expect(page.locator('details.explorer-gaps')).not.toHaveAttribute('open', '');
+});
+
 /** Le rapport de contraste WCAG 2.x entre le texte d'un élément et son fond, lus dans le navigateur. */
 const contrast=(element:Locator)=>element.evaluate(node=>{
   const style=getComputedStyle(node);

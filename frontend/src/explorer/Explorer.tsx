@@ -8,16 +8,17 @@ import {useChoices} from '../pages';
 import {AnchorSearch} from './AnchorSearch';
 import {CalendarIcon, CallsIcon, ChainIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GearIcon, ListIcon, StackIcon} from './icons';
 import {Boundaries} from './Boundaries';
+import {CodeTile} from './CodeTile';
 import {CallsView} from './CallsView';
 import {ChainView} from './ChainView';
 import {linksOf, type View} from './graph';
 import {LayerView} from './LayerView';
 import {LinkPanel} from './LinkPanel';
 import {ListView} from './ListView';
-import {NodeActions, type NodeCommands} from './NodeActions';
-import {describe, openTile, queryOf, type Described, type Query, type TileDemand} from './protocol';
+import {CopyReference, NodeActions, type NodeCommands} from './NodeActions';
+import {describe, openTile, queryOf, sourceOf, type Described, type Query, type Source, type TileDemand} from './protocol';
 import {defaultRelations, relationChoices, type RelationChoice} from './relations';
-import {naming, nodeMarks, scopeText, viewText} from './sentences';
+import {naming, nodeMarks, scopeText, toneOf, typeText, viewText} from './sentences';
 import {NamingContext, useNaming} from './Naming';
 import {Settings} from './Settings';
 import {INITIAL, NO_TRAIL, PRESETS, addressOf, canGoBack, canGoForward, reduce, settingsOf, visit, type Action, type Selected,
@@ -44,6 +45,7 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
   const settings=settingsOf(route.params);
   const analysis=settings.analysis??scanId;
   const query=useMemo(()=>queryOf(request, base, analysis), [request, base, analysis]);
+  const source=useMemo(()=>sourceOf(request, base, analysis), [request, base, analysis]);
   const {described, error:describeError}=useDescribed(query, analysis);
   const choices=useMemo(()=>described?relationChoices(described):[], [described]);
   const relations=settings.relations.length?settings.relations:defaultRelations(choices);
@@ -101,7 +103,7 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
     {state.error&&<p role="alert" className="error">{state.error}</p>}
     {!settings.root&&<p className="muted">Aucun point de départ : recherchez une référence, ou ouvrez l’explorateur depuis une route, un module, un fichier ou un commit.</p>}
     {described&&settings.root&&!relations.length&&<p className="muted">Cette analyse n’a aucun fait à parcourir : aucune relation à suivre.</p>}
-    {state.view&&<Body view={state.view} selected={state.selected} dispatch={dispatch} commands={commands} busy={busy} query={query}
+    {state.view&&<Body view={state.view} selected={state.selected} dispatch={dispatch} commands={commands} busy={busy} query={query} source={source}
       shape={shape} onShape={setShape} choices={choices} followed={relations}
       onReload={()=>run('open', demand(settings.root!, settings.depth))}/>}
   </section></NamingContext.Provider>;
@@ -110,11 +112,11 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
 const NO_TYPES:string[]=[];
 
 type Shape='appels'|'chaine'|'couches'|'liste';
-type BodyProps={view:View; selected:Selected; dispatch:(action:Action)=>void; commands:NodeCommands; busy:boolean; query:Query;
+type BodyProps={view:View; selected:Selected; dispatch:(action:Action)=>void; commands:NodeCommands; busy:boolean; query:Query; source:Source;
   shape:Shape; onShape:(shape:Shape)=>void; onReload:()=>void; choices:RelationChoice[]; followed:string[]};
 
 /** La vue reçue : son état vide s'il y en a un, sinon les appels, la chaîne, les couches ou la liste, le détail choisi et les frontières. */
-function Body({view, selected, dispatch, commands, busy, query, shape, onShape, onReload, choices, followed}:Readonly<BodyProps>){
+function Body({view, selected, dispatch, commands, busy, query, source, shape, onShape, onReload, choices, followed}:Readonly<BodyProps>){
   const named=useNaming();
   const links=useMemo(()=>linksOf(view), [view]);
   // Le panneau latéral est replié en languette (avec le nombre de coupures et de lacunes) ; choisir un nœud ou un lien le
@@ -152,10 +154,18 @@ function Body({view, selected, dispatch, commands, busy, query, shape, onShape, 
         <button type="button" className="ghost explorer-side-close" aria-expanded="true" aria-controls="explorer-side"
           onClick={()=>setSide(false)}>Masquer le panneau<ChevronRightIcon/></button>
         {link&&<LinkPanel key={link.identity} link={link} query={query} onClose={()=>select(null)}/>}
-        {node&&<section className="explorer-panel" aria-label="Nœud choisi"><h3>{named(node.reference)}</h3><code>{node.reference}</code>
+        {node&&<section className="explorer-panel node-panel" aria-label="Nœud choisi">
+          <span className={`type-pill tone-${toneOf(node.reference)}`}>{typeText(node.reference)}</span>
+          <h3>{named(node.reference)}</h3><code>{node.reference}</code>
           <p className="muted">Niveau {node.level}{nodeMarks(node, view.selection[node.reference], view.knowledge).map(mark=>` · ${mark}`).join('')}</p>
-          <NodeActions reference={node.reference} boundary={view.selection[node.reference]} commands={commands} busy={busy} anchor={node.reference===view.anchor}/></section>}
-        <Boundaries view={view} commands={commands} busy={busy}/>
+          <div className="node-panel-actions">
+            <NodeActions reference={node.reference} boundary={view.selection[node.reference]} commands={commands} busy={busy} anchor={node.reference===view.anchor}/>
+            <CopyReference reference={node.reference}/></div>
+          <CodeTile key={node.reference} reference={node.reference} source={source}/></section>}
+        {/* Avec un nœud choisi, ce que la vue ne montre pas se replie sous sa tuile : rien n'en est retiré. */}
+        <details className="explorer-gaps" key={node?'node':'none'} open={!node}>
+          <summary>Ce que la vue ne montre pas <span className="count-pill">{gaps}</span></summary>
+          <Boundaries view={view} commands={commands} busy={busy}/></details>
       </div>
     </div>
   </>;
