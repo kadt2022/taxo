@@ -279,3 +279,127 @@ def test_a_turn_with_its_unused_fields_left_empty_is_read():
     assert targeting.parse(turn(action='read', numbers=[2, 3])) == ('read', [2, 3])
     assert targeting.parse(turn(action='none')) == ('none', None)
     assert targeting.parse(turn(text='Réponse.')) == ('answer', 'Réponse.')
+
+
+# --- Corrections d'orchestration constatées sur TAKIBO (Claude Sonnet) ----------------------------------------------------
+
+def test_without_calls_left_the_guard_keeps_the_answer_marked_partial(make_repo, tmp_path, monkeypatch):
+    monkeypatch.setenv('MINIA_TARGET_TURNS', '2')
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    model = Scripted(target(ROUTE), conclude('Réponse sur le code reçu.'))
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    assert len(model.calls) == 2, 'plus aucun appel : la garde ne renvoie pas la conclusion'
+    assert result['mode'] == 'exploration', 'jamais de repli qui jetterait la réponse'
+    assert result['statements'][0]['text'] == 'Réponse sur le code reçu.'
+    assert result['partial'] is True
+    assert result['statements'][-1]['text'].startswith('Réponse partielle, non vérifiée : établie sans avoir lu #2')
+
+
+def test_an_answer_returned_by_the_guard_stays_the_answer_when_calls_run_out(make_repo, tmp_path, monkeypatch):
+    """Le cas de TAKIBO : une réponse renvoyée par la garde, puis des lectures jusqu'à épuiser les 6 appels par défaut.
+    Avant, Minia déclarait « ne progressait plus » et repartait en mode paquet, qui jetait la réponse."""
+    monkeypatch.delenv('MINIA_TARGET_TURNS', raising=False)
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    repli = json.dumps({'cited': [], 'answer': 'Repli.', 'unknown': ''})
+    model = Scripted(target(ROUTE), conclude('Première réponse.'), read(9), read(9), read(9), read(9), repli)
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    assert len(model.calls) == 6, 'les 6 appels sont faits, pas un de plus'
+    assert result['mode'] == 'exploration', 'pas de repli paquet'
+    assert result['statements'][0]['text'] == 'Première réponse.', 'la réponse rendue n’est pas perdue'
+    assert result['returned'] == ['#2']
+    assert result['partial'] is True, '#2 n’a jamais été lu : la réponse reste partielle et non vérifiée'
+
+
+def test_a_java_signature_stays_whole_when_targets_are_split():
+    from app.minia.application import targeting
+    assert targeting.split('PolicyEvaluator.evaluate(Subject,Resource,Action,Environment), Item') == [
+        'PolicyEvaluator.evaluate(Subject,Resource,Action,Environment)', 'Item']
+    assert targeting.split('C1, C2') == ['C1', 'C2']
+    assert targeting.split('a(b,c)), d') == ['a(b,c))', 'd'], 'une parenthèse de trop ne bloque pas la suite'
+
+
+def test_resolved_targets_are_served_and_only_ambiguous_names_become_candidates(make_repo, tmp_path, monkeypatch):
+    model = Scripted(target('ItemRepository.save, add'), conclude())
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    reply = sent(model, 1)
+    assert 'Parcours depuis ItemRepository.save(Long)' in reply, 'la cible résolue est servie tout de suite'
+    assert 'C1 ItemController.add(Long)' in reply
+    assert 'C2 ItemService.add(Long)' in reply
+    assert 'C3' not in reply, 'la cible résolue n’est pas mêlée aux candidats'
+    assert [step['operation'] for step in result['trajectory']].count(paths.OPERATION) == 1
+
+
+def test_a_path_already_served_and_a_search_already_made_are_not_redone(make_repo, tmp_path, monkeypatch):
+    model = Scripted(target('ItemRepository.save'), target('ItemRepository.save'), conclude())
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    operations = [step['operation'] for step in result['trajectory']]
+    assert operations == ['find_references', paths.OPERATION], 'ni seconde recherche ni second chemin'
+    assert 'Déjà transmis plus haut dans ce dialogue : ItemRepository.save(Long).' in sent(model, 2)
+
+
+def test_the_number_of_calls_is_a_setting(monkeypatch):
+    from app.minia.application.ask import AskMinia, Views
+    monkeypatch.delenv('MINIA_TARGET_TURNS', raising=False)
+    assert settings.minia_target_turns() == 6
+    assert settings.minia_target_turns('8') == 8
+    for wrong in ('1', '21', 'huit'):
+        with pytest.raises(ValueError, match='MINIA_TARGET_TURNS'):
+            settings.minia_target_turns(wrong)
+    too_few = Views(target_turns=1)
+    with pytest.raises(ValueError, match='MINIA_TARGET_TURNS'):
+        AskMinia(None, {}, None, views=too_few)
+
+
+def test_anchoring_steps_carry_their_size():
+    from app.minia.application import anchoring
+    step = anchoring._step('find_references', {}, {'outcome': 'OK', 'bytes': 4012, 'items': []})
+    assert step['bytes'] == 4012, 'le portail affiche la taille de chaque étape (« undefined octets » sinon)'
+
+
+# --- Remarques de revue de la PR #173 (Codex) ---------------------------------------------------------------------------
+
+def test_an_answer_given_before_code_served_later_is_never_presented_as_complete(make_repo, tmp_path, monkeypatch):
+    monkeypatch.setenv('MINIA_TARGET_TURNS', '4')
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    model = Scripted(target(ROUTE), conclude('Première réponse.'), read(2), read(3))
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    assert result['returned'] == ['#2'], 'la garde a renvoyé la conclusion'
+    assert result['statements'][0]['text'] == 'Première réponse.'
+    assert result['partial'] is True, 'du code est arrivé après la réponse : elle n’est pas présentée comme complète'
+    assert any(statement['text'].startswith('Réponse partielle, non vérifiée : rendue avant la lecture du code transmis '
+                                            'ensuite (tuiles #2') for statement in result['statements'])
+
+
+def test_the_guard_returns_a_conclusion_only_when_it_can_be_revised(make_repo, tmp_path, monkeypatch):
+    monkeypatch.setenv('MINIA_TARGET_TURNS', '3')
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    model = Scripted(target(ROUTE), conclude('Réponse.'))
+    result = run(make_repo, tmp_path, monkeypatch, model)
+    assert len(model.calls) == 2, 'un seul appel restant : lire puis reconclure est impossible, la réponse est gardée'
+    assert 'returned' not in result
+    assert result['partial'] is True
+
+
+class _Names:
+    """Un échange qui rend, pour chaque nom, des méthodes homonymes dans plusieurs classes."""
+    snapshot = {'analysis': 'a', 'commit': 'c1'}
+
+    def __init__(self, per_name):
+        self.per_name = per_name
+
+    def call(self, request):
+        name = request['arguments']['prefix']
+        items = [{'reference': f'symbol:java:p.C{index}#{name}()', 'type': 'symbol'} for index in range(self.per_name)]
+        return {'outcome': 'OK', 'items': items, 'bytes': 100}
+
+    def query(self, **_):
+        return []
+
+
+def test_the_candidate_cap_applies_to_the_combined_list():
+    from app.minia.application import targeting
+    found = targeting.resolve(_Names(6), 'save, load', set(), [])
+    assert found.candidates == [], 'deux noms ambigus de 6 méthodes chacun : 12 candidats, au-delà du plafond de 10'
+    assert found.too_many == [('cette demande', 12)]
+    small = targeting.resolve(_Names(4), 'save, load', set(), [])
+    assert len(small.candidates) == 8, 'sous le plafond, les candidats combinés sont proposés'

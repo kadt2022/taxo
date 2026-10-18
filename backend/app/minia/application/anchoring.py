@@ -37,7 +37,8 @@ class Anchored:
 
 
 def _step(operation, arguments, response):
-    entry = {'operation': operation, 'arguments': arguments, 'outcome': response['outcome']}
+    # La taille de la réponse, comme toute étape de la trajectoire (le portail l'affiche).
+    entry = {'operation': operation, 'arguments': arguments, 'outcome': response['outcome'], 'bytes': response.get('bytes')}
     if response['outcome'] == OK:
         entry.update(items=len(response.get('items', response.get('facts', []))),
                      not_sent=response.get('not_sent', []))

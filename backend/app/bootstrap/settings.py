@@ -83,6 +83,18 @@ def minia_path_mode(value=None):
     return chosen
 
 
+def minia_target_turns(value=None):
+    """Les appels au LLM d'un dialogue de la cible B (MINIA_TARGET_TURNS) : 6 par défaut, de 2 à 20."""
+    raw = value if value is not None else os.getenv('MINIA_TARGET_TURNS', '6')
+    try:
+        chosen = int(str(raw).strip())
+    except ValueError as exc:
+        raise ValueError(f'MINIA_TARGET_TURNS invalide : {raw} (un entier de 2 à 20).') from exc
+    if not 2 <= chosen <= 20:
+        raise ValueError(f'MINIA_TARGET_TURNS invalide : {chosen} (un entier de 2 à 20).')
+    return chosen
+
+
 def minia_source_context(value=None):
     """Code source que Minia peut recevoir : `off` (defaut, aucun) ou `diff` (le diff d'un commit, sur
     accord de chaque demande). Avec un Ollama distant, `diff` fait sortir du code de la machine."""
