@@ -31,6 +31,8 @@ NO_CODE_YET = 'Aucun code reçu : désigne d’abord une cible (action "target")
 EXHAUSTED = 'L’échange avec Taxo est épuisé : conclus avec le code déjà reçu (action "answer").'
 ALREADY = 'Déjà transmis plus haut dans ce dialogue : {}.'
 PARTIAL = 'Réponse partielle, non vérifiée : établie sans avoir lu {} (dépendances directes du parcours).'
+STALE = ('Réponse partielle, non vérifiée : rendue avant la lecture du code transmis ensuite ({}), qu’elle ne prend pas '
+         'en compte.')
 SEVERAL = ('Plusieurs parcours : l’action "read" porte sur le dernier ; pour lire une tuile d’un autre parcours, '
            'redésigne sa cible seule.')
 _CANDIDATE = re.compile(r'[Cc](\d+)')
@@ -186,6 +188,10 @@ def resolve(exchange, target, known_endpoints, pending, limit=MAX_TARGETS, cache
             found.candidates += [candidate for candidate in ambiguous if candidate not in found.candidates]
         else:
             found.unknown.append(item)
+    if len(found.candidates) > MAX_CANDIDATES:
+        # Le plafond vaut pour la liste combinée : plusieurs noms ambigus ne font pas un menu démesuré.
+        found.too_many.append(('cette demande', len(found.candidates)))
+        found.candidates = []
     return found
 
 

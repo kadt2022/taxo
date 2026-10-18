@@ -412,9 +412,26 @@ class _Targeting:
         self.menu, self.known = targeting.menu(exchange)
         self.trajectory, self.exchanged, self.turns, self.pending, self.guarded = [], [], [], [], []
         self.calls, self.premature, self.answer, self.searches = 0, False, None, {}
+        self.answered = 0  # la place de la réponse gardée dans l'échange : ce qui la suit, elle ne l'a pas vu
 
     def left(self):
         return self.max_turns - self.calls
+
+    def final(self):
+        """Sans appel restant : la réponse déjà rendue (jamais perdue), ou un arrêt si aucune ne l'a été. None tant
+        qu'il reste un appel."""
+        if self.left() > 0:
+            return None
+        if self.answer is None:
+            raise MiniaError(INVALID_ANSWER, STALLED)
+        return self.answer
+
+    def unseen(self):
+        """Le code livré après la réponse gardée : des tuiles qu'elle n'a pas vues."""
+        return [targeting.short(item['arguments']['reference']) if item['operation'] == paths.OPERATION
+                else 'tuiles ' + ', '.join(f'#{tile["number"]}' for tile in item['response']['tiles'])
+                for item in self.exchanged[self.answered:]
+                if item['operation'] in (paths.OPERATION, paths.READ) and item['response'].get('tiles')]
 
     def message(self, question):
         calls_left = self.left()
@@ -461,9 +478,10 @@ class _Targeting:
             self.premature = True
             self.turns.append(('ta conclusion', targeting.NO_CODE_YET))
             return False
-        self.answer = answer
+        self.answer, self.answered = answer, len(self.exchanged)
         missed = targeting.unread(self.exchanged)
-        if missed and not self.guarded and self.left() > 0:
+        # Renvoyée seulement s'il reste de quoi lire puis reconclure : sinon la réponse est gardée, marquée partielle.
+        if missed and not self.guarded and self.left() >= 2:
             self.guarded = missed
             trace.note(f'GARDE cible B : non lus {missed}')
             self.turns.append(('ta conclusion', targeting.recall(missed)))
@@ -521,14 +539,17 @@ class _Targeting:
 
     def completed(self, model, result, answer):
         statements = [{'type': exploration.INTERPRETATION, 'text': answer}]
-        missed = targeting.unread(self.exchanged)
+        missed, unseen = targeting.unread(self.exchanged), self.unseen()
         if missed:
             statements.append({'type': exploration.UNKNOWN, 'text': targeting.PARTIAL.format(', '.join(missed))})
+        if unseen:
+            statements.append({'type': exploration.UNKNOWN, 'text': targeting.STALE.format(', '.join(unseen))})
         ledger = getattr(model, 'ledger', None)
         usage = {} if ledger is None else {'usage': ledger.report(self.trajectory)}
         return {**result, 'status': ANSWERED, 'mode': EXPLORATION, 'path_mode': paths.TARGET, 'statements': statements,
                 'trajectory': self.trajectory, 'budget': {'max_bytes': self.exchange.budget, 'used': self.exchange.used},
-                **usage, **({'returned': self.guarded} if self.guarded else {}), **({'partial': True} if missed else {})}
+                **usage, **({'returned': self.guarded} if self.guarded else {}),
+                **({'partial': True} if missed or unseen else {})}
 
 
 class AskMinia:
@@ -1080,12 +1101,7 @@ class AskMinia:
         capacity = self._capacity(model, targeting.SYSTEM)
         state = _Targeting(exchange, self.target_turns)
         try:
-            while True:
-                if state.left() <= 0:
-                    if state.answer is None:
-                        raise MiniaError(INVALID_ANSWER, STALLED)
-                    value = state.answer  # la réponse déjà rendue reste la réponse : jamais perdue
-                    break
+            while (value:=state.final()) is None:
                 action, value, text = yield from state.turn(model, question, cancel)
                 if action == targeting.NONE:
                     # Aucun code à lire (historique, couverture…) : l'exploration classique, sur le même échange.
@@ -1093,12 +1109,11 @@ class AskMinia:
                     yield from self._explore(model, question, exchange, [], None, result, packet, cancel,
                                              prior=(state.trajectory, state.exchanged))
                     return
-                if action == targeting.ANSWER:
-                    if state.concluded(value):
-                        break
-                    continue
-                space = None if capacity is None else max(capacity - len(text.encode('utf-8')) - TURN_MARGIN, 1)
-                yield from state.serve(action, value, space, cancel)
+                if action == targeting.ANSWER and state.concluded(value):
+                    break
+                if action != targeting.ANSWER:
+                    space = None if capacity is None else max(capacity - len(text.encode('utf-8')) - TURN_MARGIN, 1)
+                    yield from state.serve(action, value, space, cancel)
         except MiniaError as exc:
             if exc.code not in _EXPLORATION_FAILURES:
                 raise
