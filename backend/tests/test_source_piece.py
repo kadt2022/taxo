@@ -179,3 +179,33 @@ def test_the_history_reads_a_file_with_the_refusals_of_the_diff(blob, content, e
 def test_a_confidential_file_is_never_opened():
     reader = _Reader(Blob('o', '100644', 4), b'SECRET=1\n')
     assert _history(reader).source('p', 'c1', 'config/.env') == (None, CONFIDENTIAL) and reader.calls == []
+
+
+def test_a_truncated_piece_never_ends_on_a_blank_line(monkeypatch):
+    """Un texte qui finirait par un saut de ligne ferait perdre une ligne à qui compte avec `splitlines()`."""
+    monkeypatch.setattr(policy, 'MAX_SOURCE_LINES', 3)
+    source = b'a\nb\n\nc\nd\n'
+    cut = policy.piece(source, 1, 5)
+    assert cut.truncated and (cut.line_start, cut.line_end, cut.declared_end) == (1, 2, 5)
+    assert cut.text == 'a\nb' and not cut.text.endswith('\n')
+    assert len(cut.text.splitlines()) == cut.line_end - cut.line_start + 1, 'les lignes comptées égalent la plage annoncée'
+    assert cut.content_hash == content_hash(source, 1, 2), 'l’empreinte est celle de ce qui est transmis'
+
+
+def test_several_blank_lines_at_the_cut_are_all_left_out(monkeypatch):
+    monkeypatch.setattr(policy, 'MAX_SOURCE_LINES', 4)
+    cut = policy.piece(b'a\n\n\n\nb\n', 1, 5)
+    assert (cut.line_end, cut.text) == (1, 'a') and cut.truncated
+
+
+def test_a_piece_of_blank_lines_only_gives_nothing(monkeypatch):
+    monkeypatch.setattr(policy, 'MAX_SOURCE_LINES', 2)
+    assert policy.piece(b'\n\n\nx\n', 1, 4) is None
+
+
+def test_a_piece_that_is_not_cut_keeps_its_declared_range(monkeypatch):
+    whole = policy.piece(b'a\n\nb\n', 1, 3)
+    assert not whole.truncated and (whole.line_end, whole.text) == (3, 'a\n\nb')
+    monkeypatch.setattr(policy, 'MAX_SOURCE_LINES', 3)
+    exact = policy.piece(b'a\nb\n\n', 1, 3)
+    assert not exact.truncated and exact.line_end == 3, 'une plage qui tient entière n’est pas rognée'
