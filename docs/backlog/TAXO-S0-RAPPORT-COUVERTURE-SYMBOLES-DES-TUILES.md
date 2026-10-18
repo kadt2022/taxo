@@ -85,7 +85,7 @@ Noms non résolus les plus fréquents : `String` (12 méthodes), `Override` (9),
   Un seul projet et un seul commit : ces valeurs décrivent cette exécution, pas Taxo en général.
 - **La durée de l'analyse n'est pas un résultat de ce rapport** : elle a varié de 47 à 190 secondes selon l'exécution et la mise
   en place sur la même machine, sans cause établie.
-- Les défauts de fidélité (`line_end` d'une pièce coupée) ne sont pas mesurés ici ; ils font l'objet du critère A4.
+- La fidélité du code restitué (pièce coupée sur une ligne vide, plages de lignes) n'est pas mesurée ici ; elle fait l'objet du critère A4.
 
 ## 5. Ce que S0 dit des lots suivants
 
