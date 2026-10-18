@@ -46,6 +46,11 @@ test('choisir un symbole montre son code, la méthode surlignée', async({page})
   await expect(tile.locator('.code-head code')).toContainText('.java');
   await expect(tile.locator('.code-line.selected').first()).toBeVisible();
   await expect(tile.locator('.code-text').first()).not.toHaveText('');
+  // Le code occupe la place la plus haute du panneau, et le schéma reste la plus grande zone.
+  const [codeTop, pillTop]=await Promise.all([tile.boundingBox(), panel.locator('.type-pill').boundingBox()]);
+  expect(codeTop!.y, 'la tuile de code est au-dessus de l’identité du nœud').toBeLessThan(pillTop!.y);
+  const [graph, side]=await Promise.all([page.locator('.chain-frame').boundingBox(), page.locator('.explorer-side').boundingBox()]);
+  expect(graph!.width, 'le schéma reste plus grand que le panneau').toBeGreaterThan(side!.width);
   await expect(panel.getByRole('button', {name:/^Copier la référence/})).toBeVisible();
   await expect(page.locator('details.explorer-gaps')).not.toHaveAttribute('open', '');
 });

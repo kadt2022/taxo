@@ -942,7 +942,8 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .explorer-tabs button:hover{background:var(--surface-3);color:var(--text)}
 .explorer-tabs button[aria-pressed=true]{background:var(--brand);color:#f4ffe8;box-shadow:inset 0 -3px 0 var(--accent)}
 .explorer-tabs button:focus-visible{position:relative;z-index:1}
-.explorer-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:16px;align-items:start}
+/* Le panneau latéral s'élargit pour le code, sans jamais dépasser la moitié : le schéma reste la plus grande zone. */
+.explorer-body{display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,44%,680px);gap:16px;align-items:start}
 .explorer-body.closed{grid-template-columns:minmax(0,1fr) 46px;gap:12px}
 .explorer-side[hidden]{display:none}
 .explorer-side-tab{display:flex;flex-direction:column;align-items:center;gap:12px;align-self:start;min-height:200px;padding:14px 0;border:0;
@@ -1106,7 +1107,8 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .node-panel-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0}
 .node-panel-actions .explorer-actions{display:inline-flex;flex-wrap:wrap;gap:6px}
 .explorer-said{font-size:12.5px;color:var(--muted)}
-.code-tile{margin-top:10px;display:grid;gap:6px;min-width:0}
+.code-tile{display:grid;gap:6px;min-width:0}
+.node-identity{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
 .code-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0}
 .code-head code{flex:1 1 100%;font-size:12px}
 .count-pill.selected{background:var(--accent);color:var(--accent-ink)}

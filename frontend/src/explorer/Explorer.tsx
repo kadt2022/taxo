@@ -154,14 +154,16 @@ function Body({view, selected, dispatch, commands, busy, query, source, shape, o
         <button type="button" className="ghost explorer-side-close" aria-expanded="true" aria-controls="explorer-side"
           onClick={()=>setSide(false)}>Masquer le panneau<ChevronRightIcon/></button>
         {link&&<LinkPanel key={link.identity} link={link} query={query} onClose={()=>select(null)}/>}
+        {/* Le code d'abord, à la place la plus haute du panneau ; ce qui identifie le nœud et ses actions viennent dessous. */}
         {node&&<section className="explorer-panel node-panel" aria-label="Nœud choisi">
-          <span className={`type-pill tone-${toneOf(node.reference)}`}>{typeText(node.reference)}</span>
-          <h3>{named(node.reference)}</h3><code>{node.reference}</code>
-          <p className="muted">Niveau {node.level}{nodeMarks(node, view.selection[node.reference], view.knowledge).map(mark=>` · ${mark}`).join('')}</p>
-          <div className="node-panel-actions">
-            <NodeActions reference={node.reference} boundary={view.selection[node.reference]} commands={commands} busy={busy} anchor={node.reference===view.anchor}/>
-            <CopyReference reference={node.reference}/></div>
-          <CodeTile key={node.reference} reference={node.reference} source={source}/></section>}
+          <CodeTile key={node.reference} reference={node.reference} source={source}/>
+          <div className="node-identity">
+            <span className={`type-pill tone-${toneOf(node.reference)}`}>{typeText(node.reference)}</span>
+            <h3>{named(node.reference)}</h3><code>{node.reference}</code>
+            <p className="muted">Niveau {node.level}{nodeMarks(node, view.selection[node.reference], view.knowledge).map(mark=>` · ${mark}`).join('')}</p>
+            <div className="node-panel-actions">
+              <NodeActions reference={node.reference} boundary={view.selection[node.reference]} commands={commands} busy={busy} anchor={node.reference===view.anchor}/>
+              <CopyReference reference={node.reference}/></div></div></section>}
         {/* Avec un nœud choisi, ce que la vue ne montre pas se replie sous sa tuile : rien n'en est retiré. */}
         <details className="explorer-gaps" key={node?'node':'none'} open={!node}>
           <summary>Ce que la vue ne montre pas <span className="count-pill">{gaps}</span></summary>
