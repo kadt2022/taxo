@@ -455,6 +455,11 @@ describe('l’explorateur', ()=>{
       expect(Array.from(tile.querySelectorAll('.code-line.selected .code-number')).map(item=>item.textContent)).toEqual(['3', '4', '5']);
       expect(tile.textContent).toContain('méthode sélectionnée');
       expect(tile.textContent).toContain('return B.run();');
+      const kinds=(selector:string)=>Array.from(tile.querySelectorAll(selector)).map(item=>item.textContent);
+      expect(kinds('.tk-keyword'), 'le code est coloré comme dans un éditeur').toEqual(expect.arrayContaining(['public', 'return']));
+      expect(kinds('.tk-type')).toEqual(expect.arrayContaining(['String']));
+      expect(kinds('.tk-method')).toEqual(expect.arrayContaining(['get', 'run']));
+      expect(Array.from(tile.querySelectorAll('.code-text')).map(item=>item.textContent).join('\n'), 'la coloration ne change pas le texte').toBe(CLASS_LINES.join('\n'));
     });
 
     it('garde les actions du nœud, copie la référence, et replie ce que la vue ne montre pas sous la tuile', async()=>{
@@ -462,7 +467,8 @@ describe('l’explorateur', ()=>{
       const written:string[]=[];
       Object.defineProperty(globalThis.navigator, 'clipboard', {configurable:true, value:{writeText:async(text:string)=>{written.push(text);}}});
       const panel=await picked();
-      expect(Array.from(panel.querySelectorAll('button')).map(item=>item.textContent)).toEqual(expect.arrayContaining(['Développer', 'Recentrer', 'Copier la référence']));
+      expect(Array.from(panel.querySelectorAll('button')).map(item=>item.textContent)).toEqual(expect.arrayContaining(['Ouvrir', 'Développer', 'Recentrer', 'Copier la référence']));
+      expect(named('Ouvrir dans l’éditeur (pas encore branché)')?.hasAttribute('disabled'), 'la place est prête, le branchement viendra').toBe(true);
       await click(named(`Copier la référence ${HANDLER}`));
       expect(written).toEqual([HANDLER]);
       expect(panel.textContent).toContain('Référence copiée.');

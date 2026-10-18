@@ -4,6 +4,13 @@ import {useState} from 'react';
 import type {Boundary} from './protocol';
 import {useNaming} from './Naming';
 
+/** Ouvrir le fichier du nœud dans l'éditeur de l'utilisateur (un IDE, VS Code) : la place est prête, le branchement viendra
+ * plus tard ; le bouton le dit au lieu de ne rien faire en silence. */
+export function OpenInEditor(){
+  return <button type="button" className="ghost" disabled aria-label="Ouvrir dans l’éditeur (pas encore branché)"
+    title="Bientôt : ouvrir ce fichier dans votre éditeur">Ouvrir</button>;
+}
+
 export type NodeCommands={expand:(reference:string)=>void; more:(reference:string)=>void; recenter:(reference:string)=>void};
 
 export function NodeActions({reference, boundary, commands, busy, anchor=false}:Readonly<{reference:string; boundary?:Boundary;

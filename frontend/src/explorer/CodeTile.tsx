@@ -46,7 +46,8 @@ export function CodeTile({reference, source}:Readonly<{reference:string; source:
       {tile.selected&&<span className="count-pill selected">méthode sélectionnée</span>}</p>
     <pre className="code-lines" tabIndex={0} aria-label={`Code de ${reference}`}>{tile.lines.map(line=>
       <span key={line.number} className={line.selected?'code-line selected':'code-line'} data-selected={line.selected||undefined}>
-        <span className="code-number" aria-hidden="true">{line.number}</span><span className="code-text">{line.text||' '}</span></span>)}</pre>
+        <span className="code-number" aria-hidden="true">{line.number}</span><span className="code-text">{line.tokens.length?line.tokens.map((token, index)=>
+          <span key={`${index}:${token.kind}`} className={`tk tk-${token.kind}`}>{token.text}</span>):' '}</span></span>)}</pre>
     {tile.truncated&&<p className="muted code-note">Taxo a coupé le code à la limite de lecture (200 lignes, 16 Ko) : la suite n’est pas transmise.</p>}
     {tile.lines.length<tile.total&&<p className="muted code-note">Affichage borné à {MAX_SHOWN} lignes autour de la sélection.</p>}
   </section>;

@@ -1,6 +1,7 @@
 // Le code d'un nœud choisi (récit « Explorer — tuile de code »). Aucune règle de graphe : ce module lit ce que Taxo a servi
 // (`get_source`) et en fait des lignes numérotées, bornées, dont celles de la méthode choisie sont désignées.
 import type {SourcePiece} from './protocol';
+import {highlight, languageOf, type Token} from './highlight';
 import {compartments, nodeType} from './sentences';
 
 /** Au plus ce nombre de lignes à l'écran : plus long, la fenêtre suit la méthode choisie. */
@@ -24,7 +25,7 @@ export function ownerOf(reference:string){
   return at<0?reference:reference.slice(0, at);
 }
 
-export type Line={number:number; text:string; selected:boolean};
+export type Line={number:number; text:string; tokens:Token[]; selected:boolean};
 export type Tile={path:string; lines:Line[]; first:number; last:number; total:number; truncated:boolean; selected:boolean;
   from:'type'|'method'};
 
@@ -40,8 +41,10 @@ export function tileOf(piece:SourcePiece, owner?:SourcePiece|null):Tile{
   const selects=!!owner||piece.reference.includes('(');
   const base=owner&&owner.line_start<=piece.line_start&&owner.line_start+linesOf(owner).length-1>=piece.line_end?owner:piece;
   const all=linesOf(base);
+  // Coloré sur toute la pièce, avant d'être borné : un commentaire qui s'ouvre plus haut colore encore la fenêtre.
+  const colored=highlight(all.map(line=>line.text), languageOf(base.path));
   const marked=selects?{from:piece.line_start, to:piece.line_end}:null;
-  const lines=all.map(line=>({...line, selected:!!marked&&line.number>=marked.from&&line.number<=marked.to}));
+  const lines=all.map((line, index)=>({...line, tokens:colored[index], selected:!!marked&&line.number>=marked.from&&line.number<=marked.to}));
   const window=lines.length>MAX_SHOWN?slice(lines, marked?.from):lines;
   return {path:base.path, lines:window, first:window[0].number, last:window[window.length-1].number, total:all.length,
     truncated:base.truncated, selected:!!marked, from:base===owner||!selects?'type':'method'};

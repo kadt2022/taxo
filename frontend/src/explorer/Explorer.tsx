@@ -15,7 +15,7 @@ import {linksOf, type View} from './graph';
 import {LayerView} from './LayerView';
 import {LinkPanel} from './LinkPanel';
 import {ListView} from './ListView';
-import {CopyReference, NodeActions, type NodeCommands} from './NodeActions';
+import {CopyReference, NodeActions, OpenInEditor, type NodeCommands} from './NodeActions';
 import {describe, openTile, queryOf, sourceOf, type Described, type Query, type Source, type TileDemand} from './protocol';
 import {defaultRelations, relationChoices, type RelationChoice} from './relations';
 import {naming, nodeMarks, scopeText, toneOf, typeText, viewText} from './sentences';
@@ -162,6 +162,7 @@ function Body({view, selected, dispatch, commands, busy, query, source, shape, o
             <h3>{named(node.reference)}</h3><code>{node.reference}</code>
             <p className="muted">Niveau {node.level}{nodeMarks(node, view.selection[node.reference], view.knowledge).map(mark=>` · ${mark}`).join('')}</p>
             <div className="node-panel-actions">
+              <OpenInEditor/>
               <NodeActions reference={node.reference} boundary={view.selection[node.reference]} commands={commands} busy={busy} anchor={node.reference===view.anchor}/>
               <CopyReference reference={node.reference}/></div></div></section>}
         {/* Avec un nœud choisi, ce que la vue ne montre pas se replie sous sa tuile : rien n'en est retiré. */}

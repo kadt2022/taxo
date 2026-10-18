@@ -46,6 +46,11 @@ test('choisir un symbole montre son code, la méthode surlignée', async({page})
   await expect(tile.locator('.code-head code')).toContainText('.java');
   await expect(tile.locator('.code-line.selected').first()).toBeVisible();
   await expect(tile.locator('.code-text').first()).not.toHaveText('');
+  // Le code est coloré comme dans un éditeur, et sa barre de défilement est sombre : aucune bande claire dans le bloc.
+  await expect(tile.locator('.tk-keyword').first()).toBeVisible();
+  await expect(tile.locator('.tk-annotation').first()).toBeVisible();
+  expect(await tile.locator('.code-lines').evaluate(node=>getComputedStyle(node).colorScheme)).toBe('dark');
+  await expect(panel.getByRole('button', {name:/^Ouvrir/})).toBeDisabled();
   // Le code occupe la place la plus haute du panneau, et le schéma reste la plus grande zone.
   const [codeTop, pillTop]=await Promise.all([tile.boundingBox(), panel.locator('.type-pill').boundingBox()]);
   expect(codeTop!.y, 'la tuile de code est au-dessus de l’identité du nœud').toBeLessThan(pillTop!.y);

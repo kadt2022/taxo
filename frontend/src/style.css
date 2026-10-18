@@ -1112,12 +1112,15 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .code-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0}
 .code-head code{flex:1 1 100%;font-size:12px}
 .count-pill.selected{background:var(--accent);color:var(--accent-ink)}
-.code-lines{margin:0;max-height:min(60vh,520px);overflow:auto;padding:10px 0;border-radius:var(--r);background:#0f1f1a;color:#e3eee7;
-  font:12.5px/1.6 var(--mono),monospace;border:1px solid #1d3a30}
+.code-lines{margin:0;max-height:min(70vh,680px);overflow:auto;padding:10px 0;border-radius:var(--r);background:#0f1f1a;color:#d4d4d4;
+  font:12.5px/1.6 var(--mono),monospace;border:1px solid #1d3a30;color-scheme:dark;scrollbar-color:#3d5c4f #0f1f1a}
 .code-lines:focus-visible{outline:none;box-shadow:var(--ring)}
-.code-line{display:flex;min-width:max-content;padding-right:14px}
+.code-line{display:flex;width:max-content;min-width:100%;padding-right:14px;box-sizing:border-box}
 .code-number{flex:none;width:44px;padding-right:12px;text-align:right;color:#6f8f81;user-select:none;font-variant-numeric:tabular-nums}
 .code-text{white-space:pre}
+/* Les couleurs d'un éditeur sombre : une teinte par sorte d'élément, la même pour tout langage coloré. */
+.tk-keyword{color:#569cd6}.tk-type{color:#4ec9b0}.tk-string{color:#ce9178}.tk-comment{color:#6a9955;font-style:italic}
+.tk-number{color:#b5cea8}.tk-annotation{color:#d7ba7d}.tk-method{color:#dcdcaa}.tk-constant{color:#4fc1ff}
 .code-line.selected{background:rgba(75,140,255,.22);box-shadow:inset 3px 0 0 #6ea1ff}
 .code-line.selected .code-number{color:#a9c6ff}
 .code-note{margin:0;font-size:13px}
