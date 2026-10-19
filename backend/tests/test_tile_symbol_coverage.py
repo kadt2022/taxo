@@ -202,3 +202,8 @@ def test_a_capitals_receiver_is_a_type_only_when_an_import_names_it():
     states = {item.name: (item.role, item.state) for item in measure.resolve(found, code, tile, NO_KNOWN, fixed=True)}
     assert states['UUID'] == (measure.TYPE, measure.IMPORTED), 'un import désigne UUID : c’est un type'
     assert states['TOKEN'] == (measure.MEMBER, measure.UNRESOLVED), 'sans import, le texte ne dit pas que TOKEN est un type'
+
+
+def test_an_import_after_a_comment_still_names_its_type():
+    tile = {'imports': [{'line': 3, 'text': '/* note */ import org.spring.Component;'}, {'line': 4, 'text': '// import a.Hidden;'}]}
+    assert measure.imported_names(tile) == ({'Component': '/* note */ import org.spring.Component;'}, [])

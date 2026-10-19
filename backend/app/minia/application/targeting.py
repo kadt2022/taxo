@@ -256,6 +256,8 @@ def _missing(response):
             said.append('Code illisible : ' + ', '.join(f'#{n}' for n in item['numbers']) + '.')
         elif item.get('what') in ('class_header', 'type_header'):
             said.append(f'En-tête indisponible : {short(item["reference"])}.')
+        elif item.get('what') == 'imports':
+            said.append(f'Imports non lus : {short(item["reference"])} ; un type de ce code peut venir d’un import absent ici.')
     if response.get('to_read'):
         said.append('Code du parcours non encore transmis : ' + ', '.join(f'#{n}' for n in response['to_read'])
                     + ' (action "read").')

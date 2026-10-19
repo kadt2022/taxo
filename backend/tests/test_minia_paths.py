@@ -476,3 +476,21 @@ def test_s3_the_imports_reach_the_model_as_code_with_their_scope_said_once():
     rendered = targeting.render_read(response)
     assert rendered.count(paths.IMPORTS_SCOPE['note']) == 1
     assert paths.IMPORTS_SCOPE['note'] not in targeting.render_read({**response, 'imports_scope': None})
+
+
+def test_s3_an_import_after_a_comment_on_its_line_is_selected_when_used():
+    lines = [{'line': 3, 'text': '/* note */ import com.acme.Item;'}, {'line': 4, 'text': '// import com.acme.Hidden;'}]
+    chosen = paths._selected_imports(lines, 'Item item')
+    assert [entry['line'] for entry in chosen] == [3]
+
+
+def test_s3_a_failed_import_read_is_said_to_the_model():
+    from app.minia.application import targeting
+    tile = {'number': 1, 'reference': 'symbol:java:a.A#m()', 'path': 'src/A.java', 'line_start': 5, 'line_end': 6,
+            'code': 'void m() {}', 'fields': []}
+    response = {'outcome': 'OK', 'tiles': [tile], 'not_sent': [{'what': 'imports', 'number': 1, 'reference': 'symbol:java:a.A',
+                                                                'reason': 'NOT_AVAILABLE'}]}
+    for rendered in (targeting.render_read(response), targeting.render_path({**response, 'reference': 'symbol:java:a.A#m()',
+                                                                                'map': [{'number': 1, 'name': 'A.m()', 'calls': []}]})):
+        assert 'Imports non lus : A' in rendered, 'le modèle ne croit pas que la méthode n’a simplement aucun import'
+        assert '--- imports' not in rendered

@@ -87,20 +87,48 @@ def piece(source: bytes, line_start, line_end):
     return Piece(line_start, last, line_end, '\n'.join(kept), content_hash(source, line_start, last))
 
 
-_IMPORT = re.compile(r'^\s*import\s+(?:static\s+)?[\w.]+(?:\.\*)?\s*;')
+_IMPORT = re.compile(r'^\s*import\s+(?:static\s+)?([\w.]+?)(\.\*)?\s*;')
+
+
+def _code_of(line, in_comment):
+    """La ligne sans ses commentaires, de bloc ou de ligne, et si un commentaire de bloc reste ouvert à sa fin : un import peut suivre
+    un commentaire fermé sur la même ligne (`/* note */ import a.B;`)."""
+    code, at = [], 0
+    while at < len(line):
+        if in_comment:
+            end = line.find('*/', at)
+            if end < 0:
+                return ''.join(code), True
+            at, in_comment = end + 2, False
+            continue
+        block, single = line.find('/*', at), line.find('//', at)
+        if single >= 0 and (block < 0 or single < block):
+            code.append(line[at:single])
+            return ''.join(code), False
+        if block < 0:
+            code.append(line[at:])
+            break
+        code.append(line[at:block])
+        at, in_comment = block + 2, True
+    return ''.join(code), in_comment
+
+
+def import_target(text):
+    """Ce qu'une ligne d'import, telle qu'écrite, importe : (nom complet, joker) ; None si ce n'est pas un import. Un joker désigne un
+    paquet, jamais un type."""
+    match = _IMPORT.match(_code_of(text, False)[0])
+    return (match.group(1), bool(match.group(2))) if match else None
 
 
 def import_lines(source: bytes, before):
-    """Les lignes `import` du fichier avant la ligne `before`, telles qu'écrites : (numéro, texte). Une ligne commentée n'en est
-    pas une. Un import n'est ici qu'un nom écrit : il ne résout rien (un joker désigne un paquet, pas un type)."""
+    """Les imports du fichier avant la ligne `before`, tels qu'écrits : (numéro de ligne, texte de l'import, sans les commentaires
+    qui l'entourent). Une ligne commentée n'en est pas une, mais un import qui suit un commentaire fermé sur sa ligne en est un. Un import n'est ici qu'un nom écrit : il ne résout
+    rien (un joker désigne un paquet, pas un type)."""
     found, in_comment = [], False
     for number, line in enumerate(lines_of(source)[:max(before - 1, 0)], 1):
-        if in_comment:
-            in_comment = '*/' not in line
-        elif line.lstrip().startswith('/*'):
-            in_comment = '*/' not in line
-        elif _IMPORT.match(line):
-            found.append((number, line.strip()))
+        code, in_comment = _code_of(line, in_comment)
+        if _IMPORT.match(code):
+            found.append((number, code.strip()))
     return found
 
 

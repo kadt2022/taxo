@@ -25,6 +25,7 @@ import re
 
 from app.minia.application import sources
 from app.protocol.domain.envelope import error, size
+from app.protocol.domain.source import import_target
 
 OPERATION, READ = 'get_path', 'read_tiles'
 OFF, FULL, MAP = 'off', 'full', 'map'
@@ -43,7 +44,6 @@ IMPORTS_SCOPE = {
     'note': 'Imports : ceux dont le nom est utilisé dans la tuile, et les imports avec joker (qui ne disent pas quel type est '
             'utilisé). Un type sans import ici est du même paquet, de java.lang, d’un paquet importé avec joker, ou non cité '
             'dans cette tuile.'}
-_IMPORT_NAME = re.compile(r'^import\s+(?:static\s+)?([\w.]+?)(\.\*)?\s*;')
 _INVALID = 'INVALID_ARGUMENT'
 _NOTE = {
     FULL: 'Le chemin calculé par Taxo depuis la référence, et le code de chaque méthode (tuile). Une tuile non transmise '
@@ -242,12 +242,13 @@ def _selected_imports(lines, text):
     un joker désigne un paquet, pas un type, et il est dit tel."""
     chosen = []
     for entry in lines:
-        match = _IMPORT_NAME.match(entry['text'])
-        if not match:
+        target = import_target(entry['text'])
+        if target is None:
             continue
-        if match.group(2):
+        name, wildcard = target
+        if wildcard:
             chosen.append({**entry, 'wildcard': True})
-        elif re.search(rf'(?<![\w$]){re.escape(match.group(1).rsplit(".", 1)[-1])}(?![\w$])', text):
+        elif re.search(rf'(?<![\w$]){re.escape(name.rsplit(".", 1)[-1])}(?![\w$])', text):
             chosen.append(entry)
     return chosen
 

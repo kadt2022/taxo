@@ -23,6 +23,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.protocol.domain.source import import_target  # noqa: E402
+
 KEYWORDS = frozenset(
     'abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally '
     'float for goto if implements import instanceof int interface long native new package private protected public return short '
@@ -186,13 +188,13 @@ def imported_names(tile):
     """Les noms simples que les imports de la tuile désignent (hors jokers, qui ne désignent qu'un paquet), avec leur import."""
     named, wildcards = {}, []
     for entry in tile.get('imports') or ():
-        match = re.match(r'^import\s+(?:static\s+)?([\w.]+?)(\.\*)?\s*;', entry['text'])
-        if not match:
+        target = import_target(entry['text'])
+        if target is None:
             continue
-        if match.group(2):
+        if target[1]:
             wildcards.append(entry['text'])
         else:
-            named[match.group(1).rsplit('.', 1)[-1]] = entry['text']
+            named[target[0].rsplit('.', 1)[-1]] = entry['text']
     return named, wildcards
 
 
