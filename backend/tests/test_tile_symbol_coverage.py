@@ -141,3 +141,64 @@ def test_a_constructor_is_skipped_under_the_name_its_declaration_writes():
     found = measure.symbols(code, measure.written_name('symbol:java:p.MessageAction#<init>(Builder)'))
     assert ('MessageAction', measure.CALL) not in found, 'le nom du constructeur n’est pas un symbole utilisé'
     assert ('Builder', measure.TYPE) in found
+# --- S3 : les imports de la tuile et la mesure avant / après ------------------------------------------------------------
+
+IMPORTING_TILE = {
+    'fields': [], 'class': {'text': '@Slf4j\n@Component\npublic class Manager {'}, 'types': [],
+    'imports': [{'line': 3, 'text': 'import org.spring.Component;'}, {'line': 4, 'text': 'import static org.x.Util.helper;'},
+                {'line': 5, 'text': 'import org.web.*;'}]}
+NO_KNOWN = {'types': set(), 'calls': set(), 'members': set()}
+
+
+def test_imports_give_a_full_name_and_wildcards_give_only_candidate_packages():
+    named, wildcards = measure.imported_names(IMPORTING_TILE)
+    assert named == {'Component': 'import org.spring.Component;', 'helper': 'import static org.x.Util.helper;'}
+    assert wildcards == ['import org.web.*;']
+    assert measure.imported_names({}) == ({}, [])
+    assert measure.imported_names({'imports': [{'line': 1, 'text': 'not an import'}]}) == ({}, [])
+
+
+def test_an_imported_type_is_identified_not_resolved_and_a_wildcard_invents_nothing():
+    code = 'void run() { Component one; Mystery two; }'
+    found = measure.symbols(code, 'run')
+    states = {item.name: item for item in measure.resolve(found, code, IMPORTING_TILE, NO_KNOWN)}
+    assert states['Component'].state == measure.IMPORTED and states['Component'].how == 'import org.spring.Component;'
+    assert states['Mystery'].state == measure.UNRESOLVED and 'paquets candidats' in states['Mystery'].how
+    assert 'import org.web.*;' in states['Mystery'].how, 'le joker est dit candidat, jamais choisi'
+
+
+def test_the_tool_fixes_are_off_by_default_and_reported_apart():
+    code = 'void run() { log.info(); String text; UUID id; }'
+    found_s0, found_fixed = measure.symbols(code, 'run'), measure.symbols(code, 'run', fixed=True)
+    old = {item.name: item.state for item in measure.resolve(found_s0, code, IMPORTING_TILE, NO_KNOWN)}
+    new = {item.name: item.state for item in measure.resolve(found_fixed, code, IMPORTING_TILE, NO_KNOWN, fixed=True)}
+    assert old['String'] == measure.UNRESOLVED and new['String'] == measure.IMPLICIT, 'java.lang : une règle du langage'
+    assert old['log'] == measure.UNRESOLVED and new['log'] == measure.IN_TILE, 'le champ log est déclaré par @Slf4j'
+    assert {role for (name, role) in found_s0 if name == 'UUID'} == {measure.MEMBER}, 'le biais du lot S0'
+    assert {role for (name, role) in found_fixed if name == 'UUID'} == {measure.TYPE}
+
+
+def test_a_name_in_capitals_is_a_type_only_when_it_is_written_as_one():
+    for before, after in [('', 'id = null'), ('', '::fromString'), ('Set<', '> items'), ('', '<T> x'), ('', '[] ids')]:
+        assert measure._used_as_type(before, after), (before, after)
+    for before, after in [('x = ', '+ 1'), ('if (', '> 0)'), ('f(', ', 3)'), ('return ', ';'), ('', '.equals(path)')]:
+        assert not measure._used_as_type(before, after), (before, after)
+
+
+def test_the_four_measures_run_from_strict_to_wide():
+    states = ([measure.Resolution('a', measure.FIELD, measure.IN_TILE, '')] * 2 + [measure.Resolution('b', measure.TYPE, measure.IMPORTED, '')]
+              + [measure.Resolution('c', measure.TYPE, measure.IMPLICIT, '')] + [measure.Resolution('d', measure.CALL, measure.KNOWN_NOT_CARRIED, '')]
+              + [measure.Resolution('e', measure.TYPE, measure.UNRESOLVED, '')] * 3)
+    result = measure.metrics(states)
+    assert (result['total'], result['carried'], result['imported'], result['implicit'], result['known'], result['unresolved']) == (8, 2, 1, 1, 1, 3)
+    assert (result['strict'], result['identified'], result['language'], result['links']) == (0.25, 0.375, 0.5, 0.625)
+    assert measure.metrics([])['strict'] == 1.0
+
+
+def test_a_capitals_receiver_is_a_type_only_when_an_import_names_it():
+    tile = {**IMPORTING_TILE, 'imports': [{'line': 3, 'text': 'import java.util.UUID;'}]}
+    code = 'void run() { UUID.fromString(a); TOKEN.equals(b); }'
+    found = measure.symbols(code, 'run', fixed=True)
+    states = {item.name: (item.role, item.state) for item in measure.resolve(found, code, tile, NO_KNOWN, fixed=True)}
+    assert states['UUID'] == (measure.TYPE, measure.IMPORTED), 'un import désigne UUID : c’est un type'
+    assert states['TOKEN'] == (measure.MEMBER, measure.UNRESOLVED), 'sans import, le texte ne dit pas que TOKEN est un type'

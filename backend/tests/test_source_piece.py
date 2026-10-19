@@ -209,3 +209,27 @@ def test_a_piece_that_is_not_cut_keeps_its_declared_range(monkeypatch):
     monkeypatch.setattr(policy, 'MAX_SOURCE_LINES', 3)
     exact = policy.piece(b'a\nb\n\n', 1, 3)
     assert not exact.truncated and exact.line_end == 3, 'une plage qui tient entière n’est pas rognée'
+FILE_WITH_IMPORTS = b"""package p;
+
+// import x.Commented;
+/* import y.InBlock;
+   import z.AlsoInBlock; */
+import a.b.C;
+import static a.b.D.helper;
+import a.e.*;
+  import   f.G  ;
+
+public class Outer {
+}
+"""
+
+
+def test_the_import_lines_are_read_as_written_and_never_from_a_comment():
+    found = policy.import_lines(FILE_WITH_IMPORTS, 11)
+    assert found == [(6, 'import a.b.C;'), (7, 'import static a.b.D.helper;'), (8, 'import a.e.*;'), (9, 'import   f.G  ;')]
+
+
+def test_the_import_lines_stop_before_the_declaration():
+    assert policy.import_lines(FILE_WITH_IMPORTS, 7) == [(6, 'import a.b.C;')]
+    assert policy.import_lines(FILE_WITH_IMPORTS, 1) == []
+    assert policy.import_lines(b'', 5) == []

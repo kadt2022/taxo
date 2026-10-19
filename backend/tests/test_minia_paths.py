@@ -389,3 +389,90 @@ def test_an_invalid_rule_never_matches_an_invalid_chain():
     assert written == [], 'deux validations échouées ne font pas une correspondance'
     _, _, _, written, _ = paths.walk(_Facts(_matched(), rules), 'endpoint:GET /x')
     assert written[0]['rules'] == [], 'une règle d’un autre producteur ne part pas avec une chaîne validée'
+
+
+# --- S3 : les imports de la tuile (récit contrat de suffisance structurelle des tuiles) ------------------------------------
+
+def _entries(*texts):
+    return [{'line': index, 'text': text} for index, text in enumerate(texts, 3)]
+
+
+def test_s3_the_tile_names_the_imports_it_uses_and_keeps_wildcards_as_wildcards():
+    lines = _entries('import com.acme.model.Item;', 'import com.acme.model.Unused;', 'import static com.acme.Util.helper;',
+                     'import org.spring.web.*;', 'import static com.acme.Consts.*;')
+    chosen = paths._selected_imports(lines, 'public Item add() { return helper(); }')
+    assert [entry['text'] for entry in chosen] == ['import com.acme.model.Item;', 'import static com.acme.Util.helper;',
+                                                   'import org.spring.web.*;', 'import static com.acme.Consts.*;']
+    assert [bool(entry.get('wildcard')) for entry in chosen] == [False, False, True, True], 'un joker n’est jamais une résolution'
+    assert all('Unused' not in entry['text'] for entry in chosen), 'un import dont le nom n’est pas utilisé n’est pas joint'
+
+
+def test_s3_a_name_is_matched_whole_never_inside_another_name():
+    lines = _entries('import com.acme.Item;')
+    assert paths._selected_imports(lines, 'ItemService service; MyItem other;') == []
+    assert len(paths._selected_imports(lines, 'List<Item> items')) == 1
+
+
+def test_s3_an_import_already_given_for_a_file_is_not_given_again():
+    key = paths._import_key('src/A.java', {'line': 6})
+    assert key == 'import:src/A.java:6'
+    exchanged = [{'operation': paths.OPERATION, 'response': {'tiles': [{'path': 'src/A.java', 'imports': [{'line': 6, 'text': 'x'}]}]}}]
+    assert key in paths._given(exchanged)
+    assert paths._given([{'operation': paths.READ, 'response': {'tiles': [{'path': 'src/A.java'}]}}]) == set()
+
+
+def test_s3_the_first_tile_carries_its_imports_with_their_line_numbers(make_repo, tmp_path, monkeypatch):
+    model = Scripted(answer(CLAIM))
+    run(make_repo, tmp_path, monkeypatch, model, 'full')
+    path = path_of(sent(model, 0))
+    first = path['tiles'][0]
+    texts = [entry['text'] for entry in first['imports']]
+    assert 'import com.acme.model.Item;' in texts and 'import com.acme.service.ItemService;' in texts
+    assert 'import org.springframework.security.access.prepost.PreAuthorize;' in texts, 'le type d’une annotation de la méthode'
+    wild = [entry for entry in first['imports'] if entry.get('wildcard')]
+    assert [entry['text'] for entry in wild] == ['import org.springframework.web.bind.annotation.*;']
+    assert all(isinstance(entry['line'], int) and entry['line'] > 0 for entry in first['imports'])
+    assert path['imports_scope']['covers'] == 'imports-named-in-the-tile-and-wildcards/1'
+    assert 'limits' not in path or 'unavailable_imports' not in path['limits']
+
+
+def test_s3_a_tile_read_again_gives_no_import_twice(make_repo, tmp_path, monkeypatch):
+    model = Scripted(call(paths.READ, numbers=[1, 2]), answer(CLAIM))
+    run(make_repo, tmp_path, monkeypatch, model, 'map')
+    entry = path_of(sent(model, 0))['tiles'][0]
+    assert entry['imports'], 'la tuile d’entrée porte ses imports'
+    again, second = sent(model, 1)['trajectory'][-1]['response']['tiles']
+    assert again['number'] == 1 and 'imports' not in again, 'ce qui a été donné pour ce fichier n’est pas redonné'
+    assert second['number'] == 2 and second['imports'], 'le fichier d’une autre méthode a ses propres imports'
+
+
+def test_s3_unreadable_imports_are_said_and_the_tile_still_goes(make_repo, tmp_path, monkeypatch):
+    from app.protocol.application.exchange import Exchange
+    from app.protocol.domain.envelope import OperationError
+
+    def refused(self, reference):
+        raise OperationError('NOT_AVAILABLE', 'Ce fichier n’est pas lisible.')
+    monkeypatch.setattr(Exchange, 'source_imports', refused)
+    model = Scripted(answer(CLAIM))
+    run(make_repo, tmp_path, monkeypatch, model, 'full')
+    path = path_of(sent(model, 0))
+    assert path['tiles'] and all('imports' not in tile for tile in path['tiles']), 'le code est servi, sans import'
+    said = [item for item in path['not_sent'] if item.get('what') == 'imports']
+    assert said and all(item['reason'] == 'NOT_AVAILABLE' for item in said)
+    assert path['limits']['unavailable_imports'] and 'imports_scope' not in path
+    assert 'unavailable_headers' not in path['limits'], 'des imports illisibles ne sont pas des en-têtes manquants'
+
+
+def test_s3_the_imports_reach_the_model_as_code_with_their_scope_said_once():
+    from app.minia.application import targeting
+    tile = {'number': 1, 'reference': 'symbol:java:a.A#m()', 'path': 'src/A.java', 'line_start': 5, 'line_end': 6,
+            'code': 'void m() {}', 'fields': [], 'imports': [{'line': 2, 'text': 'import a.B;'},
+                                                              {'line': 3, 'text': 'import a.*;', 'wildcard': True}]}
+    text = targeting._tile_text(tile)
+    assert '--- imports (src/A.java) ---' in text and 'import a.B;' in text and 'import a.*;' in text
+    assert text.index('--- imports') < text.index('--- #1'), 'les imports précèdent la méthode'
+    assert 'Taxo' not in text and 'wildcard' not in text, 'du code seulement : aucun fait ni drapeau interne'
+    response = {'outcome': 'OK', 'tiles': [tile], 'not_sent': [], 'imports_scope': paths.IMPORTS_SCOPE}
+    rendered = targeting.render_read(response)
+    assert rendered.count(paths.IMPORTS_SCOPE['note']) == 1
+    assert paths.IMPORTS_SCOPE['note'] not in targeting.render_read({**response, 'imports_scope': None})

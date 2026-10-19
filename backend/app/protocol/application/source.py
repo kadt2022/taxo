@@ -38,18 +38,7 @@ class SourceOperation:
         if not self.exchange.source_consent:
             raise OperationError(NO_CONSENT, 'La lecture du code n’a pas été autorisée pour cet échange.')
         reference = _reference(arguments, 'reference', required=True)
-        if not reference.startswith(_SYMBOL):
-            raise OperationError(INVALID_ARGUMENT, 'reference : un symbole (type, méthode ou constructeur), jamais '
-                                                   'un fichier ni un chemin.')
-        if source.nature(reference) == 'MEMBER':
-            raise OperationError(INVALID_ARGUMENT, 'reference : un type, une méthode ou un constructeur ; un champ '
-                                                   'n’a pas de code propre.')
-        self.exchange.own(reference)
-        if not self.exchange.committed:
-            # Le commit n'est pas ce que l'analyse du dossier de travail a lu : son code serait celui d'un autre état.
-            raise OperationError(NOT_AVAILABLE, 'Le code n’est lu que pour l’analyse d’un commit, jamais pour celle '
-                                                'du dossier de travail.')
-        proof, producer = self._declaration(reference)
+        proof, producer = self._readable(reference)
         commit = self.exchange.snapshot['commit']
         path = proof['path']
         found, reason, fields = self._read(reference, proof, producer)
@@ -77,6 +66,37 @@ class SourceOperation:
             _field_context(response, reference, fields)
             self._uses(response, reference, fields)
         return response
+
+    def _readable(self, reference):
+        """La déclaration d'un symbole lisible : ce que `get_source` et `imports` exigent tous deux du symbole, de l'analyse
+        et de la preuve."""
+        if not reference.startswith(_SYMBOL):
+            raise OperationError(INVALID_ARGUMENT, 'reference : un symbole (type, méthode ou constructeur), jamais '
+                                                   'un fichier ni un chemin.')
+        if source.nature(reference) == 'MEMBER':
+            raise OperationError(INVALID_ARGUMENT, 'reference : un type, une méthode ou un constructeur ; un champ '
+                                                   'n’a pas de code propre.')
+        self.exchange.own(reference)
+        if not self.exchange.committed:
+            # Le commit n'est pas ce que l'analyse du dossier de travail a lu : son code serait celui d'un autre état.
+            raise OperationError(NOT_AVAILABLE, 'Le code n’est lu que pour l’analyse d’un commit, jamais pour celle '
+                                                'du dossier de travail.')
+        return self._declaration(reference)
+
+    def imports(self, reference):
+        """Les lignes d'import du fichier d'un symbole lisible, telles qu'écrites : `{line, text}`. Même consentement, même
+        commit, mêmes refus de lecture que `get_source` ; ce n'est pas une opération du protocole, mais ce que Minia joint à la
+        tuile d'une méthode. Un import n'est qu'un nom écrit : il ne résout aucun type."""
+        if not self.exchange.source_consent:
+            raise OperationError(NO_CONSENT, 'La lecture du code n’a pas été autorisée pour cet échange.')
+        proof, _ = self._readable(reference)
+        path = proof['path']
+        if generated(path):
+            raise OperationError(NOT_AVAILABLE, source.GENERATED_FILE)
+        content, reason = self.history.source(self.exchange.project_id, proof['commit'], path)
+        if content is None:
+            raise OperationError(NOT_AVAILABLE, reason or 'Ce fichier n’est pas lisible.')
+        return [{'line': number, 'text': text} for number, text in source.import_lines(content, proof['line_start'])]
 
     def _uses(self, response, reference, fields):
         """Les références où mène la méthode, établies par la Maille : ses appels, puis le type de ses champs."""

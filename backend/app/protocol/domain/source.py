@@ -8,6 +8,7 @@ Limites : 200 lignes et 16 Ko par pièce. Au-delà, la pièce s'arrête à la de
 (`truncated`, avec la ligne de fin déclarée) ; une ligne n'est jamais coupée, et une pièce coupée ne finit jamais
 sur une ligne vide.
 """
+import re
 from dataclasses import dataclass
 
 from app.facts.domain.evidence import content_hash
@@ -23,6 +24,7 @@ CODE_SOURCE = 'CODE_SOURCE'
 # Raisons d'une pièce non transmise, en plus de celles de la lecture de l'historique (CONFIDENTIAL, BINARY,
 # TOO_LARGE, NOT_A_REGULAR_FILE) et du budget.
 CHANGED, NOT_DECLARED, LIMIT = 'CHANGED', 'NOT_DECLARED', 'LIMIT'
+GENERATED_FILE = 'Ce fichier est généré : son code n’est pas transmis.'
 # Le contexte des champs d'une méthode : la déclaration exacte des champs du type courant que son corps utilise comme
 # receveurs d'appels, dans une section distincte de la pièce. Plafond propre ; au-delà, compté (`FIELD_CONTEXT_LIMIT`).
 FIELD_CONTEXT = 'field_context'
@@ -83,6 +85,23 @@ def piece(source: bytes, line_start, line_end):
         return None
     last = line_start + len(kept) - 1
     return Piece(line_start, last, line_end, '\n'.join(kept), content_hash(source, line_start, last))
+
+
+_IMPORT = re.compile(r'^\s*import\s+(?:static\s+)?[\w.]+(?:\.\*)?\s*;')
+
+
+def import_lines(source: bytes, before):
+    """Les lignes `import` du fichier avant la ligne `before`, telles qu'écrites : (numéro, texte). Une ligne commentée n'en est
+    pas une. Un import n'est ici qu'un nom écrit : il ne résout rien (un joker désigne un paquet, pas un type)."""
+    found, in_comment = [], False
+    for number, line in enumerate(lines_of(source)[:max(before - 1, 0)], 1):
+        if in_comment:
+            in_comment = '*/' not in line
+        elif line.lstrip().startswith('/*'):
+            in_comment = '*/' not in line
+        elif _IMPORT.match(line):
+            found.append((number, line.strip()))
+    return found
 
 
 def nature(reference):
