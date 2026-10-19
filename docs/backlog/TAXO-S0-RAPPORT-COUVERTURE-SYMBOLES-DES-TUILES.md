@@ -23,15 +23,18 @@ Reproduire : `python scripts/tile_symbol_coverage.py <dépôt> --limit 25` depui
 
 ## 2. Résultat
 
-416 symboles dans 20 tuiles construites (5 des 25 méthodes retenues n'ont pas de tuile : `NOT_AVAILABLE`, cause non détaillée par l'outil).
+*Chiffres recalculés après les remarques de revue de la PR 175 : l'outil ne compte plus le nom écrit d'un constructeur comme un symbole
+(414 symboles au lieu de 416), ne prend plus un argument d'appel pour une déclaration et lit chaînes et commentaires en une passe.*
+
+414 symboles dans 20 tuiles construites (5 des 25 méthodes retenues n'ont pas de tuile : `NOT_AVAILABLE`, cause non détaillée par l'outil).
 
 | Mesure | Valeur |
 |---|---|
-| Couverture stricte (portés ÷ symboles) | **29 %** (122 sur 416) |
-| Couverture avec les liens connus de Taxo | **43 %** (177 sur 416) |
-| Non résolus | 239 (57 %) |
+| Couverture stricte (portés ÷ symboles) | **29,5 %** (122 sur 414) |
+| Couverture avec les liens connus de Taxo | **42,8 %** (177 sur 414) |
+| Non résolus | 237 (57 %) |
 
-Le critère A1 du récit (tous les symboles identifiés ou déclarés non résolus avec cause) **échoue aujourd'hui** : les 239 non
+Le critère A1 du récit (tous les symboles identifiés ou déclarés non résolus avec cause) **échoue aujourd'hui** : les 237 non
 résolus ne sont pas déclarés un par un.
 
 | Méthode | Symboles | Portés | Connus, non portés | Non résolus | Couverture stricte | Avec liens | Octets |
@@ -47,29 +50,29 @@ résolus ne sont pas déclarés un par un.
 | `AuditEventStore.healthCheck` | 2 | 1 | 0 | 1 | 50 % | 50 % | 127 |
 | `ResolvedOAuthClient.immutable` | 5 | 1 | 0 | 4 | 20 % | 20 % | 827 |
 | `JpaSigningKeyRepository.activateFirstIssuer` | 8 | 3 | 1 | 4 | 38 % | 50 % | 463 |
-| `TakiboTokenClaims.<init>` | 1 | 0 | 0 | 1 | 0 % | 0 % | 87 |
+| `TakiboTokenClaims.<init>` | 0 | 0 | 0 | 0 | 100 % | 100 % | 87 |
 | `TechnicalRole.permissions` | 4 | 1 | 0 | 3 | 25 % | 25 % | 143 |
 | `GovernanceRoleAssignmentRepository.findAssignedTechnicalRoleCodes` | 6 | 3 | 0 | 3 | 50 % | 50 % | 153 |
 | `RoleRepositoryAdapter.findBySpaceIdAndCode` | 13 | 4 | 1 | 8 | 31 % | 38 % | 352 |
 | `JpaRoleAssignmentRepository.deleteOrgLevelAssignment` | 8 | 3 | 0 | 5 | 38 % | 38 % | 572 |
 | `SlugNormalizer.normalize` | 22 | 2 | 0 | 20 | 9 % | 9 % | 668 |
 | `SpaceEntity.updateStatus` | 9 | 3 | 0 | 6 | 33 % | 33 % | 259 |
-| `MessageAction.<init>` | 13 | 1 | 1 | 11 | 8 % | 15 % | 415 |
+| `MessageAction.<init>` | 12 | 1 | 1 | 10 | 8 % | 17 % | 415 |
 | `OutboxMessageClaimRepositoryImpl.claimRunnable` | 16 | 6 | 0 | 10 | 38 % | 38 % | 1 485 |
 
-## 3. Ce que contiennent les 239 non résolus
+## 3. Ce que contiennent les 237 non résolus
 
 | Nature | Symboles | Part |
 |---|---|---|
-| Membres et appels (`warn`, `map`, `doFilter`, `getRequestURI`…) | 147 | 62 % |
-| Types qu'un **import simple** désigne dans le fichier | 63 | 26 % |
+| Membres et appels (`warn`, `map`, `doFilter`, `getRequestURI`…) | 145 | 61 % |
+| Types qu'un **import simple** désigne dans le fichier | 63 | 27 % |
 | Types du paquet `java.lang` (`String`, `Override`, `IllegalArgumentException`…) | 28 | 12 % |
 | Autre (même paquet, inconnu ou externe sans import) | 1 | < 1 % |
 
 **Lecture.** Sur les 92 types non résolus, 63 sont désignés par un import simple du fichier et 28 sont des types de `java.lang`, visibles
 sans import : **les imports n'identifient que les 63 premiers** ; les 28 autres relèvent d'une règle du langage. Avec les 63, la couverture
-identifiée monterait à **44,5 %** ((122 + 63) ÷ 416) et la couverture avec liens à **57,7 %** ; avec la règle du langage en plus, à
-52 % et 65 % au plus (estimations, à confirmer par S3). Les 147 membres et appels restent : ce sont, pour la plupart, des appels sur des
+identifiée monterait à **44,7 %** ((122 + 63) ÷ 414) et la couverture avec liens à **58,0 %** ; avec la règle du langage en plus, à
+51 % et 65 % au plus (estimations, à confirmer par S3). Les 145 membres et appels restent : ce sont, pour la plupart, des appels sur des
 types externes (journalisation, API de Spring et du JDK). Les identifier demande de typer le receveur et de classer la dépendance
 « hors du projet » (règle `frontier-classification/2`, lot S6 et § 3.5 du récit).
 
@@ -92,7 +95,7 @@ Noms non résolus les plus fréquents : `String` (12 méthodes), `Override` (9),
 
 1. **S3 (imports)** est le gain le plus net et le moins coûteux : il identifie les 63 types qu'un import simple désigne ; les
    28 types de `java.lang` demandent une règle du langage, pas un import.
-2. **Les membres et appels sur types externes (147)** forment la plus grande part restante : ils dépendent de la classification
+2. **Les membres et appels sur types externes (145)** forment la plus grande part restante : ils dépendent de la classification
    « hors du projet » et du typage du receveur, pas des champs.
 3. La couverture des **champs** et des **champs hérités** (S2) n'est pas mesurée séparément ici : les champs non résolus sont inclus
    dans « membres et appels » ou dans le rôle champ. Une mesure dédiée est à ajouter avant S2.
