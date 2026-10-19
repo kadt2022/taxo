@@ -66,9 +66,10 @@ résolus ne sont pas déclarés un par un.
 | Types du paquet `java.lang` (`String`, `Override`, `IllegalArgumentException`…) | 28 | 12 % |
 | Autre (même paquet, inconnu ou externe sans import) | 1 | < 1 % |
 
-**Lecture.** Sur les 92 types non résolus, 91 (99 %) seraient identifiés par les imports du fichier (63 par un import simple, 28
-visibles sans import). Si le lot S3 les rendait identifiés, la couverture stricte monterait au plus à **51 %** ((122 + 91) ÷ 416) et la
-couverture avec liens à **64 %** ((177 + 91) ÷ 416). Les 147 membres et appels restent : ce sont, pour la plupart, des appels sur des
+**Lecture.** Sur les 92 types non résolus, 63 sont désignés par un import simple du fichier et 28 sont des types de `java.lang`, visibles
+sans import : **les imports n'identifient que les 63 premiers** ; les 28 autres relèvent d'une règle du langage. Avec les 63, la couverture
+identifiée monterait à **44,5 %** ((122 + 63) ÷ 416) et la couverture avec liens à **57,7 %** ; avec la règle du langage en plus, à
+52 % et 65 % au plus (estimations, à confirmer par S3). Les 147 membres et appels restent : ce sont, pour la plupart, des appels sur des
 types externes (journalisation, API de Spring et du JDK). Les identifier demande de typer le receveur et de classer la dépendance
 « hors du projet » (règle `frontier-classification/2`, lot S6 et § 3.5 du récit).
 
@@ -89,7 +90,8 @@ Noms non résolus les plus fréquents : `String` (12 méthodes), `Override` (9),
 
 ## 5. Ce que S0 dit des lots suivants
 
-1. **S3 (imports)** est le gain le plus net et le moins coûteux : il identifie presque tous les types non résolus.
+1. **S3 (imports)** est le gain le plus net et le moins coûteux : il identifie les 63 types qu'un import simple désigne ; les
+   28 types de `java.lang` demandent une règle du langage, pas un import.
 2. **Les membres et appels sur types externes (147)** forment la plus grande part restante : ils dépendent de la classification
    « hors du projet » et du typage du receveur, pas des champs.
 3. La couverture des **champs** et des **champs hérités** (S2) n'est pas mesurée séparément ici : les champs non résolus sont inclus
