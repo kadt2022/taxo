@@ -108,3 +108,36 @@ def test_imports_explain_a_type_name_or_say_why_they_cannot():
     assert measure.import_kind('String', source) == 'java.lang', 'visible sans import'
     assert measure.import_kind('Mystery', source) == 'none'
     assert measure.import_kind('Mystery', source + 'import org.other.*;\n') == 'wildcard', 'un joker ne désigne pas un type'
+
+
+# --- Remarques de revue de la PR 175 ----------------------------------------------------------------------------------------
+
+def test_a_double_slash_inside_a_string_is_not_a_comment():
+    text = measure.clean('String url = "http://host"; call(real);')
+    assert 'real' in text, 'le code après la chaîne n’est pas avalé'
+    assert 'http' not in text and 'host' not in text, 'le contenu de la chaîne est effacé'
+    again = measure.clean('x = 1; // un "guillemet" dans un commentaire\nstring_after = 2;')
+    assert 'guillemet' not in again and 'string_after' in again, 'un guillemet dans un commentaire n’ouvre pas de chaîne'
+    names = {name for name, _ in measure.symbols('void m() { String url = "http://host"; helper(url); }', 'm')}
+    assert 'helper' in names and 'http' not in names
+
+
+def test_the_arguments_of_a_call_are_not_local_declarations():
+    assert measure.declared_names('void m() {\n    use(field, other);\n    helper(a,\n        b);\n}') == set()
+    names = measure.declared_names('void m() {\n    Map<String, Integer> counts = null;\n    for (String key : keys) { int[] row = null; }\n}')
+    assert names == {'counts', 'key', 'row'}, 'les vraies déclarations, génériques et tableaux compris, restent reconnues'
+    code = 'void m() {\n    use(field, other);\n}'
+    tile = {'fields': ['private int field;'], 'class': {'text': 'class A {'}, 'types': []}
+    states = {item.name: item.state for item in measure.resolve(measure.symbols(code, 'm'), code, tile, {'types': set(), 'calls': set(), 'members': set()})}
+    assert states['other'] == measure.UNRESOLVED, 'un argument n’est pas porté par la tuile parce qu’il suit une virgule'
+    assert states['field'] == measure.IN_TILE
+
+
+def test_a_constructor_is_skipped_under_the_name_its_declaration_writes():
+    assert measure.written_name('symbol:java:p.Outer.Inner#<init>(int)') == 'Inner'
+    assert measure.written_name('symbol:java:Outer#<init>()') == 'Outer'
+    assert measure.written_name('symbol:java:p.Outer#run(int)') == 'run'
+    code = 'public MessageAction(Builder builder) { this.id = builder.id; }'
+    found = measure.symbols(code, measure.written_name('symbol:java:p.MessageAction#<init>(Builder)'))
+    assert ('MessageAction', measure.CALL) not in found, 'le nom du constructeur n’est pas un symbole utilisé'
+    assert ('Builder', measure.TYPE) in found

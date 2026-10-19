@@ -35,15 +35,22 @@ LOCAL, FIELD, TYPE, CALL, MEMBER_CALL, MEMBER = 'local', 'field', 'type', 'call'
 IN_TILE, KNOWN_NOT_CARRIED, UNRESOLVED = 'in_tile', 'known_not_carried', 'unresolved'
 
 _TOKEN = re.compile(r'(?<![\w$])[A-Za-z_$][\w$]*')
-_COMMENTS = re.compile(r'//[^\n]*|/\*.*?\*/', re.DOTALL)
-_STRINGS = re.compile(r'"""(?:.|\n)*?"""|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'')
+# Chaînes et commentaires en une seule passe : un `//` dans une chaîne (`"http://host"`) n'est pas un commentaire, et un guillemet dans
+# un commentaire n'ouvre pas une chaîne.
+_LITERALS = re.compile(r'"""(?:.|\n)*?"""|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'|//[^\n]*|/\*.*?\*/', re.DOTALL)
+_DECLARATION = re.compile(r'(?:^|[;{}(])\s*(?:final\s+)?([A-Za-z_][\w.]*(?:<[^;(){}]*>)?(?:\[\])*)\s+([a-z_]\w*)\s*(?==|;|:|,|\))',
+                          re.MULTILINE)
 
 
 def clean(code):
     """Le code sans commentaires ni chaînes (leur contenu n'est pas un symbole), les sauts de ligne conservés."""
-    def blank(match):
-        return re.sub(r'[^\n]', ' ', match.group(0))
-    return _STRINGS.sub(blank, _COMMENTS.sub(blank, code))
+    return _LITERALS.sub(lambda match: re.sub(r'[^\n]', ' ', match.group(0)), code)
+
+
+def written_name(method):
+    """Le nom que la déclaration écrit : celui de la méthode, ou, pour un constructeur (`<init>`), le nom simple de sa classe."""
+    name = method.split('#', 1)[1].split('(')[0]
+    return method.split('#', 1)[0].rsplit('.', 1)[-1].rsplit(':', 1)[-1] if name == '<init>' else name
 
 
 def declared_names(code):
@@ -63,8 +70,8 @@ def declared_names(code):
             piece = ''
         else:
             piece += char
-    for match in re.finditer(r'\b(?:final\s+)?([A-Za-z_][\w.<>\[\]?, ]*?)\s+([a-z_]\w*)\s*(?==|;|:|,|\))', text[len(head):]):
-        if match.group(1).split()[0] not in KEYWORDS - {'var', 'int', 'long', 'boolean', 'double', 'float', 'char', 'byte', 'short'}:
+    for match in _DECLARATION.finditer(text[len(head):]):
+        if match.group(1) not in KEYWORDS - {'var', 'int', 'long', 'boolean', 'double', 'float', 'char', 'byte', 'short'}:
             names.add(match.group(2))
     names.update(re.findall(r'\b([a-z_]\w*)\s*->', text))
     for group in re.findall(r'\(([^()]*)\)\s*->', text):
@@ -266,7 +273,7 @@ def report(exchange, paths, repository, analysis, seconds, options):
             refused[reason] += 1
             continue
         owner = method.split('#', 1)[0]
-        own_name = method.split('#', 1)[1].split('(')[0]
+        own_name = written_name(method)
         calls = {fact['object'].split('#')[-1].split('(')[0] for fact in exchange.query(subject=method, relation='CALLS', kind='ASSERTION')}
         members = {fact['object'].split('#', 1)[1].split('(')[0] for fact in exchange.query(subject=owner, relation='CONTAINS', kind='ASSERTION')
                    if '#' in fact['object'] and '(' in fact['object']}
