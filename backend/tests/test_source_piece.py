@@ -209,3 +209,54 @@ def test_a_piece_that_is_not_cut_keeps_its_declared_range(monkeypatch):
     monkeypatch.setattr(policy, 'MAX_SOURCE_LINES', 3)
     exact = policy.piece(b'a\nb\n\n', 1, 3)
     assert not exact.truncated and exact.line_end == 3, 'une plage qui tient entière n’est pas rognée'
+
+
+FILE_WITH_IMPORTS = b"""package p;
+
+// import x.Commented;
+/* import y.InBlock;
+   import z.AlsoInBlock; */
+import a.b.C;
+import static a.b.D.helper;
+import a.e.*;
+  import   f.G  ;
+
+public class Outer {
+}
+"""
+
+
+def test_the_import_lines_are_read_as_written_and_never_from_a_comment():
+    found = policy.import_lines(FILE_WITH_IMPORTS, 11)
+    assert found == [(6, 'import a.b.C;'), (7, 'import static a.b.D.helper;'), (8, 'import a.e.*;'), (9, 'import   f.G  ;')]
+
+
+def test_the_import_lines_stop_before_the_declaration():
+    assert policy.import_lines(FILE_WITH_IMPORTS, 7) == [(6, 'import a.b.C;')]
+    assert policy.import_lines(FILE_WITH_IMPORTS, 1) == []
+    assert policy.import_lines(b'', 5) == []
+
+
+def test_an_import_after_a_closed_comment_on_its_line_is_still_an_import():
+    """Remarque de revue de la PR 176 : `/* note */ import a.B;` est un import valide."""
+    source = b"""package p;
+/* note */ import a.B;
+/* debut
+   fin */ import c.D;
+// import x.Hidden;
+import e.F; // fin
+import g.*;
+/* import h.Block; */
+class A {}
+"""
+    found = policy.import_lines(source, 20)
+    assert found == [(2, 'import a.B;'), (4, 'import c.D;'), (6, 'import e.F;'), (7, 'import g.*;')], 'le texte de l’import, sans ses commentaires'
+    assert [policy.import_target(text) for _, text in found] == [('a.B', False), ('c.D', False), ('e.F', False), ('g', True)]
+
+
+def test_what_a_line_imports_is_read_from_its_code_never_from_a_comment():
+    assert policy.import_target('/* note */ import a.B;') == ('a.B', False)
+    assert policy.import_target('import static x.Y.helper;') == ('x.Y.helper', False)
+    assert policy.import_target('import static x.Y.*;') == ('x.Y', True), 'un joker désigne un paquet'
+    assert policy.import_target('// import a.B;') is None
+    assert policy.import_target('class A {}') is None

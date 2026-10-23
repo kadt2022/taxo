@@ -106,7 +106,7 @@ def test_a_question_without_code_goes_back_to_the_classic_exploration(make_repo,
 # --- Budget, lecture, garde, consentement ------------------------------------------------------------------------------
 
 def test_what_does_not_fit_is_listed_and_read_by_number(make_repo, tmp_path, monkeypatch):
-    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 3_000)
     model = Scripted(target(ROUTE), read(2, 3), conclude())
     result = run(make_repo, tmp_path, monkeypatch, model)
     assert 'Code du parcours non encore transmis' in sent(model, 1)
@@ -122,7 +122,7 @@ def test_reading_before_any_map_is_refused(make_repo, tmp_path, monkeypatch):
 
 
 def test_a_conclusion_without_the_direct_calls_is_returned_once(make_repo, tmp_path, monkeypatch):
-    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 3_000)
     model = Scripted(target(ROUTE), conclude('Trop tôt.'), conclude('Je maintiens.'))
     result = run(make_repo, tmp_path, monkeypatch, model)
     assert 'Non lus : #2' in sent(model, 2), 'la méthode appelée par l’entrée n’a pas été lue'
@@ -200,7 +200,7 @@ def test_without_the_target_phase_the_same_conclusion_is_returned(make_repo, tmp
 
 
 def test_a_tile_only_listed_on_the_map_is_not_counted_as_read(make_repo, tmp_path, monkeypatch):
-    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 3_000)
     model = Scripted(target(ROUTE), NONE, UNKNOWN_REPOSITORY, answer(statement('interpretation', 'Je maintiens.')))
     result = run(make_repo, tmp_path, monkeypatch, model)
     sent_tiles = next(step for step in result['trajectory'] if step['operation'] == paths.OPERATION)
@@ -285,7 +285,7 @@ def test_a_turn_with_its_unused_fields_left_empty_is_read():
 
 def test_without_calls_left_the_guard_keeps_the_answer_marked_partial(make_repo, tmp_path, monkeypatch):
     monkeypatch.setenv('MINIA_TARGET_TURNS', '2')
-    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 3_000)
     model = Scripted(target(ROUTE), conclude('Réponse sur le code reçu.'))
     result = run(make_repo, tmp_path, monkeypatch, model)
     assert len(model.calls) == 2, 'plus aucun appel : la garde ne renvoie pas la conclusion'
@@ -299,7 +299,7 @@ def test_an_answer_returned_by_the_guard_stays_the_answer_when_calls_run_out(mak
     """Le cas de TAKIBO : une réponse renvoyée par la garde, puis des lectures jusqu'à épuiser les 6 appels par défaut.
     Avant, Minia déclarait « ne progressait plus » et repartait en mode paquet, qui jetait la réponse."""
     monkeypatch.delenv('MINIA_TARGET_TURNS', raising=False)
-    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 3_000)
     repli = json.dumps({'cited': [], 'answer': 'Repli.', 'unknown': ''})
     model = Scripted(target(ROUTE), conclude('Première réponse.'), read(9), read(9), read(9), read(9), repli)
     result = run(make_repo, tmp_path, monkeypatch, model)
@@ -360,7 +360,7 @@ def test_anchoring_steps_carry_their_size():
 
 def test_an_answer_given_before_code_served_later_is_never_presented_as_complete(make_repo, tmp_path, monkeypatch):
     monkeypatch.setenv('MINIA_TARGET_TURNS', '4')
-    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 3_000)
     model = Scripted(target(ROUTE), conclude('Première réponse.'), read(2), read(3))
     result = run(make_repo, tmp_path, monkeypatch, model)
     assert result['returned'] == ['#2'], 'la garde a renvoyé la conclusion'
@@ -372,7 +372,7 @@ def test_an_answer_given_before_code_served_later_is_never_presented_as_complete
 
 def test_the_guard_returns_a_conclusion_only_when_it_can_be_revised(make_repo, tmp_path, monkeypatch):
     monkeypatch.setenv('MINIA_TARGET_TURNS', '3')
-    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 2_500)
+    monkeypatch.setattr(paths, 'MAX_PATH_BYTES', 3_000)
     model = Scripted(target(ROUTE), conclude('Réponse.'))
     result = run(make_repo, tmp_path, monkeypatch, model)
     assert len(model.calls) == 2, 'un seul appel restant : lire puis reconclure est impossible, la réponse est gardée'

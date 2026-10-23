@@ -661,6 +661,10 @@ class Exchange:
     def get_source(self, arguments, max_bytes):
         return self.sources.get_source(arguments, max_bytes)
 
+    def source_imports(self, reference):
+        """Les imports du fichier d'un symbole lisible (voir `SourceOperation.imports`) ; pas une opération du protocole."""
+        return self.sources.imports(reference)
+
     def _asked(self, arguments):
         """L'affirmation demandée, vérifiée dans sa forme, et les faits valides que Taxo établit pour son sujet et sa
         relation."""

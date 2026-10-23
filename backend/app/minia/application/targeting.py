@@ -227,6 +227,8 @@ def _tile_text(tile):
     if 'class' in tile:
         head = tile['class']
         out.append(f'--- classe {short(head["reference"])} ({head["path"]}:{head["line_start"]}) ---\n{head["text"]}')
+    if tile.get('imports'):
+        out.append(f'--- imports ({tile["path"]}) ---\n' + '\n'.join(entry['text'] for entry in tile['imports']))
     out.append(f'--- #{tile["number"]} {short(tile["reference"])} ({tile["path"]}:{tile["line_start"]}-'
                f'{tile["line_end"]}){" [tronqué]" if tile.get("truncated") else ""} ---')
     if tile.get('fields'):
@@ -235,6 +237,11 @@ def _tile_text(tile):
     for head in tile.get('types') or ():
         out.append(f'--- type {short(head["reference"])} ({head["path"]}:{head["line_start"]}) ---\n{head["text"]}')
     return '\n'.join(out)
+
+
+def _notes(response):
+    """Ce que les imports envoyés disent et ne disent pas, une fois par réponse."""
+    return [paths.IMPORTS_SCOPE['note']] if response.get('imports_scope') else []
 
 
 def _missing(response):
@@ -249,6 +256,8 @@ def _missing(response):
             said.append('Code illisible : ' + ', '.join(f'#{n}' for n in item['numbers']) + '.')
         elif item.get('what') in ('class_header', 'type_header'):
             said.append(f'En-tête indisponible : {short(item["reference"])}.')
+        elif item.get('what') == 'imports':
+            said.append(f'Imports non lus : {short(item["reference"])} ; un type de ce code peut venir d’un import absent ici.')
     if response.get('to_read'):
         said.append('Code du parcours non encore transmis : ' + ', '.join(f'#{n}' for n in response['to_read'])
                     + ' (action "read").')
@@ -275,14 +284,15 @@ def render_path(response):
     if response.get('not_followed'):
         lines.append(f'{response["not_followed"]["count"]} appel(s) au-delà de la profondeur du parcours, non suivis.')
     return '\n\n'.join(part for part in ('\n'.join(lines), *map(_tile_text, response['tiles']),
-                                         '\n'.join(_missing(response))) if part)
+                                         '\n'.join(_notes(response) + _missing(response))) if part)
 
 
 def render_read(response):
     """Des tuiles lues (`read_tiles`), en texte."""
     if response.get('outcome') != 'OK':
         return f'Taxo ne peut pas lire ces tuiles : {response["error"]["message"]}'
-    return '\n\n'.join(part for part in (*map(_tile_text, response['tiles']), '\n'.join(_missing(response))) if part)
+    return '\n\n'.join(part for part in (*map(_tile_text, response['tiles']),
+                                         '\n'.join(_notes(response) + _missing(response))) if part)
 
 
 def render_candidates(candidates):

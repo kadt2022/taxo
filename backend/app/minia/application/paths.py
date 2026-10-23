@@ -25,6 +25,7 @@ import re
 
 from app.minia.application import sources
 from app.protocol.domain.envelope import error, size
+from app.protocol.domain.source import import_target
 
 OPERATION, READ = 'get_path', 'read_tiles'
 OFF, FULL, MAP = 'off', 'full', 'map'
@@ -36,6 +37,13 @@ DEPTH, MAX_METHODS = 4, 30
 MAX_PATH_BYTES = 24_000
 PIECE_BYTES = 16_000
 MAX_NOT_FOLLOWED = 20
+# Les imports d'une tuile (récit contrat de suffisance, lot S3) : ceux dont le nom est utilisé dans la tuile, et les imports avec
+# joker. Un import n'est qu'un nom écrit : il identifie le nom complet d'un type, il ne le résout pas.
+IMPORTS_SCOPE = {
+    'covers': 'imports-named-in-the-tile-and-wildcards/1',
+    'note': 'Imports : ceux dont le nom est utilisé dans la tuile, et les imports avec joker (qui ne disent pas quel type est '
+            'utilisé). Un type sans import ici est du même paquet, de java.lang, d’un paquet importé avec joker, ou non cité '
+            'dans cette tuile.'}
 _INVALID = 'INVALID_ARGUMENT'
 _NOTE = {
     FULL: 'Le chemin calculé par Taxo depuis la référence, et le code de chaque méthode (tuile). Une tuile non transmise '
@@ -204,18 +212,56 @@ def _tile(exchange, number, method, context, given):
             'line_end': item['line_end'], 'truncated': item.get('truncated', False), 'fields': fields,
             'code': item['text']}
     adds, unavailable = set(), []
+    header = _header(exchange, owner, context['headers'])
     if owner not in given:
-        header = _header(exchange, owner, context['headers'])
         if header:
             tile['class'] = header
             adds.add(owner)
         else:
             unavailable.append(_unavailable('class_header', number, owner))
+    shown, why, keys = _imports(exchange, method, '\n'.join([item['text'], *fields, (header or {}).get('text', '')]),
+                                item['path'], given | adds)
+    if shown:
+        tile['imports'] = shown
+        adds |= keys
+    if why:
+        unavailable.append({**_unavailable('imports', number, owner), 'reason': why})
     wanted = [*((ref, 'RESOLVED') for ref in sorted(resolved)), *((ref, 'NAMED') for ref in sorted(named))]
     types = _type_headers(exchange, number, wanted, given, adds, unavailable, context['headers'])
     if types:
         tile['types'] = types
     return tile, None, adds, unavailable
+
+
+def _import_key(path, entry):
+    return f'import:{path}:{entry["line"]}'
+
+
+def _selected_imports(lines, text):
+    """Les imports que la tuile nomme : ceux dont le nom simple est utilisé dans son texte, et les jokers. Jamais une résolution :
+    un joker désigne un paquet, pas un type, et il est dit tel."""
+    chosen = []
+    for entry in lines:
+        target = import_target(entry['text'])
+        if target is None:
+            continue
+        name, wildcard = target
+        if wildcard:
+            chosen.append({**entry, 'wildcard': True})
+        elif re.search(rf'(?<![\w$]){re.escape(name.rsplit(".", 1)[-1])}(?![\w$])', text):
+            chosen.append(entry)
+    return chosen
+
+
+def _imports(exchange, method, text, path, given):
+    """Les imports que la tuile donne, sans redonner ceux déjà donnés pour ce fichier ; sinon la raison de ne pas les lire."""
+    try:
+        lines = exchange.source_imports(method)
+    # Un refus de lecture (consentement, fichier généré ou illisible) devient une raison dite, comme pour le code.
+    except Exception as exc:  # noqa: BLE001
+        return [], getattr(exc, 'code', 'NOT_AVAILABLE'), set()
+    fresh = [entry for entry in _selected_imports(lines, text) if _import_key(path, entry) not in given]
+    return fresh, None, {_import_key(path, entry) for entry in fresh}
 
 
 def _unavailable(what, number, reference):
@@ -246,6 +292,7 @@ def _given(exchanged):
             for tile in item['response'].get('tiles') or ():
                 if 'class' in tile:
                     given.add(tile['class']['reference'])
+                given.update(_import_key(tile['path'], entry) for entry in tile.get('imports') or ())
                 given.update(entry['reference'] for entry in tile.get('types') or ())
     return given
 
@@ -284,6 +331,8 @@ def _finish(response, numbered, missing, max_bytes):
             {'what': 'tiles', 'numbers': sorted(numbers), 'reason': reason} for reason, numbers in missing.items())]}
         if 'map' in response:
             _announce(shown, response, numbered, missing)
+        if any(tile.get('imports') for tile in response['tiles']):
+            shown['imports_scope'] = IMPORTS_SCOPE
         if size(_sized(shown)) <= max_bytes or not response['tiles']:
             return shown
         dropped = response['tiles'].pop()
@@ -324,9 +373,13 @@ def _limits(response):
     truncated = [tile['number'] for tile in response['tiles'] if tile.get('truncated')]
     if truncated:
         limits['truncated_tiles'] = truncated
-    headers = sorted({item['reference'] for item in response['not_sent'] if item.get('reason') == 'NOT_AVAILABLE'})
+    headers = sorted({item['reference'] for item in response['not_sent']
+                      if item.get('reason') == 'NOT_AVAILABLE' and item.get('what') != 'imports'})
     if headers:
         limits['unavailable_headers'] = headers
+    unread = sorted({item['reference'] for item in response['not_sent'] if item.get('what') == 'imports'})
+    if unread:
+        limits['unavailable_imports'] = unread
     if response.get('not_followed'):
         limits['not_followed'] = response['not_followed']['count']
     return limits
