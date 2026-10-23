@@ -5,7 +5,8 @@ dans aucune Tuile et ne change aucune relation. Elle porte sa propre classificat
 transmet réellement : `CODE_SOURCE` n'y est annoncé que si du code est transmis.
 
 Limites : 200 lignes et 16 Ko par pièce. Au-delà, la pièce s'arrête à la dernière ligne entière qui tient, et le dit
-(`truncated`, avec la ligne de fin déclarée) ; une ligne n'est jamais coupée.
+(`truncated`, avec la ligne de fin déclarée) ; une ligne n'est jamais coupée, et une pièce coupée ne finit jamais
+sur une ligne vide.
 """
 from dataclasses import dataclass
 
@@ -66,13 +67,18 @@ def lines_of(source: bytes):
 
 def piece(source: bytes, line_start, line_end):
     """La pièce des lignes `line_start`..`line_end`, arrêtée aux limites ; None si pas une ligne ne tient."""
-    lines, kept, size = lines_of(source), [], 0
+    lines, kept, size, stopped = lines_of(source), [], 0, False
     for line in lines[line_start - 1:line_end]:
         cost = len(line.encode('utf-8')) + (1 if kept else 0)
         if len(kept) == MAX_SOURCE_LINES or size + cost > MAX_SOURCE_BYTES:
+            stopped = True
             break
         kept.append(line)
         size += cost
+    # Une pièce coupée ne s'arrête jamais sur une ligne vide : son texte finirait par un saut de ligne, et un lecteur qui
+    # compte les lignes avec `splitlines()` en perdrait une. La fin déclarée et l'empreinte disent ce qui est transmis.
+    while stopped and kept and kept[-1] == '':
+        kept.pop()
     if not kept:
         return None
     last = line_start + len(kept) - 1
