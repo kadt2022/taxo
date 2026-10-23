@@ -209,6 +209,8 @@ def test_a_piece_that_is_not_cut_keeps_its_declared_range(monkeypatch):
     monkeypatch.setattr(policy, 'MAX_SOURCE_LINES', 3)
     exact = policy.piece(b'a\nb\n\n', 1, 3)
     assert not exact.truncated and exact.line_end == 3, 'une plage qui tient entière n’est pas rognée'
+
+
 FILE_WITH_IMPORTS = b"""package p;
 
 // import x.Commented;
