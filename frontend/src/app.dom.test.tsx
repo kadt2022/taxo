@@ -76,14 +76,14 @@ describe('une page par fonction', ()=>{
   it('ouvre Overview en tableau de bord : cartes, analyse affichée, actions, et rien d’autre', async()=>{
     await open('#/');
     expect(current()).toContain('Overview');
-    // La marque Taxo ouvre la barre du haut et mène à Overview, avant les menus globaux.
+    // La marque Taxo ouvre la barre du haut et mène à Overview ; la barre ne porte plus de menu.
     const head=host.querySelector('.page-head .head-start');
     expect(head?.firstElementChild?.matches('a.top-brand[href="#/"]')).toBe(true);
     expect(head?.querySelector('.top-brand-text strong')?.textContent).toBe('Taxo');
     expect(head?.querySelector('.top-brand-text small')?.textContent).toBe('Software Intelligence');
     // Le lien garde un nom pour les lecteurs d'écran : le texte n'est jamais retiré, seulement masqué visuellement sur petit écran.
     expect(head?.querySelector('a.top-brand')?.textContent).toContain('Taxo');
-    expect(head?.querySelector('.top-brand + .top-menu')).not.toBeNull();
+    expect(host.querySelector('.top-menu, nav[aria-label="Menus"]'), 'la barre du haut ne porte plus de menu').toBeNull();
     // Une seule marque : la barre latérale ne la répète pas.
     expect(host.querySelectorAll('.brand-mark')).toHaveLength(1);
     expect(text()).not.toContain('EXPLORATEUR');
@@ -230,31 +230,21 @@ describe('une page par fonction', ()=>{
     expect(host.querySelector('.switcher-current strong')?.textContent).toBe('Nouveau');
   });
 
-  it('Analyse : un panneau de commande pour le projet actif, la dernière analyse et les analyses existantes', async()=>{
-    await open('#/');
+  it('lancer une analyse se fait depuis la page Analyses : la barre du haut n’a plus de menu', async()=>{
+    await open('#/analyses');
+    expect(host.querySelector('.top-menu, nav[aria-label="Menus"]')).toBeNull();
     expect(host.querySelector('.page-head .primary')).toBeNull();
-    const menu=Array.from(host.querySelectorAll('.top-menu button')).find(item=>item.textContent==='Analyse');
-    await act(async()=>{menu?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
-    const panel=host.querySelector('.menu-panel');
-    expect(panel?.textContent).toContain('Boutique');
-    expect(panel?.querySelector('.command-main')?.textContent).toBe('Lancer l’analyse globale');
-    expect(panel?.querySelector('a[href="#/analyses/new"]')?.textContent).toBe('Voir l’analyse');
-    expect(Array.from(panel?.querySelectorAll('.command-links a')??[]).map(link=>link.getAttribute('href'))).toEqual(['#/analyses', '#/comparaisons']);
-    await act(async()=>{panel?.querySelector('.command-main')?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
+    await act(async()=>{host.querySelector('.launch-button')?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
     await flush();
-    expect(host.querySelector('.menu-panel')).toBeNull();
     const calls=(vi.mocked(fetch).mock.calls as unknown as [URL, RequestInit?][]).filter(([, init])=>init?.method==='POST').map(([url])=>url.toString());
     expect(calls.some(url=>url.endsWith('/projects/p/analyses'))).toBe(true);
   });
 
-  it('sans analyse : la première se lance depuis l’accueil comme depuis le menu', async()=>{
+  it('sans analyse : la première se lance depuis l’accueil', async()=>{
     empty=true;
     await open('#/');
     expect(host.querySelector('.welcome .primary')?.textContent).toBe('Lancer la première analyse');
-    const menu=Array.from(host.querySelectorAll('.top-menu button')).find(item=>item.textContent==='Analyse');
-    await act(async()=>{menu?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
-    expect(host.querySelector('.menu-panel')?.textContent).toContain('Aucune analyse pour ce projet.');
-    expect(host.querySelector('.menu-panel .command-main')?.textContent).toBe('Lancer la première analyse');
+    expect(host.querySelector('.top-menu')).toBeNull();
   });
 
   it('une analyse interrompue reste à son projet : en changer efface son échec', async()=>{

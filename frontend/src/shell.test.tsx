@@ -1,6 +1,6 @@
 import {renderToStaticMarkup} from 'react-dom/server';
 import {describe, expect, it, vi} from 'vitest';
-import {BrandMark, MENU_ICONS, ResultsNav, TopMenu, closeOnOutside, commitOf, navItemsOf, since} from './shell';
+import {BrandMark, ResultsNav, closeOnOutside, commitOf, navItemsOf, since} from './shell';
 import type {RouteCounts, Scan} from './overview';
 
 const NOW=Date.parse('2026-09-30T12:00:00Z');
@@ -80,36 +80,6 @@ describe('closeOnOutside', ()=>{
     closeOnOutside(null, close, doc as unknown as Document);
     doc.handlers.get('mousedown')?.({target:{}} as unknown as Event);
     expect(close).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('TopMenu', ()=>{
-  const render=(initialOpen:string|null, latest?:()=>void, running=false)=>renderToStaticMarkup(<TopMenu latest={latest} running={running}
-    initialOpen={initialOpen} analysis={()=><p>Panneau</p>}/>);
-  it('ne garde que les commandes globales : aucun lien de navigation', ()=>{
-    const html=render(null);
-    for(const name of ['Fichier','Analyse','Affichage','Aide'])expect(html).toContain(`<path d="${MENU_ICONS[name]}"></path></svg><span class="menu-label">${name}</span></button>`);
-    expect(new Set(Object.values(MENU_ICONS)).size).toBe(4);
-    expect(html).not.toContain('Overview');
-    expect(html).not.toContain('<a ');
-    expect(html).not.toContain('menu-list');
-    expect(html).toContain('aria-haspopup="dialog"');
-  });
-  it('ouvre un seul menu à la fois, et Analyse en panneau', ()=>{
-    const html=render('Affichage');
-    expect(html.match(/menu-list/g)).toHaveLength(1);
-    expect(html).toContain('href="#/analyses"');
-    expect(html).not.toContain('Ajouter un projet…');
-    expect(render('Analyse')).toContain('<div class="menu-panel" role="dialog" aria-label="Analyse"><p>Panneau</p></div>');
-  });
-  it('mène aux projets, désactive ce qui n’est pas possible, et signale une analyse en cours', ()=>{
-    expect(render('Fichier')).toContain('href="#/projets?ajouter=1"');
-    expect(render('Fichier')).toContain('href="#/projets"');
-    expect(render('Affichage')).toMatch(/disabled="">Revenir à la dernière analyse/);
-    expect(render('Affichage', ()=>{})).not.toContain('disabled=""');
-    expect(render('Aide')).toContain('version 0.1');
-    expect(render(null, undefined, true)).toContain('class="is-running"');
-    expect(render(null)).not.toContain('is-running');
   });
 });
 

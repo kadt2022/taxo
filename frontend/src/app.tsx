@@ -2,8 +2,8 @@
 import {useEffect, useState, type ReactNode} from 'react';
 import {type MiniaStatus} from './minia';
 import {AnalysisLimits, overviewCards, panelKey, routeCounts, technologiesOf, type Scan} from './overview';
-import {BrandMark, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
-import {AnalysisCommand, LaunchCard} from './commands';
+import {BrandMark, ResultsNav, navItemsOf, since, type Project} from './shell';
+import {LaunchCard} from './commands';
 import {ProjectSwitcher} from './switcher';
 import {href, go, parse, useRoute, withProject} from './nav';
 import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, ProjectsPage, TechnologiesPage} from './pages';
@@ -131,8 +131,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   </div>;
   return <div className="layout">
     <header className="page-head"><div className="head-start"><a className="top-brand" href={href('overview')}><BrandMark/><span className="top-brand-text"><strong>Taxo</strong><small>Software Intelligence</small></span></a>
-      <TopMenu running={running} latest={scanId&&scanId!==latest?.id?showLatest:undefined} analysis={close=><AnalysisCommand project={project}
-        latest={latest} running={running} canAnalyze={!!selected&&!busy&&!loading} onAnalyze={analyze} onClose={close}/>}/></div></header>
+    </div></header>
     <aside>
     {!loading&&<ProjectSwitcher key={projects.length} projects={projects} selected={selected} status={shown?since(shown.created_at):''} busy={busy}
       onOpen={open} onAdd={add}/>}
