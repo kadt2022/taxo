@@ -76,16 +76,10 @@ describe('une page par fonction', ()=>{
   it('ouvre Overview en tableau de bord : cartes, analyse affichée, actions, et rien d’autre', async()=>{
     await open('#/');
     expect(current()).toContain('Overview');
-    // La marque Taxo ouvre la barre du haut et mène à Overview ; la barre ne porte plus de menu.
-    const head=host.querySelector('.page-head .head-start');
-    expect(head?.firstElementChild?.matches('a.top-brand[href="#/"]')).toBe(true);
-    expect(head?.querySelector('.top-brand-text strong')?.textContent).toBe('Taxo');
-    expect(head?.querySelector('.top-brand-text small')?.textContent).toBe('Software Intelligence');
-    // Le lien garde un nom pour les lecteurs d'écran : le texte n'est jamais retiré, seulement masqué visuellement sur petit écran.
-    expect(head?.querySelector('a.top-brand')?.textContent).toContain('Taxo');
-    expect(host.querySelector('.top-menu, nav[aria-label="Menus"]'), 'la barre du haut ne porte plus de menu').toBeNull();
-    // Une seule marque : la barre latérale ne la répète pas.
-    expect(host.querySelectorAll('.brand-mark')).toHaveLength(1);
+    // Plus de barre du haut : ni marque, ni menu, ni en-tête ; la navigation est la barre latérale.
+    expect(host.querySelector('header, .page-head, .top-brand, .top-menu, nav[aria-label="Menus"]'), 'plus de barre du haut').toBeNull();
+    expect(host.querySelector('.layout > aside'), 'la barre latérale ouvre la page').not.toBeNull();
+    expect(host.querySelector('.results-nav a[href="#/"]')?.textContent, 'Overview reste le chemin vers l’accueil').toContain('Overview');
     expect(text()).not.toContain('EXPLORATEUR');
     expect(host.querySelector('.overview .cards')).not.toBeNull();
     expect(text()).toContain('Dernière analyse');
@@ -210,7 +204,6 @@ describe('une page par fonction', ()=>{
     await open('#/projets');
     expect(host.querySelector('aside > .switcher')).not.toBeNull();
     expect(host.querySelector('.results-nav a[href="#/projets"]')).toBeNull();
-    expect(host.querySelector('.page-head .picker')).toBeNull();
     const items=Array.from(host.querySelectorAll('.project-list li'));
     expect(items.map(item=>item.querySelector('strong')?.textContent)).toEqual(['Boutique', 'Atelier']);
     expect(items[0].textContent).toContain('Projet actif');
@@ -233,7 +226,6 @@ describe('une page par fonction', ()=>{
   it('lancer une analyse se fait depuis la page Analyses : la barre du haut n’a plus de menu', async()=>{
     await open('#/analyses');
     expect(host.querySelector('.top-menu, nav[aria-label="Menus"]')).toBeNull();
-    expect(host.querySelector('.page-head .primary')).toBeNull();
     await act(async()=>{host.querySelector('.launch-button')?.dispatchEvent(new MouseEvent('click', {bubbles:true}));});
     await flush();
     const calls=(vi.mocked(fetch).mock.calls as unknown as [URL, RequestInit?][]).filter(([, init])=>init?.method==='POST').map(([url])=>url.toString());

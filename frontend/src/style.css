@@ -70,13 +70,6 @@ header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
 h1{font-size:clamp(28px,3vw,38px);font-weight:700;letter-spacing:-.025em;line-height:1.15;margin:0 0 10px;overflow-wrap:anywhere}
 .path{display:inline-block;font-family:var(--mono),monospace;font-size:12.5px;color:var(--text-2);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 12px;overflow-wrap:anywhere;margin:0}
 header .primary{padding:12px 20px}
-.page-head{align-items:center;padding:14px 16px 14px 18px;margin-bottom:18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow)}
-.page-title{display:flex;align-items:center;gap:14px;min-width:0}
-.page-icon{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--brand);color:var(--accent)}
-.page-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8}
-.page-head h1{font-size:22px;margin:0;letter-spacing:-.015em}
-.page-head .primary{padding:11px 20px;border-radius:var(--r)}
-@media (max-width:560px){.page-head{flex-wrap:wrap;gap:12px}.page-head .primary{width:100%}}
 
 
 .error{background:var(--danger-soft);color:var(--danger);border:1px solid #f3cfc8;padding:12px 14px;border-radius:var(--r-sm);margin-bottom:18px;font-size:14px}
@@ -387,18 +380,7 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
 .overview .card-link{font-size:12px;padding:0 10px}
 
 /* En-tête de page : style application, à plat, sans bandeau ni carte */
-.page-head{position:static;overflow:visible;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:2px 2px 16px;margin:0 0 20px;background:none;border:0;border-bottom:1px solid var(--border);border-radius:0;box-shadow:none}
-.page-head::after{content:none}
-.page-title{gap:12px}
-.page-icon{width:36px;height:36px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--brand-3);box-shadow:var(--shadow-sm)}
-.page-icon svg{width:18px;height:18px}
-.page-head h1{color:var(--text);font-size:20px;font-weight:650;line-height:1.2}
-.page-sub{margin:2px 0 0;font-size:13px;color:var(--muted)}
-.page-head .primary{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:9px;background:var(--brand);color:#fff;border:1px solid var(--brand);font-size:13px;font-weight:600;box-shadow:none}
-.page-head .primary:hover:not(:disabled){background:var(--brand-2)}
-.page-head .primary:disabled{background:var(--surface-3);border-color:var(--border);color:var(--muted);opacity:1}
 .btn-arrow{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
-.page-head .primary:hover:not(:disabled) .btn-arrow{transform:translateX(2px)}
 
 /* Progression d'une analyse : carte avec barre d'avancement et étapes en frise verticale */
 .progress{padding:22px 24px 20px;border-radius:var(--r-lg);box-shadow:var(--shadow)}
@@ -444,40 +426,10 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
   main{height:calc(100vh - 10px);margin-bottom:0;border-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;box-shadow:none}
 }
 
-/* Barre supérieure fixe, façon menu d'application : sur toute la largeur, dans la couleur de la coque */
-.page-head{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:16px;height:44px;margin:0;padding:0 14px 0 20px;background:#0f3029;border:0;border-radius:0;box-shadow:none}
-.page-title{gap:12px}
-.page-title>div{display:flex;align-items:baseline;gap:12px;min-width:0}
-.page-icon{width:28px;height:28px;border-radius:8px;background:rgba(184,224,127,.14);border:1px solid rgba(184,224,127,.3);color:var(--accent);box-shadow:none}
-.page-icon svg{width:16px;height:16px}
-.page-head h1{color:#f1f6f2;font-size:15px;font-weight:650;letter-spacing:0;white-space:nowrap}
-.page-sub{margin:0;font-size:12.5px;color:#8fb0a3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.page-head .primary{padding:6px 12px;font-size:12.5px;background:var(--accent);color:var(--brand);border-color:var(--accent)}
-.page-head .primary:hover:not(:disabled){background:#c8ea94}
-.page-head .primary:disabled{background:rgba(255,255,255,.1);border-color:transparent;color:rgba(255,255,255,.55)}
-@media(max-width:760px){.page-sub{display:none}}
 @media(min-width:901px){
-  .layout{grid-template-rows:44px minmax(0,1fr)}
-  .page-head{grid-column:1/-1}
   aside{height:100%;position:static}
-  main{height:calc(100vh - 44px - 10px)}
 }
 
-/* Barre de menus : la marque Taxo, puis Fichier, Analyse, Affichage, Aide */
-.head-start{display:flex;align-items:center;gap:28px;min-width:0}
-.top-brand{display:inline-flex;align-items:center;gap:9px;flex:none;color:#fff;text-decoration:none;line-height:1}
-.top-brand .brand-mark{width:30px;height:30px}
-.top-brand-text{display:flex;flex-direction:column;gap:2px}
-.top-brand-text strong{font-size:17px;font-weight:700;letter-spacing:-.02em}
-.top-brand-text small{font-size:10.5px;font-weight:500;letter-spacing:.02em;color:#a9c4b8}
-.top-brand:focus-visible{border-radius:6px}
-@media(max-width:1100px){.head-start{gap:14px}}
-/* Sous 900 px, la règle générale des en-têtes empile leur contenu : la barre du haut reste sur une ligne, puis se replie sur deux sous
-   560 px, sans jamais rogner le sélecteur de projet ni l'analyse globale. */
-@media(max-width:900px){.page-head{grid-column:1/-1;flex-direction:row;align-items:center}.head-start{flex:1 1 auto}}
-@media(max-width:900px){.top-brand-text small{display:none}}
-@media(max-width:560px){.top-brand-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.head-start{gap:6px}
-  .page-head{height:auto;flex-wrap:wrap;row-gap:8px;padding:8px 12px}.head-actions{width:100%;justify-content:space-between}.picker{flex:1 1 auto;min-width:0}.picker-current{max-width:100%;min-width:0;overflow:hidden}.picker-current strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.head-actions>.primary{flex:none;width:auto}}
 main{scroll-behavior:smooth}
 main section,main details,main [id]{scroll-margin-top:16px}
 @media(prefers-reduced-motion:reduce){main{scroll-behavior:auto}}
@@ -792,11 +744,6 @@ main section,main details,main [id]{scroll-margin-top:16px}
 .switcher-current small{display:flex;align-items:center;gap:6px}
 .switcher-current small i{flex:none;width:6px;height:6px;border-radius:50%;background:#5fcf8a}
 .switcher-save{white-space:nowrap}
-/* Le menu horizontal commence juste après la barre latérale : la marque occupe sa largeur (272 px, 232 px sur tablette). */
-.top-brand{width:calc(272px - 20px)}
-.head-start{gap:0}
-@media(max-width:1000px){.top-brand{width:calc(232px - 20px)}}
-@media(max-width:900px){.top-brand{width:auto}.head-start{gap:14px}}
 
 /* ——— Poste de lancement de la page Analyses (TAXO-UI-05) ——— */
 .launch{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:18px 22px;padding:22px 24px;border-radius:var(--r-lg);overflow:hidden;
