@@ -362,7 +362,7 @@ describe('l’explorateur', ()=>{
     await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
     const bar=host.querySelector('.chain-frame .chain-tools[role=toolbar]') as HTMLElement;
     expect(bar.getAttribute('aria-label')).toBe('Commandes du graphe');
-    for(const name of ['Zoom avant', 'Zoom arrière', 'Ajuster à la largeur', 'Recentrer sur l’ancre', 'Agrandir la zone', 'Exporter en image (PNG)'])
+    for(const name of ['Zoom avant', 'Zoom arrière', 'Ajuster à la largeur', 'Recentrer sur l’ancre', 'Agrandir le schéma dans une nouvelle fenêtre', 'Exporter en image (PNG)'])
       expect(bar.contains(named(name)??null), name).toBe(true);
     const legend=host.querySelector('.chain-tools fieldset.chain-legend') as HTMLElement;
     expect(legend.querySelector('legend')?.textContent, 'la légende a son nom').toBe('Légende');
@@ -410,15 +410,37 @@ describe('l’explorateur', ()=>{
     expect(globalThis.localStorage.getItem('taxo.explorer.graph-theme')).toBe('light');
   });
 
-  it('lève la hauteur maximale à la demande, et la rétablit', async()=>{
+  it('ouvre le schéma dans sa propre fenêtre, avec l’adresse de ce qui est affiché, et dit une fenêtre bloquée', async()=>{
+    const opened=vi.spyOn(globalThis, 'open').mockReturnValue({} as Window);
+    try{
+      await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}&projet=p`);
+      await click(named('Agrandir le schéma dans une nouvelle fenêtre'));
+      const [address, target, features]=opened.mock.calls[0] as [string, string, string];
+      expect(target).toBe('_blank');
+      expect(features, 'une vraie fenêtre, pas un onglet').toContain('popup=yes');
+      const params=new URL(address).hash.split('?')[1];
+      const asked=new URLSearchParams(params);
+      expect(new URL(address).hash.startsWith('#/explorer?')).toBe(true);
+      expect(asked.get('plein')).toBe('schema');
+      expect(asked.get('forme'), 'la forme regardée').toBe('chaine');
+      expect(asked.get('racine'), 'le point de départ est repris').toBe(ROUTE);
+      expect(asked.get('projet'), 'le projet aussi').toBe('p');
+      expect(host.querySelector('[role=alert]')).toBeNull();
+      opened.mockReturnValue(null);
+      await click(named('Agrandir le schéma dans une nouvelle fenêtre'));
+      expect(host.querySelector('.chain-tools [role=alert]')?.textContent).toContain('bloqué la nouvelle fenêtre');
+      await click(named('Appels'));
+      opened.mockReturnValue({} as Window);
+      await click(named('Agrandir le schéma dans une nouvelle fenêtre'));
+      expect(new URLSearchParams((opened.mock.calls.at(-1)![0] as string).split('?')[1]).get('forme')).toBe('appels');
+    }finally{opened.mockRestore();}
+  });
+
+  it('n’a plus de bouton qui lève la hauteur dans la page : l’agrandissement est la fenêtre', async()=>{
     await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
-    const zone=()=>host.querySelector('.chain-scroll') as HTMLElement;
-    expect(zone().classList.contains('grown')).toBe(false);
-    await click(named('Agrandir la zone'));
-    expect(zone().classList.contains('grown')).toBe(true);
-    expect(named('Réduire la zone')?.getAttribute('aria-pressed')).toBe('true');
-    await click(named('Réduire la zone'));
-    expect(zone().classList.contains('grown')).toBe(false);
+    expect(named('Agrandir la zone')).toBeUndefined();
+    expect(named('Réduire la zone')).toBeUndefined();
+    expect(host.querySelector('.chain-scroll.grown')).toBeNull();
   });
 
   it('n’appelle jamais Minia : seulement le protocole et la liste des analyses', async()=>{
@@ -525,12 +547,91 @@ describe('l’explorateur', ()=>{
       expect(panel.querySelector('.code-line.selected')?.textContent).toContain('150');
     });
 
+    it('ouvre la tuile de code dans sa propre fenêtre : la classe et son code, en grand', async()=>{
+      serving();
+      const opened=vi.spyOn(globalThis, 'open').mockReturnValue({} as Window);
+      try{
+        const panel=await picked();
+        const button=named('Agrandir le code dans une nouvelle fenêtre');
+        expect(panel.querySelector('.code-head')?.contains(button??null), 'le bouton est sur la tuile').toBe(true);
+        await click(button);
+        const asked=new URLSearchParams((opened.mock.calls[0][0] as string).split('?')[1]);
+        expect(asked.get('plein')).toBe('code');
+        expect(asked.get('noeud'), 'le nœud choisi').toBe(HANDLER);
+        opened.mockReturnValue(null);
+        await click(button);
+        expect(panel.querySelector('.code-head [role=alert]')?.textContent).toContain('bloqué la nouvelle fenêtre');
+      }finally{opened.mockRestore();}
+    });
+
     it('ne demande aucun code pour un nœud qui n’est pas un symbole, et le dit', async()=>{
       await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
       await click(host.querySelector('.chain-node.anchor'));
       await wait();
       expect(calls.filter(call=>call.operation==='get_source')).toHaveLength(0);
       expect(host.querySelector('[aria-label="Nœud choisi"]')?.textContent).toContain('n’a pas de code propre');
+    });
+  });
+
+  describe('les fenêtres à part : le code d’une classe, ou le schéma, en grand', ()=>{
+    const serving=()=>{
+      source={'symbol:java:A':{reference:'symbol:java:A', commit:'c', path:'src/A.java', items:[piece('symbol:java:A', 1, CLASS_LINES)]},
+        [HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[piece(HANDLER, 3, CLASS_LINES.slice(2, 5))]}};
+    };
+
+    it('la fenêtre de code ne montre que la classe et son code, sans bouton Agrandir, sans graphe ni recherche', async()=>{
+      serving();
+      await open(`#/explorer?plein=code&noeud=${encodeURIComponent(HANDLER)}`);
+      await wait();
+      const shown=host.querySelector('.plein-code') as HTMLElement;
+      expect(shown, 'la page est la fenêtre de code').toBeTruthy();
+      expect(shown.querySelector('.code-tile.large'), 'en grand').not.toBeNull();
+      expect(Array.from(shown.querySelectorAll('.code-line')).map(line=>line.querySelector('.code-number')?.textContent)).toEqual(['1', '2', '3', '4', '5', '6']);
+      expect(shown.querySelectorAll('.code-line.selected'), 'la méthode reste surlignée dans sa classe').toHaveLength(3);
+      expect(named('Agrandir le code dans une nouvelle fenêtre'), 'on est déjà dans la fenêtre').toBeUndefined();
+      expect(host.querySelector('.explorer-head, input, .explorer-body, .chain'), 'rien d’autre que le code').toBeNull();
+      expect(calls.filter(call=>call.operation==='get_neighborhood'), 'aucune vue chargée pour montrer du code').toHaveLength(0);
+      expect(document.title).toContain('code');
+    });
+
+    it('la fenêtre de code lève la borne d’affichage : toutes les lignes de la pièce de Taxo', async()=>{
+      const body=Array.from({length:200}, (_, index)=>`  line ${index+1};`);
+      source={[HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[piece(HANDLER, 150, body.slice(149, 153))]},
+        'symbol:java:A':{reference:'symbol:java:A', commit:'c', path:'src/A.java', items:[piece('symbol:java:A', 1, body)]}};
+      await open(`#/explorer?plein=code&noeud=${encodeURIComponent(HANDLER)}`);
+      await wait();
+      expect(host.querySelectorAll('.plein-code .code-line')).toHaveLength(200);
+      expect(host.textContent).not.toContain('Affichage borné');
+    });
+
+    it('la fenêtre de code dit qu’aucun nœud n’est désigné plutôt que de rester vide', async()=>{
+      await open('#/explorer?plein=code');
+      expect(host.querySelector('.plein-code')?.textContent).toContain('Aucun nœud désigné');
+    });
+
+    it('la fenêtre du schéma ne montre que le schéma et ses commandes, sans bouton Agrandir', async()=>{
+      await open(`#/explorer?plein=schema&forme=chaine&racine=${encodeURIComponent(ROUTE)}`);
+      const shown=host.querySelector('.plein-schema') as HTMLElement;
+      expect(shown, 'la page est la fenêtre du schéma').toBeTruthy();
+      expect(shown.querySelector('.chain-tools[role=toolbar]'), 'les commandes du graphe restent').not.toBeNull();
+      expect(shown.querySelectorAll('.chain-node').length).toBeGreaterThan(0);
+      expect(named('Agrandir le schéma dans une nouvelle fenêtre'), 'on est déjà dans la fenêtre').toBeUndefined();
+      expect(host.querySelector('.explorer-head, .explorer-tabs, .explorer-side, input'), 'ni recherche, ni onglets, ni panneau').toBeNull();
+      expect(tiles()[0]).toMatchObject({root:ROUTE});
+      expect(document.title).toContain('schéma');
+    });
+
+    it('la fenêtre du schéma reprend la forme Appels, et dit un point de départ absent', async()=>{
+      await open(`#/explorer?plein=schema&forme=appels&racine=${encodeURIComponent(ROUTE)}`);
+      expect(host.querySelector('.plein-schema .calls'), 'la forme regardée est reprise').not.toBeNull();
+      expect(named('Agrandir le schéma dans une nouvelle fenêtre')).toBeUndefined();
+      await open('#/explorer?plein=schema');
+      expect(host.querySelector('.plein-schema')?.textContent).toContain('Aucun point de départ');
+    });
+
+    it('un schéma d’ancre inconnue le dit, comme dans la page', async()=>{
+      await open(`#/explorer?plein=schema&racine=${encodeURIComponent(ABSENT)}`);
+      expect(host.querySelector('.plein-schema')?.textContent).toContain('n’apparaît dans aucun fait de cette analyse');
     });
   });
 });

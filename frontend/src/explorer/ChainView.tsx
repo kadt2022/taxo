@@ -11,7 +11,8 @@ import type {Link, View} from './graph';
 import type {Selected} from './state';
 import {compartments, factText, knowledgeText, linkMarks, nodeMarks, selectionText, toneOf, typeText, verb} from './sentences';
 import {useNaming} from './Naming';
-import {DownloadIcon, ExpandIcon, FitIcon, LocateIcon, MinusIcon, MoonIcon, PlusIcon, ShrinkIcon, SunIcon} from './icons';
+import {DownloadIcon, FitIcon, LocateIcon, MinusIcon, MoonIcon, PlusIcon, SunIcon} from './icons';
+import {OpenWindow} from './OpenWindow';
 import {useGraphTheme} from './graphTheme';
 import {ZOOM_MAX, ZOOM_MIN, fitScale, zoomIn, zoomOut} from './zoom';
 import type {NodeCommands} from './NodeActions';
@@ -19,8 +20,10 @@ import type {NodeCommands} from './NodeActions';
 const classes=(...names:(string|false|undefined)[])=>names.filter(Boolean).join(' ');
 const formOf=(relation:string):Form=>FORMS[relation]??'CHAIN';
 
-export function ChainView({view, links, selected, onSelect, commands, busy, viewName='Chaîne'}:Readonly<{view:View; links:Link[];
-  selected:Selected; onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean; viewName?:string}>){
+/** `windowAddress` : l'adresse du schéma dans sa propre fenêtre (le bouton « Agrandir ») ; `windowed` : on est dans cette fenêtre. */
+export function ChainView({view, links, selected, onSelect, commands, busy, viewName='Chaîne', windowAddress, windowed=false}:Readonly<{view:View;
+  links:Link[]; selected:Selected; onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean; viewName?:string;
+  windowAddress?:string; windowed?:boolean}>){
   const id=useId(), named=useNaming();
   const text:ChainText=useMemo(()=>({name:value=>compartments(value, named), note:knowledgeText,
     cut:boundary=>`${selectionText(boundary)} · ${boundary.continuation?'voir la suite':'développer'} ›`,
@@ -34,7 +37,7 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
   const kinds=new Set(drawn.boxes.map(box=>box.kind));
   const marks=[...new Set(drawn.arrows.flatMap(item=>linkMarks(item.link)))];
   const frame=useRef<HTMLDivElement>(null), [saving,setSaving]=useState(false), [failure,setFailure]=useState('');
-  const [zoom,setZoom]=useState(1), [grown,setGrown]=useState(false), {theme, toggle}=useGraphTheme();
+  const [zoom,setZoom]=useState(1), {theme, toggle}=useGraphTheme();
   const fit=()=>setZoom(fitScale(frame.current!.clientWidth, drawn.width));
   /** L'ancre au centre de la zone visible. */
   const recenter=()=>{
@@ -66,9 +69,8 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
           onClick={()=>setZoom(zoomOut(zoom))}><MinusIcon/></button>
         <button type="button" className="tool" aria-label="Ajuster à la largeur" title="Ajuster à la largeur" onClick={fit}><FitIcon/></button>
         <button type="button" className="tool" aria-label="Recentrer sur l’ancre" title="Recentrer sur l’ancre" onClick={recenter}><LocateIcon/></button>
-        <button type="button" className="tool" aria-label={grown?'Réduire la zone':'Agrandir la zone'} aria-pressed={grown}
-          title={grown?'Rétablir la hauteur maximale':'Lever la hauteur maximale : toute la hauteur du graphe'}
-          onClick={()=>setGrown(!grown)}>{grown?<ShrinkIcon/>:<ExpandIcon/>}</button>
+        {windowAddress&&!windowed&&<OpenWindow className="tool" address={windowAddress} label="Agrandir le schéma dans une nouvelle fenêtre"
+          title="Ouvrir le schéma, en grand, dans une nouvelle fenêtre"/>}
       </div>
       <span className="chain-sep" aria-hidden="true"/>
       <button type="button" className="tool tool-text" onClick={()=>{void save();}} disabled={saving}><DownloadIcon/>{saving?'Création de l’image…':'Exporter en image (PNG)'}</button>
@@ -91,7 +93,7 @@ export function ChainView({view, links, selected, onSelect, commands, busy, view
           </ul></details>
       </fieldset>
     </div>
-    <div className={classes('explorer-layers chain-scroll', grown&&'grown')} ref={frame}>
+    <div className="explorer-layers chain-scroll" ref={frame}>
     <div className="chain-zoomed" style={{width:drawn.width*zoom, height:drawn.height*zoom}}>
     <div className="explorer-canvas" style={{width:drawn.width, height:drawn.height, transform:zoom===1?undefined:`scale(${zoom})`, transformOrigin:'0 0'}}>
       <svg width={drawn.width} height={drawn.height} aria-hidden="true">

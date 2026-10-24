@@ -67,3 +67,23 @@ describe('le code d’un nœud', ()=>{
     expect(refusalText('NOT_AVAILABLE', 'Pas de commit.')).toBe('Pas de commit.');
   });
 });
+
+
+describe('la fenêtre de code lève la borne d’affichage', ()=>{
+  const body=Array.from({length:200}, (_, index)=>`  line ${index+1};`);
+  const type=piece('symbol:java:a.A', 1, body);
+  const method=piece('symbol:java:a.A#m()', 150, body.slice(149, 155));
+
+  it('sans limite, toutes les lignes de la pièce sont montrées, la méthode surlignée', ()=>{
+    const whole=tileOf(method, type, Number.POSITIVE_INFINITY);
+    expect(whole.lines).toHaveLength(200);
+    expect([whole.first, whole.last, whole.total]).toEqual([1, 200, 200]);
+    expect(whole.lines.filter(line=>line.selected).map(line=>line.number)).toEqual([150, 151, 152, 153, 154, 155]);
+  });
+
+  it('avec la limite par défaut, la fenêtre reste bornée autour de la méthode', ()=>{
+    expect(tileOf(method, type).lines).toHaveLength(MAX_SHOWN);
+    expect(tileOf(method, type, 50).lines).toHaveLength(50);
+    expect(tileOf(method, type, 50).lines.some(line=>line.number===150&&line.selected)).toBe(true);
+  });
+});

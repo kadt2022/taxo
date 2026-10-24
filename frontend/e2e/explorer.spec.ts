@@ -60,6 +60,40 @@ test('choisir un symbole montre son code, la méthode surlignée', async({page})
   await expect(page.locator('details.explorer-gaps')).not.toHaveAttribute('open', '');
 });
 
+// « Agrandir » ouvre une vraie fenêtre : la classe et son code en grand, ou le schéma en grand, sans menu ni barre latérale.
+test('Agrandir la tuile de code ouvre une fenêtre avec la classe et son code, en grand', async({page})=>{
+  await page.goto('/#/explorer');
+  await page.getByRole('textbox', {name:'Point de départ'}).fill('GET /ad');
+  await page.getByRole('button', {name:/route GET \/admin\/users/}).click();
+  await expect(page.getByText(/éléments?, \d+ nœuds?\./)).toBeVisible();
+  await page.locator('.chain-node.tone-symbol').first().click();
+  await expect(page.getByRole('region', {name:'Tuile de code'})).toBeVisible();
+  const [popup]=await Promise.all([page.waitForEvent('popup'), page.getByRole('button', {name:'Agrandir le code dans une nouvelle fenêtre'}).click()]);
+  const tile=popup.getByRole('region', {name:'Tuile de code'});
+  await expect(tile).toBeVisible();
+  await expect(tile.locator('.code-line.selected').first()).toBeVisible();
+  await expect(tile.locator('.code-head code')).toContainText('.java');
+  expect(await popup.locator('aside, header.page-head, .explorer-head').count(), 'ni menu, ni barre latérale, ni recherche').toBe(0);
+  await expect(popup.getByRole('button', {name:/^Agrandir/}), 'déjà dans la fenêtre').toHaveCount(0);
+  expect(await tile.locator('.code-lines').evaluate(node=>getComputedStyle(node).maxHeight), 'toute la hauteur du code').toBe('none');
+  expect(await tile.locator('.code-lines').evaluate(node=>Number.parseFloat(getComputedStyle(node).fontSize)), 'en grand').toBeGreaterThanOrEqual(15);
+  await popup.close();
+});
+
+test('Agrandir le schéma ouvre une fenêtre avec le schéma, ses commandes et sa forme', async({page})=>{
+  await openRoute(page);
+  const [popup]=await Promise.all([page.waitForEvent('popup'), page.getByRole('button', {name:'Agrandir le schéma dans une nouvelle fenêtre'}).click()]);
+  await expect(popup.locator('.plein-schema .chain-node.anchor')).toBeVisible();
+  await expect(popup.getByRole('toolbar', {name:'Commandes du graphe'})).toBeVisible();
+  expect(await popup.locator('aside, header.page-head, .explorer-head, .explorer-tabs, input').count(), 'rien d’autre que le schéma').toBe(0);
+  await expect(popup.getByRole('button', {name:/^Agrandir/}), 'déjà dans la fenêtre').toHaveCount(0);
+  const zone=popup.locator('.chain-scroll');
+  const [height, view]=await Promise.all([zone.evaluate(node=>node.getBoundingClientRect().height), popup.evaluate(()=>window.innerHeight)]);
+  expect(height, 'le schéma prend la hauteur de la fenêtre').toBeGreaterThan(view*0.5);
+  await popup.getByRole('button', {name:'Zoom avant'}).click();
+  await popup.close();
+});
+
 /** Le rapport de contraste WCAG 2.x entre le texte d'un élément et son fond, lus dans le navigateur. */
 const contrast=(element:Locator)=>element.evaluate(node=>{
   const style=getComputedStyle(node);
@@ -167,7 +201,7 @@ for(const [width, height] of [[1440, 900], [1100, 800], [800, 900], [480, 900]])
 }
 
 // La barre d'outils du graphe : le zoom met à l'échelle le dessin déjà calculé, il ne le recalcule jamais ; l'ajustement tient
-// la largeur de la zone ; le recentrage ramène l'ancre ; l'agrandissement lève la hauteur maximale ; la languette rouvre le panneau.
+// la largeur de la zone ; le recentrage ramène l'ancre ; l'agrandissement ouvre le schéma dans une fenêtre ; la languette rouvre le panneau.
 test('la barre d’outils du graphe : zoom, ajustement, recentrage, agrandissement, panneau', async({page})=>{
   await page.setViewportSize({width:1280, height:800});
   await openRoute(page);
@@ -191,11 +225,7 @@ test('la barre d’outils du graphe : zoom, ajustement, recentrage, agrandisseme
   await page.getByRole('button', {name:'Recentrer sur l’ancre'}).click();
   await expect(page.locator('.chain-node.anchor').first()).toBeVisible();
 
-  const limited=await zone.evaluate(node=>getComputedStyle(node).maxHeight);
-  await page.getByRole('button', {name:'Agrandir la zone'}).click();
-  expect(await zone.evaluate(node=>getComputedStyle(node).maxHeight), 'la hauteur maximale est levée').toBe('none');
-  await page.getByRole('button', {name:'Réduire la zone'}).click();
-  expect(await zone.evaluate(node=>getComputedStyle(node).maxHeight)).toBe(limited);
+  await expect(page.getByRole('button', {name:'Agrandir le schéma dans une nouvelle fenêtre'}), 'l’agrandissement est une fenêtre').toBeVisible();
 
   // Le panneau latéral est replié en languette ; elle le rouvre, et il se referme.
   const side=page.locator('#explorer-side');

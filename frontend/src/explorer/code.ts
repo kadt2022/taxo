@@ -37,7 +37,7 @@ const linesOf=(piece:SourcePiece)=>{
 /** La tuile à montrer : le type qui contient la méthode, la méthode surlignée, quand le type en couvre toute la plage ;
  * sinon la méthode seule, surlignée tout entière. Sans méthode, le type seul, rien de surligné. Bornée à `MAX_SHOWN`
  * lignes, autour de la sélection. */
-export function tileOf(piece:SourcePiece, owner?:SourcePiece|null):Tile{
+export function tileOf(piece:SourcePiece, owner?:SourcePiece|null, limit=MAX_SHOWN):Tile{
   const selects=!!owner||piece.reference.includes('(');
   const base=owner&&owner.line_start<=piece.line_start&&owner.line_start+linesOf(owner).length-1>=piece.line_end?owner:piece;
   const all=linesOf(base);
@@ -45,16 +45,16 @@ export function tileOf(piece:SourcePiece, owner?:SourcePiece|null):Tile{
   const colored=highlight(all.map(line=>line.text), languageOf(base.path));
   const marked=selects?{from:piece.line_start, to:piece.line_end}:null;
   const lines=all.map((line, index)=>({...line, tokens:colored[index], selected:!!marked&&line.number>=marked.from&&line.number<=marked.to}));
-  const window=lines.length>MAX_SHOWN?slice(lines, marked?.from):lines;
+  const window=lines.length>limit?slice(lines, limit, marked?.from):lines;
   return {path:base.path, lines:window, first:window[0].number, last:window[window.length-1].number, total:all.length,
     truncated:base.truncated, selected:!!marked, from:base===owner||!selects?'type':'method'};
 }
 
 /** Une fenêtre de `MAX_SHOWN` lignes qui commence un peu avant la ligne choisie (ou en tête, sans ligne choisie). */
-function slice(lines:Line[], from?:number){
+function slice(lines:Line[], limit:number, from?:number){
   const at=from===undefined?0:Math.max(0, lines.findIndex(line=>line.number===from)-CONTEXT_BEFORE);
-  const start=Math.min(at, lines.length-MAX_SHOWN);
-  return lines.slice(start, start+MAX_SHOWN);
+  const start=Math.min(at, lines.length-limit);
+  return lines.slice(start, start+limit);
 }
 
 const NOT_SENT:Record<string, string>={CONFIDENTIAL:'le fichier est confidentiel', GENERATED:'le fichier est généré',

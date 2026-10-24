@@ -16,9 +16,9 @@ import {useGraphTheme} from './graphTheme';
 
 const onAxis=(relation:string)=>CALL_AXIS.includes(relation);
 
-export function CallsView({view, links, selected, onSelect, commands, busy, choices, followed}:Readonly<{view:View; links:Link[];
-  selected:Selected; onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean; choices:RelationChoice[];
-  followed:string[]}>){
+export function CallsView({view, links, selected, onSelect, commands, busy, choices, followed, windowAddress, windowed=false}:Readonly<{view:View;
+  links:Link[]; selected:Selected; onSelect:(selected:Selected)=>void; commands:NodeCommands; busy:boolean; choices:RelationChoice[];
+  followed:string[]; windowAddress?:string; windowed?:boolean}>){
   const named=useNaming(), {theme}=useGraphTheme();
   const projected=useMemo(()=>calls(view, links, onAxis), [view, links]);
   const gaps=CALL_AXIS.flatMap(relation=>{
@@ -33,7 +33,7 @@ export function CallsView({view, links, selected, onSelect, commands, busy, choi
     {projected.links.length===0&&<output className="explorer-empty">Aucun lien d’exécution établi par Taxo depuis cette ancre
       dans la vue reçue.</output>}
     <ChainView view={projected.view} links={projected.links} selected={selected} onSelect={onSelect} commands={commands} busy={busy}
-      viewName="Appels"/>
+      viewName="Appels" windowAddress={windowAddress} windowed={windowed}/>
     <section className="calls-limits" data-theme={theme} aria-label="Où s’arrête la vue Appels">
       <h3>Où s’arrête la vue Appels</h3>
       <ul>
