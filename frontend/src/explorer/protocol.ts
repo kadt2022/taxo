@@ -54,17 +54,35 @@ export type Query=<T>(operation:string, args:Record<string, unknown>, signal?:Ab
 // Les opérations qui nomment leur analyse dans leurs arguments ; les autres la tiennent de l'échange.
 const NAMED=new Set(['get_neighborhood', 'find_references']);
 
+/** Une opération dans son propre échange : la réponse `OK`, ou le refus de Taxo. */
+async function exchange<T>(post:Post, base:string, body:object, signal?:AbortSignal):Promise<T>{
+  const answer=await post<{responses:(Envelope&T)[]}>(`${base}/taxo-query`, {method:'POST', signal,
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const [response]=answer.responses;
+  if(response.outcome==='ERROR')throw new Refusal(response.error?.code??'ERROR', response.error?.message??'Refusé par Taxo.');
+  return response;
+}
+
 /** Un échange du protocole par demande, sur l'analyse choisie : la réponse `OK`, ou le refus de Taxo. */
 export function queryOf(post:Post, base:string, analysis:string):Query{
-  return async<T,>(operation:string, args:Record<string, unknown>, signal?:AbortSignal)=>{
+  return <T,>(operation:string, args:Record<string, unknown>, signal?:AbortSignal)=>{
     const named=NAMED.has(operation)?{analysis, ...args}:args;
-    const body={analysis, requests:[{operation, max_bytes:MAX_BYTES, arguments:named}]};
-    const answer=await post<{responses:(Envelope&T)[]}>(`${base}/taxo-query`, {method:'POST', signal,
-      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-    const [response]=answer.responses;
-    if(response.outcome==='ERROR')throw new Refusal(response.error?.code??'ERROR', response.error?.message??'Refusé par Taxo.');
-    return response;
+    return exchange<T>(post, base, {analysis, requests:[{operation, max_bytes:MAX_BYTES, arguments:named}]}, signal);
   };
+}
+
+/** Une pièce de code : un symbole déclaré, ses lignes à partir de `line_start`, coupée sur une ligne entière si elle est
+ * trop longue (`truncated`, la fin déclarée est dans `declared`). */
+export type SourcePiece={reference:string; path:string; line_start:number; line_end:number; truncated:boolean;
+  declared:{line_start:number; line_end:number}; text:string};
+export type SourceReply={reference:string; path:string; commit:string; items:SourcePiece[]; not_sent?:{what:string; reason:string}[]};
+/** Lit le code d'un symbole, au commit de l'analyse, sous l'accord de l'échange (`consent.source`) : Taxo ne le rend que
+ * si son réglage serveur le permet, et ne conserve rien de ce qui est lu. */
+export type Source=(reference:string, signal?:AbortSignal)=>Promise<SourceReply>;
+
+export function sourceOf(post:Post, base:string, analysis:string):Source{
+  return (reference, signal)=>exchange<SourceReply>(post, base, {analysis, consent:{source:true},
+    requests:[{operation:'get_source', max_bytes:MAX_BYTES, arguments:{reference}}]}, signal);
 }
 
 /** Les arguments d'une Tuile : toujours `neighborhood/2`, preuves résumées, forme compacte. */

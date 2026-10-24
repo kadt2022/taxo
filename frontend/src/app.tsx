@@ -2,8 +2,8 @@
 import {useEffect, useState, type ReactNode} from 'react';
 import {type MiniaStatus} from './minia';
 import {AnalysisLimits, overviewCards, panelKey, routeCounts, technologiesOf, type Scan} from './overview';
-import {BrandMark, ResultsNav, TopMenu, navItemsOf, since, type Project} from './shell';
-import {AnalysisCommand, LaunchCard} from './commands';
+import {BrandMark, ResultsNav, navItemsOf, since, type Project} from './shell';
+import {LaunchCard} from './commands';
 import {ProjectSwitcher} from './switcher';
 import {href, go, parse, useRoute, withProject} from './nav';
 import {AnalysesPage, AnalysisPage, ArchitecturePage, ComparisonsPage, DataPage, DisplayedNote, NotFoundPage, OverviewPage, PendingPage, ProjectsPage, TechnologiesPage} from './pages';
@@ -14,6 +14,7 @@ import {apiUrl} from './api';
 import {openStream} from './sse';
 import {AnalysisProgress, analyzeProject, liveScan, pendingEvaluators, type Run} from './analysis';
 import {ExplorerPage} from './explorer/Explorer';
+import {FULL_VALUES} from './explorer/OpenWindow';
 
 export async function request<T>(path:string, init?:RequestInit):Promise<T> {
   const response = await fetch(apiUrl(path), init);
@@ -123,11 +124,14 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
     return <section className="welcome"><div className="glyph">⌘</div><h2>Prêt pour la première analyse</h2><p>Taxo vous montrera ce qu’il comprend de votre projet, et ce qu’il ne sait pas encore déterminer.</p>
       <button type="button" className="primary" disabled={busy} onClick={analyze}>Lancer la première analyse</button><p className="muted">Java · TypeScript · Python · React · Spring Boot</p></section>;
   }
+  // Une fenêtre ouverte depuis l'Explorer (`plein=code` ou `plein=schema`) ne montre que cette partie, en grand, sans menu ni barre latérale.
+  if(route.page==='explorer'&&FULL_VALUES.includes(route.params.get('plein')??''))return <div className="plein-layout">
+    {error&&<div role="alert" className="error">{error}</div>}
+    {loading?<output>Chargement…</output>:page()}
+  </div>;
   return <div className="layout">
-    <header className="page-head"><div className="head-start"><a className="top-brand" href={href('overview')}><BrandMark/><span className="top-brand-text"><strong>Taxo</strong><small>Software Intelligence</small></span></a>
-      <TopMenu running={running} latest={scanId&&scanId!==latest?.id?showLatest:undefined} analysis={close=><AnalysisCommand project={project}
-        latest={latest} running={running} canAnalyze={!!selected&&!busy&&!loading} onAnalyze={analyze} onClose={close}/>}/></div></header>
     <aside>
+    <a className="side-brand" href={href('overview')}><BrandMark/><span className="side-brand-text"><strong>Taxo</strong><small>Software Intelligence</small></span></a>
     {!loading&&<ProjectSwitcher key={projects.length} projects={projects} selected={selected} status={shown?since(shown.created_at):''} busy={busy}
       onOpen={open} onAdd={add}/>}
     {selected&&<ResultsNav items={navItems} current={route.page}/>}

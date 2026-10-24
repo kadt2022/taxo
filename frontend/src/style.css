@@ -70,13 +70,6 @@ header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
 h1{font-size:clamp(28px,3vw,38px);font-weight:700;letter-spacing:-.025em;line-height:1.15;margin:0 0 10px;overflow-wrap:anywhere}
 .path{display:inline-block;font-family:var(--mono),monospace;font-size:12.5px;color:var(--text-2);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 12px;overflow-wrap:anywhere;margin:0}
 header .primary{padding:12px 20px}
-.page-head{align-items:center;padding:14px 16px 14px 18px;margin-bottom:18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow)}
-.page-title{display:flex;align-items:center;gap:14px;min-width:0}
-.page-icon{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--brand);color:var(--accent)}
-.page-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8}
-.page-head h1{font-size:22px;margin:0;letter-spacing:-.015em}
-.page-head .primary{padding:11px 20px;border-radius:var(--r)}
-@media (max-width:560px){.page-head{flex-wrap:wrap;gap:12px}.page-head .primary{width:100%}}
 
 
 .error{background:var(--danger-soft);color:var(--danger);border:1px solid #f3cfc8;padding:12px 14px;border-radius:var(--r-sm);margin-bottom:18px;font-size:14px}
@@ -387,18 +380,7 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
 .overview .card-link{font-size:12px;padding:0 10px}
 
 /* En-tête de page : style application, à plat, sans bandeau ni carte */
-.page-head{position:static;overflow:visible;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:2px 2px 16px;margin:0 0 20px;background:none;border:0;border-bottom:1px solid var(--border);border-radius:0;box-shadow:none}
-.page-head::after{content:none}
-.page-title{gap:12px}
-.page-icon{width:36px;height:36px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--brand-3);box-shadow:var(--shadow-sm)}
-.page-icon svg{width:18px;height:18px}
-.page-head h1{color:var(--text);font-size:20px;font-weight:650;line-height:1.2}
-.page-sub{margin:2px 0 0;font-size:13px;color:var(--muted)}
-.page-head .primary{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:9px;background:var(--brand);color:#fff;border:1px solid var(--brand);font-size:13px;font-weight:600;box-shadow:none}
-.page-head .primary:hover:not(:disabled){background:var(--brand-2)}
-.page-head .primary:disabled{background:var(--surface-3);border-color:var(--border);color:var(--muted);opacity:1}
 .btn-arrow{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
-.page-head .primary:hover:not(:disabled) .btn-arrow{transform:translateX(2px)}
 
 /* Progression d'une analyse : carte avec barre d'avancement et étapes en frise verticale */
 .progress{padding:22px 24px 20px;border-radius:var(--r-lg);box-shadow:var(--shadow)}
@@ -439,59 +421,15 @@ aside .secondary{white-space:nowrap;padding:11px 12px}
   main{max-width:none;height:calc(100vh - 20px);margin:10px 10px 10px 0;overflow:auto;background:var(--bg);border:1px solid rgba(184,224,127,.22);border-radius:16px;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
 }
 
-/* Le panneau principal va jusqu'au bord bas de l'écran : ni marge, ni contour, ni coins arrondis en bas */
+/* Le panneau principal va du bord haut au bord bas de l'écran : ni marge, ni contour, ni coins arrondis, plus de bande au-dessus */
 @media(min-width:901px){
-  main{height:calc(100vh - 10px);margin-bottom:0;border-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;box-shadow:none}
+  main{height:100vh;margin-top:0;margin-bottom:0;border-top:0;border-bottom:0;border-radius:0;box-shadow:none}
 }
 
-/* Barre supérieure fixe, façon menu d'application : sur toute la largeur, dans la couleur de la coque */
-.page-head{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:16px;height:44px;margin:0;padding:0 14px 0 20px;background:#0f3029;border:0;border-radius:0;box-shadow:none}
-.page-title{gap:12px}
-.page-title>div{display:flex;align-items:baseline;gap:12px;min-width:0}
-.page-icon{width:28px;height:28px;border-radius:8px;background:rgba(184,224,127,.14);border:1px solid rgba(184,224,127,.3);color:var(--accent);box-shadow:none}
-.page-icon svg{width:16px;height:16px}
-.page-head h1{color:#f1f6f2;font-size:15px;font-weight:650;letter-spacing:0;white-space:nowrap}
-.page-sub{margin:0;font-size:12.5px;color:#8fb0a3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.page-head .primary{padding:6px 12px;font-size:12.5px;background:var(--accent);color:var(--brand);border-color:var(--accent)}
-.page-head .primary:hover:not(:disabled){background:#c8ea94}
-.page-head .primary:disabled{background:rgba(255,255,255,.1);border-color:transparent;color:rgba(255,255,255,.55)}
-@media(max-width:760px){.page-sub{display:none}}
 @media(min-width:901px){
-  .layout{grid-template-rows:44px minmax(0,1fr)}
-  .page-head{grid-column:1/-1}
   aside{height:100%;position:static}
-  main{height:calc(100vh - 44px - 10px)}
 }
 
-/* Barre de menus : la marque Taxo, puis Fichier, Analyse, Affichage, Aide */
-.head-start{display:flex;align-items:center;gap:28px;min-width:0}
-.top-brand{display:inline-flex;align-items:center;gap:9px;flex:none;color:#fff;text-decoration:none;line-height:1}
-.top-brand .brand-mark{width:30px;height:30px}
-.top-brand-text{display:flex;flex-direction:column;gap:2px}
-.top-brand-text strong{font-size:17px;font-weight:700;letter-spacing:-.02em}
-.top-brand-text small{font-size:10.5px;font-weight:500;letter-spacing:.02em;color:#a9c4b8}
-.top-brand:focus-visible{border-radius:6px}
-.top-menu{display:flex;align-items:center;gap:2px;min-width:0}
-.top-menu .menu>button{display:inline-flex;align-items:center;gap:7px}
-.top-menu .menu>button svg{flex:none;width:15px;height:15px;fill:none;stroke:#d3e4da;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:stroke .15s}
-.top-menu .menu>button:hover svg,.top-menu .menu>button[aria-expanded="true"] svg{stroke:var(--accent)}
-@media(max-width:1100px){.head-start{gap:14px}}
-@media(max-width:900px){.top-menu .menu>button{padding:6px 8px}.menu-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
-/* Sous 900 px, la règle générale des en-têtes empile leur contenu : la barre du haut reste sur une ligne, puis se replie sur deux sous
-   560 px, sans jamais rogner le sélecteur de projet ni l'analyse globale. */
-@media(max-width:900px){.page-head{grid-column:1/-1;flex-direction:row;align-items:center}.head-start{flex:1 1 auto}}
-@media(max-width:900px){.top-brand-text small{display:none}}
-@media(max-width:560px){.top-brand-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.head-start{gap:6px}
-  .page-head{height:auto;flex-wrap:wrap;row-gap:8px;padding:8px 12px}.head-actions{width:100%;justify-content:space-between}.picker{flex:1 1 auto;min-width:0}.picker-current{max-width:100%;min-width:0;overflow:hidden}.picker-current strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.head-actions>.primary{flex:none;width:auto}}
-.top-menu .menu{position:relative}
-.top-menu .menu>button{padding:6px 12px;border:0;border-radius:8px;background:none;font-size:13.5px;font-weight:550;color:#eef5f0;white-space:nowrap}
-.top-menu .menu>button:hover,.top-menu .menu>button[aria-expanded="true"]{background:rgba(255,255,255,.09);color:#fff}
-.top-menu .menu-link{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:8px;font-size:13.5px;font-weight:650;color:#fff;background:rgba(184,224,127,.16);text-decoration:none;white-space:nowrap}
-.top-menu .menu-link:hover{background:rgba(184,224,127,.26)}
-.menu-list{position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:230px;padding:6px;display:grid;gap:1px;background:#123a31;border:1px solid rgba(184,224,127,.22);border-radius:12px;box-shadow:0 14px 32px -8px rgba(0,0,0,.55)}
-.menu-list a,.menu-list button{display:block;width:100%;padding:8px 12px;border:0;border-radius:8px;background:none;text-align:left;font-size:13px;color:#e4eee7;text-decoration:none}
-.menu-list a:hover,.menu-list button:hover:not(:disabled){background:rgba(184,224,127,.16);color:#fff}
-.menu-list button:disabled{color:#8fb0a3;cursor:default;opacity:1}
 main{scroll-behavior:smooth}
 main section,main details,main [id]{scroll-margin-top:16px}
 @media(prefers-reduced-motion:reduce){main{scroll-behavior:auto}}
@@ -510,7 +448,6 @@ main section,main details,main [id]{scroll-margin-top:16px}
 .results-count{flex:none;min-width:28px;padding:1px 8px;border-radius:var(--r-pill);background:rgba(255,255,255,.09);color:#d6e6dc;font-size:11.5px;text-align:center;font-variant-numeric:tabular-nums}
 .results-nav a[aria-current="page"] .results-count{background:rgba(184,224,127,.2);color:var(--accent)}
 
-.top-menu .menu-link svg{width:16px;height:16px;fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
 /* Sélecteur de projet de la barre du haut */
 .head-actions{display:flex;align-items:center;gap:10px;flex:none}
@@ -748,24 +685,6 @@ main section,main details,main [id]{scroll-margin-top:16px}
 .architecture-group h3{display:flex;align-items:center;gap:8px;font-size:15px;margin:0 0 6px}
 
 /* ——— Panneau de commande Analyse, page Projets, projet actif (TAXO-UI-05) ——— */
-.menu-panel{position:absolute;top:calc(100% + 8px);left:0;z-index:50;width:360px;max-width:calc(100vw - 24px);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 40px -12px rgba(8,30,25,.45);overflow:hidden}
-.command section{padding:16px 18px;border-bottom:1px solid var(--border)}
-.command h3{margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.command p{margin:0 0 10px;font-size:13.5px;line-height:1.5;color:var(--text-2)}
-.command dl{display:flex;gap:8px;align-items:baseline;margin:0 0 12px;font-size:13.5px}
-.command dt{color:var(--muted)}
-.command dd{margin:0;font-weight:650;color:var(--text)}
-.command-empty{color:var(--warn)!important}
-.command-main{display:flex;width:100%;justify-content:center;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--r-sm);font-size:14px;text-decoration:none}
-.command-main svg{width:14px;height:14px;fill:currentColor;stroke:none}
-.command-when{font-size:15px!important;font-weight:650;color:var(--text)!important;margin-bottom:2px!important;font-variant-numeric:tabular-nums}
-.command-code code{font-size:12px;color:var(--text-2)}
-.command .ghost{text-decoration:none}
-.command-links{display:flex;flex-direction:column;padding:6px;background:var(--surface-2)}
-.command-links a{display:flex;justify-content:space-between;padding:9px 12px;border-radius:8px;font-size:13.5px;font-weight:550;color:var(--brand);text-decoration:none}
-.command-links a:hover{background:var(--surface-3)}
-.top-menu .menu>button.is-running svg{stroke:var(--accent);animation:taxo-pulse 1.4s ease-in-out infinite}
-@media(prefers-reduced-motion:reduce){.top-menu .menu>button.is-running svg{animation:none}}
 .active-project{display:flex;flex-direction:column;gap:1px;margin:0 0 18px;padding:10px 12px;border-radius:var(--r-sm);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#dbe8df;text-decoration:none}
 .active-project:hover{background:rgba(255,255,255,.08)}
 .active-project span{font-size:10.5px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:#8fb0a3}
@@ -782,8 +701,6 @@ main section,main details,main [id]{scroll-margin-top:16px}
 .project-form h2{font-size:16px;margin:0 0 12px}
 .project-form-actions{display:flex;align-items:center;gap:14px}
 .project-add{align-self:flex-start}
-.page-head .menu-panel .command-main{padding:11px 14px;font-size:14px;font-weight:650;border-radius:var(--r-sm)}
-.page-head .menu-panel .command-main:disabled{background:var(--surface-3);color:var(--muted)}
 
 /* ——— Sélecteur de projet, en tête du menu vertical (TAXO-UI-05) ——— */
 .switcher{margin:0 0 18px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);transition:background .15s,border-color .15s}
@@ -827,12 +744,6 @@ main section,main details,main [id]{scroll-margin-top:16px}
 .switcher-current small{display:flex;align-items:center;gap:6px}
 .switcher-current small i{flex:none;width:6px;height:6px;border-radius:50%;background:#5fcf8a}
 .switcher-save{white-space:nowrap}
-/* Le menu horizontal commence juste après la barre latérale : la marque occupe sa largeur (272 px, 232 px sur tablette). */
-.top-brand{width:calc(272px - 20px)}
-.head-start{gap:0}
-.top-menu{margin-left:6px}
-@media(max-width:1000px){.top-brand{width:calc(232px - 20px)}}
-@media(max-width:900px){.top-brand{width:auto}.head-start{gap:14px}.top-menu{margin-left:0}}
 
 /* ——— Poste de lancement de la page Analyses (TAXO-UI-05) ——— */
 .launch{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:18px 22px;padding:22px 24px;border-radius:var(--r-lg);overflow:hidden;
@@ -872,6 +783,18 @@ main section,main details,main [id]{scroll-margin-top:16px}
 *::-webkit-scrollbar-track{background:transparent}
 *::-webkit-scrollbar-thumb{background:#c3cfc6;border-radius:10px;border:3px solid transparent;background-clip:padding-box}
 *::-webkit-scrollbar-thumb:hover{background-color:#9fb1a6}
+/* La barre latérale défile discrètement, dans sa propre couleur, quand la fenêtre est plus basse que le menu */
+/* La marque Taxo : en haut de la barre latérale, lien vers l'accueil */
+.side-brand{display:inline-flex;align-items:center;gap:9px;align-self:flex-start;margin:0 0 22px 2px;color:#fff;text-decoration:none;line-height:1}
+.side-brand .brand-mark{flex:none;width:30px;height:30px}
+.side-brand-text{display:flex;flex-direction:column;gap:2px}
+.side-brand-text strong{font-size:17px;font-weight:700;letter-spacing:-.02em}
+.side-brand-text small{font-size:10.5px;font-weight:500;letter-spacing:.02em;color:#a9c4b8}
+.side-brand:focus-visible{border-radius:6px}
+aside{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
+aside::-webkit-scrollbar{width:6px}
+aside::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border:0;border-radius:6px}
+aside::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.3)}
 *::-webkit-scrollbar-button{display:none;width:0;height:0}
 *::-webkit-scrollbar-corner{background:transparent}
 aside,aside *{scrollbar-color:rgba(184,224,127,.28) transparent}
@@ -942,7 +865,8 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .explorer-tabs button:hover{background:var(--surface-3);color:var(--text)}
 .explorer-tabs button[aria-pressed=true]{background:var(--brand);color:#f4ffe8;box-shadow:inset 0 -3px 0 var(--accent)}
 .explorer-tabs button:focus-visible{position:relative;z-index:1}
-.explorer-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:16px;align-items:start}
+/* Le panneau latéral s'élargit pour le code, sans jamais dépasser la moitié : le schéma reste la plus grande zone. */
+.explorer-body{display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,44%,680px);gap:16px;align-items:start}
 .explorer-body.closed{grid-template-columns:minmax(0,1fr) 46px;gap:12px}
 .explorer-side[hidden]{display:none}
 .explorer-side-tab{display:flex;flex-direction:column;align-items:center;gap:12px;align-self:start;min-height:200px;padding:14px 0;border:0;
@@ -997,7 +921,15 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .chain-tools [role=alert]{margin:0;overflow-wrap:anywhere}
 .chain-zoomed{position:relative}
 .chain-zoomed>.explorer-canvas{position:absolute;left:0;top:0}
-.explorer-layers.grown{max-height:none}
+/* Une partie de l'Explorer dans sa propre fenêtre (le code d'une classe, ou le schéma), en grand : ni menu ni barre latérale. */
+.plein-layout{min-height:100vh;padding:16px clamp(12px,2vw,32px) 32px;background:var(--bg)}
+.plein{display:grid;gap:12px;min-width:0}
+.code-enlarge{margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:4px 10px;min-height:0;font-size:12.5px}
+.code-tile.large .code-head{font-size:14px}
+.code-tile.large .code-head code{font-size:13.5px}
+.code-tile.large .code-lines{max-height:none;font-size:15px;line-height:1.7;padding:14px 0}
+.code-tile.large .code-number{width:56px}
+.plein-schema .chain-scroll{max-height:none;height:calc(100vh - 170px);min-height:320px}
 .calls{display:flex;flex-direction:column;gap:10px;min-width:0}
 .calls-question{margin:0;font-size:13.5px;color:var(--text-2)}
 .calls-limits{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:10px 14px}
@@ -1100,6 +1032,33 @@ aside::-webkit-scrollbar-thumb:hover,aside *::-webkit-scrollbar-thumb:hover{back
 .explorer-boundaries h4{margin:12px 0 4px;font-size:13px;color:var(--text-2)}
 .explorer-boundaries ul{margin:0;padding-left:18px;display:grid;gap:6px;font-size:13px}
 .explorer-not-sent{color:var(--warn)}
+/* La tuile de code du nœud choisi : un bloc sombre dans les deux thèmes, la ligne choisie en relief, jamais de défilement de page. */
+.type-pill{display:inline-flex;align-items:center;margin-bottom:6px;padding:2px 10px;border-radius:var(--r-pill);font-size:12px;font-weight:650;
+  background:color-mix(in srgb,var(--tone,var(--tone-symbol)) 16%,var(--surface));color:var(--tone,var(--tone-symbol))}
+.node-panel-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0}
+.node-panel-actions .explorer-actions{display:inline-flex;flex-wrap:wrap;gap:6px}
+.explorer-said{font-size:12.5px;color:var(--muted)}
+.code-tile{display:grid;gap:6px;min-width:0}
+.node-identity{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.code-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0}
+.code-head code{flex:1 1 100%;font-size:12px}
+.count-pill.selected{background:var(--accent);color:var(--accent-ink)}
+.code-lines{margin:0;max-height:min(70vh,680px);overflow:auto;padding:10px 0;border-radius:var(--r);background:#0f1f1a;color:#d4d4d4;
+  font:12.5px/1.6 var(--mono),monospace;border:1px solid #1d3a30;color-scheme:dark;scrollbar-color:#3d5c4f #0f1f1a}
+.code-lines:focus-visible{outline:none;box-shadow:var(--ring)}
+.code-line{display:flex;width:max-content;min-width:100%;padding-right:14px;box-sizing:border-box}
+.code-number{flex:none;width:44px;padding-right:12px;text-align:right;color:#6f8f81;user-select:none;font-variant-numeric:tabular-nums}
+.code-text{white-space:pre}
+/* Les couleurs d'un éditeur sombre : une teinte par sorte d'élément, la même pour tout langage coloré. */
+.tk-keyword{color:#569cd6}.tk-type{color:#4ec9b0}.tk-string{color:#ce9178}.tk-comment{color:#6a9955;font-style:italic}
+.tk-number{color:#b5cea8}.tk-annotation{color:#d7ba7d}.tk-method{color:#dcdcaa}.tk-constant{color:#4fc1ff}
+.code-line.selected{background:rgba(75,140,255,.22);box-shadow:inset 3px 0 0 #6ea1ff}
+.code-line.selected .code-number{color:#a9c6ff}
+.code-note{margin:0;font-size:13px}
+.explorer-gaps{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm)}
+.explorer-gaps>summary{display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;padding:12px 16px;font-weight:650;font-size:14px}
+.explorer-gaps>.explorer-boundaries{border:0;box-shadow:none;border-top:1px solid var(--border);border-radius:0 0 var(--r-lg) var(--r-lg)}
+.explorer-gaps>.explorer-boundaries>h3{display:none}
 @media(max-width:1180px){.explorer-search-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:1100px){.explorer-body,.explorer-body.closed{grid-template-columns:minmax(0,1fr)}.explorer-side{position:static;max-height:none;overflow:visible}
   .explorer-side-tab{flex-direction:row;justify-content:center;min-height:0;padding:10px 14px}.explorer-side-label{writing-mode:horizontal-tb}

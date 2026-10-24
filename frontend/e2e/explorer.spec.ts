@@ -1,5 +1,7 @@
 // Le parcours de l'explorateur dans Chromium, contre une API Taxo réelle (TAXO-01J § 9) : une ancre, une preuve, l'export.
 import {expect, test, type Locator} from '@playwright/test';
+import {execSync} from 'node:child_process';
+import {mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {ROOT} from '../playwright.config';
 
@@ -29,6 +31,99 @@ test('rechercher une ancre, développer, consulter une preuve', async({page})=>{
   await expect(panel.getByRole('list', {name:'Preuves'})).toContainText('UserAdminController.java:');
   expect(called.length).toBeGreaterThan(0);
   expect(called.filter(path=>path.startsWith('/api/')&&!path.endsWith('/taxo-query'))).toEqual([]);
+});
+
+// Choisir un symbole du graphe ouvre sa tuile de code dans le panneau : le code lu au commit de l'analyse, la méthode choisie
+// surlignée dans son type. Le dessin du graphe n'est pas touché.
+test('choisir un symbole montre son code, la méthode surlignée', async({page})=>{
+  await page.goto('/#/explorer');
+  await page.getByRole('textbox', {name:'Point de départ'}).fill('GET /ad');
+  await page.getByRole('button', {name:/route GET \/admin\/users/}).click();
+  await expect(page.getByText(/éléments?, \d+ nœuds?\./)).toBeVisible();
+  await page.locator('.chain-node.tone-symbol').first().click();
+  const panel=page.getByRole('region', {name:'Nœud choisi'});
+  await expect(panel.locator('.type-pill')).toHaveText('symbole');
+  const tile=panel.getByRole('region', {name:'Tuile de code'});
+  await expect(tile).toBeVisible();
+  await expect(tile.locator('.code-head code')).toContainText('.java');
+  await expect(tile.locator('.code-line.selected').first()).toBeVisible();
+  await expect(tile.locator('.code-text').first()).not.toHaveText('');
+  // Le code est coloré comme dans un éditeur, et sa barre de défilement est sombre : aucune bande claire dans le bloc.
+  await expect(tile.locator('.tk-keyword').first()).toBeVisible();
+  await expect(tile.locator('.tk-annotation').first()).toBeVisible();
+  expect(await tile.locator('.code-lines').evaluate(node=>getComputedStyle(node).colorScheme)).toBe('dark');
+  await expect(panel.getByRole('button', {name:/^Ouvrir/})).toBeDisabled();
+  // Le code occupe la place la plus haute du panneau, et le schéma reste la plus grande zone.
+  const [codeTop, pillTop]=await Promise.all([tile.boundingBox(), panel.locator('.type-pill').boundingBox()]);
+  expect(codeTop!.y, 'la tuile de code est au-dessus de l’identité du nœud').toBeLessThan(pillTop!.y);
+  const [graph, side]=await Promise.all([page.locator('.chain-frame').boundingBox(), page.locator('.explorer-side').boundingBox()]);
+  expect(graph!.width, 'le schéma reste plus grand que le panneau').toBeGreaterThan(side!.width);
+  await expect(panel.getByRole('button', {name:/^Copier la référence/})).toBeVisible();
+  await expect(page.locator('details.explorer-gaps')).not.toHaveAttribute('open', '');
+});
+
+// « Agrandir » ouvre une vraie fenêtre : la classe et son code en grand, ou le schéma en grand, sans menu ni barre latérale.
+test('Agrandir la tuile de code ouvre une fenêtre avec la classe et son code, en grand', async({page})=>{
+  await page.goto('/#/explorer');
+  await page.getByRole('textbox', {name:'Point de départ'}).fill('GET /ad');
+  await page.getByRole('button', {name:/route GET \/admin\/users/}).click();
+  await expect(page.getByText(/éléments?, \d+ nœuds?\./)).toBeVisible();
+  await page.locator('.chain-node.tone-symbol').first().click();
+  await expect(page.getByRole('region', {name:'Tuile de code'})).toBeVisible();
+  const [popup]=await Promise.all([page.waitForEvent('popup'), page.getByRole('button', {name:'Agrandir le code dans une nouvelle fenêtre'}).click()]);
+  const tile=popup.getByRole('region', {name:'Tuile de code'});
+  await expect(tile).toBeVisible();
+  await expect(tile.locator('.code-line.selected').first()).toBeVisible();
+  await expect(tile.locator('.code-head code')).toContainText('.java');
+  expect(await popup.locator('aside, header.page-head, .explorer-head').count(), 'ni menu, ni barre latérale, ni recherche').toBe(0);
+  await expect(popup.getByRole('button', {name:/^Agrandir/}), 'déjà dans la fenêtre').toHaveCount(0);
+  expect(await tile.locator('.code-lines').evaluate(node=>getComputedStyle(node).maxHeight), 'toute la hauteur du code').toBe('none');
+  expect(await tile.locator('.code-lines').evaluate(node=>Number.parseFloat(getComputedStyle(node).fontSize)), 'en grand').toBeGreaterThanOrEqual(15);
+  await popup.close();
+});
+
+test('Agrandir le schéma ouvre une fenêtre avec le schéma, ses commandes et sa forme', async({page})=>{
+  await openRoute(page);
+  const [popup]=await Promise.all([page.waitForEvent('popup'), page.getByRole('button', {name:'Agrandir le schéma dans une nouvelle fenêtre'}).click()]);
+  await expect(popup.locator('.plein-schema .chain-node.anchor')).toBeVisible();
+  await expect(popup.getByRole('toolbar', {name:'Commandes du graphe'})).toBeVisible();
+  expect(await popup.locator('aside, header.page-head, .explorer-head, .explorer-tabs, input').count(), 'rien d’autre que le schéma').toBe(0);
+  await expect(popup.getByRole('button', {name:/^Agrandir/}), 'déjà dans la fenêtre').toHaveCount(0);
+  const zone=popup.locator('.chain-scroll');
+  const [height, view]=await Promise.all([zone.evaluate(node=>node.getBoundingClientRect().height), popup.evaluate(()=>window.innerHeight)]);
+  expect(height, 'le schéma prend la hauteur de la fenêtre').toBeGreaterThan(view*0.5);
+  await popup.getByRole('button', {name:'Zoom avant'}).click();
+  await popup.close();
+});
+
+// La fenêtre rouvre le projet et l'analyse affichés, pas ceux que le portail choisirait par défaut (le premier de la liste). Le portail écrit
+// le projet dans l'adresse sans que la page le sache : sans cela, la fenêtre cherchait le code dans un autre projet.
+test('Agrandir ouvre le code du projet affiché, même s’il n’est pas le premier de la liste', async({page, request})=>{
+  const folder=join(ROOT, 'second');
+  mkdirSync(join(folder, 'src/main/java/com/acme/only'), {recursive:true});
+  writeFileSync(join(folder, 'src/main/java/com/acme/only/OnlyHere.java'),
+    'package com.acme.only;\n\npublic class OnlyHere {\n    public String ping() { return "pong"; }\n}\n');
+  const git=(command:string)=>execSync(`git -C "${folder}" -c user.name=Taxo -c user.email=taxo@example.invalid ${command}`);
+  git('init -q');
+  git('add -A');
+  git('commit -q -m "Un second projet"');
+  const created=await request.post('/api/projects', {data:{name:'Second', path:folder}});
+  expect(created.ok()).toBe(true);
+  const {id}=await created.json();
+  expect((await request.post(`/api/projects/${id}/scans`)).status()).toBe(201);
+  await page.goto(`/#/explorer?projet=${id}`);
+  // Naviguer dans le portail retire le projet de l'état de la page : il ne reste que dans la barre d'adresse (replaceState).
+  await page.getByRole('link', {name:/^Analyses/}).click();
+  await page.getByRole('link', {name:/^Explorer/}).click();
+  await page.getByRole('textbox', {name:'Point de départ'}).fill('java:com.acme.only.OnlyHere#ping');
+  await page.getByRole('button', {name:/OnlyHere#ping/}).click();
+  await page.locator('.chain-node.anchor').first().click();
+  await expect(page.getByRole('region', {name:'Tuile de code'})).toContainText('ping');
+  const [popup]=await Promise.all([page.waitForEvent('popup'), page.getByRole('button', {name:'Agrandir le code dans une nouvelle fenêtre'}).click()]);
+  await expect(popup.locator('.plein-code .code-line.selected').first()).toBeVisible();
+  await expect(popup.locator('.plein-code')).toContainText('OnlyHere');
+  await expect(popup.locator('.plein-code [role=alert]'), 'aucun refus : c’est bien le projet affiché').toHaveCount(0);
+  await popup.close();
 });
 
 /** Le rapport de contraste WCAG 2.x entre le texte d'un élément et son fond, lus dans le navigateur. */
@@ -138,7 +233,7 @@ for(const [width, height] of [[1440, 900], [1100, 800], [800, 900], [480, 900]])
 }
 
 // La barre d'outils du graphe : le zoom met à l'échelle le dessin déjà calculé, il ne le recalcule jamais ; l'ajustement tient
-// la largeur de la zone ; le recentrage ramène l'ancre ; l'agrandissement lève la hauteur maximale ; la languette rouvre le panneau.
+// la largeur de la zone ; le recentrage ramène l'ancre ; l'agrandissement ouvre le schéma dans une fenêtre ; la languette rouvre le panneau.
 test('la barre d’outils du graphe : zoom, ajustement, recentrage, agrandissement, panneau', async({page})=>{
   await page.setViewportSize({width:1280, height:800});
   await openRoute(page);
@@ -162,11 +257,7 @@ test('la barre d’outils du graphe : zoom, ajustement, recentrage, agrandisseme
   await page.getByRole('button', {name:'Recentrer sur l’ancre'}).click();
   await expect(page.locator('.chain-node.anchor').first()).toBeVisible();
 
-  const limited=await zone.evaluate(node=>getComputedStyle(node).maxHeight);
-  await page.getByRole('button', {name:'Agrandir la zone'}).click();
-  expect(await zone.evaluate(node=>getComputedStyle(node).maxHeight), 'la hauteur maximale est levée').toBe('none');
-  await page.getByRole('button', {name:'Réduire la zone'}).click();
-  expect(await zone.evaluate(node=>getComputedStyle(node).maxHeight)).toBe(limited);
+  await expect(page.getByRole('button', {name:'Agrandir le schéma dans une nouvelle fenêtre'}), 'l’agrandissement est une fenêtre').toBeVisible();
 
   // Le panneau latéral est replié en languette ; elle le rouvre, et il se referme.
   const side=page.locator('#explorer-side');

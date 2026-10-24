@@ -11,7 +11,9 @@ from repository import BACKEND, write
 root, port = Path(sys.argv[1]), sys.argv[2]
 shutil.rmtree(root, ignore_errors=True)
 write(root / 'shop')
-env = {**os.environ, 'DATABASE_URL': f'sqlite:///{root / "taxo.db"}', 'TAXO_ALLOWED_ROOTS': str(root)}
+# La lecture du code d'un symbole est désactivée par défaut : le parcours de la tuile de code l'autorise, comme un serveur le ferait.
+env = {**os.environ, 'DATABASE_URL': f'sqlite:///{root / "taxo.db"}', 'TAXO_ALLOWED_ROOTS': str(root),
+       'TAXO_SOURCE_READING': 'symbol'}
 subprocess.run([sys.executable, '-m', 'alembic', 'upgrade', 'head'], cwd=BACKEND, env=env, check=True)
 os.chdir(BACKEND)
 os.execvpe(sys.executable, [sys.executable, '-m', 'uvicorn', 'app.main:create_app', '--factory', '--host', '127.0.0.1',

@@ -1,11 +1,10 @@
-// Coque de l'application : barre de menus, sélecteur de projet et menu vertical des résultats (TAXO-UI-04).
+// Coque de l'application : sélecteur de projet et menu vertical des résultats (TAXO-UI-04).
 // Sorti de main.tsx pour être testé ; les effets prennent leur document et leur observateur en paramètre.
-import {useEffect, useId, useRef, useState, type ReactNode} from 'react';
+import {useId} from 'react';
 import {type RouteCounts, type Scan} from './overview';
 import {href, type Page} from './nav';
 
 export type Project = {id:string; name:string; path:string};
-export type MenuItem = {label:string; href?:string; disabled?:boolean; run?:()=>void};
 export type NavItem = {id:Page; label:string; count?:string; apart?:boolean; muted?:boolean};
 
 export const ICON_PATHS:Record<string,string>={overview:'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z',
@@ -18,12 +17,6 @@ export const ICON_PATHS:Record<string,string>={overview:'M3 3h7v9H3zM14 3h7v5h-7
   limites:'M12 3l10 18H2zM12 10v5M12 18v.5', historique:'M12 7v5l3 2M3 12a9 9 0 1 0 3-6.7M3 4v5h5', securite:'M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z',
   donnees:'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
   'non-interpretees':'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8v5M12 16v.5'};
-
-/** Icônes des menus globaux, au même trait que celles du menu vertical : une feuille, une courbe d'activité, une mise en page,
- * un point d'interrogation. */
-export const MENU_ICONS:Record<string,string>={Fichier:'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4',
-  Analyse:'M3 12h4l3-7 4 14 3-7h4', Affichage:'M4 4h16v16H4zM4 9h16M9 9v11',
-  Aide:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.5M12 17h.01'};
 
 /** Le logo de Taxo : un réseau de faits, six nœuds reliés autour d'un centre. Dessiné, pas une image. */
 export function BrandMark(){
@@ -83,32 +76,6 @@ export function closeOnOutside(box:{contains(node:Node):boolean}|null, close:()=
   const escape=(event:Event)=>{if((event as KeyboardEvent).key==='Escape')close();};
   doc.addEventListener('mousedown',away);doc.addEventListener('keydown',escape);
   return()=>{doc.removeEventListener('mousedown',away);doc.removeEventListener('keydown',escape);};
-}
-
-type TopMenuProps = {analysis:(close:()=>void)=>ReactNode; running?:boolean; latest?:()=>void; initialOpen?:string|null};
-
-/** Barre de menus façon application, réservée aux commandes globales : Fichier, Analyse, Affichage, Aide. La navigation est dans le
- * menu vertical. Analyse ouvre un panneau de commande ; les autres menus, une liste. Un seul menu ouvert à la fois ; Échap ou un clic
- * ailleurs le referme, et le survol change de menu une fois la barre activée. */
-export function TopMenu({analysis, running=false, latest, initialOpen=null}:Readonly<TopMenuProps>){
-  const [open,setOpen]=useState<string|null>(initialOpen);
-  const bar=useRef<HTMLElement>(null);
-  const close=()=>setOpen(null);
-  const menus:[string,MenuItem[]|null][]=[
-    ['Fichier',[{label:'Ouvrir un projet…', href:href('projets')}, {label:'Ajouter un projet…', href:href('projets', undefined, {ajouter:'1'})}]],
-    ['Analyse',null],
-    ['Affichage',[{label:'Revenir à la dernière analyse', disabled:!latest, run:latest}, {label:'Choisir l’analyse affichée…', href:href('analyses')}]],
-    ['Aide',[{label:'Taxo · version 0.1', disabled:true},{label:'Analyse locale : vos fichiers restent sur votre machine', disabled:true}]]];
-  useEffect(()=>open?closeOnOutside(bar.current,close):undefined,[open]);
-  return <nav className="top-menu" ref={bar} aria-label="Menus">{menus.map(([name,items])=><div className="menu" key={name}>
-    <button type="button" aria-haspopup={items?'menu':'dialog'} aria-expanded={open===name} className={!items&&running?'is-running':undefined}
-      onClick={()=>setOpen(open===name?null:name)} onMouseEnter={()=>open&&setOpen(name)}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d={MENU_ICONS[name]}/></svg><span className="menu-label">{name}</span></button>
-    {open===name&&(items?<div className="menu-list" role="menu">{items.map(item=>item.href
-      ?<a key={item.label} role="menuitem" href={item.href} onClick={close}>{item.label}</a>
-      :<button type="button" key={item.label} role="menuitem" disabled={item.disabled} onClick={()=>{close();item.run?.();}}>{item.label}</button>)}</div>
-      :<div className="menu-panel" role="dialog" aria-label={name}>{analysis(close)}</div>)}
-  </div>)}</nav>;
 }
 
 /** Menu vertical : une entrée par page, la page affichée marquée. */

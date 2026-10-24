@@ -8,16 +8,18 @@ import {useChoices} from '../pages';
 import {AnchorSearch} from './AnchorSearch';
 import {CalendarIcon, CallsIcon, ChainIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GearIcon, ListIcon, StackIcon} from './icons';
 import {Boundaries} from './Boundaries';
+import {CodeTile} from './CodeTile';
 import {CallsView} from './CallsView';
 import {ChainView} from './ChainView';
 import {linksOf, type View} from './graph';
 import {LayerView} from './LayerView';
 import {LinkPanel} from './LinkPanel';
 import {ListView} from './ListView';
-import {NodeActions, type NodeCommands} from './NodeActions';
-import {describe, openTile, queryOf, type Described, type Query, type TileDemand} from './protocol';
+import {FULL_VALUES, windowAddress, type Full} from './OpenWindow';
+import {CopyReference, NodeActions, OpenInEditor, type NodeCommands} from './NodeActions';
+import {describe, openTile, queryOf, sourceOf, type Described, type Query, type Source, type TileDemand} from './protocol';
 import {defaultRelations, relationChoices, type RelationChoice} from './relations';
-import {naming, nodeMarks, scopeText, viewText} from './sentences';
+import {naming, nodeMarks, scopeText, toneOf, typeText, viewText} from './sentences';
 import {NamingContext, useNaming} from './Naming';
 import {Settings} from './Settings';
 import {INITIAL, NO_TRAIL, PRESETS, addressOf, canGoBack, canGoForward, reduce, settingsOf, visit, type Action, type Selected,
@@ -44,6 +46,7 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
   const settings=settingsOf(route.params);
   const analysis=settings.analysis??scanId;
   const query=useMemo(()=>queryOf(request, base, analysis), [request, base, analysis]);
+  const source=useMemo(()=>sourceOf(request, base, analysis), [request, base, analysis]);
   const {described, error:describeError}=useDescribed(query, analysis);
   const choices=useMemo(()=>described?relationChoices(described):[], [described]);
   const relations=settings.relations.length?settings.relations:defaultRelations(choices);
@@ -65,9 +68,15 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
     openTile(query, wanted, controller.signal).then(tile=>dispatch({type:'loaded', id, tile}),
       reason=>{if((reason as Error).name!=='AbortError')dispatch({type:'failed', id, message:(reason as Error).message});});
   }
+  // Une fenêtre à part (`plein=code` ou `plein=schema`) ne montre que le code d'une classe, ou le schéma, en grand.
+  const asked=route.params.get('plein')??'';
+  const full=FULL_VALUES.includes(asked)?asked as Full:undefined;
+  // La fenêtre rouvre le même projet et la même analyse que la page : jamais ceux que le portail choisirait par défaut.
+  const addressFor=(extra:Record<string, string>)=>windowAddress(route, globalThis.location,
+    {...(project?{projet:project.id}:{}), analyse:analysis, ...extra});
   const opening=JSON.stringify([analysis, settings.root, relations, settings.direction, settings.depth, settings.preset]);
   useEffect(()=>{
-    if(settings.root&&described&&relations.length)run('open', demand(settings.root, settings.depth));
+    if(settings.root&&described&&relations.length&&full!=='code')run('open', demand(settings.root, settings.depth));
     return ()=>running.current?.abort();
   },[opening, described]);
 
@@ -83,6 +92,9 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
   const cancel=()=>{running.current?.abort();dispatch({type:'cancel'});};
   const busy=state.pending!==null;
   const named=useMemo(()=>naming(project), [project]);
+  if(full)return <NamingContext.Provider value={named}><Windowed full={full} node={route.params.get('noeud')||undefined} appels={route.params.get('forme')==='appels'}
+    source={source} view={state.view} selected={state.selected} dispatch={dispatch} commands={commands} busy={busy} choices={choices}
+    followed={relations} hasRoot={!!settings.root} errors={[describeError, state.error].filter(Boolean)}/></NamingContext.Provider>;
   return <NamingContext.Provider value={named}><section className="page explorer" aria-label="Explorer">
     <div className="page-intro explorer-head">
       <div><h1>Explorer</h1><p>Choisissez un point de départ : Taxo montre ce qui le relie au reste, niveau par niveau, avec la preuve de chaque lien et ce qu’il ne montre pas.</p></div>
@@ -101,20 +113,49 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
     {state.error&&<p role="alert" className="error">{state.error}</p>}
     {!settings.root&&<p className="muted">Aucun point de départ : recherchez une référence, ou ouvrez l’explorateur depuis une route, un module, un fichier ou un commit.</p>}
     {described&&settings.root&&!relations.length&&<p className="muted">Cette analyse n’a aucun fait à parcourir : aucune relation à suivre.</p>}
-    {state.view&&<Body view={state.view} selected={state.selected} dispatch={dispatch} commands={commands} busy={busy} query={query}
-      shape={shape} onShape={setShape} choices={choices} followed={relations}
+    {state.view&&<Body view={state.view} selected={state.selected} dispatch={dispatch} commands={commands} busy={busy} query={query} source={source}
+      addressFor={addressFor} shape={shape} onShape={setShape} choices={choices} followed={relations}
       onReload={()=>run('open', demand(settings.root!, settings.depth))}/>}
   </section></NamingContext.Provider>;
 }
 
 const NO_TYPES:string[]=[];
 
+type WindowProps={full:Full; node?:string; appels:boolean; source:Source; view:View|null; selected:Selected; dispatch:(action:Action)=>void;
+  commands:NodeCommands; busy:boolean; choices:RelationChoice[]; followed:string[]; hasRoot:boolean; errors:string[]};
+
+/** Une partie de l'Explorer dans sa propre fenêtre : le code de la classe, ou le schéma, en grand, et rien d'autre. */
+function Windowed({full, node, appels, source, view, selected, dispatch, commands, busy, choices, followed, hasRoot, errors}:Readonly<WindowProps>){
+  const named=useNaming();
+  const name=node?named(node):'';
+  useEffect(()=>{document.title=`Taxo · ${full==='code'?'code':'schéma'}${name?` · ${name}`:''}`;},[full, name]);
+  if(full==='code')return <section className="plein plein-code" aria-label="Code en grand">
+    {node?<CodeTile reference={node} source={source} large/>:<p className="muted">Aucun nœud désigné : ouvrez cette fenêtre depuis la tuile de code.</p>}</section>;
+  return <section className="plein plein-schema" aria-label="Schéma en grand">
+    {errors.map(message=><p key={message} role="alert" className="error">{message}</p>)}
+    {busy&&<output className="explorer-pending">Ouverture de la vue…</output>}
+    {!hasRoot&&<p className="muted">Aucun point de départ : ouvrez cette fenêtre depuis le schéma.</p>}
+    {view&&<SchemaWindow view={view} selected={selected} dispatch={dispatch} commands={commands} busy={busy} appels={appels} choices={choices}
+      followed={followed}/>}
+  </section>;
+}
+
+function SchemaWindow({view, selected, dispatch, commands, busy, appels, choices, followed}:Readonly<Pick<WindowProps, 'selected'|'dispatch'|'commands'|'busy'
+  |'appels'|'choices'|'followed'> & {view:View}>){
+  const named=useNaming();
+  const links=useMemo(()=>linksOf(view), [view]);
+  if(!view.known)return <output className="explorer-empty">« {named(view.anchor)} » n’apparaît dans aucun fait de cette analyse.</output>;
+  const select=(value:Selected)=>dispatch({type:'select', selected:value});
+  return appels?<CallsView view={view} links={links} selected={selected} onSelect={select} commands={commands} busy={busy} choices={choices}
+    followed={followed} windowed/>:<ChainView view={view} links={links} selected={selected} onSelect={select} commands={commands} busy={busy} windowed/>;
+}
+
 type Shape='appels'|'chaine'|'couches'|'liste';
-type BodyProps={view:View; selected:Selected; dispatch:(action:Action)=>void; commands:NodeCommands; busy:boolean; query:Query;
-  shape:Shape; onShape:(shape:Shape)=>void; onReload:()=>void; choices:RelationChoice[]; followed:string[]};
+type BodyProps={view:View; selected:Selected; dispatch:(action:Action)=>void; commands:NodeCommands; busy:boolean; query:Query; source:Source;
+  addressFor:(extra:Record<string, string>)=>string; shape:Shape; onShape:(shape:Shape)=>void; onReload:()=>void; choices:RelationChoice[]; followed:string[]};
 
 /** La vue reçue : son état vide s'il y en a un, sinon les appels, la chaîne, les couches ou la liste, le détail choisi et les frontières. */
-function Body({view, selected, dispatch, commands, busy, query, shape, onShape, onReload, choices, followed}:Readonly<BodyProps>){
+function Body({view, selected, dispatch, commands, busy, query, source, addressFor, shape, onShape, onReload, choices, followed}:Readonly<BodyProps>){
   const named=useNaming();
   const links=useMemo(()=>linksOf(view), [view]);
   // Le panneau latéral est replié en languette (avec le nombre de coupures et de lacunes) ; choisir un nœud ou un lien le
@@ -140,9 +181,9 @@ function Body({view, selected, dispatch, commands, busy, query, shape, onShape, 
     </div>
     <div className={side?'explorer-body':'explorer-body closed'}>
       {shape==='appels'&&<CallsView view={view} links={links} selected={selected} onSelect={select}
-        commands={commands} busy={busy} choices={choices} followed={followed}/>}
+        commands={commands} busy={busy} choices={choices} followed={followed} windowAddress={addressFor({plein:'schema', forme:'appels'})}/>}
       {shape==='chaine'&&<ChainView view={view} links={links} selected={selected} onSelect={select}
-        commands={commands} busy={busy}/>}
+        commands={commands} busy={busy} windowAddress={addressFor({plein:'schema', forme:'chaine'})}/>}
       {shape==='couches'&&<LayerView view={view} links={links} selected={selected} onSelect={select}/>}
       {shape==='liste'&&<ListView view={view} links={links} commands={commands} busy={busy} onSelect={identity=>select({kind:'link', identity})}/>}
       {!side&&<button type="button" className="explorer-side-tab" aria-expanded="false" aria-controls="explorer-side"
@@ -152,10 +193,21 @@ function Body({view, selected, dispatch, commands, busy, query, shape, onShape, 
         <button type="button" className="ghost explorer-side-close" aria-expanded="true" aria-controls="explorer-side"
           onClick={()=>setSide(false)}>Masquer le panneau<ChevronRightIcon/></button>
         {link&&<LinkPanel key={link.identity} link={link} query={query} onClose={()=>select(null)}/>}
-        {node&&<section className="explorer-panel" aria-label="Nœud choisi"><h3>{named(node.reference)}</h3><code>{node.reference}</code>
-          <p className="muted">Niveau {node.level}{nodeMarks(node, view.selection[node.reference], view.knowledge).map(mark=>` · ${mark}`).join('')}</p>
-          <NodeActions reference={node.reference} boundary={view.selection[node.reference]} commands={commands} busy={busy} anchor={node.reference===view.anchor}/></section>}
-        <Boundaries view={view} commands={commands} busy={busy}/>
+        {/* Le code d'abord, à la place la plus haute du panneau ; ce qui identifie le nœud et ses actions viennent dessous. */}
+        {node&&<section className="explorer-panel node-panel" aria-label="Nœud choisi">
+          <CodeTile key={node.reference} reference={node.reference} source={source} windowAddress={addressFor({plein:'code', noeud:node.reference})}/>
+          <div className="node-identity">
+            <span className={`type-pill tone-${toneOf(node.reference)}`}>{typeText(node.reference)}</span>
+            <h3>{named(node.reference)}</h3><code>{node.reference}</code>
+            <p className="muted">Niveau {node.level}{nodeMarks(node, view.selection[node.reference], view.knowledge).map(mark=>` · ${mark}`).join('')}</p>
+            <div className="node-panel-actions">
+              <OpenInEditor/>
+              <NodeActions reference={node.reference} boundary={view.selection[node.reference]} commands={commands} busy={busy} anchor={node.reference===view.anchor}/>
+              <CopyReference reference={node.reference}/></div></div></section>}
+        {/* Avec un nœud choisi, ce que la vue ne montre pas se replie sous sa tuile : rien n'en est retiré. */}
+        <details className="explorer-gaps" key={node?'node':'none'} open={!node}>
+          <summary>Ce que la vue ne montre pas <span className="count-pill">{gaps}</span></summary>
+          <Boundaries view={view} commands={commands} busy={busy}/></details>
       </div>
     </div>
   </>;

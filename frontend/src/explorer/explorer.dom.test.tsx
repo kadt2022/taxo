@@ -57,13 +57,18 @@ function compact(full:Tile):CompactTile{
 }
 
 type Call={operation:string; arguments:Record<string, unknown>};
-let calls:Call[], paths:string[], held:Map<string, ()=>void>, holding:Set<string>;
+let calls:Call[], consents:unknown[], paths:string[], held:Map<string, ()=>void>, holding:Set<string>, source:Record<string, object>;
+
+const CLASS_LINES=['public class A {', '  private int x;', '  public String get() {', '    return B.run();', '  }', '}'];
+const piece=(reference:string, from:number, lines:string[])=>({kind:'source', reference, path:'src/A.java', line_start:from,
+  line_end:from+lines.length-1, truncated:false, declared:{line_start:from, line_end:from+lines.length-1}, text:`${lines.join('\n')}\n`});
 
 async function answer(path:string, init?:RequestInit):Promise<unknown>{
   paths.push(path);
   if(path.endsWith('/comparisons/analyses'))return [{id:'scan-1', created_at:'2026-10-03T10:00:00Z', snapshot:{commit:'a'.repeat(40)}}];
-  const {requests:[call]}=JSON.parse(init!.body as string) as {requests:Call[]};
+  const {requests:[call], consent}=JSON.parse(init!.body as string) as {requests:Call[]; consent?:unknown};
   calls.push(call);
+  consents.push(consent);
   const reply=(value:object)=>({responses:[{outcome:'OK', ...value}]});
   switch(call.operation){
   case 'describe':return reply({items:[
@@ -85,6 +90,11 @@ async function answer(path:string, init?:RequestInit):Promise<unknown>{
     if(holding.has(at))return new Promise(resolve=>held.set(at, ()=>resolve(response)));
     return response;
   }
+  case 'get_source':{
+    const found=source[String(call.arguments.reference)];
+    const error=found&&'error' in found?found.error:{code:'NOT_AVAILABLE', message:'Aucune déclaration écrite de ce symbole dans cette analyse.'};
+    return found&&!('error' in found)?reply(found):{responses:[{outcome:'ERROR', error}]};
+  }
   default:throw new Error(`inattendu : ${call.operation}`);
   }
 }
@@ -96,7 +106,7 @@ function Harness(){
 }
 
 let host:HTMLElement, root:Root;
-beforeEach(()=>{resetGraphTheme();calls=[];paths=[];held=new Map();holding=new Set();host=document.createElement('div');document.body.append(host);root=createRoot(host);});
+beforeEach(()=>{resetGraphTheme();calls=[];consents=[];source={};paths=[];held=new Map();holding=new Set();host=document.createElement('div');document.body.append(host);root=createRoot(host);});
 afterEach(()=>{act(()=>root.unmount());host.remove();globalThis.location.hash='';});
 
 const wait=(ms=0)=>act(async()=>{await new Promise(resolve=>setTimeout(resolve, ms));});
@@ -352,7 +362,7 @@ describe('l’explorateur', ()=>{
     await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
     const bar=host.querySelector('.chain-frame .chain-tools[role=toolbar]') as HTMLElement;
     expect(bar.getAttribute('aria-label')).toBe('Commandes du graphe');
-    for(const name of ['Zoom avant', 'Zoom arrière', 'Ajuster à la largeur', 'Recentrer sur l’ancre', 'Agrandir la zone', 'Exporter en image (PNG)'])
+    for(const name of ['Zoom avant', 'Zoom arrière', 'Ajuster à la largeur', 'Recentrer sur l’ancre', 'Agrandir le schéma dans une nouvelle fenêtre', 'Exporter en image (PNG)'])
       expect(bar.contains(named(name)??null), name).toBe(true);
     const legend=host.querySelector('.chain-tools fieldset.chain-legend') as HTMLElement;
     expect(legend.querySelector('legend')?.textContent, 'la légende a son nom').toBe('Légende');
@@ -400,15 +410,38 @@ describe('l’explorateur', ()=>{
     expect(globalThis.localStorage.getItem('taxo.explorer.graph-theme')).toBe('light');
   });
 
-  it('lève la hauteur maximale à la demande, et la rétablit', async()=>{
+  it('ouvre le schéma dans sa propre fenêtre, avec l’adresse de ce qui est affiché, et dit une fenêtre bloquée', async()=>{
+    const opened=vi.spyOn(globalThis, 'open').mockReturnValue({} as Window);
+    try{
+      await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}&projet=p`);
+      await click(named('Agrandir le schéma dans une nouvelle fenêtre'));
+      const [address, target, features]=opened.mock.calls[0] as [string, string, string];
+      expect(target).toBe('_blank');
+      expect(features, 'une vraie fenêtre, pas un onglet').toContain('popup=yes');
+      const params=new URL(address).hash.split('?')[1];
+      const asked=new URLSearchParams(params);
+      expect(new URL(address).hash.startsWith('#/explorer?')).toBe(true);
+      expect(asked.get('plein')).toBe('schema');
+      expect(asked.get('forme'), 'la forme regardée').toBe('chaine');
+      expect(asked.get('racine'), 'le point de départ est repris').toBe(ROUTE);
+      expect(asked.get('projet'), 'le projet aussi').toBe('p');
+      expect(asked.get('analyse'), 'et l’analyse affichée, jamais celle que le portail choisirait par défaut').toBe('scan-1');
+      expect(host.querySelector('[role=alert]')).toBeNull();
+      opened.mockReturnValue(null);
+      await click(named('Agrandir le schéma dans une nouvelle fenêtre'));
+      expect(host.querySelector('.chain-tools [role=alert]')?.textContent).toContain('bloqué la nouvelle fenêtre');
+      await click(named('Appels'));
+      opened.mockReturnValue({} as Window);
+      await click(named('Agrandir le schéma dans une nouvelle fenêtre'));
+      expect(new URLSearchParams((opened.mock.calls.at(-1)![0] as string).split('?')[1]).get('forme')).toBe('appels');
+    }finally{opened.mockRestore();}
+  });
+
+  it('n’a plus de bouton qui lève la hauteur dans la page : l’agrandissement est la fenêtre', async()=>{
     await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
-    const zone=()=>host.querySelector('.chain-scroll') as HTMLElement;
-    expect(zone().classList.contains('grown')).toBe(false);
-    await click(named('Agrandir la zone'));
-    expect(zone().classList.contains('grown')).toBe(true);
-    expect(named('Réduire la zone')?.getAttribute('aria-pressed')).toBe('true');
-    await click(named('Réduire la zone'));
-    expect(zone().classList.contains('grown')).toBe(false);
+    expect(named('Agrandir la zone')).toBeUndefined();
+    expect(named('Réduire la zone')).toBeUndefined();
+    expect(host.querySelector('.chain-scroll.grown')).toBeNull();
   });
 
   it('n’appelle jamais Minia : seulement le protocole et la liste des analyses', async()=>{
@@ -418,5 +451,188 @@ describe('l’explorateur', ()=>{
     await click(named('Charger les preuves (2)'));
     expect(paths.every(path=>path==='/projects/p/taxo-query'||path==='/projects/p/comparisons/analyses')).toBe(true);
     expect(new Set(calls.map(call=>call.operation))).toEqual(new Set(['describe', 'get_neighborhood', 'get_evidence']));
+  });
+
+  describe('la tuile de code du nœud choisi', ()=>{
+    const picked=async()=>{
+      await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+      await click(named(/^symbole java:A#get\(\)/));
+      await wait();
+      return host.querySelector('[aria-label="Nœud choisi"]') as HTMLElement;
+    };
+    const serving=()=>{
+      source={'symbol:java:A':{reference:'symbol:java:A', commit:'c', path:'src/A.java', items:[piece('symbol:java:A', 1, CLASS_LINES)]},
+        [HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[piece(HANDLER, 3, CLASS_LINES.slice(2, 5))]}};
+    };
+
+    it('montre le code du type, la méthode choisie surlignée, avec le chemin et le type du nœud', async()=>{
+      serving();
+      const panel=await picked();
+      const reads=calls.filter(call=>call.operation==='get_source');
+      expect(reads.map(call=>String(call.arguments.reference)).sort((a, b)=>a.localeCompare(b)), 'la méthode et son type').toEqual(['symbol:java:A', HANDLER]);
+      expect(consents.filter(Boolean), 'chaque lecture de code porte son consentement, et seule elle').toEqual([{source:true}, {source:true}]);
+      expect(panel.querySelector('.type-pill')?.textContent).toBe('symbole');
+      const tile=panel.querySelector('[aria-label="Tuile de code"]') as HTMLElement;
+      expect(tile.querySelector('.code-head code')?.textContent).toBe('src/A.java');
+      expect(Array.from(tile.querySelectorAll('.code-number')).map(item=>item.textContent)).toEqual(['1', '2', '3', '4', '5', '6']);
+      expect(Array.from(tile.querySelectorAll('.code-line.selected .code-number')).map(item=>item.textContent)).toEqual(['3', '4', '5']);
+      expect(tile.textContent).toContain('méthode sélectionnée');
+      expect(tile.textContent).toContain('return B.run();');
+      const kinds=(selector:string)=>Array.from(tile.querySelectorAll(selector)).map(item=>item.textContent);
+      expect(kinds('.tk-keyword'), 'le code est coloré comme dans un éditeur').toEqual(expect.arrayContaining(['public', 'return']));
+      expect(kinds('.tk-type')).toEqual(expect.arrayContaining(['String']));
+      expect(kinds('.tk-method')).toEqual(expect.arrayContaining(['get', 'run']));
+      expect(Array.from(tile.querySelectorAll('.code-text')).map(item=>item.textContent).join('\n'), 'la coloration ne change pas le texte').toBe(CLASS_LINES.join('\n'));
+    });
+
+    it('garde les actions du nœud, copie la référence, et replie ce que la vue ne montre pas sous la tuile', async()=>{
+      serving();
+      const written:string[]=[];
+      Object.defineProperty(globalThis.navigator, 'clipboard', {configurable:true, value:{writeText:async(text:string)=>{written.push(text);}}});
+      const panel=await picked();
+      expect(Array.from(panel.querySelectorAll('button')).map(item=>item.textContent)).toEqual(expect.arrayContaining(['Ouvrir', 'Développer', 'Recentrer', 'Copier la référence']));
+      expect(named('Ouvrir dans l’éditeur (pas encore branché)')?.hasAttribute('disabled'), 'la place est prête, le branchement viendra').toBe(true);
+      await click(named(`Copier la référence ${HANDLER}`));
+      expect(written).toEqual([HANDLER]);
+      expect(panel.textContent).toContain('Référence copiée.');
+      const gaps=host.querySelector('details.explorer-gaps') as HTMLDetailsElement;
+      expect(gaps.open, 'replié avec un nœud choisi').toBe(false);
+      expect(gaps.querySelector('[aria-label="Ce que la vue ne montre pas"]'), 'rien n’est retiré').not.toBeNull();
+    });
+
+    it('dit le refus de Taxo tel quel, sans code inventé ni tuile vide', async()=>{
+      const panel=await picked();
+      expect(panel.querySelector('[aria-label="Tuile de code"]')).toBeNull();
+      expect(panel.querySelector('[role=alert]')?.textContent).toContain('Aucune déclaration écrite de ce symbole');
+    });
+
+    it('garde la méthode seule si son type est illisible, et dit ce que Taxo n’a pas transmis', async()=>{
+      source={[HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[piece(HANDLER, 3, CLASS_LINES.slice(2, 5))]}};
+      const panel=await picked();
+      const lines=Array.from(panel.querySelectorAll('.code-line')) as HTMLElement[];
+      expect(lines, 'le type refusé n’empêche pas la méthode').toHaveLength(3);
+      expect(lines.every(line=>line.classList.contains('selected'))).toBe(true);
+    });
+
+    it('dit pourquoi Taxo n’a pas transmis le code', async()=>{
+      source={[HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[], not_sent:[{what:'source', reason:'CONFIDENTIAL'}]}};
+      const panel=await picked();
+      expect(panel.textContent).toContain('le fichier est confidentiel');
+      expect(panel.querySelector('.code-line')).toBeNull();
+    });
+
+    it('dit quand la copie échoue, sans la supposer faite', async()=>{
+      serving();
+      Object.defineProperty(globalThis.navigator, 'clipboard', {configurable:true, value:{writeText:async()=>{throw new Error('refusé');}}});
+      const panel=await picked();
+      await click(named(`Copier la référence ${HANDLER}`));
+      expect(panel.textContent).toContain('Copie impossible');
+      expect(panel.textContent).not.toContain('Référence copiée.');
+    });
+
+    it('dit quand le consentement manque, et ce qui le lève sur le serveur', async()=>{
+      source={[HANDLER]:{error:{code:'NO_CONSENT', message:'La lecture du code n’a pas été autorisée pour cet échange.'}}};
+      const panel=await picked();
+      expect(panel.querySelector('[role=alert]')?.textContent).toContain('TAXO_SOURCE_READING=symbol');
+    });
+
+    it('dit un code coupé par Taxo, et un affichage borné autour de la méthode', async()=>{
+      const body=Array.from({length:200}, (_, index)=>`  line ${index+1};`);
+      source={'symbol:java:A':{reference:'symbol:java:A', commit:'c', path:'src/A.java', items:[{...piece('symbol:java:A', 1, body), truncated:true}]},
+        [HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[piece(HANDLER, 150, body.slice(149, 153))]}};
+      const panel=await picked();
+      expect(panel.querySelectorAll('.code-line')).toHaveLength(120);
+      expect(panel.textContent).toContain('Taxo a coupé le code à la limite de lecture');
+      expect(panel.textContent).toContain('Affichage borné à 120 lignes');
+      expect(panel.querySelector('.code-head .count-pill')?.textContent).toMatch(/^lignes \d+–\d+ sur 200$/);
+      expect(panel.querySelector('.code-line.selected')?.textContent).toContain('150');
+    });
+
+    it('ouvre la tuile de code dans sa propre fenêtre : la classe et son code, en grand', async()=>{
+      serving();
+      const opened=vi.spyOn(globalThis, 'open').mockReturnValue({} as Window);
+      try{
+        const panel=await picked();
+        const button=named('Agrandir le code dans une nouvelle fenêtre');
+        expect(panel.querySelector('.code-head')?.contains(button??null), 'le bouton est sur la tuile').toBe(true);
+        await click(button);
+        const asked=new URLSearchParams((opened.mock.calls[0][0] as string).split('?')[1]);
+        expect(asked.get('plein')).toBe('code');
+        expect(asked.get('noeud'), 'le nœud choisi').toBe(HANDLER);
+        opened.mockReturnValue(null);
+        await click(button);
+        expect(panel.querySelector('.code-head [role=alert]')?.textContent).toContain('bloqué la nouvelle fenêtre');
+      }finally{opened.mockRestore();}
+    });
+
+    it('ne demande aucun code pour un nœud qui n’est pas un symbole, et le dit', async()=>{
+      await open(`#/explorer?racine=${encodeURIComponent(ROUTE)}`);
+      await click(host.querySelector('.chain-node.anchor'));
+      await wait();
+      expect(calls.filter(call=>call.operation==='get_source')).toHaveLength(0);
+      expect(host.querySelector('[aria-label="Nœud choisi"]')?.textContent).toContain('n’a pas de code propre');
+    });
+  });
+
+  describe('les fenêtres à part : le code d’une classe, ou le schéma, en grand', ()=>{
+    const serving=()=>{
+      source={'symbol:java:A':{reference:'symbol:java:A', commit:'c', path:'src/A.java', items:[piece('symbol:java:A', 1, CLASS_LINES)]},
+        [HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[piece(HANDLER, 3, CLASS_LINES.slice(2, 5))]}};
+    };
+
+    it('la fenêtre de code ne montre que la classe et son code, sans bouton Agrandir, sans graphe ni recherche', async()=>{
+      serving();
+      await open(`#/explorer?plein=code&noeud=${encodeURIComponent(HANDLER)}`);
+      await wait();
+      const shown=host.querySelector('.plein-code') as HTMLElement;
+      expect(shown, 'la page est la fenêtre de code').toBeTruthy();
+      expect(shown.querySelector('.code-tile.large'), 'en grand').not.toBeNull();
+      expect(Array.from(shown.querySelectorAll('.code-line')).map(line=>line.querySelector('.code-number')?.textContent)).toEqual(['1', '2', '3', '4', '5', '6']);
+      expect(shown.querySelectorAll('.code-line.selected'), 'la méthode reste surlignée dans sa classe').toHaveLength(3);
+      expect(named('Agrandir le code dans une nouvelle fenêtre'), 'on est déjà dans la fenêtre').toBeUndefined();
+      expect(host.querySelector('.explorer-head, input, .explorer-body, .chain'), 'rien d’autre que le code').toBeNull();
+      expect(calls.filter(call=>call.operation==='get_neighborhood'), 'aucune vue chargée pour montrer du code').toHaveLength(0);
+      expect(document.title).toContain('code');
+    });
+
+    it('la fenêtre de code lève la borne d’affichage : toutes les lignes de la pièce de Taxo', async()=>{
+      const body=Array.from({length:200}, (_, index)=>`  line ${index+1};`);
+      source={[HANDLER]:{reference:HANDLER, commit:'c', path:'src/A.java', items:[piece(HANDLER, 150, body.slice(149, 153))]},
+        'symbol:java:A':{reference:'symbol:java:A', commit:'c', path:'src/A.java', items:[piece('symbol:java:A', 1, body)]}};
+      await open(`#/explorer?plein=code&noeud=${encodeURIComponent(HANDLER)}`);
+      await wait();
+      expect(host.querySelectorAll('.plein-code .code-line')).toHaveLength(200);
+      expect(host.textContent).not.toContain('Affichage borné');
+    });
+
+    it('la fenêtre de code dit qu’aucun nœud n’est désigné plutôt que de rester vide', async()=>{
+      await open('#/explorer?plein=code');
+      expect(host.querySelector('.plein-code')?.textContent).toContain('Aucun nœud désigné');
+    });
+
+    it('la fenêtre du schéma ne montre que le schéma et ses commandes, sans bouton Agrandir', async()=>{
+      await open(`#/explorer?plein=schema&forme=chaine&racine=${encodeURIComponent(ROUTE)}`);
+      const shown=host.querySelector('.plein-schema') as HTMLElement;
+      expect(shown, 'la page est la fenêtre du schéma').toBeTruthy();
+      expect(shown.querySelector('.chain-tools[role=toolbar]'), 'les commandes du graphe restent').not.toBeNull();
+      expect(shown.querySelectorAll('.chain-node').length).toBeGreaterThan(0);
+      expect(named('Agrandir le schéma dans une nouvelle fenêtre'), 'on est déjà dans la fenêtre').toBeUndefined();
+      expect(host.querySelector('.explorer-head, .explorer-tabs, .explorer-side, input'), 'ni recherche, ni onglets, ni panneau').toBeNull();
+      expect(tiles()[0]).toMatchObject({root:ROUTE});
+      expect(document.title).toContain('schéma');
+    });
+
+    it('la fenêtre du schéma reprend la forme Appels, et dit un point de départ absent', async()=>{
+      await open(`#/explorer?plein=schema&forme=appels&racine=${encodeURIComponent(ROUTE)}`);
+      expect(host.querySelector('.plein-schema .calls'), 'la forme regardée est reprise').not.toBeNull();
+      expect(named('Agrandir le schéma dans une nouvelle fenêtre')).toBeUndefined();
+      await open('#/explorer?plein=schema');
+      expect(host.querySelector('.plein-schema')?.textContent).toContain('Aucun point de départ');
+    });
+
+    it('un schéma d’ancre inconnue le dit, comme dans la page', async()=>{
+      await open(`#/explorer?plein=schema&racine=${encodeURIComponent(ABSENT)}`);
+      expect(host.querySelector('.plein-schema')?.textContent).toContain('n’apparaît dans aucun fait de cette analyse');
+    });
   });
 });
