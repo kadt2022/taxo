@@ -79,6 +79,13 @@ describe('une page par fonction', ()=>{
     // Plus de barre du haut : ni marque, ni menu, ni en-tête ; la navigation est la barre latérale.
     expect(host.querySelector('header, .page-head, .top-brand, .top-menu, nav[aria-label="Menus"]'), 'plus de barre du haut').toBeNull();
     expect(host.querySelector('.layout > aside'), 'la barre latérale ouvre la page').not.toBeNull();
+    // La marque Taxo est en haut de la barre latérale, avant le sélecteur de projet, et mène à l'accueil.
+    const brand=host.querySelector('aside > a.side-brand');
+    expect(brand?.getAttribute('href')).toBe('#/');
+    expect(brand?.nextElementSibling?.classList.contains('switcher'), 'avant le sélecteur de projet').toBe(true);
+    expect(brand?.querySelector('.side-brand-text strong')?.textContent).toBe('Taxo');
+    expect(brand?.querySelector('.side-brand-text small')?.textContent).toBe('Software Intelligence');
+    expect(host.querySelectorAll('.brand-mark'), 'une seule marque').toHaveLength(1);
     expect(host.querySelector('.results-nav a[href="#/"]')?.textContent, 'Overview reste le chemin vers l’accueil').toContain('Overview');
     expect(text()).not.toContain('EXPLORATEUR');
     expect(host.querySelector('.overview .cards')).not.toBeNull();

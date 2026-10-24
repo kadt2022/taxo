@@ -2,7 +2,7 @@
 import {useEffect, useState, type ReactNode} from 'react';
 import {type MiniaStatus} from './minia';
 import {AnalysisLimits, overviewCards, panelKey, routeCounts, technologiesOf, type Scan} from './overview';
-import {ResultsNav, navItemsOf, since, type Project} from './shell';
+import {BrandMark, ResultsNav, navItemsOf, since, type Project} from './shell';
 import {LaunchCard} from './commands';
 import {ProjectSwitcher} from './switcher';
 import {href, go, parse, useRoute, withProject} from './nav';
@@ -131,6 +131,7 @@ export function App({history}:Readonly<{history:(projectId:string, minia:MiniaSt
   </div>;
   return <div className="layout">
     <aside>
+    <a className="side-brand" href={href('overview')}><BrandMark/><span className="side-brand-text"><strong>Taxo</strong><small>Software Intelligence</small></span></a>
     {!loading&&<ProjectSwitcher key={projects.length} projects={projects} selected={selected} status={shown?since(shown.created_at):''} busy={busy}
       onOpen={open} onAdd={add}/>}
     {selected&&<ResultsNav items={navItems} current={route.page}/>}
