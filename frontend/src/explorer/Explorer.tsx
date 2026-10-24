@@ -71,7 +71,9 @@ export function ExplorerPage({base, request, scanId, route, revision, project}:R
   // Une fenêtre à part (`plein=code` ou `plein=schema`) ne montre que le code d'une classe, ou le schéma, en grand.
   const asked=route.params.get('plein')??'';
   const full=FULL_VALUES.includes(asked)?asked as Full:undefined;
-  const addressFor=(extra:Record<string, string>)=>windowAddress(route, globalThis.location, extra);
+  // La fenêtre rouvre le même projet et la même analyse que la page : jamais ceux que le portail choisirait par défaut.
+  const addressFor=(extra:Record<string, string>)=>windowAddress(route, globalThis.location,
+    {...(project?{projet:project.id}:{}), analyse:analysis, ...extra});
   const opening=JSON.stringify([analysis, settings.root, relations, settings.direction, settings.depth, settings.preset]);
   useEffect(()=>{
     if(settings.root&&described&&relations.length&&full!=='code')run('open', demand(settings.root, settings.depth));

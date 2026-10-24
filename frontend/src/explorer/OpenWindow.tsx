@@ -2,16 +2,18 @@
 // du portail, à une adresse qui dit quoi montrer (`plein=code` ou `plein=schema`) : elle relit le projet, l'analyse et le nœud depuis
 // cette adresse, et ne partage aucun état avec la fenêtre d'origine.
 import {useState} from 'react';
-import {href, type Route} from '../nav';
+import {href, parse, type Route} from '../nav';
 import {ExpandIcon} from './icons';
 
 export type Full='code'|'schema';
 export const FULL_VALUES:readonly string[]=['code', 'schema'];
 const FEATURES='popup=yes,width=1360,height=900';
 
-/** L'adresse absolue de l'Explorer dans une fenêtre : tout ce que la page courante porte, plus ce qu'il faut montrer. */
-export function windowAddress(route:Pick<Route, 'params'>, place:Pick<Location, 'origin'|'pathname'>, extra:Record<string, string>){
-  const kept=Object.fromEntries(route.params);
+/** L'adresse absolue de l'Explorer dans une fenêtre : tout ce que la page courante porte, plus ce qu'il faut montrer. Elle lit aussi
+ * l'adresse du navigateur : le portail y ajoute le projet (`withProject`) sans que l'état de la page le sache, et une fenêtre qui
+ * n'aurait pas le projet prendrait le premier de la liste, donc l'analyse d'un autre projet. */
+export function windowAddress(route:Pick<Route, 'params'>, place:Pick<Location, 'origin'|'pathname'|'hash'>, extra:Record<string, string>){
+  const kept={...Object.fromEntries(route.params), ...Object.fromEntries(parse(place.hash).params)};
   return `${place.origin}${place.pathname}${href('explorer', undefined, {...kept, ...extra})}`;
 }
 

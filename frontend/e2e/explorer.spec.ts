@@ -1,5 +1,7 @@
 // Le parcours de l'explorateur dans Chromium, contre une API Taxo réelle (TAXO-01J § 9) : une ancre, une preuve, l'export.
 import {expect, test, type Locator} from '@playwright/test';
+import {execSync} from 'node:child_process';
+import {mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {ROOT} from '../playwright.config';
 
@@ -91,6 +93,36 @@ test('Agrandir le schéma ouvre une fenêtre avec le schéma, ses commandes et s
   const [height, view]=await Promise.all([zone.evaluate(node=>node.getBoundingClientRect().height), popup.evaluate(()=>window.innerHeight)]);
   expect(height, 'le schéma prend la hauteur de la fenêtre').toBeGreaterThan(view*0.5);
   await popup.getByRole('button', {name:'Zoom avant'}).click();
+  await popup.close();
+});
+
+// La fenêtre rouvre le projet et l'analyse affichés, pas ceux que le portail choisirait par défaut (le premier de la liste). Le portail écrit
+// le projet dans l'adresse sans que la page le sache : sans cela, la fenêtre cherchait le code dans un autre projet.
+test('Agrandir ouvre le code du projet affiché, même s’il n’est pas le premier de la liste', async({page, request})=>{
+  const folder=join(ROOT, 'second');
+  mkdirSync(join(folder, 'src/main/java/com/acme/only'), {recursive:true});
+  writeFileSync(join(folder, 'src/main/java/com/acme/only/OnlyHere.java'),
+    'package com.acme.only;\n\npublic class OnlyHere {\n    public String ping() { return "pong"; }\n}\n');
+  const git=(command:string)=>execSync(`git -C "${folder}" -c user.name=Taxo -c user.email=taxo@example.invalid ${command}`);
+  git('init -q');
+  git('add -A');
+  git('commit -q -m "Un second projet"');
+  const created=await request.post('/api/projects', {data:{name:'Second', path:folder}});
+  expect(created.ok()).toBe(true);
+  const {id}=await created.json();
+  expect((await request.post(`/api/projects/${id}/scans`)).status()).toBe(201);
+  await page.goto(`/#/explorer?projet=${id}`);
+  // Naviguer dans le portail retire le projet de l'état de la page : il ne reste que dans la barre d'adresse (replaceState).
+  await page.getByRole('link', {name:/^Analyses/}).click();
+  await page.getByRole('link', {name:/^Explorer/}).click();
+  await page.getByRole('textbox', {name:'Point de départ'}).fill('java:com.acme.only.OnlyHere#ping');
+  await page.getByRole('button', {name:/OnlyHere#ping/}).click();
+  await page.locator('.chain-node.anchor').first().click();
+  await expect(page.getByRole('region', {name:'Tuile de code'})).toContainText('ping');
+  const [popup]=await Promise.all([page.waitForEvent('popup'), page.getByRole('button', {name:'Agrandir le code dans une nouvelle fenêtre'}).click()]);
+  await expect(popup.locator('.plein-code .code-line.selected').first()).toBeVisible();
+  await expect(popup.locator('.plein-code')).toContainText('OnlyHere');
+  await expect(popup.locator('.plein-code [role=alert]'), 'aucun refus : c’est bien le projet affiché').toHaveCount(0);
   await popup.close();
 });
 

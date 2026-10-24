@@ -425,6 +425,7 @@ describe('l’explorateur', ()=>{
       expect(asked.get('forme'), 'la forme regardée').toBe('chaine');
       expect(asked.get('racine'), 'le point de départ est repris').toBe(ROUTE);
       expect(asked.get('projet'), 'le projet aussi').toBe('p');
+      expect(asked.get('analyse'), 'et l’analyse affichée, jamais celle que le portail choisirait par défaut').toBe('scan-1');
       expect(host.querySelector('[role=alert]')).toBeNull();
       opened.mockReturnValue(null);
       await click(named('Agrandir le schéma dans une nouvelle fenêtre'));
